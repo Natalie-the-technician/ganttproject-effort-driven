@@ -24,6 +24,7 @@ import biz.ganttproject.customproperty.CustomPropertyEvent
 import biz.ganttproject.customproperty.CustomPropertyListener
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.TestSetupHelper
+import net.sourceforge.ganttproject.storage.LazyProjectDatabaseProxy
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.storage.SQL_PROJECT_DATABASE_OPTIONS
 import net.sourceforge.ganttproject.storage.SqlProjectDatabaseImpl
@@ -85,6 +86,78 @@ class EffortPropertyStorageTest {
   fun clear() {
     dataSource.connection.use { conn -> conn.createStatement().execute("shutdown") }
   }
+
+  /**
+   * The failure as it happens in the running application, with the SAME wiring: the task manager
+   * talks to a LazyProjectDatabaseProxy, and the custom property listener is the one that
+   * GanttProjectBase registers (`createTaskCustomPropertyListener`).
+   *
+   * Every earlier test in this file bypassed the proxy and therefore passed while the application
+   * kept failing. This one is the honest reproduction.
+   */
+  @Test
+  fun `effort reaches the database through the real proxy wiring`() {
+    val proxy = LazyProjectDatabaseProxy(
+      databaseFactory = { SqlProjectDatabaseImpl(dataSource) },
+      taskManager = { proxyTaskManager },
+      filterUpdater = {})
+    proxyTaskManager = TestSetupHelper.newTaskManagerBuilder().also {
+      it.setTaskUpdateBuilderFactory { task -> proxy.createTaskUpdateBuilder(task) }
+    }.build()
+    val cpm = proxyTaskManager.customPropertyManager
+    cpm.addListener(proxy.createTaskCustomPropertyListener())
+
+    val task = proxyTaskManager.newTaskBuilder().withName("t").build()
+    proxy.insertTask(task)
+
+    // Exactly what the task properties dialog does: create the definition, then write a value.
+    val def = EffortDrivenProperties.findOrCreateTaskEffort(cpm)
+    proxy.onCustomColumnChange(cpm)
+    val edited = task.customValues.copyOf().also { it.setValue(def, 20.0) }
+    task.createMutator().also { it.setCustomProperties(edited) }.commit()
+
+    assertEquals(20.0, readEffortColumn())
+  }
+
+  /**
+   * THE bug that manual testing found, reproduced: after "Projekt -> Neu" every custom column
+   * change was silently dropped.
+   *
+   * `ProjectUIFacadeImpl.createProject` calls `project.close()` (which sets `isProjectOpen`
+   * to false) and then `fireProjectCreated()`. Nothing handled `projectCreated`, so the flag
+   * stayed false and `LazyProjectDatabaseProxy.onCustomColumnChange` swallowed everything from
+   * then on — no exception, no log, no column.
+   *
+   * This is not specific to the effort feature: ANY custom column created after a new project
+   * was affected. The effort field just hits it every single time.
+   */
+  @Test
+  fun `custom columns still reach the database after a new project was created`() {
+    val proxy = LazyProjectDatabaseProxy(
+      databaseFactory = { SqlProjectDatabaseImpl(dataSource) },
+      taskManager = { proxyTaskManager },
+      filterUpdater = {})
+    proxyTaskManager = TestSetupHelper.newTaskManagerBuilder().also {
+      it.setTaskUpdateBuilderFactory { task -> proxy.createTaskUpdateBuilder(task) }
+    }.build()
+    val cpm = proxyTaskManager.customPropertyManager
+    cpm.addListener(proxy.createTaskCustomPropertyListener())
+    val projectListener = proxy.createProjectEventListener()
+
+    // This is what happens when the user picks "Projekt -> Neu".
+    projectListener.projectClosed()
+    projectListener.projectCreated()
+
+    val task = proxyTaskManager.newTaskBuilder().withName("t").build()
+    proxy.insertTask(task)
+    val def = EffortDrivenProperties.findOrCreateTaskEffort(cpm)
+    val edited = task.customValues.copyOf().also { it.setValue(def, 20.0) }
+    task.createMutator().also { it.setCustomProperties(edited) }.commit()
+
+    assertEquals(20.0, readEffortColumn())
+  }
+
+  private lateinit var proxyTaskManager: TaskManager
 
   /** Reads the effort straight out of the mirror table. Throws when the column does not exist. */
   private fun readEffortColumn(): Double? =

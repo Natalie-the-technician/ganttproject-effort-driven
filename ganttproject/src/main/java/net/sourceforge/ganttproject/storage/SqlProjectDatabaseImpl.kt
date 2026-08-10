@@ -153,16 +153,6 @@ class SqlProjectDatabaseImpl(
         } catch (e: Exception) {
           val errorMessage = "Failed to execute or log txnId=$localTxnId\n ${it.sqlStatementH2}"
           LOG.error(errorMessage)
-          // [Fork-Aenderung] DIAGNOSE (voruebergehend): welche Datenbank und welche Spalten sieht
-          // die fehlschlagende Anweisung wirklich? Wieder entfernen, sobald die Ursache feststeht.
-          runCatching {
-            val url = context.configuration().connectionProvider().acquire()?.metaData?.url
-            val cols = context.fetch(
-              "select column_name from information_schema.columns where lower(table_name)='task'")
-              .map { r -> r.get(0).toString() }
-            net.sourceforge.ganttproject.GPLogger.create("EffortDriven")
-              .error("effort-driven/fehler: URL=$url SpaltenDerTaskTabelle=$cols")
-          }
           throw ProjectDatabaseException(errorMessage, e)
         }
       }

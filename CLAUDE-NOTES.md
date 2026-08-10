@@ -226,6 +226,10 @@ Ressource bekommt eine einstellbare Stundenzahl pro Tag.
   ob das Ergebnis inhaltlich stimmt.
 - Geschätzte Zahlen als Schätzung kennzeichnen und sagen, von wem sie stammen.
 - Antworten auf Deutsch. Anrede: Natalie (rechtlicher Name Oliver Frank).
+- **Logzeiten immer mit Zeitzonenhinweis melden.** `ganttproject.log` schreibt in UTC, die
+  Systemuhr steht auf MESZ — 2 Stunden Versatz. In Sitzung 3 führte das Gleichsetzen beider
+  Zeiten zu einer falschen Schlussfolgerung („du hast die alte Version getestet"), die Natalie
+  korrigieren musste. Vorschlag stammt von Natalie.
 
 ---
 
@@ -669,6 +673,50 @@ der nächste fand sie vor und war deshalb grün, ohne etwas zu prüfen. In
 3 Tests. Der wichtigste stellt den kaputten Zustand her (Definition ohne Spalte), weist nach,
 dass der Wert dabei **verloren geht**, und belegt, dass der explizite Abgleich ihn heilt.
 Die Vorbedingung ist ausdrücklich geprüft — schlägt sie fehl, sagt der Test das.
+
+### DIE URSACHE: ein Fehler im Original-GanttProject
+
+Gefunden durch Natalies Handtest per Computernutzung, entscheidend war die Zeile, die **fehlte**.
+
+`ProjectUIFacadeImpl.createProject` (Z. 288–305) macht beim Anlegen eines neuen Projekts:
+
+1. `project.close()` → `fireProjectClosed()` → `ProjectEventListenerImpl.projectClosed()`
+   → **`isProjectOpen = false`**
+2. danach `fireProjectCreated()`
+
+**`projectCreated` wurde nirgends behandelt** (`ProjectEventListener.Stub` erbt es leer). Die
+Sperre blieb also dauerhaft zu. `LazyProjectDatabaseProxy.onCustomColumnChange` prüft aber:
+
+```kotlin
+override fun onCustomColumnChange(...) { if (isProjectOpen) { getDatabase()... } }
+```
+
+→ Ab „Projekt → Neu" wurde **jede** Spaltenänderung **stillschweigend verworfen**: kein Fehler,
+kein Logeintrag, keine Spalte. Der erste Schreibvorgang auf eine benutzerdefinierte Eigenschaft
+scheiterte dann mit `Column "..." not found`, und weil `MutatorImpl.commit()` Datenbankfehler
+nur protokolliert, lief die Anwendung scheinbar weiter — bis gar kein Vorgang mehr anlegbar war.
+
+**Das betrifft nicht nur die aufwandsgetriebene Planung.** Jede benutzerdefinierte Spalte, die
+nach „Projekt → Neu" angelegt wird, war betroffen. Unser Feature trifft es nur zuverlässig,
+weil es die Definition selbst anlegt.
+
+**Behebung:** `ProjectEventListenerImpl.projectCreated()` verwirft die Spiegeldatenbank und baut
+sie frisch auf — genau wie `projectRestoring` es tut.
+
+**Gegentest 7:** Behandlung wieder entfernt → `custom columns still reach the database after a
+new project was created` schlug mit exakt Natalies Fehlermeldung fehl
+(`Column "effort_hours" not found`). Zurückgenommen, wieder grün.
+
+### Wie der Befund zustande kam — Methodik, die sich gelohnt hat
+
+Fünf Hypothesen aufgestellt, alle fünf im Test widerlegt (Transaktion, Zwischenspeicher,
+Init-Skript, `isProjectOpen`-Vorgabewert, Proxy-Nachbau). Erst gezielte Diagnoseausgaben an drei
+Stellen brachten die Wahrheit — und zwar durch eine **fehlende** Zeile: die Storage-Meldung
+erschien nur beim Start, nicht beim Speichern. Damit war klar, dass die Spaltenverwaltung gar
+nicht erreicht wurde.
+
+**Lehre:** Wenn Instrumentierung eingebaut wird, ist das Ausbleiben einer erwarteten Zeile ein
+genauso starker Befund wie ihr Inhalt.
 
 ### Stolperfalle beim Handtest: vor jedem Test neu bauen
 
