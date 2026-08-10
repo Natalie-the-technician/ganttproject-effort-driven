@@ -47,6 +47,7 @@ import net.sourceforge.ganttproject.resource.HumanResourceMerger
 import net.sourceforge.ganttproject.resource.OverwritingMerger
 import net.sourceforge.ganttproject.roles.RoleManager
 import net.sourceforge.ganttproject.storage.LazyProjectDatabaseProxy
+import net.sourceforge.ganttproject.task.algorithm.EffortDrivenTrigger
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.task.*
 import net.sourceforge.ganttproject.task.event.createTaskListenerWithTimerBarrier
@@ -100,6 +101,9 @@ open class GanttProjectImpl(
 
   init {
     myCalendar.addListener { setModified() }
+    // Effort-driven scheduling: recalculate durations when the resources change. Registered here,
+    // in the UI-free project class, so that it also works headless (import, command line, tests).
+    humanResourceManager.addView(EffortDrivenTrigger(this.taskManager))
   }
 
   override fun setModified() {

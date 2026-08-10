@@ -423,14 +423,73 @@ ohne Regression** (mitgelaufen, weil `TaskManagerImpl` angefasst wurde).
 `testWithoutResourcePropertiesNothingHappens` schlug mit `NullPointerException` fehl,
 Sabotage zurückgenommen.
 
+### Schritt 3 erledigt: Auslöser — das Feature wirkt jetzt
+
+Neu: `EffortDrivenTrigger.kt` — eine Klasse, die `ResourceView` umsetzt und über
+`humanResourceManager.addView(...)` registriert wird. Registriert in **`GanttProjectImpl`**
+(init-Block), nicht in `GanttProject.java`.
+
+**Warum nicht wie in der Übergabe vorgeschlagen in `GanttProject.java`:** Das ist die
+Oberflächenklasse; alles darin ist headless nicht prüfbar. `addView(ResourceView)` ist
+öffentlich, `GanttProjectImpl` hält beide Manager und ist oberflächenfrei. Damit wirkt der
+Auslöser auch bei Import und Kommandozeile — und ist testbar.
+
+**Korrektur an der Übergabe — wichtig:** Die Übergabe nennt nur `resourceAssignmentsChanged`.
+Das **verfehlt das Kernbeispiel der Nutzerin**. Im Code nachgewiesen:
+`HumanResource.setValue(...)` (Z. 205–207) feuert `fireResourceChanged()`. Das Umstellen der
+Tagesstunden ist also **kein** Zuweisungsereignis. Der Auslöser hört deshalb auf drei Ereignisse:
+
+| Ereignis | Fall |
+|---|---|
+| `resourceChanged` | Tagesstunden bearbeitet — **das Kernbeispiel** (auf 4 h/Tag → 5 Tage) |
+| `resourceAssignmentsChanged` | Zuweisung hinzu/entfernt, Auslastung geändert |
+| `resourcesRemoved` | von zwei zugewiesenen Personen fällt eine weg → Verfügbarkeit halbiert |
+
+`resourceAdded` bleibt bewusst leer: eine neue Ressource trägt noch keine Zuweisung.
+
+**Reihenfolge jetzt erzwungen:** erst `effortDrivenDurationAlgorithm`, dann `scheduler`.
+**Schleifenschutz:** `isRunning` mit `try/finally`, wörtlich das Muster aus `SchedulerImpl`.
+
+Neu: `EffortDrivenTriggerTest.kt`, 3 Tests, **alle über echte Ereignisse**, kein direkter
+Aufruf des Algorithmus. Darunter das Beispiel der Vorgabe von Anfang bis Ende und der Fall
+„Zuweisung entfernt → Aufgabe wird länger".
+
+**Stand: das gesamte Testmodul ist grün — 300 Tests, 0 Fehler.**
+(Voller Modullauf `:ganttproject-tester:test`, ~30 s. War angebracht, weil `GanttProjectImpl`
+eine zentrale Klasse ist.)
+
+**Gegentest 4:** `resourceChanged` auf leer gesetzt → `testChangingDailyHoursChangesTheDuration`
+schlug fehl (`expected:<10> but was:<3>`), Sabotage zurückgenommen.
+
+### Falle für künftige Tests: Endlosrekursion in anonymen TaskManagerConfig-Objekten
+
+Beim ersten Lauf gab es `StackOverflowError` in **allen drei** neuen Tests. Ursache lag im
+Test, nicht im Produktionscode:
+
+```kotlin
+override fun getResourceManager(): HumanResourceManager = resourceManager  // ruft sich selbst!
+```
+
+In Kotlin löst `resourceManager` auf die synthetische Eigenschaft **des anonymen Objekts** auf,
+also auf genau diesen Getter. Richtig ist die Qualifizierung:
+
+```kotlin
+override fun getResourceManager() = this@EffortDrivenTriggerTest.resourceManager
+```
+
+Die anderen Testklassen sind nicht betroffen, weil sie `null` zurückgeben.
+
 ### Nächster Schritt
 
-Schritt 3 der Übergabe: Auslöser. Heute ruft **niemand** den neuen Algorithmus auf — er hängt
-im Sammelobjekt, ohne dass ihn etwas anstößt. Anzuhängen an `resourceAssignmentsChanged`
-(Hörer in `GanttProject.java` ~Z. 722 setzt heute nur `setAskForSave(true)`). Dabei:
-Reihenfolge vor dem Scheduler sicherstellen und Rückkopplung vermeiden (`isEnabled()` und
-das `isRunning`-Muster aus `SchedulerImpl`; der Algorithmus schreibt bereits nicht, wenn sich
-die Dauer nicht ändert).
+Schritt 4 der Übergabe: Oberfläche in `gui/taskproperties/TaskResourcesPanel.kt` — Aufwandsfeld
+je Aufgabe, Tagesstunden je Ressource. **Von Claude nicht selbst prüfbar** (JavaFX ohne
+Bildschirm), Natalie testet mit Screenshots oder Computer-Use.
+
+Bis dahin sind Aufwand und Tagesstunden nur über die **normale Spaltenverwaltung** für Custom
+Properties eintragbar (`effort_hours` an der Aufgabe, `hours_per_day` an der Ressource).
+Das genügt, um Stufe 1 von Hand auszuprobieren.
+
+Danach Schritt 5: Konflikt Dauer/Aufwand nach Bearbeitung im Original-GanttProject.
 
 ### Kleinigkeit, offen
 
