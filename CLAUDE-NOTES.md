@@ -607,10 +607,77 @@ JavaFX startet hier nicht — Aussehen und Bedienung sind **ungetestet**. Zu pr�
    (Das ist der Punkt, an dem das Überschreiben zuschlagen würde.)
 5. Ungültige Eingabe („acht") → bleibt der vorherige Wert stehen, ohne Absturz?
 
+---
+
+## 12. Fehler aus dem Handtest — und was er über Testen lehrt
+
+Natalie hat Schritt 4 in der laufenden Anwendung geprüft. Die Oberfläche war in Ordnung
+(Feld „Aufwand", Spalte „Std./Tag" zeigte 8), aber **das Speichern schlug fehl**:
+
+```
+UPDATE Task SET effort_hours=2.0 ... Column "effort_hours" not found
+```
+
+Danach ließ sich **kein Vorgang mehr anlegen**, bis zum Neustart.
+
+### Ursache
+
+GanttProject spiegelt Aufgaben in eine H2-Datenbank; jede Custom Property braucht dort eine
+**Spalte** (`ALTER TABLE Task ADD COLUMN <id>`), erzeugt aus dem Ereignis `customPropertyChange`.
+Unser Aufwandsfeld legte die Definition **während des Dialog-Commits** an — als einziges im
+ganzen Programm; alles andere legt Spalten im Spaltenverwalter an, außerhalb einer laufenden
+Undo-Transaktion (`UndoableEditImpl` startet die Transaktion **vor** dem Commit).
+
+Ergebnis: Definition vorhanden, Spalte fehlt. Und weil jeder weitere Schreibvorgang alle
+Definitionen in das UPDATE aufnimmt, scheitert **ab dann alles** — daher „kein Vorgang mehr
+anlegbar".
+
+### Behebung
+
+`TaskPropertiesController.save()` ruft jetzt vor dem Commit ausdrücklich
+`projectDatabase.onCustomColumnChange(...)`. Der Aufruf ist idempotent (vergleicht Definitionen
+mit Spalten) und hängt nicht davon ab, ob der Hörer feuert.
+
+### DIE WICHTIGSTE LEHRE: verschluckte Datenbankfehler
+
+`MutatorImpl.commit()` in `TaskImpl.kt:283`:
+
+```kotlin
+try { taskUpdateBuilder.commit() }
+catch (e: ProjectDatabaseException) { GPLogger.log(e) }   // nur geloggt!
+```
+
+**Der Datenbankfehler wird verschluckt.** Folgen:
+
+1. Die Anwendung lief nach dem Fehler scheinbar weiter — der Schaden fiel erst später auf.
+2. **Drei meiner Reproduktionsversuche waren grün und damit wertlos.** Ich hielt drei Hypothesen
+   für widerlegt, dabei hatte ich nur die verschluckte Ausnahme gemessen. Erst der vierte
+   Anlauf, der den **Datenbankinhalt zurückliest**, zeigte den Fehler.
+
+**Regel für dieses Projekt:** Bei allem, was über `TaskUpdateBuilder` in die Datenbank geht,
+niemals auf Ausnahmen prüfen, sondern **den gespeicherten Wert zurücklesen**.
+
+### Zweite Falle: geteilte H2-Datenbank zwischen Tests
+
+`jdbc:h2:mem:<name>` überlebt zwischen Tests derselben Klasse. Ein Test legte die Spalte an,
+der nächste fand sie vor und war deshalb grün, ohne etwas zu prüfen. In
+`EffortPropertyStorageTest` bekommt daher **jeder Test eine eigene Datenbank**
+(Name aus `TestInfo`).
+
+### Neu: EffortPropertyStorageTest (Modul ganttproject, nicht ganttproject-tester)
+
+3 Tests. Der wichtigste stellt den kaputten Zustand her (Definition ohne Spalte), weist nach,
+dass der Wert dabei **verloren geht**, und belegt, dass der explizite Abgleich ihn heilt.
+Die Vorbedingung ist ausdrücklich geprüft — schlägt sie fehl, sagt der Test das.
+
 ### Nächster Schritt
 
-Schritt 5: Konflikt Dauer/Aufwand, wenn jemand die Datei im Original-GanttProject öffnet und
-dort die Dauer ändert. Beim Öffnen erkennen und mit Rückfrage auflösen, nicht stillschweigend.
+Natalie muss Schritt 4 **erneut prüfen** (Anleitung in Abschnitt 11). Wichtig: eine bereits
+kaputt gespeicherte Datei bzw. laufende Sitzung vorher neu starten.
+
+Danach Schritt 5: Konflikt Dauer/Aufwand, wenn jemand die Datei im Original-GanttProject öffnet
+und dort die Dauer ändert. Beim Öffnen erkennen und mit Rückfrage auflösen, nicht
+stillschweigend.
 
 ### Kleinigkeit, offen
 

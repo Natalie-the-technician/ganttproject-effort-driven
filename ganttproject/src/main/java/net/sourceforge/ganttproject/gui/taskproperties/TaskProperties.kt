@@ -64,6 +64,14 @@ class TaskPropertiesController(private val task: Task, roleManager: RoleManager,
         // task.customValues schreiben, wuerde dieser Aufruf es mit der beim Oeffnen gezogenen
         // Kopie stillschweigend ueberschreiben.
         resourcesPanel.applyEffort(it)
+        // [Fork-Aenderung] Die Spiegeltabelle in der H2-Datenbank braucht eine Spalte fuer jede
+        // Property. Legt applyEffort die Definition neu an, entsteht diese Spalte sonst nicht
+        // rechtzeitig: das UPDATE scheitert dann mit `Column "effort_hours" not found`, und weil
+        // die Definition trotzdem existiert, schlaegt danach JEDER weitere Schreibvorgang fehl -
+        // es lassen sich keine Vorgaenge mehr anlegen, bis das Programm neu gestartet wird.
+        // Der Aufruf ist idempotent: er vergleicht Definitionen und Spalten und tut nichts,
+        // wenn bereits alles passt.
+        projectDatabase.onCustomColumnChange(task.manager.customPropertyManager)
         mutator.setCustomProperties(it)
       }
       predecessorsPanel.commit()
