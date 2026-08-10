@@ -670,6 +670,22 @@ der nächste fand sie vor und war deshalb grün, ohne etwas zu prüfen. In
 dass der Wert dabei **verloren geht**, und belegt, dass der explizite Abgleich ihn heilt.
 Die Vorbedingung ist ausdrücklich geprüft — schlägt sie fehl, sagt der Test das.
 
+### Stolperfalle beim Handtest: vor jedem Test neu bauen
+
+Der erste Prüflauf nach dem Fix testete noch die **alte** Programmversion — `dist-bin` war vor
+der Korrektur gebaut worden. Das kostete einen kompletten Durchgang.
+
+**Vor jedem Handtest neu bauen** und den Zeitstempel vergleichen:
+
+```powershell
+.\gradlew.bat :ganttproject-builder:distBin
+# Kontrolle: muss juenger sein als die letzte Quelltextaenderung
+ls ganttproject-builder\dist-bin\plugins\base\ganttproject\lib\ganttproject-*.jar.lib
+```
+
+`:ganttproject-builder:runApp` baut zwar selbst, aber wer das Fenster aus einem alten Lauf
+offen hat, testet weiter den alten Stand.
+
 ### Nächster Schritt
 
 Natalie muss Schritt 4 **erneut prüfen** (Anleitung in Abschnitt 11). Wichtig: eine bereits
