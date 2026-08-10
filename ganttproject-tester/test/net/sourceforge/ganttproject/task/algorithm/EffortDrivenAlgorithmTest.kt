@@ -72,8 +72,9 @@ class EffortDrivenAlgorithmTest : TestCase() {
   }
 
   /** The algorithm under test, wired to this test's hierarchy and property managers. */
-  private fun newAlgorithm(): EffortDrivenDurationAlgorithm =
-    object : EffortDrivenDurationAlgorithm(taskManager, taskProperties, resourceProperties) {
+  private fun newAlgorithm(
+    resourceProps: CustomColumnsManager? = resourceProperties): EffortDrivenDurationAlgorithm =
+    object : EffortDrivenDurationAlgorithm(taskManager, taskProperties, { resourceProps }) {
       override fun createContainmentFacade(): TaskContainmentHierarchyFacade =
         taskManager.taskHierarchy
     }
@@ -172,6 +173,23 @@ class EffortDrivenAlgorithmTest : TestCase() {
 
     val touched = runRecording()
     assertTrue("the leaf must be touched", touched.contains(task))
+  }
+
+  /**
+   * A project can have no resource manager at all — TaskManagerConfig.getResourceManager() returns
+   * null in tests and in headless imports. There are then no daily hours to read, so the algorithm
+   * must do nothing rather than fail.
+   */
+  fun testWithoutResourcePropertiesNothingHappens() {
+    val task = taskManager.createTask()
+    val resource = resourceManager.getById(1)
+    setEffort(task, 20.0)
+    setHoursPerDay(resource, 2.0)
+    task.assignmentCollection.addAssignment(resource).load = 100f
+    setDurationDays(task, 7)
+
+    newAlgorithm(resourceProps = null).run()
+    assertEquals(7, durationDays(task))
   }
 
   /** Runs the algorithm and returns the tasks it reported as modified. */

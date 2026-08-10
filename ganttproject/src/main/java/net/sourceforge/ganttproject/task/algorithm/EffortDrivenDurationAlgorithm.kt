@@ -25,6 +25,7 @@ import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskContainmentHierarchyFacade
 import net.sourceforge.ganttproject.task.TaskManager
+import java.util.function.Supplier
 import kotlin.math.ceil
 
 /**
@@ -126,7 +127,12 @@ fun computeDurationDays(effortHours: Double, availableHoursPerDay: Double): Int 
 abstract class EffortDrivenDurationAlgorithm(
   private val taskManager: TaskManager,
   private val taskProperties: CustomPropertyManager,
-  private val resourceProperties: CustomPropertyManager,
+  /**
+   * Resolved on every run, not once in the constructor: a project may have no resource manager at
+   * all (the task manager is built with one that is null in tests and in headless imports), and the
+   * algorithm is constructed before the project is fully wired.
+   */
+  private val resourceProperties: Supplier<CustomPropertyManager?>,
 ) : AlgorithmBase() {
 
   protected abstract fun createContainmentFacade(): TaskContainmentHierarchyFacade
@@ -135,22 +141,24 @@ abstract class EffortDrivenDurationAlgorithm(
     if (!isEnabled) {
       return
     }
+    val resourceProps = resourceProperties.get() ?: return
     val facade = createContainmentFacade()
-    recalculate(facade.rootTask, facade)
+    recalculate(facade.rootTask, facade, resourceProps)
   }
 
-  private fun recalculate(task: Task, facade: TaskContainmentHierarchyFacade) {
+  private fun recalculate(
+    task: Task, facade: TaskContainmentHierarchyFacade, resourceProps: CustomPropertyManager) {
     val nested = facade.getNestedTasks(task)
     if (nested.isEmpty()) {
-      recalculateLeaf(task)
+      recalculateLeaf(task, resourceProps)
     } else {
-      nested.forEach { recalculate(it, facade) }
+      nested.forEach { recalculate(it, facade, resourceProps) }
     }
   }
 
-  private fun recalculateLeaf(task: Task) {
+  private fun recalculateLeaf(task: Task, resourceProps: CustomPropertyManager) {
     val effort = task.effortHours(taskProperties) ?: return
-    val availability = task.availableHoursPerDay(resourceProperties)
+    val availability = task.availableHoursPerDay(resourceProps)
     if (availability <= 0.0) {
       return
     }

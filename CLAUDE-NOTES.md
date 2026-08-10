@@ -396,10 +396,47 @@ zurückgenommen, wieder grün.
 **Übertragbare Lehre:** Wirkung am Modell zu messen ist trügerisch, wo das Modell selbst
 korrigiert. Was der eigene Code *entscheidet*, muss beobachtbar gemacht werden.
 
+### Schritt 2 erledigt: in AlgorithmCollection eingereiht
+
+- `AlgorithmCollection`: Feld, Konstruktorparameter und
+  `getEffortDrivenDurationAlgorithm()` ergänzt. **Nur ein Aufrufer** des Konstruktors
+  (`TaskManagerImpl`), daher überschaubar.
+- `TaskManagerImpl` (~Z. 242): anonyme Unterklasse wie bei den anderen Algorithmen,
+  `createContainmentFacade()` liefert `getTaskHierarchy()`.
+
+**Wichtig — Ressourcen-Properties erst zur Laufzeit auflösen.** `getResourceManager()` darf
+**null** sein (Tests, kopfloser Import) und wird erst nach dem TaskManager verdrahtet. Der
+Konstruktor nimmt deshalb einen `Supplier<CustomPropertyManager?>`, aufgelöst in jedem `run()`;
+ist er null, tut der Algorithmus nichts. Vorbild für das Muster: `myHierarchySupplier` in
+`TaskManagerImpl` Z. 82. Ohne diesen Umweg wäre der Konstruktor auf einen halb fertigen
+Projektzustand angewiesen.
+
+**Reihenfolge (offene Frage der Übergabe, jetzt festgehalten):** Der Algorithmus muss **vor**
+dem Scheduler laufen — er setzt Dauern, der Scheduler propagiert danach Termine. Das steht als
+Kommentar am Getter. **Noch nicht erzwungen**, weil noch niemand ihn aufruft; das entscheidet
+sich in Schritt 3.
+
+Tests: 48 grün — EffortDriven 6/11/11, dazu **SchedulerTest 13 und TestResourceAssignments 7
+ohne Regression** (mitgelaufen, weil `TaskManagerImpl` angefasst wurde).
+
+**Gegentest 3:** Null-Schutz entfernt (`?: return` durch `!!` ersetzt) →
+`testWithoutResourcePropertiesNothingHappens` schlug mit `NullPointerException` fehl,
+Sabotage zurückgenommen.
+
 ### Nächster Schritt
 
-Schritt 2 der Übergabe: in `AlgorithmCollection` einreihen (Feld + Getter, Konstruktoraufrufer
-in `TaskManagerImpl` Zeile ~240 mitziehen). Danach Schritt 3 (Auslöser) und 4 (Oberfläche).
+Schritt 3 der Übergabe: Auslöser. Heute ruft **niemand** den neuen Algorithmus auf — er hängt
+im Sammelobjekt, ohne dass ihn etwas anstößt. Anzuhängen an `resourceAssignmentsChanged`
+(Hörer in `GanttProject.java` ~Z. 722 setzt heute nur `setAskForSave(true)`). Dabei:
+Reihenfolge vor dem Scheduler sicherstellen und Rückkopplung vermeiden (`isEnabled()` und
+das `isRunning`-Muster aus `SchedulerImpl`; der Algorithmus schreibt bereits nicht, wenn sich
+die Dauer nicht ändert).
+
+### Kleinigkeit, offen
+
+Compilerwarnung im eigenen Code: `EffortDrivenDurationAlgorithm.kt:99` „No cast needed" —
+`assignment.resource as? HumanResource` ist überflüssig, weil `getResource()` bereits
+`HumanResource` liefert. Stammt aus Sitzung 2, ohne Wirkung, bei Gelegenheit aufräumen.
 
 ---
 
