@@ -131,13 +131,29 @@ genau die Information, die man sehen will, aber es ist eine Meldung, keine Autom
 **Deutlich größer als Stufe 1.** Enthält: API-Anbindung mit Authentifizierung und Rate Limit,
 Zuordnungsdialog, Lernspeicher, Doppelimport-Schutz, Token-Verwaltung je Ressource.
 
-**Vor dem Bauen zu klären:** Gehört das überhaupt in GanttProject? Die Auswertung der Stunden
-(Schätzfehler, Kapazitätsquote) läuft ohnehin in der Planungskette außerhalb dieses Repos, wo
-sie geprüft und versioniert ist. Denkbar wäre, dass der Import ebenfalls dorthin gehört und
-GanttProject nur die fertigen Werte anzeigt. Das spart die Hälfte der Arbeit — Dialog und
-Lernspeicher wären dann Sache der Planungskette.
+### Verortung ENTSCHIEDEN (10.08.2026): Import gehört in den Fork
 
-**Empfehlung:** Diese Frage mit Natalie entscheiden, bevor eine Zeile Code entsteht.
+Ursprünglich stand hier die Frage, ob der Import besser in die Planungskette gehört. Natalies
+Einwand hat sie beantwortet: Dann bräuchte sie ein weiteres Programm, statt alles an einer
+Stelle zu tun.
+
+Der ausschlaggebende Punkt: **Ein Zuordnungsdialog braucht eine Oberfläche — und die gibt es
+nur in GanttProject.** Die Planungskette erzeugt Markdown-Listen und eine reine Leseansicht;
+der Import dorthin zu legen hieße, erst eine zweite Oberfläche zu bauen.
+
+**Arbeitsteilung:**
+
+| Werkzeug | Aufgabe |
+|---|---|
+| GanttProject-Fork | Zeiten importieren, zuordnen, Ist-Stunden in die Datei schreiben |
+| Planungskette (außerhalb) | Schätzfehler und Kapazitätsquote auswerten, Restschätzungen kalibrieren |
+
+Schnittstelle ist die `.gan`-Datei — genau so arbeitet die Kette ohnehin schon.
+
+**Ehrlich dazu:** Zwei Werkzeuge bleiben es vorerst trotzdem. Die Planungskette leistet Dinge,
+die der Fork auch nach Stufe 1 nicht kann: Kapazitätsstufen, gekoppelte Finanzierungs-Gates,
+Prioritätsverteilung, Trennung von Warte- und Arbeitszeit. Erst wenn Stufe 2 (Kapazitäts-
+verteilung mit Konfliktabfrage) steht, könnte der Fork die Kette ablösen.
 
 ---
 
