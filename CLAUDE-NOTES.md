@@ -4,7 +4,7 @@
 Hier steht, was bereits herausgefunden wurde, damit Sackgassen nicht wiederholt werden.
 **Claude schreibt diese Datei am Ende jeder Sitzung fort.**
 
-Zuletzt geändert: 10.08.2026 (Sitzung 1)
+Zuletzt geändert: 10.08.2026 (Sitzung 3, erste lokale Sitzung mit Claude Code)
 
 ---
 
@@ -324,6 +324,82 @@ bei 4 h/Tag = 5 Tage).
       `GanttProject.java` nur `setAskForSave(true)`)
 - [ ] Oberfläche: Spalten in `gui/taskproperties/TaskResourcesPanel.kt`
 - [ ] Konflikt Dauer/Aufwand nach Bearbeitung im Original auflösen
+
+---
+
+## 10. Sitzung 3 — erste lokale Sitzung (Claude Code auf dem Rechner der Nutzerin)
+
+### Umgebung: gelöst, einmalig einzurichten
+
+Der Klon liegt unter `C:\Users\ofran\Documents\GitHub\ganttproject-resource-planer`.
+
+**Das JDK war der Blocker.** `JAVA_HOME` zeigte auf Microsoft OpenJDK 21 — ein JDK **ohne**
+JavaFX. Damit scheitert `:biz.ganttproject.core:compileKotlin` reproduzierbar an
+`Unresolved reference 'javafx'` (in Sitzung 3 einmal vollständig durchlaufen und belegt).
+
+Wichtige Unterscheidung, die Zeit spart:
+- Modul `ganttproject` wendet `org.openjfx.javafxplugin` an, holt JavaFX also über Gradle.
+- Modul **`biz.ganttproject.core` tut das nicht** und erwartet JavaFX **aus dem JDK**.
+  Deshalb genügt ein normales JDK nicht, obwohl das Plugin im Projekt vorkommt.
+
+Gelöst mit BellSoft Liberica **Full** JDK 21 (enthält JavaFX):
+
+```
+C:\Users\ofran\jdks\jdk-21.0.12-full
+```
+
+Geprüft: `java --list-modules` zeigt javafx.base/controls/fxml/graphics/media/swing/web 21.0.12.
+
+**Für jeden Gradle-Aufruf setzen** (PowerShell), Arbeitsverzeichnis explizit setzen, weil
+Hintergrundaufrufe sonst in `C:\` landen und `gradlew.bat` nicht finden:
+
+```powershell
+Set-Location "C:\Users\ofran\Documents\GitHub\ganttproject-resource-planer"
+$env:JAVA_HOME = "C:\Users\ofran\jdks\jdk-21.0.12-full"
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+.\gradlew.bat --no-daemon :ganttproject-tester:test --tests "*EffortDriven*"
+```
+
+Laufzeit gemessen: Erstlauf mit Kompilierung ~2,5 min, danach ~25 s.
+`curl` in der Git-Bash scheitert an Zertifikaten — für Downloads PowerShell nehmen.
+
+### Schritt 1 erledigt: EffortDrivenDurationAlgorithm ist eine echte Algorithmusklasse
+
+In `EffortDrivenDurationAlgorithm.kt` ergänzt: `abstract class EffortDrivenDurationAlgorithm`
+über `AlgorithmBase`, Vorbild `RecalculateTaskCompletionPercentageAlgorithm`.
+
+- läuft rekursiv über die Hierarchie, rechnet **nur auf Blattaufgaben**
+- überspringt Aufgaben ohne Aufwand (opt-in) und ohne Verfügbarkeit (nichts zugewiesen)
+- schreibt über `task.createMutator()` / `setDuration` / `commit()`
+- **schreibt nicht, wenn sich die Dauer nicht ändert** — Vorsorge gegen Rückkopplung,
+  wenn der Algorithmus in Schritt 3 an Ereignisse gehängt wird
+- meldet jede geänderte Aufgabe über `diagnostic.addModifiedTask(...)`
+
+Neu: `EffortDrivenAlgorithmTest.kt`, 5 Tests.
+**Stand: 27 Tests grün** (Algorithm 5, Duration 11, Model 11).
+
+### Befund aus dem Gegentest: Container sind vom Modell geschützt — Tests darauf sind blind
+
+Der erste Container-Test prüfte, ob die **Dauer** des Containers unverändert bleibt.
+Gegentest (Blattprüfung entfernt, Container wie Blätter behandelt): **Test blieb grün.**
+
+Grund, empirisch belegt: Der sabotierte Code rief `setDuration(40 Tage)` samt `commit()` auf
+dem Container auf — die Dauer blieb trotzdem stehen. **GanttProject verwirft eine auf einen
+Container geschriebene Dauer selbst.** Der Test prüfte also eine Zusicherung von GanttProject,
+nicht den eigenen Blattfilter. Nach Arbeitsregel wertlos.
+
+**Reparatur:** Der Test prüft jetzt über den `Diagnostic`-Haken von `AlgorithmBase`, **welche**
+Aufgaben der Algorithmus anfasst, statt was am Modell hängen bleibt. Gegentest wiederholt:
+`testContainerIsNotTouched` schlug fehl („the container must not be touched"), Sabotage
+zurückgenommen, wieder grün.
+
+**Übertragbare Lehre:** Wirkung am Modell zu messen ist trügerisch, wo das Modell selbst
+korrigiert. Was der eigene Code *entscheidet*, muss beobachtbar gemacht werden.
+
+### Nächster Schritt
+
+Schritt 2 der Übergabe: in `AlgorithmCollection` einreihen (Feld + Getter, Konstruktoraufrufer
+in `TaskManagerImpl` Zeile ~240 mitziehen). Danach Schritt 3 (Auslöser) und 4 (Oberfläche).
 
 ---
 

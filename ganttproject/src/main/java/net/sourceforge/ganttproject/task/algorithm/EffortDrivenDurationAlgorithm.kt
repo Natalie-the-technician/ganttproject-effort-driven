@@ -23,6 +23,8 @@ import biz.ganttproject.customproperty.CustomPropertyDefinition
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.task.Task
+import net.sourceforge.ganttproject.task.TaskContainmentHierarchyFacade
+import net.sourceforge.ganttproject.task.TaskManager
 import kotlin.math.ceil
 
 /**
@@ -105,4 +107,68 @@ fun computeDurationDays(effortHours: Double, availableHoursPerDay: Double): Int 
   require(effortHours > 0.0) { "effort must be positive, was $effortHours" }
   require(availableHoursPerDay > 0.0) { "availability must be positive, was $availableHoursPerDay" }
   return maxOf(1, ceil(effortHours / availableHoursPerDay).toInt())
+}
+
+/**
+ * Walks the task hierarchy and rewrites the duration of every leaf task that has an effort value,
+ * deriving it from the effort and the daily availability of the assigned resources. Modelled on
+ * [RecalculateTaskCompletionPercentageAlgorithm]: recurse over the hierarchy, derive a value,
+ * commit it through a mutator.
+ *
+ * Only *leaf* tasks are touched. GanttProject derives container durations from their children, so
+ * writing a duration onto a container would be wrong.
+ *
+ * A leaf is left untouched when it has no effort value (the feature is opt-in per task) or when
+ * nothing is assigned to it (availability 0.0 — there is no resource to spread the effort over).
+ * After this algorithm has run, the existing scheduler propagates the new dates through the
+ * dependency graph; this algorithm therefore has to run *before* the scheduler.
+ */
+abstract class EffortDrivenDurationAlgorithm(
+  private val taskManager: TaskManager,
+  private val taskProperties: CustomPropertyManager,
+  private val resourceProperties: CustomPropertyManager,
+) : AlgorithmBase() {
+
+  protected abstract fun createContainmentFacade(): TaskContainmentHierarchyFacade
+
+  override fun run() {
+    if (!isEnabled) {
+      return
+    }
+    val facade = createContainmentFacade()
+    recalculate(facade.rootTask, facade)
+  }
+
+  private fun recalculate(task: Task, facade: TaskContainmentHierarchyFacade) {
+    val nested = facade.getNestedTasks(task)
+    if (nested.isEmpty()) {
+      recalculateLeaf(task)
+    } else {
+      nested.forEach { recalculate(it, facade) }
+    }
+  }
+
+  private fun recalculateLeaf(task: Task) {
+    val effort = task.effortHours(taskProperties) ?: return
+    val availability = task.availableHoursPerDay(resourceProperties)
+    if (availability <= 0.0) {
+      return
+    }
+    val days = computeDurationDays(effort, availability)
+    val newDuration = taskManager.createLength(days.toLong())
+    val current = task.duration
+    // Avoid firing a change event when nothing actually changes: important once this algorithm
+    // is triggered from resource events, so it does not feed itself in a loop.
+    if (current.timeUnit == newDuration.timeUnit && current.length == newDuration.length) {
+      return
+    }
+    val mutator = task.createMutator()
+    mutator.setDuration(newDuration)
+    mutator.commit()
+    // Report through the diagnostic hook of AlgorithmBase. This is the only externally visible
+    // trace of *which* tasks this algorithm decided to touch: the model silently discards a
+    // duration written onto a container, so the duration alone cannot tell a caller (or a test)
+    // whether the leaf check did its job.
+    diagnostic.addModifiedTask(task, task.start?.time, task.end?.time)
+  }
 }
