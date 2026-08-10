@@ -61,20 +61,34 @@ object EffortDrivenProperties {
   const val DEFAULT_HOURS_PER_DAY = 8.0
 
   fun findOrCreateTaskEffort(manager: CustomPropertyManager): CustomPropertyDefinition =
-    manager.getCustomPropertyDefinition(TASK_EFFORT_HOURS)
+    manager.findEffortDefinition(TASK_EFFORT_HOURS)
       ?: manager.createDefinition(TASK_EFFORT_HOURS, CustomPropertyClass.DOUBLE.iD, "Effort (h)", null)
 
   fun findOrCreateResourceHours(manager: CustomPropertyManager): CustomPropertyDefinition =
-    manager.getCustomPropertyDefinition(RESOURCE_HOURS_PER_DAY)
+    manager.findEffortDefinition(RESOURCE_HOURS_PER_DAY)
       ?: manager.createDefinition(RESOURCE_HOURS_PER_DAY, CustomPropertyClass.DOUBLE.iD, "Hours per day", null)
 }
+
+/**
+ * Finds a custom property by its id OR by its name.
+ *
+ * Both are needed, and looking at the id alone is a trap: a property that WE create carries
+ * [EffortDrivenProperties.TASK_EFFORT_HOURS] as its id, but a column that the USER creates in the
+ * column manager gets a generated id (`tpc0`, `tpc1`, …) and keeps the typed text as its *name*
+ * only — see `ColumnManager.kt`, which calls `createDefinition(type, title, defaultValue)`.
+ *
+ * Verified by hand: with an id-only lookup, a resource column named `hours_per_day` was ignored
+ * and every task fell back to the default of 8 hours per day.
+ */
+fun CustomPropertyManager.findEffortDefinition(idOrName: String): CustomPropertyDefinition? =
+  getCustomPropertyDefinition(idOrName) ?: definitions.firstOrNull { it.name == idOrName }
 
 /**
  * Reads the effort of a task, or null when the task has none. A task without effort keeps
  * whatever duration it has: this feature is opt-in, per task.
  */
 fun Task.effortHours(manager: CustomPropertyManager): Double? {
-  val def = manager.getCustomPropertyDefinition(EffortDrivenProperties.TASK_EFFORT_HOURS) ?: return null
+  val def = manager.findEffortDefinition(EffortDrivenProperties.TASK_EFFORT_HOURS) ?: return null
   val raw = this.customValues.getValue(def) ?: return null
   val value = (raw as? Number)?.toDouble() ?: raw.toString().toDoubleOrNull() ?: return null
   return if (value > 0.0) value else null
@@ -85,7 +99,7 @@ fun Task.effortHours(manager: CustomPropertyManager): Double? {
  * the resource carries no value, so that an untouched project keeps working.
  */
 fun HumanResource.hoursPerDay(manager: CustomPropertyManager): Double {
-  val def = manager.getCustomPropertyDefinition(EffortDrivenProperties.RESOURCE_HOURS_PER_DAY)
+  val def = manager.findEffortDefinition(EffortDrivenProperties.RESOURCE_HOURS_PER_DAY)
     ?: return EffortDrivenProperties.DEFAULT_HOURS_PER_DAY
   val raw = this.getCustomField(def) ?: return EffortDrivenProperties.DEFAULT_HOURS_PER_DAY
   val value = (raw as? Number)?.toDouble() ?: raw.toString().toDoubleOrNull()

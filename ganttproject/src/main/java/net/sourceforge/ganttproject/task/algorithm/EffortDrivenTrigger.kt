@@ -41,6 +41,11 @@ import net.sourceforge.ganttproject.task.TaskManager
  *  - [resourcesRemoved] — a task assigned to two people loses one of them, so the remaining
  *    availability halves.
  *
+ * NOT here: the effort itself. It lives on the TASK, and a task change arrives while the task's
+ * own mutator is still committing — `MutatorReentered.commit()` does nothing, so a duration
+ * written at that moment is discarded. Editing the effort therefore triggers the recalculation
+ * from `GanttDialogProperties`, right after the mutator has been committed.
+ *
  * ORDER: the duration algorithm runs first and the scheduler second. The algorithm sets durations,
  * the scheduler then propagates the dates through the dependency graph. The other way round the
  * propagated dates would be computed from durations that are about to change.

@@ -28,6 +28,7 @@ import biz.ganttproject.core.option.DefaultBooleanOption
 import biz.ganttproject.core.time.TimeUnitStack
 import biz.ganttproject.core.time.impl.GPTimeUnitStack
 import biz.ganttproject.customproperty.CustomColumnsManager
+import biz.ganttproject.customproperty.CustomPropertyClass
 import junit.framework.TestCase
 import net.sourceforge.ganttproject.gui.NotificationManager
 import net.sourceforge.ganttproject.resource.HumanResource
@@ -76,6 +77,55 @@ class EffortDrivenTriggerTest : TestCase() {
     })
     // This is the registration that GanttProjectImpl does for a real project.
     resourceManager.addView(EffortDrivenTrigger(taskManager))
+  }
+
+  /**
+   * The daily hours as the USER creates them: through the column manager, which generates the id
+   * (`tpc0`) and keeps the typed text as the NAME only. Looking the property up by id alone made
+   * the feature silently fall back to 8 h/day — found by testing the running application.
+   */
+  private fun setHoursPerDayAsTheUserWould(resource: HumanResource, hours: Double) {
+    val def = resourceProperties.definitions.firstOrNull { it.name == "hours_per_day" }
+      ?: resourceProperties.createDefinition(CustomPropertyClass.DOUBLE, "hours_per_day", null)
+    resource.setValue(def, hours)
+  }
+
+  fun testHoursPerDayIsFoundWhenTheColumnWasCreatedByName() {
+    val task = taskManager.createTask()
+    val resource = resourceManager.getById(1)
+    setEffort(task, 20.0)
+    task.assignmentCollection.addAssignment(resource).load = 100f
+
+    setHoursPerDayAsTheUserWould(resource, 2.0)
+    assertEquals(10, durationDays(task))
+
+    setHoursPerDayAsTheUserWould(resource, 4.0)
+    assertEquals(5, durationDays(task))
+  }
+
+  /**
+   * Entering the effort must be enough on its own, without touching any resource afterwards.
+   *
+   * This mirrors what `GanttDialogProperties` does when OK is pressed: commit the mutator, THEN
+   * run the algorithm. Doing it from a task listener does not work — the listener fires while the
+   * task's own mutator is still committing, and `MutatorReentered.commit()` discards everything
+   * written at that moment. Found by testing the running application: the duration only moved
+   * once a resource was edited by chance.
+   */
+  fun testEnteringTheEffortAloneRecalculatesTheDuration() {
+    val task = taskManager.createTask()
+    val resource = resourceManager.getById(1)
+    setHoursPerDayAsTheUserWould(resource, 2.0)
+    task.assignmentCollection.addAssignment(resource).load = 100f
+    val before = durationDays(task)
+
+    val def = EffortDrivenProperties.findOrCreateTaskEffort(taskManager.customPropertyManager)
+    val edited = task.customValues.copyOf().also { it.setValue(def, 20.0) }
+    task.createMutator().also { it.setCustomProperties(edited) }.commit()
+    taskManager.algorithmCollection.effortDrivenDurationAlgorithm.run()
+
+    assertTrue("duration must change without touching any resource", before != durationDays(task))
+    assertEquals(10, durationDays(task))
   }
 
   private fun setEffort(task: Task, hours: Double) {
