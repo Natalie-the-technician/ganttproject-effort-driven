@@ -29,6 +29,12 @@ fun runStatements(dataSource: DataSource, statements: List<String>) {
   """.trimIndent()
   println("Running \n $sqlScript")
   dataSource.connection.use { cnx ->
+    // [Fork-Aenderung] DIAGNOSE (voruebergehend): welche Datenbank bekommt diese Anweisungen?
+    // Wieder entfernen, sobald die Ursache feststeht.
+    if (statements.any { it.contains("effort_hours") }) {
+      net.sourceforge.ganttproject.GPLogger.create("EffortDriven")
+        .error("effort-driven/ddl: URL=${cnx.metaData.url} Anweisungen=$statements")
+    }
     statements.forEach { query ->
       cnx.createStatement().use { stmt ->
         try {

@@ -21,6 +21,9 @@ package net.sourceforge.ganttproject.storage
 import biz.ganttproject.customproperty.*
 import javax.sql.DataSource
 
+// [Fork-Aenderung] DIAGNOSE (voruebergehend), siehe onCustomColumnChange.
+private val EFFORT_DIAG = net.sourceforge.ganttproject.GPLogger.create("EffortDriven")
+
 /**
  * Responsible for the storage of custom properties in the database tables.
  * Creates and updates table columns appropriately.
@@ -41,6 +44,12 @@ class SqlCustomPropertyStorageManager(private val dataSource: DataSource) {
    */
   fun onCustomColumnChange(customPropertyManager: CustomPropertyManager) {
     val newStatements = createCustomColumnStatements(customPropertyManager)
+    // [Fork-Aenderung] DIAGNOSE (voruebergehend): hier faellt die Entscheidung, ob ueberhaupt ein
+    // ALTER TABLE ausgefuehrt wird. Wieder entfernen, sobald die Ursache feststeht.
+    EFFORT_DIAG.error(
+      "effort-driven/storage: Instanz=${System.identityHashCode(this)}" +
+        " bisher=$customColumnStatements neu=$newStatements" +
+        " wirdAusgefuehrt=${customColumnStatements != newStatements.toSet()}")
     synchronized(customColumnStatements) {
       if (customColumnStatements != newStatements.toSet()) {
         runStatements(dataSource, dropStatements)
