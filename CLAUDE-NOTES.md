@@ -382,3 +382,6 @@ Diese Datei ist das Gegenmittel — sie aktuell zu halten ist Teil der Arbeit, n
 - `NOTIZ-Ist-Stunden.md` — Vorschlag, ein drittes Custom Property `effort_actual_hours` zu
   ergaenzen. **Nicht beauftragt.** Natalie sagt Bescheid, wenn es umgesetzt werden soll.
   Nicht ungefragt einbauen.
+- `NOTIZ-Zeiterfassung-Import.md` — Vorschlag, Ist-Zeiten aus Toggl Track ueber die API zu
+  importieren, mit Zuordnungsvorschlaegen, Lernspeicher und Token je Ressource.
+  **Nicht beauftragt.** Setzt NOTIZ-Ist-Stunden.md voraus.
