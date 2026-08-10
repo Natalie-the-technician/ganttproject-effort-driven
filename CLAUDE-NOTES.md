@@ -249,7 +249,70 @@ Ressource bekommt eine einstellbare Stundenzahl pro Tag.
       Struktur) — betrifft auch das Dateiformat und damit die Abwärtskompatibilität
 - [ ] Erst danach: Umfangsbericht statt geratener Aufwandszahl
 
-**Nicht angefangen:** Änderungen am Code. Der Stand ist unverändertes Upstream plus dieser Datei.
+---
+
+## 9. Sitzung 2 — Stufe 1 begonnen
+
+### Entwurfsfrage ENTSCHIEDEN: Custom Properties
+
+Im Code nachgewiesen, nicht vermutet:
+
+- `TaskSaver.kt` schreibt eine **fest verdrahtete Liste** von Attributen aus dem Modell.
+  Ein neues XML-Attribut würde von der Original-GanttProject-Version beim Speichern
+  **stillschweigend verworfen** — Daten weg, ohne Fehlermeldung.
+- Custom Properties dagegen werden regulär geschrieben: `TaskSaver` läuft über
+  `customPropertyManager.definitions` und schreibt `<customproperty taskproperty-id=... value=...>`.
+  Das Original kennt das als eigenes Feature.
+
+→ **Runde Fork → Original → Fork überlebt.** Vorgabe der Nutzerin („kompatibel zum normalen
+GanttProject") ist damit erfüllt.
+
+`HumanResource` implementiert `CustomPropertyHolder`, Ressourcen können also ebenfalls
+Custom Properties tragen.
+
+**Bekannte Nebenwirkungen:**
+- Aufwand erscheint im Original als normale Spalte, dort editierbar, aber ohne Wirkung.
+- Ändert jemand im Original die Dauer, passen Aufwand und Dauer nicht mehr zusammen.
+  Der Algorithmus muss das beim Öffnen bemerken und auflösen — **noch nicht umgesetzt**.
+
+### Was auf Branch `effort-driven` liegt
+
+`EffortDrivenDurationAlgorithm.kt` (Paket `task.algorithm`):
+
+- `EffortDrivenProperties` — Namen der beiden Custom Properties, Standardwert 8 h/Tag,
+  `findOrCreate...`-Helfer
+- `Task.effortHours(...)` — Aufwand oder `null`; ohne Aufwand bleibt die Dauer unangetastet,
+  das Feature ist **je Aufgabe opt-in**
+- `HumanResource.hoursPerDay(...)` — mit Rückfall auf 8, damit alte Projekte weiterlaufen
+- `Task.availableHoursPerDay(...)` — Summe über Zuweisungen, gewichtet mit `load`
+- `computeDurationDays(effort, availability)` — **bewusst modellfrei**, damit unittestbar:
+  `max(1, ceil(effort / availability))`, wirft bei Werten <= 0
+
+`EffortDrivenDurationTest.kt`: **11 Tests, alle grün.** Darunter vier Negativfälle
+(null/negativer Aufwand, null/negative Verfügbarkeit).
+
+**Gegentest durchgeführt:** Aufrunden absichtlich durch Abrunden ersetzt →
+`testPartialDayIsRoundedUp` schlug fehl, Sabotage zurückgenommen, wieder 11/11 grün.
+Die Tests sind also nachweislich wirksam.
+
+### Ehrliche Lücke
+
+`Task.availableHoursPerDay(...)` und die beiden Property-Leser sind **nicht** durch Tests
+gedeckt — sie brauchen ein aufgebautes Aufgabenmodell. Vorlage dafür ist
+`TestResourceAssignments.java` (baut `TaskManager` und `HumanResourceManager` von Hand auf).
+Das ist der nächste Schritt.
+
+### Nächste Schritte für Stufe 1
+
+- [ ] Modelltests nach Vorbild `TestResourceAssignments` für die drei ungetesteten Funktionen
+- [ ] `EffortDrivenDurationAlgorithm` als echte `AlgorithmBase`-Klasse (Vorlage:
+      `RecalculateTaskCompletionPercentageAlgorithm`), die über die Blattaufgaben läuft und
+      `mutator.setDuration(...)` setzt
+- [ ] In `AlgorithmCollection` einreihen
+- [ ] Auslöser: an `resourceAssignmentsChanged` hängen (heute setzt der Hörer in
+      `GanttProject.java` nur `setAskForSave(true)`)
+- [ ] Oberfläche: Spalten in `gui/taskproperties/TaskResourcesPanel.kt`
+- [ ] Konflikt Dauer/Aufwand nach Bearbeitung im Original auflösen
 
 ---
 
