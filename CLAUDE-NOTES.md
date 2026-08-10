@@ -155,6 +155,51 @@ Ergebnisse als XML unter `ganttproject-tester/build/test-results/test/`.
 JavaFX-Oberfläche im Container nicht startbar ist. Oberflächenprüfung übernimmt der Nutzer
 per Screenshot oder Computer-Use.
 
+### Vorlage: RecalculateTaskCompletionPercentageAlgorithm (gelesen, Sitzung 1)
+
+Sehr kurz und genau das Muster, das wir brauchen:
+
+```java
+public abstract class RecalculateTaskCompletionPercentageAlgorithm extends AlgorithmBase {
+  @Override public void run() {
+    if (!isEnabled()) return;
+    TaskContainmentHierarchyFacade facade = createContainmentFacade();
+    recalculate...(facade.getRootTask(), facade);
+  }
+  // rekursiv ueber die Hierarchie, Aenderung ueber:
+  //   var mutator = task.createMutator();
+  //   mutator.setCompletionPercentage(x);
+  //   mutator.commit();
+  protected abstract TaskContainmentHierarchyFacade createContainmentFacade();
+}
+```
+
+Fuer uns analog: ueber die Blattaufgaben laufen, Dauer aus Aufwand und Verfuegbarkeit rechnen,
+`mutator.setDuration(...)`, committen. Danach laeuft der vorhandene Scheduler.
+
+### Ereigniskette bei Zuweisungsaenderung (verfolgt, Sitzung 1)
+
+```
+HumanResource.createAssignment() / setLoad() / swapAssignments()
+  -> fireAssignmentsChanged()
+  -> HumanResourceManager.fireAssignmentsChanged(resource)
+  -> ResourceView.resourceAssignmentsChanged(ResourceEvent) an alle Views
+```
+
+Hoerer heute: `GanttProject.java` (setzt nur `setAskForSave(true)`),
+`ResourceLoadGraphicArea`, `ResourceTable.kt`.
+
+**Wichtig: Kein Hoerer stoesst einen Algorithmus an.** Eine Zuweisungsaenderung loest heute
+KEINE Neuberechnung aus — nur „Datei geaendert". Genau hier muss der neue Algorithmus
+angehaengt werden.
+
+Zum Vergleich, wer Algorithmen heute anstoesst: `TaskManagerImpl` (u. a. `processCriticalPath`),
+`WeekendsSettingsPanel` (Wochenendwechsel), die MS-Project-Importer.
+
+`setLoad(...)` wird aufgerufen in `AssignmentToggleAction` (fest auf 100) und
+`ClipboardTaskProcessor` (kopieren). Bearbeitet wird die Auslastung in
+`gui/taskproperties/TaskResourcesPanel.kt`.
+
 ---
 
 ## 5. Was gebaut werden soll (Vorgabe des Nutzers)
@@ -193,13 +238,65 @@ Ressource bekommt eine einstellbare Stundenzahl pro Tag.
 - Ansatzpunkt gefunden: `getLoad()` ohne Wirkung auf Termine
 - `SchedulerImpl` gelesen: propagiert nur Termine, berechnet nie Dauer → neuer Schritt davor
 - Einhängepunkt gefunden: `AlgorithmCollection`
+- Vorlage gelesen, Ereigniskette verfolgt: Zuweisungsänderung stößt heute nichts an
 
 **Offen:**
 - [ ] Default-Branch im Repo auf `master` stellen (macht der Nutzer, Token hat kein Adminrecht)
-- [ ] `RecalculateTaskCompletionPercentageAlgorithm` als Vorlage lesen
-- [ ] Auslöser klären: Was ruft die Algorithmen auf, wenn eine Zuweisung geändert wird?
+- [ ] Entscheiden, wo der Aufwand in Stunden gespeichert wird — siehe Abschnitt 8
+- [ ] `HumanResource`: Feld „Stunden pro Tag" ergänzen (heute gibt es nur Auslastung in %)
+- [ ] Konfliktabfrage entwerfen (Abschnitt 5) — braucht die Reihenfolgenummer je Aufgabe
 - [ ] Entscheiden, wo der Aufwand in Stunden gespeichert wird (neues Feld oder vorhandene
       Struktur) — betrifft auch das Dateiformat und damit die Abwärtskompatibilität
 - [ ] Erst danach: Umfangsbericht statt geratener Aufwandszahl
 
 **Nicht angefangen:** Änderungen am Code. Der Stand ist unverändertes Upstream plus dieser Datei.
+
+---
+
+## 8. Umfangsbericht (Sitzung 1, nach Codeanalyse)
+
+Kein geratener Aufwand — hier steht, welche Arbeit anfällt und welche Unbekannten bleiben.
+
+### Stufe 1: Dauer aus Aufwand rechnen (Issue #83)
+
+| Baustein | Umfang | Risiko |
+|---|---|---|
+| Feld „Stunden pro Tag" an `HumanResource` | klein | gering |
+| Aufwand in Stunden je Aufgabe speichern | klein–mittel | **Dateiformat, siehe unten** |
+| `EffortDrivenDurationAlgorithm` nach Vorlage | klein (Vorlage ist ~40 Zeilen) | gering |
+| In `AlgorithmCollection` einreihen | klein | gering |
+| Auslöser an `resourceAssignmentsChanged` hängen | klein | mittel — Reihenfolge zu anderen Algorithmen |
+| Oberfläche in `TaskResourcesPanel.kt` | mittel | **nur vom Nutzer prüfbar** |
+| Unit-Tests neben `TestResourceAssignments` | klein | gering |
+
+**Offene Entwurfsfrage — die einzige echte Weiche:** Wo wird der Aufwand gespeichert?
+
+- *Neues Feld im Dateiformat:* sauber, aber Dateien werden vom Original-GanttProject nicht
+  mehr vollständig gelesen. Rückweg versperrt.
+- *Vorhandene Custom Columns:* keine Formatänderung, Dateien bleiben kompatibel, dafür
+  umständlicher im Code und für den Nutzer sichtbar als normale Spalte.
+
+Diese Frage vor dem ersten Code klären, sie zieht alles Weitere nach sich.
+
+### Stufe 2: Kapazitätsverteilung mit Konfliktabfrage
+
+Deutlich größer als Stufe 1 und im vorhandenen Code **ohne Vorbild**:
+
+- Überlastung überhaupt erkennen (Summe je Ressource und Tag über alle Aufgaben)
+- Reihenfolgenummer je Aufgabe als neues Feld (GanttProjects Prioritätsfeld hat Stufen,
+  keine Reihenfolge — reicht nicht)
+- drei Auflösungsstrategien implementieren
+- Dialog dafür bauen (JavaFX)
+- Wechselwirkung mit dem Scheduler: Verteilung ändert Dauern, das verschiebt Termine, was
+  die Verteilung wieder ändern kann — **Konvergenz ist nicht selbstverständlich**
+
+**Empfehlung:** Stufe 1 zuerst vollständig, inklusive Tests und Oberflächenprüfung. Stufe 2
+erst danach bewerten — mit Stufe 1 im Rücken lässt sich der Aufwand dann realistisch schätzen,
+jetzt wäre jede Zahl geraten.
+
+### Was den Aufwand unkalkulierbar macht
+
+Nicht die Codemenge, sondern der Zuschnitt der Sitzungen: Der Container startet leer, JDK und
+Klon sind weg, jede Sitzung beginnt mit ~10 Minuten Einrichtung. Änderungen müssen deshalb in
+sitzungsgroße Stücke geschnitten werden, die jeweils für sich getestet und committet werden.
+Diese Datei ist das Gegenmittel — sie aktuell zu halten ist Teil der Arbeit, nicht Beiwerk.
