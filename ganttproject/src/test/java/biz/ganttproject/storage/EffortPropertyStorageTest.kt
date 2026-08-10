@@ -20,6 +20,7 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package biz.ganttproject.storage
 
+import biz.ganttproject.customproperty.CustomPropertyClass
 import biz.ganttproject.customproperty.CustomPropertyEvent
 import biz.ganttproject.customproperty.CustomPropertyListener
 import biz.ganttproject.customproperty.CustomPropertyManager
@@ -155,6 +156,45 @@ class EffortPropertyStorageTest {
     task.createMutator().also { it.setCustomProperties(edited) }.commit()
 
     assertEquals(20.0, readEffortColumn())
+  }
+
+  /**
+   * The same defect, shown WITHOUT any of this fork's code: a plain custom text column, created
+   * the way the column manager creates one. Nothing here mentions effort.
+   *
+   * This is what makes the report to the upstream project honest — the bug is in stock
+   * GanttProject, our feature merely runs into it every time.
+   */
+  @Test
+  fun `a plain custom column also fails after a new project was created`() {
+    val proxy = LazyProjectDatabaseProxy(
+      databaseFactory = { SqlProjectDatabaseImpl(dataSource) },
+      taskManager = { proxyTaskManager },
+      filterUpdater = {})
+    proxyTaskManager = TestSetupHelper.newTaskManagerBuilder().also {
+      it.setTaskUpdateBuilderFactory { task -> proxy.createTaskUpdateBuilder(task) }
+    }.build()
+    val cpm = proxyTaskManager.customPropertyManager
+    cpm.addListener(proxy.createTaskCustomPropertyListener())
+    val projectListener = proxy.createProjectEventListener()
+
+    projectListener.projectClosed()
+    projectListener.projectCreated()
+
+    val task = proxyTaskManager.newTaskBuilder().withName("t").build()
+    proxy.insertTask(task)
+    val def = cpm.createDefinition(CustomPropertyClass.TEXT, "Bemerkung", null)
+    val edited = task.customValues.copyOf().also { it.setValue(def, "hallo") }
+    task.createMutator().also { it.setCustomProperties(edited) }.commit()
+
+    val stored = dataSource.connection.use { conn ->
+      conn.createStatement().use { stmt ->
+        stmt.executeQuery("SELECT ${def.id} FROM Task").use { rs ->
+          if (rs.next()) rs.getObject(1)?.toString() else null
+        }
+      }
+    }
+    assertEquals("hallo", stored)
   }
 
   private lateinit var proxyTaskManager: TaskManager
