@@ -530,17 +530,87 @@ Ohne Aufwandswert bleibt alles wie bisher (opt-in je Aufgabe). Ohne `hours_per_d
 Modell- und Projekttests ohne Bildschirm. Ob Eingabe, Anzeige und Neuzeichnen stimmen, muss
 Natalie prüfen.
 
+## 11. Sitzung 3, Schritt 4 — Oberfläche
+
+### Zwei Befunde, die den Zuschnitt geändert haben
+
+**1. Die Werte waren schon bedienbar.** Der Aufgabendialog enthält bereits eine Registerkarte
+für Custom Properties (`CustomColumnsPanel`, eingehängt in `TaskProperties.kt:51`), und
+Ressourcen-Custom-Properties erscheinen als Spalten in der Ressourcentabelle. Schritt 4 war
+also **Bequemlichkeit, nicht Fähigkeit** — anders, als die Übergabe nahelegt.
+
+**2. Falle: zwei Editoren für denselben Wert.** `CustomColumnsPanel.save()` (Z. 232–243)
+schreibt **alle** Custom Properties aus seiner Tabelle in eine **beim Öffnen gezogene Kopie**
+(`task.customValues.copyOf()`) und setzt darüber den gesamten Satz neu. Ein Aufwandsfeld, das
+direkt auf `task.customValues` schreibt, würde beim Klick auf OK von dieser veralteten Kopie
+**stillschweigend überschrieben** — Datenverlust ohne Fehlermeldung.
+
+**Lösung:** `TaskResourcesPanel.applyEffort(holder)` schreibt in **denselben Halter**, den die
+Registerkarte gleich committet. Verdrahtet in `TaskProperties.save()`:
+
+```kotlin
+customPropertiesPanel.save {
+  resourcesPanel.applyEffort(it)   // [Fork-Aenderung] gleicher Schreibweg
+  mutator.setCustomProperties(it)
+}
+```
+
+### Entscheidung der Nutzerin: Tagesstunden nur anzeigen
+
+Aufwandsfeld im Aufgabendialog (bearbeitbar), Spalte „Std./Tag" in der Zuweisungstabelle
+**nur zur Anzeige**. Begründung: Tagesstunden gelten **global** für alle Aufgaben einer
+Ressource. Im Aufgabendialog editierbar zu machen hieße, aus einem Aufgabendialog heraus fremde
+Termine zu verschieben, ohne dass man es bemerkt. Bearbeitet werden sie in der
+Ressourcenverwaltung.
+
+### Beschriftungen sind fest verdrahtet — mit Grund
+
+Die Übersetzungsdateien liegen im **Submodul** `biz.ganttproject.app.localization`, das auf
+`bardsoftware/...` zeigt. Dort darf nichts hinein, das wäre ein fremdes Repository.
+`RootLocalizer.formatText` liefert bei fehlendem Schlüssel **den Schlüssel selbst** zurück — im
+Dialog stünde dann wörtlich `effortDriven.hoursPerDay`. Deshalb feste Beschriftungen als
+Konstanten am Ende von `TaskResourcesPanel.kt`: „Aufwand", „Stunden", „Std./Tag".
+
+Wer später übersetzen will, braucht einen fork-eigenen Ressourcenpfad — nicht das Submodul.
+
+### Eingabelogik aus JavaFX herausgelöst, damit sie prüfbar ist
+
+Ein `TextField` lässt sich ohne JavaFX-Toolkit nicht erzeugen; Logik im Panel wäre headless
+nicht testbar. Deshalb liegt die Auswertung als **reine Funktion** `parseEffortInput(text)` im
+Algorithmus-Paket, mit `EffortInput.Clear / Hours / Invalid`.
+
+| Eingabe | Ergebnis |
+|---|---|
+| leer, nur Leerzeichen, null | `Clear` — Aufwand wird entfernt, Dauer bleibt |
+| `20`, `20.5`, `20,5`, `" 8 "` | `Hours` — **Komma wird als Dezimaltrennzeichen akzeptiert** |
+| `acht`, `8h`, `0`, `-5`, `Infinity` | `Invalid` — gespeicherter Wert bleibt unangetastet |
+
+`EffortInputTest`: 8 Tests. **Gegentest 6:** Kommabehandlung und Unendlich-Prüfung entfernt →
+`testDecimalComma` und `testInfinityIsInvalid` schlugen fehl, zurückgenommen.
+
+Die Property-Definition wird **erst angelegt, wenn wirklich ein Wert eingetragen wird** —
+Projekte ohne das Feature bekommen keine ungefragte Spalte.
+
+**Stand: 309 Tests grün.**
+
+### WAS NATALIE PRÜFEN MUSS (von Claude nicht prüfbar)
+
+JavaFX startet hier nicht — Aussehen und Bedienung sind **ungetestet**. Zu prüfen:
+
+1. Aufgabendialog → Registerkarte Ressourcen: Erscheint rechts unter den Kostenfeldern der
+   Abschnitt „Aufwand" mit Eingabefeld? Ist das Feld sichtbar und nicht abgeschnitten?
+2. Spalte „Std./Tag" in der Zuweisungstabelle: erscheint sie, zeigt sie 8 bei Ressourcen ohne
+   eigenen Wert und den eingetragenen Wert bei anderen?
+3. Aufwand eintragen, OK → wird der Wert nach erneutem Öffnen wieder angezeigt?
+4. **Der wichtige Fall:** Aufwand im Feld eintragen **und** in derselben Sitzung etwas in der
+   Custom-Property-Registerkarte ändern, dann OK. Bleiben **beide** Änderungen erhalten?
+   (Das ist der Punkt, an dem das Überschreiben zuschlagen würde.)
+5. Ungültige Eingabe („acht") → bleibt der vorherige Wert stehen, ohne Absturz?
+
 ### Nächster Schritt
 
-Schritt 4 der Übergabe: Oberfläche in `gui/taskproperties/TaskResourcesPanel.kt` — Aufwandsfeld
-je Aufgabe, Tagesstunden je Ressource. **Von Claude nicht selbst prüfbar** (JavaFX ohne
-Bildschirm), Natalie testet mit Screenshots oder Computer-Use.
-
-Bis dahin sind Aufwand und Tagesstunden nur über die **normale Spaltenverwaltung** für Custom
-Properties eintragbar (`effort_hours` an der Aufgabe, `hours_per_day` an der Ressource).
-Das genügt, um Stufe 1 von Hand auszuprobieren.
-
-Danach Schritt 5: Konflikt Dauer/Aufwand nach Bearbeitung im Original-GanttProject.
+Schritt 5: Konflikt Dauer/Aufwand, wenn jemand die Datei im Original-GanttProject öffnet und
+dort die Dauer ändert. Beim Öffnen erkennen und mit Rückfrage auflösen, nicht stillschweigend.
 
 ### Kleinigkeit, offen
 

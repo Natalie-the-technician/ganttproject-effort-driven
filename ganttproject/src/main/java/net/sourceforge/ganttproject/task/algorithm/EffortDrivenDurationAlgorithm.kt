@@ -104,6 +104,37 @@ fun Task.availableHoursPerDay(resourceProperties: CustomPropertyManager): Double
   }
 
 /**
+ * What the user typed into the effort field means, once interpreted.
+ *
+ * Kept out of the JavaFX panel on purpose: a TextField cannot be constructed without a JavaFX
+ * toolkit, so logic left inside the panel could not be tested headless. This is where the actual
+ * decisions live, so this is what gets tested.
+ */
+sealed interface EffortInput {
+  /** The field was left empty: the task drops its effort and keeps whatever duration it has. */
+  object Clear : EffortInput
+
+  /** A usable number of hours. */
+  data class Hours(val value: Double) : EffortInput
+
+  /** Not a number, or not a positive one. The stored value is left untouched. */
+  object Invalid : EffortInput
+}
+
+/**
+ * Interprets the text of the effort field. Accepts a comma as the decimal separator, because that
+ * is what a German keyboard produces and silently reading "20,5" as 20 would be a trap.
+ */
+fun parseEffortInput(text: String?): EffortInput {
+  val trimmed = text?.trim().orEmpty()
+  if (trimmed.isEmpty()) {
+    return EffortInput.Clear
+  }
+  val hours = trimmed.replace(',', '.').toDoubleOrNull() ?: return EffortInput.Invalid
+  return if (hours > 0.0 && hours.isFinite()) EffortInput.Hours(hours) else EffortInput.Invalid
+}
+
+/**
  * Duration in days for the given effort and availability, at least one day.
  * Kept separate from the model so it can be tested on its own.
  */

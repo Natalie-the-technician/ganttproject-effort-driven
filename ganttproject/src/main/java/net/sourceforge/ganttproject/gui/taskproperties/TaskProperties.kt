@@ -59,6 +59,11 @@ class TaskPropertiesController(private val task: Task, roleManager: RoleManager,
     task.createMutator().also { mutator ->
       mainPropertiesPanel.save(mutator)
       customPropertiesPanel.save {
+        // [Fork-Aenderung] Der Aufwand wird in DENSELBEN Halter geschrieben, den die
+        // Custom-Property-Registerkarte gleich committet. Wuerde das Aufwandsfeld direkt auf
+        // task.customValues schreiben, wuerde dieser Aufruf es mit der beim Oeffnen gezogenen
+        // Kopie stillschweigend ueberschreiben.
+        resourcesPanel.applyEffort(it)
         mutator.setCustomProperties(it)
       }
       predecessorsPanel.commit()
