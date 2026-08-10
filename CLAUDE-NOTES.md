@@ -295,16 +295,27 @@ Custom Properties tragen.
 `testPartialDayIsRoundedUp` schlug fehl, Sabotage zurückgenommen, wieder 11/11 grün.
 Die Tests sind also nachweislich wirksam.
 
-### Ehrliche Lücke
+### Lücke geschlossen: Modelltests
 
-`Task.availableHoursPerDay(...)` und die beiden Property-Leser sind **nicht** durch Tests
-gedeckt — sie brauchen ein aufgebautes Aufgabenmodell. Vorlage dafür ist
-`TestResourceAssignments.java` (baut `TaskManager` und `HumanResourceManager` von Hand auf).
-Das ist der nächste Schritt.
+`EffortDrivenModelTest.kt` — **11 Tests, alle grün.** Aufbau nach Vorbild
+`TestResourceAssignments`: echter `TaskManager` über `TaskManager.Access.newInstance` mit
+anonymem `TaskManagerConfig`, `HumanResourceManager` mit eigenem `CustomColumnsManager`.
+
+**Wichtig für künftige Tests:** Aufgaben- und Ressourcen-Properties brauchen **getrennte**
+`CustomColumnsManager`-Instanzen. Werte setzen über `task.customValues.setValue(def, wert)`
+bzw. `resource.setValue(def, wert)`, lesen über `getValue` bzw. `getCustomField`.
+
+Abgedeckt: Aufwand nicht gesetzt → `null`; Aufwand lesen; Null-Aufwand gilt als nicht gesetzt;
+Ressource ohne Wert → Rückfall 8 h; Tagesstunden lesen; nichtpositive Werte → Rückfall;
+keine Zuweisung → 0 h verfügbar; eine Zuweisung; **Auslastung wird angewendet**; zwei
+Zuweisungen addieren sich; Beispiel der Vorgabe durchs ganze Modell (20 h bei 2 h/Tag = 10 Tage,
+bei 4 h/Tag = 5 Tage).
+
+**Gegentest:** Auslastungsgewichtung absichtlich entfernt (`* load / 100.0` gestrichen) →
+`testLoadIsApplied` schlug fehl, danach zurückgenommen, wieder 22/22 grün über beide Klassen.
 
 ### Nächste Schritte für Stufe 1
 
-- [ ] Modelltests nach Vorbild `TestResourceAssignments` für die drei ungetesteten Funktionen
 - [ ] `EffortDrivenDurationAlgorithm` als echte `AlgorithmBase`-Klasse (Vorlage:
       `RecalculateTaskCompletionPercentageAlgorithm`), die über die Blattaufgaben läuft und
       `mutator.setDuration(...)` setzt
