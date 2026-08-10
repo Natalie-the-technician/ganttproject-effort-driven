@@ -115,6 +115,32 @@ beim Konflikt (siehe Abschnitt 5).
 **Sackgasse vermeiden:** In `TaskMutator` nach `setDuration` zu suchen bringt nichts — die
 Methode steckt in `MutableTask`.
 
+### Wie SchedulerImpl arbeitet (gelesen, Sitzung 1)
+
+`doRun()` → `schedule(Node)` je Knoten des Abhängigkeitsgraphen. Aus den eingehenden Kanten
+werden mit Guava-`Range` erlaubte Start- und Endbereiche geschnitten (stark/schwach getrennt,
+Teilaufgaben gesondert). Danach:
+
+- `modifyTaskStart(task, newStart)` — bei Aufgaben **ohne** Unteraufgaben über
+  `task.createShiftMutator()` und `shift(...)`: **die Dauer bleibt erhalten**, die Aufgabe
+  wird nur verschoben. Bei Aufgaben mit Unteraufgaben über `setStart`.
+- `modifyTaskEnd(task, newEnd)` — `mutator.setEnd(...)`.
+
+**Wichtigste Erkenntnis:** Der Scheduler *propagiert* nur Termine durch den Graphen. Er
+berechnet **nie** eine Dauer aus Aufwand. Effort-driven scheduling ist deshalb kein Umbau des
+Schedulers, sondern ein **zusätzlicher Schritt davor**, der die Dauer setzt; danach propagiert
+der vorhandene Scheduler wie bisher weiter.
+
+### Einhängepunkt für einen neuen Algorithmus
+
+`AlgorithmCollection` sammelt die Algorithmen, u. a.:
+`RecalculateTaskScheduleAlgorithm`, `AdjustTaskBoundsAlgorithm`,
+`RecalculateTaskCompletionPercentageAlgorithm`, `CriticalPathAlgorithm`, `myScheduler`.
+
+Ein neuer `EffortDrivenDurationAlgorithm` (Arbeitstitel) würde sich hier einreihen —
+Vorbild ist `RecalculateTaskCompletionPercentageAlgorithm`, das strukturell dasselbe tut:
+einen abgeleiteten Wert aus anderen Feldern neu berechnen.
+
 ### Tests, die es schon gibt
 
 ```bash
@@ -165,11 +191,13 @@ Ressource bekommt eine einstellbare Stundenzahl pro Tag.
 - Build zum Laufen gebracht, beide Hindernisse dokumentiert (JavaFX, Zertifikate)
 - Testsuite im Zielbereich läuft grün
 - Ansatzpunkt gefunden: `getLoad()` ohne Wirkung auf Termine
+- `SchedulerImpl` gelesen: propagiert nur Termine, berechnet nie Dauer → neuer Schritt davor
+- Einhängepunkt gefunden: `AlgorithmCollection`
 
 **Offen:**
 - [ ] Default-Branch im Repo auf `master` stellen (macht der Nutzer, Token hat kein Adminrecht)
-- [ ] Finden, wo beim Ändern einer Zuweisung die Dauer neu gesetzt werden müsste
-- [ ] `SchedulerImpl` lesen und verstehen, wie Termine heute zustande kommen
+- [ ] `RecalculateTaskCompletionPercentageAlgorithm` als Vorlage lesen
+- [ ] Auslöser klären: Was ruft die Algorithmen auf, wenn eine Zuweisung geändert wird?
 - [ ] Entscheiden, wo der Aufwand in Stunden gespeichert wird (neues Feld oder vorhandene
       Struktur) — betrifft auch das Dateiformat und damit die Abwärtskompatibilität
 - [ ] Erst danach: Umfangsbericht statt geratener Aufwandszahl
