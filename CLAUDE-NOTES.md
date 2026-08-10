@@ -718,6 +718,59 @@ nicht erreicht wurde.
 **Lehre:** Wenn Instrumentierung eingebaut wird, ist das Ausbleiben einer erwarteten Zeile ein
 genauso starker Befund wie ihr Inhalt.
 
+### STUFE 1 IST FERTIG — in der laufenden Anwendung geprüft
+
+Natalie hat am 10.08.2026 per Computernutzung (Cowork) geprüft. **Alle Werte abgelesen, nicht
+geschätzt:**
+
+| Prüfung | Ergebnis |
+|---|---|
+| 20 h Aufwand, keine Tagesstunden gesetzt | 3 Tage (20 ÷ 8, aufgerundet) |
+| `hours_per_day` = 2 | **10 Tage** |
+| `hours_per_day` = 4 | **5 Tage** |
+| Aufwand 20 → 40 geändert, Ressource **nicht** angefasst | **10 Tage** (40 ÷ 4) |
+| zweiter Vorgang anlegbar | ja |
+| ERROR/WARN im Log | keine (Filter positiv und negativ gegengeprüft) |
+
+Damit tut GanttProject das, was Upstream-Issue #83 seit 2013 offen hat.
+
+### Zwei Fehler, die NUR der Handtest gefunden hat
+
+Beide waren bei 300+ grünen Tests unsichtbar, weil beide die Verdrahtung zur echten Bedienung
+betrafen — nicht die Rechnung.
+
+**1. Spalte wurde nicht gefunden (Kennung vs. Name).**
+`ColumnManager.kt:131` legt Spalten über `createDefinition(type, title, defaultValue)` an. Diese
+Überladung erzeugt die **Kennung selbst** (`tpc0`, `tpc1`, …); der vom Nutzer getippte Text wird
+nur der **Name**. Unser Code suchte nach der Kennung, fand nichts und fiel auf 8 h/Tag zurück —
+daher exakt 20 ÷ 8 = 3 Tage, unabhängig vom eingetragenen Wert.
+Behoben: `findEffortDefinition(idOrName)` sucht nach **Kennung oder Name**.
+
+**Merke:** Eigenschaften, die *wir* anlegen, tragen unsere Kennung. Eigenschaften, die der
+*Nutzer* anlegt, tragen sie im Namen. Immer beides prüfen.
+
+**2. Auslöser griff zu früh (Wiedereintritt des Mutators).**
+Der Aufwand ist eine Eigenschaft der **Aufgabe**. Ein Aufgabenereignis trifft ein, während der
+Mutator derselben Aufgabe noch committet — und **`MutatorReentered.commit()` tut nichts**. Eine
+dort gesetzte Dauer ist verloren. Ein `TaskListener` kann diesen Fall deshalb grundsätzlich
+nicht lösen; der Versuch schlug im Test sofort fehl.
+Behoben in `GanttDialogProperties`: der Algorithmus läuft **nach** `mutator.commit()` und **vor**
+dem Terminalgorithmus.
+
+Das erklärt auch Natalies Beobachtung, dass die Dauer erst beim späteren Bearbeiten der Ressource
+ansprang: nur der Ressourcenweg lief außerhalb eines Commits.
+
+### Bekannte Lücke
+
+Aufwand **direkt in eine Tabellenspalte** getippt (statt in den Dialog) löst noch nichts aus —
+dort gilt derselbe Commit-Zeitpunkt. Wenn Natalie so arbeiten will, muss das nachgebaut werden.
+
+### Fehlerbericht ans Original
+
+`ISSUE-upstream-projectCreated.md` liegt fertig zum Einreichen bei
+`bardsoftware/ganttproject`. Belegt mit einer **gewöhnlichen** Textspalte (`tpc0`), damit klar
+ist: der Fehler steckt im Original, nicht in unserem Feature.
+
 ### Stolperfalle beim Handtest: vor jedem Test neu bauen
 
 Der erste Prüflauf nach dem Fix testete noch die **alte** Programmversion — `dist-bin` war vor
@@ -736,12 +789,16 @@ offen hat, testet weiter den alten Stand.
 
 ### Nächster Schritt
 
-Natalie muss Schritt 4 **erneut prüfen** (Anleitung in Abschnitt 11). Wichtig: eine bereits
-kaputt gespeicherte Datei bzw. laufende Sitzung vorher neu starten.
+Stufe 1 ist abgeschlossen und geprüft. Offen, in der Reihenfolge der Übergabe:
 
-Danach Schritt 5: Konflikt Dauer/Aufwand, wenn jemand die Datei im Original-GanttProject öffnet
-und dort die Dauer ändert. Beim Öffnen erkennen und mit Rückfrage auflösen, nicht
-stillschweigend.
+- **Schritt 5:** Konflikt Dauer/Aufwand, wenn jemand die Datei im Original-GanttProject öffnet
+  und dort die Dauer ändert. Beim Öffnen erkennen und mit Rückfrage auflösen, nicht
+  stillschweigend.
+- **Stufe 2:** Kapazitätsverteilung mit Konfliktabfrage (Abschnitt 5 und 8). Deutlich größer und
+  im vorhandenen Code ohne Vorbild. Der Aufwand lässt sich jetzt — mit Stufe 1 im Rücken —
+  realistischer schätzen als in Sitzung 1.
+- Kleinere Lücke: Aufwand direkt in einer Tabellenspalte (siehe oben).
+- Vormerkungen der Nutzerin: `NOTIZ-Ist-Stunden.md`, `NOTIZ-Zeiterfassung-Import.md`.
 
 ### Kleinigkeit, offen
 
