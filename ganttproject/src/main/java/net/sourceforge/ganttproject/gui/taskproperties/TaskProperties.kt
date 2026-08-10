@@ -71,7 +71,19 @@ class TaskPropertiesController(private val task: Task, roleManager: RoleManager,
         // es lassen sich keine Vorgaenge mehr anlegen, bis das Programm neu gestartet wird.
         // Der Aufruf ist idempotent: er vergleicht Definitionen und Spalten und tut nichts,
         // wenn bereits alles passt.
-        projectDatabase.onCustomColumnChange(task.manager.customPropertyManager)
+        // [Fork-Aenderung] DIAGNOSE (voruebergehend): der Abgleich lief nachweislich, half aber
+        // nicht. Diese Zeilen sagen beim naechsten Handtest, woran es liegt. Wieder entfernen,
+        // sobald die Ursache feststeht.
+        val cpm = task.manager.customPropertyManager
+        EFFORT_LOG.error(
+          "effort-driven: vor Abgleich, Definitionen={}, Datenbankobjekt={}",
+          cpm.definitions.map { d -> d.id }, projectDatabase.javaClass.name)
+        try {
+          projectDatabase.onCustomColumnChange(cpm)
+          EFFORT_LOG.error("effort-driven: Abgleich ohne Fehler zurueckgekehrt")
+        } catch (ex: Exception) {
+          EFFORT_LOG.error("effort-driven: Abgleich WARF eine Ausnahme", ex)
+        }
         mutator.setCustomProperties(it)
       }
       predecessorsPanel.commit()
@@ -83,3 +95,6 @@ class TaskPropertiesController(private val task: Task, roleManager: RoleManager,
   }
 
 }
+
+// [Fork-Aenderung] DIAGNOSE (voruebergehend), siehe save().
+private val EFFORT_LOG = net.sourceforge.ganttproject.GPLogger.create("EffortDriven")
