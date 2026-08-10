@@ -37,6 +37,8 @@ public class AlgorithmCollection {
 
   private final CriticalPathAlgorithm myCriticalPathAlgorithm;
 
+  // [Fork-Aenderung] Neues Feld: haelt den Algorithmus, der die Dauer aus dem Aufwand rechnet.
+  // Im Original-GanttProject gibt es dieses Feld nicht.
   private final EffortDrivenDurationAlgorithm myEffortDrivenDurationAlgorithm;
 
   private final AlgorithmBase myScheduler;
@@ -48,6 +50,7 @@ public class AlgorithmCollection {
       AdjustTaskBoundsAlgorithm adjustTaskBoundsAlgorithm,
       RecalculateTaskCompletionPercentageAlgorithm completionPercentageAlgorithm,
       ChartBoundsAlgorithm projectBoundsAlgorithm, CriticalPathAlgorithm criticalPathAlgorithm,
+      // [Fork-Aenderung] Neuer Konstruktorparameter (im Original nicht vorhanden).
       EffortDrivenDurationAlgorithm effortDrivenDurationAlgorithm,
       AlgorithmBase scheduler) {
     myScheduler = scheduler;
@@ -57,6 +60,7 @@ public class AlgorithmCollection {
     myCompletionPercentageAlgorithm = completionPercentageAlgorithm;
     myProjectBoundsAlgorithm = projectBoundsAlgorithm;
     myCriticalPathAlgorithm = criticalPathAlgorithm;
+    // [Fork-Aenderung] Neue Zuweisung.
     myEffortDrivenDurationAlgorithm = effortDrivenDurationAlgorithm;
   }
 
@@ -85,6 +89,8 @@ public class AlgorithmCollection {
   }
 
   /**
+   * [Fork-Aenderung] Neuer Getter, im Original nicht vorhanden.
+   *
    * Derives task durations from effort and daily resource availability. Must run BEFORE the
    * scheduler: it sets the durations, the scheduler then propagates the dates through the
    * dependency graph. Run afterwards, the propagated dates would be stale.

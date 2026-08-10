@@ -47,6 +47,7 @@ import net.sourceforge.ganttproject.resource.HumanResourceMerger
 import net.sourceforge.ganttproject.resource.OverwritingMerger
 import net.sourceforge.ganttproject.roles.RoleManager
 import net.sourceforge.ganttproject.storage.LazyProjectDatabaseProxy
+// [Fork-Aenderung] Neuer Import fuer den Ausloeser der Dauerberechnung.
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenTrigger
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.task.*
@@ -101,6 +102,8 @@ open class GanttProjectImpl(
 
   init {
     myCalendar.addListener { setModified() }
+    // [Fork-Aenderung] Diese Zeile ist neu, im Original nicht vorhanden. Ohne sie laeuft die
+    // Dauerberechnung nie an — sie ist der einzige Punkt, an dem das Feature eingeschaltet wird.
     // Effort-driven scheduling: recalculate durations when the resources change. Registered here,
     // in the UI-free project class, so that it also works headless (import, command line, tests).
     humanResourceManager.addView(EffortDrivenTrigger(this.taskManager))

@@ -479,6 +479,57 @@ override fun getResourceManager() = this@EffortDrivenTriggerTest.resourceManager
 
 Die anderen Testklassen sind nicht betroffen, weil sie `null` zurückgeben.
 
+### Lücke geschlossen: ist der Auslöser überhaupt eingebaut?
+
+`EffortDrivenTriggerTest` registriert den Auslöser **selbst**. Damit ist bewiesen, dass er
+funktioniert — **nicht**, dass ihn jemals jemand einschaltet. Die Registrierung in
+`GanttProjectImpl` war durch nichts geprüft.
+
+Neu: `EffortDrivenProjectWiringTest.kt` (1 Test). Er baut ein echtes `GanttProjectImpl`,
+ändert **nur** die Tagesstunden der Ressource und erwartet, dass die Dauer von selbst folgt.
+
+**Gegentest 5:** Registrierungszeile auskommentiert → **nur dieser eine Test** schlug fehl
+(`expected:<10> but was:<1>`), die anderen 31 blieben grün. Genau das war die Gefahr: Eine
+gelöschte Zeile hätte das Feature stillgelegt, ohne dass irgendeine Prüfung angeschlagen hätte.
+
+**Stand: 301 Tests grün.**
+
+### Änderungen im Fremdcode sind markiert
+
+Auf Wunsch der Nutzerin trägt **jede** Zeile, die gegenüber dem Original-GanttProject geändert
+wurde, die Marke `[Fork-Aenderung]`. Neue Dateien tragen im Kopf
+„NEUE DATEI DIESES FORKS". So findet man alles wieder:
+
+```bash
+grep -rn "Fork-Aenderung" ganttproject/src
+grep -rln "NEUE DATEI DIESES FORKS" ganttproject/src ganttproject-tester/test
+```
+
+Geänderte Originaldateien sind bislang nur drei:
+`AlgorithmCollection.java`, `TaskManagerImpl.java`, `GanttProjectImpl.kt`.
+Alles andere liegt in neuen Dateien — das hält die Angriffsfläche beim Abgleich mit dem
+Original klein.
+
+### Stufe 1 von Hand ausprobieren (ohne eigene Oberfläche)
+
+Es gibt noch keine Bedienfelder; Aufwand und Tagesstunden werden als Custom Properties über die
+normale Spaltenverwaltung eingetragen:
+
+1. Aufgaben-Spalte anlegen: Name **`effort_hours`**, Typ Dezimalzahl. Wert = Aufwand in Stunden.
+2. Ressourcen-Spalte anlegen: Name **`hours_per_day`**, Typ Dezimalzahl. Wert = Stunden pro Tag.
+3. Ressource der Aufgabe zuweisen (Auslastung wirkt: 50 % halbiert die Tagesstunden).
+4. Tagesstunden ändern → die Dauer der Aufgabe muss sich anpassen.
+
+Erwartung laut Vorgabe: 20 h bei 2 h/Tag = 10 Tage; auf 4 h/Tag = 5 Tage.
+Ohne Aufwandswert bleibt alles wie bisher (opt-in je Aufgabe). Ohne `hours_per_day` gilt 8 h.
+
+**Wichtig:** Die Namen müssen exakt so lauten — sie stehen als Konstanten in
+`EffortDrivenProperties`.
+
+**Was hier NICHT geprüft ist:** das Verhalten in der laufenden Anwendung. Alle Nachweise sind
+Modell- und Projekttests ohne Bildschirm. Ob Eingabe, Anzeige und Neuzeichnen stimmen, muss
+Natalie prüfen.
+
 ### Nächster Schritt
 
 Schritt 4 der Übergabe: Oberfläche in `gui/taskproperties/TaskResourcesPanel.kt` — Aufwandsfeld

@@ -1,6 +1,8 @@
 /*
 Copyright 2026 Noctuvo
 
+NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+
 This file is part of GanttProject, an opensource project management tool.
 
 GanttProject is free software: you can redistribute it and/or modify
