@@ -374,3 +374,11 @@ Nicht die Codemenge, sondern der Zuschnitt der Sitzungen: Der Container startet 
 Klon sind weg, jede Sitzung beginnt mit ~10 Minuten Einrichtung. Änderungen müssen deshalb in
 sitzungsgroße Stücke geschnitten werden, die jeweils für sich getestet und committet werden.
 Diese Datei ist das Gegenmittel — sie aktuell zu halten ist Teil der Arbeit, nicht Beiwerk.
+
+---
+
+## Offene Vormerkungen
+
+- `NOTIZ-Ist-Stunden.md` — Vorschlag, ein drittes Custom Property `effort_actual_hours` zu
+  ergaenzen. **Nicht beauftragt.** Natalie sagt Bescheid, wenn es umgesetzt werden soll.
+  Nicht ungefragt einbauen.
