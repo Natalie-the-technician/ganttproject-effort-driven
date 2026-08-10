@@ -172,3 +172,11 @@ hängt daran, dass die Datei aktuell bleibt.
 - Automatische Prüfungen finden Formfehler, keine Sinnfehler.
 - Geschätzte Zahlen als Schätzung kennzeichnen und sagen, von wem sie stammen.
 - Antworten auf Deutsch. Anrede: Natalie.
+
+---
+
+## Offene Vormerkungen
+
+- `NOTIZ-Ist-Stunden.md` — Vorschlag, ein drittes Custom Property `effort_actual_hours` zu
+  ergaenzen. **Nicht beauftragt.** Natalie sagt Bescheid, wenn es umgesetzt werden soll.
+  Nicht ungefragt einbauen.
