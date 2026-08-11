@@ -858,6 +858,145 @@ Diese Datei ist das Gegenmittel — sie aktuell zu halten ist Teil der Arbeit, n
 
 ---
 
+## 13. Sitzung 4 — Zeiterfassung, Schritte 1 und 2 (Web-Sitzung)
+
+Gearbeitet auf Branch `zeiterfassung`, aus der Chat-Oberfläche (Claude Code on the web).
+
+### BLOCKER: In dieser Umgebung ließ sich nichts bauen
+
+`./gradlew :ganttproject-tester:test` bricht bei der Abhängigkeitsauflösung ab:
+
+```
+Could not resolve com.sandec:mdfx:0.2.12
+  > https://dl.google.com/dl/android/maven2/...  403 Forbidden
+  > https://sandec.jfrog.io/artifactory/repo/... 403 Forbidden
+```
+
+Die 403 kommen **nicht** von den Servern, sondern vom Egress-Proxy dieser Umgebung: beide Hosts
+stehen nicht auf der Freigabeliste (`curl $HTTPS_PROXY/__agentproxy/status` nennt sie unter
+`recentRelayFailures` mit `connect_rejected`). Geprüft: `mdfx` liegt **nicht** auf Maven Central
+(dort 404), Maven Central selbst ist erreichbar. Der mitgelieferte
+`biz.ganttproject.app.libs/lib/mdfx-0.2.0-SNAPSHOT.jar` taugt nicht als Ersatz — er enthält
+`MDFXNode`, aber **nicht** `MarkdownView`, das `UIFacadeImpl.java` und `MajorUpdateUi.kt` brauchen.
+
+Umgehen wäre möglich gewesen (Ersatz-Jar bauen), ist aber laut Proxy-Anleitung ausdrücklich
+untersagt: Richtlinienabweisungen melden, nicht umgehen. **Also gemeldet statt gebastelt.**
+
+Zusätzlich fehlt in dieser Umgebung `cdn.azul.com` (das JDK mit JavaFX aus Abschnitt 2 lässt sich
+nicht laden, ebenfalls 403). Das System-JDK 21 hat kein JavaFX; ob der `org.openjfx.javafxplugin`
+das auffängt, konnte wegen des mdfx-Abbruchs nicht mehr festgestellt werden.
+
+**Folge:** Der Code dieser Sitzung ist **nicht kompiliert und nicht getestet**. Kein einziger
+Testlauf, kein Gegentest. Das ist eine echte Lücke, keine Formalie — siehe „Was Natalie prüfen
+muss" unten.
+
+**Damit die nächste Sitzung wieder bauen kann:** entweder `sandec.jfrog.io` und `cdn.azul.com` in
+der Netzwerk-Richtlinie der Umgebung freigeben (Einstellungen der Web-Umgebung, siehe
+code.claude.com/docs/en/claude-code-on-the-web), oder lokal auf Natalies Rechner arbeiten, wo
+Sitzung 3 nachweislich gebaut hat.
+
+### „ZUERST PRÜFEN" aus der Übergabe: aufgelöst, nichts kaputt
+
+Die Übergabe vermutete zwei Fassungen von `TASK_EFFORT_ACTUAL_HOURS` /
+`findOrCreateTaskActualEffort`. **Es gibt nur eine.** Beide Namen kommen im Hauptcode je genau
+einmal vor, `object EffortDrivenProperties` existiert genau einmal, und es gibt keine
+Namensvarianten (Suche ohne Beachtung der Groß-/Kleinschreibung über `.kt/.java/.xml/.properties`).
+
+Der Widerspruch entstand durch den Vergleichspunkt: eingeführt hat beide der Commit `74a95585e`
+(„Teil A", 11.08.2026 10:01) — unmittelbar **vor** dem Test-Commit `57b8abb98` derselben Sitzung.
+Verglichen wurde aber gegen `effort-driven`, und `zeiterfassung` zweigt nicht von dessen Spitze ab,
+sondern von `eaf15c6b9`; `effort-driven` hat den Teil-A-Code nie bekommen. Der Name
+`findOrCreateTaskActualEffort` ist damit der gewollte — er ist das Gegenstück zu
+`findOrCreateTaskEffort` und steht in derselben Reihe wie `findOrCreateResourceHours`.
+
+**Gegentest der Prüfung** (das Einzige, was ohne Build gegenzutesten war): eine zweite Datei mit
+derselben Konstante und Funktion angelegt — die Suche meldete sofort beide Fundstellen. Sabotage
+gelöscht, Suche zeigt wieder eine. Die Prüfung war also nicht blind.
+
+### Schritt 1 — Spaltenabgleich: kein neuer Aufruf nötig, aber eine Reihenfolge
+
+Der Abgleich `projectDatabase.onCustomColumnChange(...)` in `TaskPropertiesController.save()` gilt
+für den **ganzen** Property-Manager, nicht für eine einzelne Definition. Er deckt `effort_actual_hours`
+also mit ab — **vorausgesetzt, das Feld hat die Definition vorher angelegt.** Deshalb wurde kein
+zweiter Aufruf ergänzt, sondern die Reihenfolge festgeschrieben und kommentiert:
+
+```
+resourcesPanel.applyEffort(it)
+resourcesPanel.applyActualEffort(it)      // beide apply* ZUERST
+projectDatabase.onCustomColumnChange(...) // dann der Abgleich
+mutator.setCustomProperties(it)
+```
+
+Ein drittes Feld gehört über die Abgleichzeile. Steht es darunter, fehlt die Spalte, das UPDATE
+scheitert mit `Column "..." not found`, und danach lässt sich **kein Vorgang mehr anlegen** — genau
+Natalies Fehler aus Sitzung 3.
+
+Absichtlich **keine** Variante `findOrCreateTaskActualEffort(manager, projectDatabase)` gebaut: sie
+hätte in dieser Sitzung keinen Aufrufer und wäre toter Code. **Für Schritt 4/5 (Import) gilt aber:**
+der Import läuft über einen eigenen Menüpunkt, nicht über den Dialog — er muss
+`onCustomColumnChange` **selbst** aufrufen, bevor er schreibt.
+
+Neu in `EffortPropertyStorageTest` (Modul `ganttproject`), **ungelaufen**:
+
+| Test | Was er beweist |
+|---|---|
+| `actual effort can be stored right after its definition was created` | Definition spät angelegt, Wert kommt trotzdem in der Spiegeltabelle an |
+| `an explicit column sync repairs an actual effort definition without a column` | kaputter Zustand hergestellt, Verlust nachgewiesen, Abgleich heilt ihn |
+| `effort and actual effort are stored together by one dialog commit` | die Reihenfolge oben — beide Spalten, ein Commit |
+
+Beim dritten Test war der erste Entwurf **wertlos**: mit registriertem Hörer legt dieser die Spalten
+ohnehin an, der Test wäre auch ohne den Abgleich grün gewesen. Deshalb wird der Hörer jetzt
+abgemeldet, damit der ausdrückliche Abgleich die einzige Quelle der Spalten ist. Alle drei lesen
+den Wert **zurück** und prüfen nicht auf Ausnahmen — `MutatorImpl.commit()` verschluckt sie.
+
+### Schritt 2 — Eingabefeld „Ist-Stunden"
+
+In `TaskResourcesPanel` neben „Aufwand → Stunden", Beschriftung fest verdrahtet (`Ist-Stunden`),
+aus demselben Grund wie bei den übrigen neuen Beschriftungen: die i18n-Dateien liegen im Submodul
+des Original-Repositories.
+
+- `applyActualEffort(holder)` schreibt in **denselben Halter** wie `applyEffort`, nie direkt auf
+  `task.customValues`.
+- `parseEffortInput(...)` wiederverwendet — Komma als Dezimaltrennzeichen gilt also für beide Felder.
+- Leeres Feld löscht den Wert, legt die Definition aber nicht neu an.
+- Ungültige Eingabe lässt den gespeicherten Wert stehen und den getippten Text im Feld sichtbar,
+  damit ein Tippfehler korrigierbar bleibt statt beim OK zu verschwinden.
+- Auf die Dauer wirkt das Feld nicht: `EffortDrivenDurationAlgorithm` liest ausschließlich
+  `effortHours`, nie `actualEffortHours`.
+
+**Bekannte Nebenwirkung, nicht neu:** `GanttDialogProperties` lässt den Aufwandsalgorithmus bei
+**jedem** OK laufen. Hat ein Vorgang geplanten Aufwand und eine dazu unpassende Dauer von Hand,
+wird die Dauer beim OK korrigiert — auch wenn nur die Ist-Stunden geändert wurden. Das war schon
+vor dieser Sitzung so.
+
+### WAS NATALIE PRÜFEN MUSS (in dieser Sitzung nichts davon prüfbar)
+
+Zuerst und vor allem: **bauen und die Tests laufen lassen.** Erst danach sind die Aussagen oben
+mehr als Absicht.
+
+```powershell
+.\gradlew.bat :ganttproject:test --tests "*EffortPropertyStorage*"
+.\gradlew.bat :ganttproject-tester:test --tests "*ActualEffort*" --tests "*Toggl*" --tests "*TimeEntryMatching*"
+```
+
+Gegentest zu Schritt 1 (bitte wirklich ausführen): in `TaskPropertiesController.save()` die Zeile
+`projectDatabase.onCustomColumnChange(...)` **über** die beiden `apply*`-Aufrufe schieben →
+`effort and actual effort are stored together by one dialog commit` **muss** fehlschlagen.
+Danach zurücknehmen.
+
+Handtest zu Schritt 2 (vorher `:ganttproject-builder:distBin` neu bauen, sonst startet die alte
+Fassung):
+
+- Feld „Ist-Stunden" sichtbar unter „Stunden".
+- Wert eintragen, OK, Dialog erneut öffnen → Wert steht noch da.
+- Aufwand und Ist-Stunden **gemeinsam** speicherbar.
+- Ungültige Eingabe (`abc`) → alter Wert bleibt erhalten.
+- **Dauer ändert sich beim Eintragen von Ist-Stunden nicht.**
+- Nach dem Speichern noch ein Vorgang anlegbar (das war in Sitzung 3 der Folgeschaden).
+- Log ohne ERROR/WARN.
+
+---
+
 ## Offene Vormerkungen
 
 - `NOTIZ-Ist-Stunden.md` — Vorschlag, ein drittes Custom Property `effort_actual_hours` zu

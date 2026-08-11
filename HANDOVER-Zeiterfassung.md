@@ -53,16 +53,18 @@ Alle Sabotagen zurückgenommen, danach wieder grün.
 
 ---
 
-## 4. ZUERST PRÜFEN — ein ungeklärter Punkt
+## 4. ZUERST PRÜFEN — ERLEDIGT (Sitzung 4)
 
-In `EffortDrivenDurationAlgorithm.kt` standen `TASK_EFFORT_ACTUAL_HOURS` und
-`findOrCreateTaskActualEffort` bereits, obwohl `HEAD` von `effort-driven` sie nicht enthält.
-Der Widerspruch ließ sich in der Chat-Sitzung nicht auflösen. Der Test wurde an den
-vorgefundenen Namen angeglichen, statt eine Ursache zu erfinden.
+~~In `EffortDrivenDurationAlgorithm.kt` standen `TASK_EFFORT_ACTUAL_HOURS` und
+`findOrCreateTaskActualEffort` bereits, obwohl `HEAD` von `effort-driven` sie nicht enthält.~~
 
-**Bitte einmal nachsehen**, ob es nicht zwei Fassungen derselben Funktion gibt und ob der Name
-`findOrCreateTaskActualEffort` der gewollte ist. Falls doppelt: eine Fassung entfernen, Tests
-laufen lassen.
+**Aufgelöst: es gibt nur eine Fassung, nichts ist zu entfernen.** Beide Namen kommen im Hauptcode
+je genau einmal vor. Eingeführt hat sie Commit `74a95585e` („Teil A") — unmittelbar vor dem
+Test-Commit derselben Sitzung. Der Vergleich lief gegen `effort-driven`, das den Teil-A-Code nie
+bekommen hat: `zeiterfassung` zweigt von `eaf15c6b9` ab, nicht von der Spitze von `effort-driven`.
+`findOrCreateTaskActualEffort` ist der gewollte Name (Gegenstück zu `findOrCreateTaskEffort`).
+
+Einzelheiten samt Gegentest in `CLAUDE-NOTES.md`, Abschnitt 13.
 
 ---
 
