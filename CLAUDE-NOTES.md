@@ -385,3 +385,6 @@ Diese Datei ist das Gegenmittel — sie aktuell zu halten ist Teil der Arbeit, n
 - `NOTIZ-Zeiterfassung-Import.md` — Vorschlag, Ist-Zeiten aus Toggl Track ueber die API zu
   importieren, mit Zuordnungsvorschlaegen, Lernspeicher und Token je Ressource.
   **Nicht beauftragt.** Setzt NOTIZ-Ist-Stunden.md voraus.
+- `ENTWURF-Ist-Stunden-Import.md` — Umsetzungsentwurf zu beiden Vormerkungen, aufbauend
+  auf dem Stand nach Sitzung 3. Enthaelt die Zuordnung der bekannten Fallen zu den
+  einzelnen Schritten. **Nicht beauftragt.**
