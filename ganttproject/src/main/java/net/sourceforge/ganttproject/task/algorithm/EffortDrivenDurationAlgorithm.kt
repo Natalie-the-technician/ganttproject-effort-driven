@@ -57,12 +57,28 @@ object EffortDrivenProperties {
   /** Daily availability of a resource, in hours. Custom property on resources. */
   const val RESOURCE_HOURS_PER_DAY = "hours_per_day"
 
+  /**
+   * Effort ACTUALLY spent on a task, in hours. Custom property on tasks. [Fork-Aenderung]
+   *
+   * Purely a record. It never influences the duration, the completion percentage or the status
+   * of a task — see [Task.actualEffortHours]. Consumed outside this program by the planning
+   * chain, which derives two separate figures from it: the estimation error (actual / planned
+   * hours) and the capacity ratio (all actual hours / hours assumed available in the period).
+   */
+  const val TASK_EFFORT_ACTUAL_HOURS = "effort_actual_hours"
+
   /** Used when a resource carries no explicit value. */
   const val DEFAULT_HOURS_PER_DAY = 8.0
 
   fun findOrCreateTaskEffort(manager: CustomPropertyManager): CustomPropertyDefinition =
     manager.findEffortDefinition(TASK_EFFORT_HOURS)
       ?: manager.createDefinition(TASK_EFFORT_HOURS, CustomPropertyClass.DOUBLE.iD, "Effort (h)", null)
+
+  /** [Fork-Aenderung] Counterpart of [findOrCreateTaskEffort] for the recorded actual effort. */
+  fun findOrCreateTaskActualEffort(manager: CustomPropertyManager): CustomPropertyDefinition =
+    manager.findEffortDefinition(TASK_EFFORT_ACTUAL_HOURS)
+      ?: manager.createDefinition(TASK_EFFORT_ACTUAL_HOURS, CustomPropertyClass.DOUBLE.iD,
+                                  "Actual effort (h)", null)
 
   fun findOrCreateResourceHours(manager: CustomPropertyManager): CustomPropertyDefinition =
     manager.findEffortDefinition(RESOURCE_HOURS_PER_DAY)
@@ -89,6 +105,21 @@ fun CustomPropertyManager.findEffortDefinition(idOrName: String): CustomProperty
  */
 fun Task.effortHours(manager: CustomPropertyManager): Double? {
   val def = manager.findEffortDefinition(EffortDrivenProperties.TASK_EFFORT_HOURS) ?: return null
+  val raw = this.customValues.getValue(def) ?: return null
+  val value = (raw as? Number)?.toDouble() ?: raw.toString().toDoubleOrNull() ?: return null
+  return if (value > 0.0) value else null
+}
+
+/**
+ * Reads the recorded actual effort of a task, or null when none was recorded. [Fork-Aenderung]
+ *
+ * Deliberately NOT used anywhere in the scheduling path. Time spent is not the same as work
+ * finished: letting it drive the duration would make a task rewrite its own plan while it is
+ * still being worked on. [EffortDrivenDurationAlgorithm] must never call this.
+ */
+fun Task.actualEffortHours(manager: CustomPropertyManager): Double? {
+  val def = manager.findEffortDefinition(EffortDrivenProperties.TASK_EFFORT_ACTUAL_HOURS)
+    ?: return null
   val raw = this.customValues.getValue(def) ?: return null
   val value = (raw as? Number)?.toDouble() ?: raw.toString().toDoubleOrNull() ?: return null
   return if (value > 0.0) value else null
