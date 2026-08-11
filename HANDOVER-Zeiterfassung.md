@@ -1,120 +1,155 @@
 # Übergabe: Zeiterfassung (Branch `zeiterfassung`)
 
-Erstellt 11.08.2026 aus der Chat-Oberfläche. Ab hier wird lokal weitergearbeitet.
+Stand 11.08.2026, nach den Web-Sitzungen 4 und 5. **Diese Datei ersetzt die Fassung vom Vormittag.**
+Adressat ist die **lokale Sitzung auf Natalies Rechner** — dort, wo sich bauen lässt.
 
-**Zuerst lesen:** `CLAUDE-NOTES.md` (Einrichtung, Fallen, Stand nach Sitzung 3) und
-`ENTWURF-Ist-Stunden-Import.md` (das Warum, die Fallen je Schritt).
-Diese Datei sagt nur, **was fertig ist und was als Nächstes zu tun ist**.
+**Zuerst lesen:** `CLAUDE-NOTES.md`, Abschnitte 13 und 14 (Warum und Fallen).
+Diese Datei sagt nur, **was fertig ist, was ungeprüft ist und was als Nächstes zu tun ist**.
+
+---
+
+## 0. Das Wichtigste in fünf Zeilen
+
+1. Schritte 1 bis 3 sind gebaut. **Schritt 3 ist geprüft, die Schritte 1 und 2 sind es nicht.**
+2. Grund: In der Web-Umgebung ließ sich Gradle nicht ausführen. Auf deinem Rechner geht es.
+3. **Erste Handlung der lokalen Sitzung: bauen und Abschnitt 4 dieser Datei abarbeiten.**
+   Vorher keinen neuen Code schreiben.
+4. Erst danach Schritt 4 (Speicherung der importierten Eintrags-IDs).
+5. Falls lokal noch ungepushte Arbeit liegt: **erst zusammenführen**, dann weiterarbeiten.
 
 ---
 
 ## 1. Lage in einem Absatz
 
 GanttProject soll die tatsächlich aufgewendeten Stunden festhalten und sie aus Toggl Track
-importieren können. Die **Rechen- und Entscheidungslogik ist gebaut und mit Gegentests
-abgesichert**. Was fehlt, ist Oberfläche und Verdrahtung.
-
-## 2. Branches
-
-| Branch | Inhalt |
-|---|---|
-| `master` | Spiegel des Originals plus Notizdateien |
-| `effort-driven` | Stufe 1 (effort-driven scheduling), fertig und in der Anwendung geprüft |
-| **`zeiterfassung`** | **hier weiterarbeiten** — abgezweigt von `effort-driven`, enthält den neuen Code |
-
-```bash
-git fetch && git checkout zeiterfassung
-```
-
-## 3. Was auf `zeiterfassung` liegt
-
-| Datei | Inhalt | Tests |
-|---|---|---|
-| `.../task/algorithm/EffortDrivenDurationAlgorithm.kt` (ergänzt) | `actualEffortHours(...)`, Konstante `TASK_EFFORT_ACTUAL_HOURS`, `findOrCreateTaskActualEffort(...)` | 7 |
-| `.../timetracking/TogglClient.kt` | Abruf, Auth, Fehlerarten, JSON-Leser | 15 |
-| `.../timetracking/TimeEntryMatching.kt` | Zuordnung, Aufteilung, Doppelimport-Schutz | 23 |
-| `ganttproject-tester/test/.../ActualEffortTest.kt` | | |
-| `ganttproject-tester/test/.../timetracking/TogglClientTest.kt` | | |
-| `ganttproject-tester/test/.../timetracking/TimeEntryMatchingTest.kt` | | |
-
-**45 neue Tests, gesamtes Testmodul 356 Tests, 0 Fehler** (Stand 11.08.2026).
-
-```bash
-./gradlew :ganttproject-tester:test --tests "*ActualEffort*" --tests "*Toggl*" --tests "*TimeEntryMatching*"
-```
-
-### Gegentests, die durchgeführt wurden
-
-- Ist-Stunden: Namenssuche entfernt, Null-Schutz entfernt → 3 Tests schlugen fehl.
-- Zuordnung: Doppelimport-Schutz ausgehebelt, blanke Zahl als Vorgangsnummer zugelassen,
-  Summenprüfung der Aufteilung entfernt → **5 Tests** schlugen fehl.
-
-Alle Sabotagen zurückgenommen, danach wieder grün.
+importieren können. Rechen- und Entscheidungslogik, der Leser für die Ist-Stunden, das
+Eingabefeld und die HTTP-Anbindung sind gebaut. Was fehlt: die Speicherung der schon
+importierten Einträge, die Übernahme in die Aufgaben, der Zuordnungsdialog und die Token-Ablage.
 
 ---
 
-## 4. ZUERST PRÜFEN — ERLEDIGT (Sitzung 4)
+## 2. Branchstand
 
-~~In `EffortDrivenDurationAlgorithm.kt` standen `TASK_EFFORT_ACTUAL_HOURS` und
-`findOrCreateTaskActualEffort` bereits, obwohl `HEAD` von `effort-driven` sie nicht enthält.~~
+| Branch | Stand |
+|---|---|
+| `zeiterfassung` | **`c000b1eec`** — hier weiterarbeiten |
+| `claude/zeiterfassung-handover-i15418` | derselbe Commit, nur die Ablage der Web-Sitzung |
+| `effort-driven` | Stufe 1, ohne den Zeiterfassungscode |
+| `master` | Spiegel des Originals plus Notizdateien |
 
-**Aufgelöst: es gibt nur eine Fassung, nichts ist zu entfernen.** Beide Namen kommen im Hauptcode
-je genau einmal vor. Eingeführt hat sie Commit `74a95585e` („Teil A") — unmittelbar vor dem
-Test-Commit derselben Sitzung. Der Vergleich lief gegen `effort-driven`, das den Teil-A-Code nie
-bekommen hat: `zeiterfassung` zweigt von `eaf15c6b9` ab, nicht von der Spitze von `effort-driven`.
-`findOrCreateTaskActualEffort` ist der gewollte Name (Gegenstück zu `findOrCreateTaskEffort`).
+```bash
+git fetch origin && git checkout zeiterfassung && git pull --ff-only
+```
 
-Einzelheiten samt Gegentest in `CLAUDE-NOTES.md`, Abschnitt 13.
+**Wichtig:** In der Web-Sitzung vom 11.08. wurde gemeldet, es seien lokal „neue Features
+nachgerüstet" worden. **In Git ist davon nichts angekommen** — weder auf `zeiterfassung` noch
+sonst wo, und es gibt keine Pull Requests. Wenn auf dem Rechner noch etwas liegt: **zuerst
+committen und zusammenführen, bevor neuer Code entsteht.** Sonst gibt es Konflikte in genau den
+Dateien, die unten stehen.
+
+---
+
+## 3. Was auf `zeiterfassung` liegt
+
+### Fertig und geprüft
+
+| Datei | Inhalt | Tests |
+|---|---|---|
+| `.../task/algorithm/EffortDrivenDurationAlgorithm.kt` | Stufe 1, plus `actualEffortHours(...)`, `TASK_EFFORT_ACTUAL_HOURS`, `findOrCreateTaskActualEffort(...)` | 7 |
+| `.../timetracking/TogglClient.kt` | Abruf, Auth, Fehlerarten, JSON-Leser | 15 |
+| `.../timetracking/TimeEntryMatching.kt` | Zuordnung, Aufteilung, Doppelimport-Schutz | 23 |
+| `.../timetracking/HttpClientBackend.kt` | **neu, Schritt 3** — echtes HTTP, Wartezeit, Zeitlimits | 14 |
+
+### Gebaut, aber NICHT geprüft — hier liegt die Arbeit
+
+| Datei | Was daran neu ist |
+|---|---|
+| `.../gui/taskproperties/TaskResourcesPanel.kt` | Feld „Ist-Stunden", `applyActualEffort(...)` |
+| `.../gui/taskproperties/TaskProperties.kt` | `applyActualEffort` eingehängt, Reihenfolge des Spaltenabgleichs festgeschrieben |
+| `ganttproject/src/test/.../storage/EffortPropertyStorageTest.kt` | 3 neue Speichertests |
+
+Kein Testlauf, keine Übersetzung, kein Gegentest — die Web-Umgebung konnte das Modul nicht bauen.
+
+---
+
+## 4. ZUERST TUN — die ungeprüften Sachen prüfen
+
+Nichts hiervon ist Formsache. Zwei der drei Fehler, die dieses Vorhaben bisher aufgehalten haben,
+hat **nur** der Handtest gefunden.
+
+### 4.1 Bauen und die Tests laufen lassen
+
+```powershell
+.\gradlew.bat :ganttproject:test --tests "*EffortPropertyStorage*"
+.\gradlew.bat :ganttproject-tester:test --tests "*ActualEffort*" --tests "*Toggl*" `
+    --tests "*TimeEntryMatching*" --tests "*HttpClientBackend*"
+```
+
+Erwartung: **9** Tests aus `EffortPropertyStorageTest` (6 alte, 3 neue) und **59** aus dem zweiten
+Aufruf (7 + 15 + 23 + 14). Das gesamte Testmodul `ganttproject-tester` sollte bei **370** stehen
+(356 vorher plus 14 neue) — **diese Zahlen sind ausgezählt bzw. gerechnet, nicht gemessen.**
+
+Die 14 Tests aus Schritt 3 sind bereits ausgeführt worden, allerdings außerhalb von Gradle
+(Rezept in `CLAUDE-NOTES.md` Abschnitt 14). Wenn sie unter Gradle **nicht** grün sind, liegt es
+am Zusammenspiel mit dem Modul, nicht an der Logik — dann bitte die Meldung genau lesen.
+
+### 4.2 Gegentest zu Schritt 1 — bitte wirklich ausführen
+
+In `TaskPropertiesController.save()` die Zeile `projectDatabase.onCustomColumnChange(...)`
+**über** die beiden `apply*`-Aufrufe schieben.
+
+→ `effort and actual effort are stored together by one dialog commit` **muss** fehlschlagen.
+Bleibt der Test grün, sichert er nichts, und die Reihenfolge ist nicht belegt. Danach zurücknehmen.
+
+### 4.3 Handtest zu Schritt 2
+
+**Vorher neu bauen**, sonst startet die alte Fassung:
+
+```powershell
+.\gradlew.bat :ganttproject-builder:distBin
+# Kontrolle: muss juenger sein als die letzte Quelltextaenderung
+ls ganttproject-builder\dist-bin\plugins\base\ganttproject\lib\ganttproject-*.jar.lib
+```
+
+- [ ] Feld „Ist-Stunden" sichtbar, unter „Stunden" im Ressourcenreiter.
+- [ ] Wert eintragen, OK, Dialog erneut öffnen → Wert steht noch da.
+- [ ] Aufwand und Ist-Stunden **gemeinsam** speicherbar.
+- [ ] Ungültige Eingabe (`abc`) → alter Wert bleibt erhalten, getippter Text bleibt im Feld stehen.
+- [ ] Komma wird angenommen (`12,5`).
+- [ ] **Dauer ändert sich beim Eintragen von Ist-Stunden nicht.**
+- [ ] Danach lässt sich noch ein Vorgang anlegen — das war in Sitzung 3 der Folgeschaden.
+- [ ] Log ohne ERROR/WARN (Filter positiv und negativ gegenprüfen).
+
+**Eine Stolperstelle beim vorletzten Punkt:** `GanttDialogProperties` lässt den
+Aufwandsalgorithmus bei **jedem** OK laufen. Hat ein Vorgang geplanten Aufwand und eine von Hand
+dazu unpassende Dauer, wird die Dauer beim OK korrigiert — auch wenn nur die Ist-Stunden geändert
+wurden. Das ist nicht neu und kein Fehler dieses Schritts. Zum Prüfen einen Vorgang nehmen, dessen
+Dauer zum Aufwand passt, oder einen ganz ohne Aufwand.
+
+### 4.4 Danach
+
+Ergebnis in `CLAUDE-NOTES.md` festhalten — **abgelesene Werte, keine geschätzten.** Erst dann
+weiter mit Schritt 4.
 
 ---
 
 ## 5. Nächste Schritte, in dieser Reihenfolge
 
-Jeder Schritt ist für sich lauffähig und committbar.
-
-### Schritt 1 — Spaltenabgleich beim ersten Schreiben (klein, aber kritisch)
-
-Beim Anlegen von `effort_actual_hours` muss `projectDatabase.onCustomColumnChange(...)` gerufen
-werden, sonst existiert die Definition ohne Datenbankspalte und jedes Schreiben scheitert.
-**Genau der Fehler aus Natalies Handtest in Sitzung 3.** Der Aufruf ist idempotent.
-
-Test: Speichertest mit **eigener H2-Datenbank**, Wert **zurücklesen**. Nicht auf Ausnahmen
-prüfen — `MutatorImpl.commit()` verschluckt Datenbankfehler.
-
-### Schritt 2 — Eingabefeld für Ist-Stunden
-
-Im Aufgabendialog neben „Aufwand". **In denselben Halter schreiben**, den
-`CustomColumnsPanel.save { }` committet, nicht direkt auf `task.customValues` — sonst
-überschreibt die veraltete Kopie den Wert still.
-
-`parseEffortInput(text)` wiederverwenden (akzeptiert Komma), nicht duplizieren.
-
-Danach ist Teil A **für sich nutzbar**: Stunden lassen sich von Hand eintragen, und die
-Auswertung in Natalies Planungskette wartet bereits fertig gebaut darauf. **Hier eine Prüfung
-durch Natalie einplanen, bevor es weitergeht.**
-
-### Schritt 3 — Echte HTTP-Umsetzung von `HttpBackend` — ERLEDIGT (Sitzung 5)
-
-`.../timetracking/HttpClientBackend.kt`: `HttpClientBackend`, `JdkHttpSender`, `RequestThrottle`,
-`buildTogglRequest`. Vertrag eingehalten (bei Nicht-2xx wird nicht geworfen), Wartezeit von einer
-Sekunde auf monotoner Uhr, Uhr und Schlafen injizierbar.
-
-14 Tests, 7 Gegentests, alle gefangen. Zusammen mit den bestehenden Toggl-Tests **52 Tests grün**.
-Einzelheiten in `CLAUDE-NOTES.md`, Abschnitt 14 — dort steht auch, wie sich trotz gesperrtem
-Gradle-Build übersetzen und testen lässt.
-
-Noch **kein Aufrufer**: den bekommt das Backend in Schritt 4/5. Mit echtem Netz ist es noch nie
-gelaufen.
+Schritte 1 bis 3 sind erledigt (1 und 2 vorbehaltlich Abschnitt 4).
 
 ### Schritt 4 — Speicherung der importierten Eintrags-IDs
 
 `planImport(entries, alreadyImported)` erwartet eine Abbildung `Toggl-Eintrags-ID → bereits
-importierte Stunden`. Diese Abbildung muss **projektweit** gespeichert werden, nicht je
-Vorgang — sonst greift der Schutz nicht mehr, wenn ein Eintrag später einem anderen Vorgang
-zugeordnet wird.
+importierte Stunden`. Diese Abbildung muss **projektweit** gespeichert werden, nicht je Vorgang —
+sonst greift der Schutz nicht mehr, wenn ein Eintrag später einem anderen Vorgang zugeordnet wird.
 
 Ablage als Custom Property am Projekt oder in den Projektoptionen. **Nicht als neues
-XML-Attribut** — der `TaskSaver` verwirft Unbekanntes still (siehe `CLAUDE-NOTES.md`).
+XML-Attribut** — der `TaskSaver` verwirft Unbekanntes still.
+
+**Achtung, aus Sitzung 4:** Der Import läuft über einen eigenen Menüpunkt, nicht über den
+Aufgabendialog. Er kann sich also **nicht** auf den Spaltenabgleich verlassen, den
+`TaskPropertiesController.save()` macht — er muss `projectDatabase.onCustomColumnChange(...)`
+**selbst** rufen, bevor er schreibt.
 
 **Gegentest Pflicht:** denselben Import zweimal laufen lassen, Stundensumme muss gleich bleiben.
 
@@ -125,9 +160,16 @@ XML-Attribut** — der `TaskSaver` verwirft Unbekanntes still (siehe `CLAUDE-NOT
 - **Nicht aus einem Mutator-Commit heraus ausführen** — `MutatorReentered.commit()` tut nichts,
   dort gesetzte Werte sind verloren. Eigener Menüpunkt.
 - Nach dem Schreiben **zurücklesen**, nicht auf Ausnahmen vertrauen.
+- **Ein Backend je Importlauf**: `RequestThrottle` gilt je Instanz, zwei Instanzen feuern zweimal
+  in derselben Sekunde und holen sich ein 429.
 
 **Unantastbar:** `complete`, Status, geplante Dauer, geplanter Aufwand. Ein **Hinweis** bei
 deutlicher Überschreitung ist erwünscht — als Meldung, nicht als Änderung.
+
+**Hier fällt auch der erste Lauf mit echtem Netz an.** `HttpClientBackend` hat noch nie mit Toggl
+gesprochen; alle 14 Tests laufen gegen eingespielte Antworten. Erwartbare Stolperstellen: der
+Token gehört in den **Benutzernamen** (das Wort `api_token` ins Passwort), und die Zeitlimits
+(30 s Antwort, 15 s Verbindung) sind **geschätzt, nicht gemessen** — wenn sie greifen, anpassen.
 
 ### Schritt 6 — Zuordnungsdialog
 
@@ -149,27 +191,29 @@ Zuordnung `Ressourcen-ID → Token` in den **Anwendungseinstellungen**.
 
 ---
 
-## 6. Was Natalie prüfen muss (Oberfläche)
-
-**Nach Schritt 2:** Feld sichtbar, Wert bleibt nach erneutem Öffnen erhalten, Aufwand und
-Ist-Stunden gemeinsam speicherbar, ungültige Eingabe lässt den alten Wert stehen, **Dauer
-ändert sich beim Eintragen von Ist-Stunden nicht**.
-
-**Nach Schritt 5/6:** Import mit echtem Token, Vorschläge plausibel, freie Auswahl erreichbar,
-Aufteilung rechnet richtig, **zweiter Lauf verdoppelt nichts**, Rückgängig macht den gesamten
-Import rückgängig.
-
-Vor jedem Handtest neu bauen — sonst startet die alte Fassung.
-
----
-
-## 7. Was NICHT gebaut wird
+## 6. Was NICHT gebaut wird
 
 - Kein automatischer Hintergrund-Sync (Import auf Anforderung, mit Vorschau).
 - Keine Rückrichtung nach Toggl.
 - Kein PDF-Parser (der Free-Plan liefert PDF ohne Datum je Eintrag — untauglich).
 - Keine Ableitung von Fortschritt oder Fertigstellung aus Zeitdaten.
 - Keine Rückkopplung von Ist-Stunden auf die geplante Dauer.
+
+---
+
+## 7. Fallen, die dieses Vorhaben schon Zeit gekostet haben
+
+Alle im Einzelnen in `CLAUDE-NOTES.md`. Kurzfassung, damit sie niemand zweimal tritt:
+
+| Falle | Kurz |
+|---|---|
+| `MutatorImpl.commit()` verschluckt Datenbankfehler | Nie auf Ausnahmen prüfen, **immer zurücklesen** |
+| Custom Property ohne H2-Spalte | `onCustomColumnChange(...)` rufen, **nach** dem Anlegen |
+| Kennung vs. Name | Selbst angelegte tragen unsere Kennung, vom Nutzer angelegte nur den Namen |
+| `MutatorReentered.commit()` tut nichts | Algorithmen **nach** dem Commit laufen lassen |
+| Geteilte H2-Datenbank zwischen Tests | Jeder Test seine eigene (Name aus `TestInfo`) |
+| Alte Fassung getestet | Vor jedem Handtest neu bauen, Zeitstempel prüfen |
+| Test, der nichts sichert | Vorbedingung ausdrücklich prüfen — siehe 4.2 |
 
 ---
 
