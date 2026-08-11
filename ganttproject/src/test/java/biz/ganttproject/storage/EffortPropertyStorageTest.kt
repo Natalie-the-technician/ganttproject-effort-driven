@@ -200,10 +200,19 @@ class EffortPropertyStorageTest {
   private lateinit var proxyTaskManager: TaskManager
 
   /** Reads the effort straight out of the mirror table. Throws when the column does not exist. */
-  private fun readEffortColumn(): Double? =
+  private fun readEffortColumn(): Double? = readDoubleColumn(EffortDrivenProperties.TASK_EFFORT_HOURS)
+
+  /**
+   * Reads the recorded actual effort straight out of the mirror table. Throws when the column does
+   * not exist — which is the whole point: a missing column is exactly the failure being tested.
+   */
+  private fun readActualEffortColumn(): Double? =
+    readDoubleColumn(EffortDrivenProperties.TASK_EFFORT_ACTUAL_HOURS)
+
+  private fun readDoubleColumn(column: String): Double? =
     dataSource.connection.use { conn ->
       conn.createStatement().use { stmt ->
-        stmt.executeQuery("SELECT ${EffortDrivenProperties.TASK_EFFORT_HOURS} FROM Task").use { rs ->
+        stmt.executeQuery("SELECT $column FROM Task").use { rs ->
           if (rs.next()) (rs.getObject(1) as? Number)?.toDouble() else null
         }
       }
@@ -266,6 +275,94 @@ class EffortPropertyStorageTest {
     task.createMutator().also { it.setCustomProperties(edited2) }.commit()
     assertEquals(30.0, readEffortColumn())
   }
+
+  // [Fork-Aenderung] ---- Anfang: Ist-Stunden (Schritt 1 der Uebergabe Zeiterfassung) ----
+
+  /**
+   * The recorded actual effort walks into exactly the same trap as the planned effort: its
+   * definition is created while the task properties dialog is being committed, so the mirror
+   * column has to appear at that very moment.
+   *
+   * Same shape as `effort can be stored right after its definition was created`, for the second
+   * property. It is a separate test on purpose — one property having a column says nothing about
+   * the other one.
+   */
+  @Test
+  fun `actual effort can be stored right after its definition was created`() {
+    val task = taskManager.newTaskBuilder().withName("t").build()
+    projectDatabase.insertTask(task)
+
+    val def = EffortDrivenProperties.findOrCreateTaskActualEffort(customPropertyManager)
+    val edited = task.customValues.copyOf().also { it.setValue(def, 12.5) }
+
+    val mutator = task.createMutator()
+    mutator.setCustomProperties(edited)
+    mutator.commit()
+    // Read back: the commit swallows database errors, so only the stored value proves anything.
+    assertEquals(12.5, readActualEffortColumn())
+  }
+
+  /**
+   * The broken state for the actual effort, and the repair: definition present, mirror column
+   * missing, value lost — until the explicit sync runs.
+   *
+   * The precondition is asserted, not assumed: without the `assertTrue` below the test would also
+   * pass if the column had been there all along, and would prove nothing.
+   */
+  @Test
+  fun `an explicit column sync repairs an actual effort definition without a column`() {
+    val task = taskManager.newTaskBuilder().withName("t").build()
+    projectDatabase.insertTask(task)
+
+    // Simulate the broken state: definition present, mirror column missing.
+    customPropertyManager.removeListener(listener)
+    val def = EffortDrivenProperties.findOrCreateTaskActualEffort(customPropertyManager)
+
+    val edited = task.customValues.copyOf().also { it.setValue(def, 12.5) }
+    task.createMutator().also { it.setCustomProperties(edited) }.commit()
+    assertTrue(runCatching { readActualEffortColumn() }.isFailure,
+      "the mirror column must be missing here, otherwise this test proves nothing")
+
+    // This is what TaskPropertiesController.save() does before committing.
+    projectDatabase.onCustomColumnChange(customPropertyManager)
+
+    val edited2 = task.customValues.copyOf().also { it.setValue(def, 31.0) }
+    task.createMutator().also { it.setCustomProperties(edited2) }.commit()
+    assertEquals(31.0, readActualEffortColumn())
+  }
+
+  /**
+   * The order that the task properties dialog performs: BOTH effort fields write into one property
+   * holder, the column sync runs ONCE for the whole manager, and a single mutator commit stores
+   * everything. See `TaskPropertiesController.save()`.
+   *
+   * The listener is removed on purpose, so that the explicit sync is the ONLY thing that can
+   * create the two mirror columns. Otherwise the listener would create them anyway and this test
+   * would stay green even with the sync deleted — it would guard nothing.
+   *
+   * Removing the sync, or moving it in front of the two `apply` calls (the easy mistake when a
+   * third field is added later), makes the reads below fail on a missing column.
+   *
+   * Both values are checked: a sync that produced only the first column would otherwise pass.
+   */
+  @Test
+  fun `effort and actual effort are stored together by one dialog commit`() {
+    val task = taskManager.newTaskBuilder().withName("t").build()
+    projectDatabase.insertTask(task)
+    customPropertyManager.removeListener(listener)
+
+    val holder = task.customValues.copyOf()
+    holder.setValue(EffortDrivenProperties.findOrCreateTaskEffort(customPropertyManager), 20.0)
+    holder.setValue(
+      EffortDrivenProperties.findOrCreateTaskActualEffort(customPropertyManager), 12.5)
+    projectDatabase.onCustomColumnChange(customPropertyManager)
+    task.createMutator().also { it.setCustomProperties(holder) }.commit()
+
+    assertEquals(20.0, readEffortColumn())
+    assertEquals(12.5, readActualEffortColumn())
+  }
+
+  // [Fork-Aenderung] ---- Ende des neuen Blocks ----
 
   /**
    * The same thing, but wrapped in a project database transaction — this is what the running
