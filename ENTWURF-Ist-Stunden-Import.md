@@ -1,6 +1,57 @@
 # Entwurf: Ist-Stunden und Zeiterfassungs-Import
 
-Status: **ENTWURF, nicht beauftragt.** Natalie gibt das Signal, Teil für Teil.
+> **STAND 11.08.2026: Teile A, B1, B2 und B3 sind GEBAUT UND GETESTET.**
+> Sie liegen auf Branch **`zeiterfassung`** (abgezweigt von `effort-driven`).
+> **45 neue Tests grün, gesamtes Testmodul 356 Tests ohne Fehler.**
+> Was noch fehlt, steht unten unter „Offen". Der Rest dieses Dokuments beschreibt weiterhin
+> das Warum und die Fallen — beim Weiterbauen zuerst lesen.
+
+## Was bereits im Branch `zeiterfassung` liegt
+
+| Datei | Inhalt | Tests |
+|---|---|---|
+| `EffortDrivenDurationAlgorithm.kt` (ergänzt) | `actualEffortHours(...)` — Leser für die Ist-Stunden | 7 |
+| `timetracking/TogglClient.kt` | Abruf, Authentifizierung, Fehlerarten, JSON-Leser | 15 |
+| `timetracking/TimeEntryMatching.kt` | Zuordnung, Aufteilung, Doppelimport-Schutz | 23 |
+
+Alle drei mit Gegentest belegt:
+
+- **Ist-Stunden:** Namenssuche entfernt und Null-Schutz entfernt → drei Tests schlugen fehl.
+- **Zuordnung:** Doppelimport-Schutz ausgehebelt, blanke Zahl als Vorgangsnummer akzeptiert,
+  Summenprüfung der Aufteilung entfernt → **fünf** Tests schlugen fehl, darunter
+  `testSecondImportAddsNothing`.
+
+### Entwurfsentscheidungen, die dabei getroffen wurden
+
+- **Zuordnungslogik ohne GanttProject-Typen und ohne Oberfläche.** `MatchableTask` ist ein
+  eigenes kleines Modell. Der Dialog ruft die Funktionen nur auf. Das ist die Lehre aus
+  Stufe 1, wo zwei Fehler hinter 300 grünen Tests steckten, weil die Verdrahtung nicht
+  prüfbar war.
+- **Netzzugriff hinter `HttpBackend`.** Tests liefern aufgezeichnete Antworten. Ein Test, der
+  Netz braucht, ist kein Test.
+- **`kotlinx-serialization-json` statt neuer Abhängigkeit** — ist im Modul `ganttproject`
+  bereits eingebunden (`build.gradle` Z. 51, Plugin Z. 17).
+- **JSON wird als Baum gelesen, nicht auf feste Klassen abgebildet.** Toggl ergänzt Felder;
+  ein unbekanntes Feld darf den Import nicht brechen. Kaputte Einträge werden übersprungen
+  **und gemeldet** (`parseTimeEntriesWithProblems`).
+- **Laufende Einträge werden verworfen** — sie haben in Toggl eine negative Dauer.
+- **Nur `#123` gilt als Vorgangsnummer.** Eine blanke Zahl nicht: „8 Stunden Doku" ist nicht
+  Vorgang 8.
+- **Geänderter Eintrag wird aktualisiert, nicht addiert** (`hoursDelta()` liefert die
+  Differenz, auch negativ). Das war die offene Frage aus der ersten Fassung.
+
+### Ein Widerspruch, den ich nicht auflösen konnte
+
+Beim Einbau von Teil A stellte sich heraus, dass die Konstante `TASK_EFFORT_ACTUAL_HOURS` und
+`findOrCreateTaskActualEffort` bereits in der Datei standen, obwohl der Fork-Stand (`HEAD`) sie
+nicht enthält. Meine eigene Ergänzung trug einen anderen Namen
+(`findOrCreateActualEffort`). Ich habe den Test an den vorgefundenen Namen angeglichen, statt
+eine Ursache zu erfinden. **Vor dem Weiterbauen kurz prüfen, ob der Name im Branch stimmig ist**
+und ob es nicht doch zwei Fassungen gibt.
+
+---
+
+Status des Restes: **ENTWURF, nicht beauftragt.**
 
 Baut auf dem Stand nach Sitzung 3 auf (Stufe 1 fertig und in der laufenden Anwendung geprüft,
 309+ Tests grün). Ersetzt nicht `NOTIZ-Ist-Stunden.md` und `NOTIZ-Zeiterfassung-Import.md` —
@@ -195,7 +246,21 @@ Umsetzbar als Zuordnung `Ressourcen-ID → Token-Kennung` in den Anwendungseinst
 
 ---
 
-## 5. Reihenfolge und Umfang
+## 5. Offen — was noch zu bauen ist
+
+| Teil | Zustand |
+|---|---|
+| A — Feld für Ist-Stunden | Leser und Tests **fertig**. **Offen: Eingabefeld im Dialog** (A4) und der Spaltenabgleich `projectDatabase.onCustomColumnChange(...)` beim ersten Schreiben (A3) |
+| B1 — Abruf | **fertig**, außer der echten `HttpBackend`-Umsetzung (`java.net.http.HttpClient`) samt Wartezeit von 1 s zwischen Anfragen |
+| B2 — Zuordnung | Logik **fertig**. **Offen: der Dialog**, der sie bedient |
+| B3 — Doppelimport-Schutz | Logik **fertig**. **Offen: Speicherung der importierten IDs** im Projekt |
+| B4 — Übernahme in die Aufgaben | **offen** — Vorschau, eine Undo-Transaktion, nicht aus einem Mutator-Commit heraus |
+| C — Token je Ressource | **offen** — Ablage in den Anwendungseinstellungen, nicht in der Projektdatei |
+
+**Empfohlene Reihenfolge:** A4 und A3 zuerst (klein, macht Teil A für sich nutzbar), dann B1
+zu Ende, dann B3-Speicherung, dann B4, zuletzt B2-Dialog und C.
+
+## 6. Reihenfolge und Umfang (ursprüngliche Einschätzung)
 
 | Teil | Umfang (Schätzung Claude) | Abhängig von |
 |---|---|---|
@@ -213,7 +278,7 @@ Stundenbasis"). Damit hat der Import schon einen erprobten Abnehmer, wenn er kom
 
 ---
 
-## 6. Was Natalie prüfen muss
+## 7. Was Natalie prüfen muss
 
 Wie immer alles, was Oberfläche ist. Konkret:
 
@@ -227,7 +292,7 @@ gesamten Import rückgängig.
 
 ---
 
-## 7. Was NICHT gebaut wird
+## 8. Was NICHT gebaut wird
 
 - Kein automatischer Hintergrund-Sync.
 - Keine Rückrichtung nach Toggl.
@@ -237,7 +302,7 @@ gesamten Import rückgängig.
 
 ---
 
-## 8. Empfehlung an Natalie, unabhängig vom Code
+## 9. Empfehlung an Natalie, unabhängig vom Code
 
 **Ab sofort die Vorgangsnummer in den Toggl-Eintrag schreiben**, etwa `#332 Firmware Sensorik`.
 Das kostet zwei Sekunden je Eintrag und macht aus dem schwersten Teil (B2) einen einfachen.
