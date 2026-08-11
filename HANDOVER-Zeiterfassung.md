@@ -93,13 +93,18 @@ Danach ist Teil A **für sich nutzbar**: Stunden lassen sich von Hand eintragen,
 Auswertung in Natalies Planungskette wartet bereits fertig gebaut darauf. **Hier eine Prüfung
 durch Natalie einplanen, bevor es weitergeht.**
 
-### Schritt 3 — Echte HTTP-Umsetzung von `HttpBackend`
+### Schritt 3 — Echte HTTP-Umsetzung von `HttpBackend` — ERLEDIGT (Sitzung 5)
 
-Eine Klasse mit `java.net.http.HttpClient`, die `HttpBackend` erfüllt. Der bestehende
-Vertrag bleibt: **darf bei Nicht-2xx nicht werfen**, sondern Status und Rumpf zurückgeben —
-die Fehlerzuordnung macht `TogglClient`.
+`.../timetracking/HttpClientBackend.kt`: `HttpClientBackend`, `JdkHttpSender`, `RequestThrottle`,
+`buildTogglRequest`. Vertrag eingehalten (bei Nicht-2xx wird nicht geworfen), Wartezeit von einer
+Sekunde auf monotoner Uhr, Uhr und Schlafen injizierbar.
 
-Dazu die Wartezeit von **einer Sekunde zwischen Anfragen** (`TogglApi.MIN_REQUEST_INTERVAL`).
+14 Tests, 7 Gegentests, alle gefangen. Zusammen mit den bestehenden Toggl-Tests **52 Tests grün**.
+Einzelheiten in `CLAUDE-NOTES.md`, Abschnitt 14 — dort steht auch, wie sich trotz gesperrtem
+Gradle-Build übersetzen und testen lässt.
+
+Noch **kein Aufrufer**: den bekommt das Backend in Schritt 4/5. Mit echtem Netz ist es noch nie
+gelaufen.
 
 ### Schritt 4 — Speicherung der importierten Eintrags-IDs
 

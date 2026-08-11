@@ -997,6 +997,97 @@ Fassung):
 
 ---
 
+## 14. Sitzung 5 — Schritt 3, und ein Weg zum Prüfen trotz gesperrtem Build
+
+### WICHTIG: Teilübersetzung ohne Gradle — geprüft und benutzt
+
+Der volle Build bleibt gesperrt (`mdfx`, siehe Abschnitt 13). **Aber:** Dateien, die weder das
+GanttProject-Modell noch JavaFX anfassen, lassen sich einzeln übersetzen und ausführen. Der
+Kotlin-Compiler und alles Nötige liegen auf Maven Central, und das ist erreichbar. `mdfx` wird
+dabei nie angefragt — das ist keine Umgehung der Sperre, sondern ein anderer Bauweg für Dateien,
+die die gesperrte Bibliothek gar nicht brauchen.
+
+```bash
+# Von Maven Central: kotlin-compiler-embeddable, kotlin-stdlib, kotlin-reflect,
+# kotlin-script-runtime, kotlin-daemon-embeddable, kotlinx-coroutines-core-jvm (der Compiler
+# braucht sie, sonst NoClassDefFoundError CoroutineScope), trove4j, annotations-13.0,
+# kotlinx-serialization-json-jvm + -core-jvm, junit 4.13.2, hamcrest-core.
+CP=$(ls lib/*.jar | tr '\n' ':')
+java -cp "$CP" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -classpath "$CP" -d out src/*.kt
+java -cp "out:$CP" org.junit.runner.JUnitCore net.sourceforge.ganttproject.timetracking.HttpClientBackendTest
+```
+
+**Damit geprüft: 52 Tests grün** — 14 neue plus die 15 Toggl- und 23 Zuordnungstests aus
+Sitzung 4. Dass die bestehenden 38 hier genau so durchlaufen wie gemeldet, ist zugleich der Beleg,
+dass dieser Behelfsaufbau dem echten Build entspricht.
+
+**Grenze, die man kennen muss:** Es funktioniert nur für Dateien ohne Bezug auf das Modell, die
+Oberfläche oder die Datenbank. **Die Schritte 1 und 2 aus Sitzung 4 sind damit weiterhin
+ungeprüft** — sie hängen an `TaskManager`, H2 und JavaFX.
+
+### Schritt 3 gebaut: echte HTTP-Umsetzung von `HttpBackend`
+
+Neu: `.../timetracking/HttpClientBackend.kt` mit vier Bausteinen.
+
+| Baustein | Aufgabe |
+|---|---|
+| `HttpClientBackend` | erfüllt `HttpBackend`, verdrahtet Wartezeit und Senden |
+| `JdkHttpSender` | die einzigen zwei Zeilen, die wirklich ein Netz brauchen |
+| `RequestThrottle` | hält die Sekunde zwischen Anfragen ein |
+| `buildTogglRequest` | baut die Anfrage, getrennt zum Ansehen im Test |
+
+Entscheidungen und ihre Gründe:
+
+- **Der Vertrag bleibt: bei Nicht-2xx wird NICHT geworfen**, sondern Status und Rumpf
+  zurückgegeben. Welcher Status was bedeutet, weiß `TogglClient` — und wird dort netzfrei
+  getestet. Würde dieses Backend bei 403 werfen, läge dieses Wissen an zwei Stellen.
+- **Nur eine ausgebliebene Antwort** (Netz weg, Zeitüberschreitung) wird zu
+  `TogglException(UNAVAILABLE)` — genau die Bedeutung, die der Wert schon hatte.
+- **Unterbrechung:** `Thread.currentThread().interrupt()` vor dem Werfen, sonst vergisst ein
+  Faden, dass er anhalten sollte.
+- **Wartezeit auf monotoner Uhr** (`System.nanoTime`), nie auf der Wanduhr: eine
+  Zeitkorrektur würde sonst entweder einen Schwall Anfragen auslösen oder den Import blockieren.
+- **Aufrunden auf ganze Millisekunden.** Abrunden verfehlt das Intervall um bis zu eine
+  Millisekunde — genau der Fall, den Toggl mit 429 beantwortet.
+- **Uhr und Schlafen sind injizierbar**, sonst dauert jeder Wartezeit-Test eine echte Sekunde.
+- **Der Throttle gilt je Instanz.** Ein Importlauf muss deshalb EIN Backend für alle Anfragen
+  verwenden — zwei Instanzen feuern zweimal in derselben Sekunde.
+- **Zeitlimits (30 s Antwort, 15 s Verbindung) sind geschätzt, nicht gemessen — von Claude.**
+  Ohne Zeitlimit blockiert ein hängender Server den Import, bis das Programm abgeschossen wird.
+- **Der Token steht in keiner Meldung** dieser Datei. Ein Test wacht darüber.
+
+**Noch kein Aufrufer** — den bekommt das Backend in Schritt 4/5. Das ist beabsichtigt: Schritt 3
+ist als eigener, für sich lauffähiger Schritt zugeschnitten.
+
+### Gegentest: sieben Sabotagen, sieben gefangen
+
+Nicht behauptet, sondern ausgeführt — jede Sabotage einzeln eingebaut, übersetzt, Tests laufen
+lassen, zurückgenommen (Skript im Arbeitsverzeichnis der Sitzung).
+
+| Sabotage | Ergebnis |
+|---|---|
+| Aufrunden auf ganze Millisekunden entfernt | `testARemainderBelowOneMillisecondStillWaits` |
+| verstrichene Zeit nicht abgezogen | dieser **und zwei weitere** Wartezeit-Tests |
+| Wartezeit erst nach dem Senden | `testTheWaitHappensBeforeTheRequestIsSent` |
+| wirft bei Nicht-2xx | `testNonSuccessIsReturnedAndNotThrown` |
+| Unterbrechungsmerker nicht wiederhergestellt | `testAnInterruptedRequestKeepsTheInterruptFlag` |
+| Token in die Fehlermeldung geschrieben | `testTheFailureMessageDoesNotCarryTheToken` |
+| Zeitlimit von der Anfrage entfernt | `testRequestCarriesATimeout` |
+
+Sechs Sabotagen wurden von **genau** dem vorgesehenen Test gefangen, eine zusätzlich von zwei
+weiteren — erwartbar, weil sie die gesamte Zeitrechnung verbiegt. Ohne Sabotage: 52 Tests grün.
+
+### Stand und nächster Schritt
+
+- Schritte 1 und 2: gebaut, **ungeprüft** (Build gesperrt). Prüfliste am Ende von Abschnitt 13.
+- Schritt 3: gebaut, übersetzt, 14 Tests, 7 Gegentests. **Ohne echtes Netz getestet** — dass
+  Toggl wirklich antwortet, kann erst ein Lauf mit echtem Token zeigen (Schritt 5/6).
+- Als Nächstes Schritt 4: Speicherung der importierten Eintrags-IDs, **projektweit**, nicht je
+  Vorgang. Gegentest Pflicht: denselben Import zweimal laufen lassen, Stundensumme muss gleich
+  bleiben.
+
+---
+
 ## Offene Vormerkungen
 
 - `NOTIZ-Ist-Stunden.md` — Vorschlag, ein drittes Custom Property `effort_actual_hours` zu
