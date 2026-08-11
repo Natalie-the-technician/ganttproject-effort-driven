@@ -1088,6 +1088,67 @@ weiteren — erwartbar, weil sie die gesamte Zeitrechnung verbiegt. Ohne Sabotag
 
 ---
 
+## 15. Sitzung 6 (lokal) — Prüfliste der Übergabe abgearbeitet
+
+Die Übergabe verlangte: erst bauen und prüfen, kein neuer Code. Ergebnis: **zwei echte Befunde**,
+beide vorher unbemerkt.
+
+### Gemessene Zahlen (nicht gerechnet)
+
+`ganttproject-tester`: **370 Tests, 0 Fehler** — ActualEffort 7, TogglClient 15,
+TimeEntryMatching 23, HttpClientBackend 14. `EffortPropertyStorageTest`: 10.
+Die 14 Tests aus Schritt 3 laufen also auch unter Gradle, nicht nur außerhalb.
+
+**Falle beim Zählen:** `:ganttproject:test` bricht am vorbestehenden `GPCloudDocumentTest` ab
+(Windows-Pfadfehler im Original). In einem gemeinsamen Aufruf läuft `:ganttproject-tester:test`
+dann **gar nicht** — man liest alte Ergebnisdateien und hält sie für neue. Getrennt aufrufen.
+Mich hat das kurz 311 statt 370 sehen lassen.
+
+### Befund 1 — Dezimalstellen gingen in der Spiegeltabelle verloren
+
+Zwei Speichertests schlugen fehl: **12,5 kam als 13,0 zurück.**
+
+`asSqlType()` bildet `DOUBLE` auf `"numeric"` ab. In H2 hat `NUMERIC` **ohne Angabe die
+Nachkommastellen null** — jede Dezimalzahl wird auf eine ganze gerundet. Betrifft **jede**
+benutzerdefinierte Dezimalspalte, auch den geplanten Aufwand; bisher unbemerkt, weil alle Tests
+glatte Werte benutzten (20,0 statt 20,5).
+
+Behoben: `"double precision"`. **Gegentest 9:** zurück auf `"numeric"` → beide Tests wieder rot.
+
+Wieder ein Defekt im Original, nicht in der neuen Arbeit. Kandidat für einen zweiten
+Fehlerbericht ans Original.
+
+### Befund 2 — der geforderte Gegentest 4.2 schlug NICHT an
+
+Die Übergabe verlangte ihn ausdrücklich, mit der richtigen Erwartung: *„Bleibt der Test grün,
+sichert er nichts."* **Er blieb grün.**
+
+Grund: `effort and actual effort are stored together by one dialog commit` schreibt seine
+**eigene** Reihenfolge fest und ruft `TaskPropertiesController.save()` nie auf. Er konnte die
+Produktionsreihenfolge nie absichern — der Kommentar im Test behauptete das Gegenteil.
+
+Behoben, indem die Reihenfolge an **eine** prüfbare Stelle wandert:
+`applyEffortFieldsThenSyncColumns` (neue Datei, ohne JavaFX-Typen). `save()` ruft sie, der neue
+Test ruft dieselbe Funktion. **Gegentest 11:** Reihenfolge in der Funktion vertauscht →
+`Column "effort_hours" not found`. Zurückgenommen.
+
+Ein weiteres Feld kommt jetzt in die Liste in `save()`; die Reihenfolge kann dabei nicht mehr
+verrutschen.
+
+**Lehre:** Ein Test, der eine Reihenfolge nachbaut statt sie aufzurufen, prüft sich selbst. Wenn
+eine Reihenfolge zählt, muss sie in einer Funktion stehen, die die Produktion wirklich benutzt.
+
+### Noch offen aus dieser Sitzung
+
+- **Handtest zu Schritt 2** (Abschnitt 4.3 der Übergabe) — von Claude nicht prüfbar.
+- Kleinigkeit, gesehen aber nicht geändert: In `applyEffort` und `applyActualEffort` benutzt der
+  Zweig „Feld geleert" noch `getCustomPropertyDefinition(...)`, also **nur die Kennung**. Eine
+  vom Nutzer selbst angelegte Spalte gleichen Namens ließe sich damit nicht leeren. Betrifft
+  beide Felder gleichermaßen und ist älter als die Zeiterfassung. Bewusst nicht mitgeändert,
+  weil die Übergabe „erst prüfen, kein neuer Code" verlangt.
+
+---
+
 ## Offene Vormerkungen
 
 - `NOTIZ-Ist-Stunden.md` — Vorschlag, ein drittes Custom Property `effort_actual_hours` zu
