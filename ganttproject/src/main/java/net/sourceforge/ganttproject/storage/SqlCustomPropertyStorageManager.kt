@@ -106,5 +106,10 @@ private fun CustomPropertyClass.asSqlType() = when (this) {
   CustomPropertyClass.INTEGER -> "integer"
   CustomPropertyClass.DATE -> "date"
   CustomPropertyClass.BOOLEAN -> "boolean"
-  CustomPropertyClass.DOUBLE -> "numeric"
+  // [Fork-Aenderung] War "numeric". In H2 hat NUMERIC ohne Angabe die Nachkommastellen NULL, die
+  // Spiegeltabelle rundete also jede Dezimalzahl auf eine ganze: 12,5 Stunden wurden zu 13.
+  // Betrifft JEDE benutzerdefinierte Dezimalspalte, nicht nur die Zeiterfassung - beim geplanten
+  // Aufwand fiel es bisher nur nicht auf, weil die Tests glatte Werte benutzten.
+  // Nachgewiesen durch `actual effort can be stored right after its definition was created`.
+  CustomPropertyClass.DOUBLE -> "double precision"
 }

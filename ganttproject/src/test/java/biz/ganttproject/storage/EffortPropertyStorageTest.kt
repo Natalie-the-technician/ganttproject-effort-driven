@@ -25,6 +25,7 @@ import biz.ganttproject.customproperty.CustomPropertyEvent
 import biz.ganttproject.customproperty.CustomPropertyListener
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.TestSetupHelper
+import net.sourceforge.ganttproject.gui.taskproperties.applyEffortFieldsThenSyncColumns
 import net.sourceforge.ganttproject.storage.LazyProjectDatabaseProxy
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.storage.SQL_PROJECT_DATABASE_OPTIONS
@@ -356,6 +357,40 @@ class EffortPropertyStorageTest {
     holder.setValue(
       EffortDrivenProperties.findOrCreateTaskActualEffort(customPropertyManager), 12.5)
     projectDatabase.onCustomColumnChange(customPropertyManager)
+    task.createMutator().also { it.setCustomProperties(holder) }.commit()
+
+    assertEquals(20.0, readEffortColumn())
+    assertEquals(12.5, readActualEffortColumn())
+  }
+
+  /**
+   * The order that the dialog really uses, driven through the SAME function the dialog calls:
+   * [applyEffortFieldsThenSyncColumns].
+   *
+   * The test above writes its own sequence and therefore secures nothing — verified by
+   * counter-test: moving the sync in `TaskPropertiesController.save()` in front of the two
+   * `apply` calls left it green. This one goes through the production code path, so a
+   * counter-test inside that function does break it.
+   *
+   * The listener is removed on purpose, so the explicit sync is the only thing that can create
+   * the columns.
+   */
+  @Test
+  fun `the dialog order creates the columns before the values are written`() {
+    val task = taskManager.newTaskBuilder().withName("t").build()
+    projectDatabase.insertTask(task)
+    customPropertyManager.removeListener(listener)
+
+    val holder = task.customValues.copyOf()
+    applyEffortFieldsThenSyncColumns(
+      holder = holder,
+      definitions = customPropertyManager,
+      projectDatabase = projectDatabase,
+      // Stand-ins for the two panel fields: each creates its definition on first use, exactly
+      // like applyEffort/applyActualEffort do.
+      fields = listOf(
+        { h -> h.setValue(EffortDrivenProperties.findOrCreateTaskEffort(customPropertyManager), 20.0) },
+        { h -> h.setValue(EffortDrivenProperties.findOrCreateTaskActualEffort(customPropertyManager), 12.5) }))
     task.createMutator().also { it.setCustomProperties(holder) }.commit()
 
     assertEquals(20.0, readEffortColumn())

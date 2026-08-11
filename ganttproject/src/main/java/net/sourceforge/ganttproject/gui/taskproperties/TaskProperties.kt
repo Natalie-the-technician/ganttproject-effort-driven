@@ -63,20 +63,15 @@ class TaskPropertiesController(private val task: Task, roleManager: RoleManager,
         // Custom-Property-Registerkarte gleich committet. Wuerden die Felder direkt auf
         // task.customValues schreiben, wuerde dieser Aufruf sie mit der beim Oeffnen gezogenen
         // Kopie stillschweigend ueberschreiben.
-        resourcesPanel.applyEffort(it)
-        resourcesPanel.applyActualEffort(it)
-        // [Fork-Aenderung] REIHENFOLGE BEACHTEN: Dieser Abgleich muss NACH allen apply*-Aufrufen
-        // stehen. Die Spiegeltabelle in der H2-Datenbank braucht eine Spalte fuer jede Property.
-        // Legt einer der Aufrufe oben eine Definition neu an, entsteht diese Spalte sonst nicht
-        // rechtzeitig: das UPDATE scheitert dann mit `Column "effort_hours" not found`, und weil
-        // die Definition trotzdem existiert, schlaegt danach JEDER weitere Schreibvorgang fehl -
-        // es lassen sich keine Vorgaenge mehr anlegen, bis das Programm neu gestartet wird.
-        // Ein weiteres Feld gehoert deshalb ueber diese Zeile, nicht darunter.
-        // Der Aufruf gilt fuer den ganzen Property-Manager und ist idempotent: er vergleicht
-        // Definitionen und Spalten und tut nichts, wenn bereits alles passt.
-        // Abgesichert durch EffortPropertyStorageTest, insbesondere
-        // `effort and actual effort are stored together by one dialog commit`.
-        projectDatabase.onCustomColumnChange(task.manager.customPropertyManager)
+        // [Fork-Aenderung] Reihenfolge (Felder schreiben, DANN Spalten abgleichen) steckt in
+        // applyEffortFieldsThenSyncColumns - dort ist sie ohne JavaFX pruefbar und durch einen
+        // Gegentest abgesichert. Ein weiteres Feld kommt in diese Liste, sonst aendert sich hier
+        // nichts.
+        applyEffortFieldsThenSyncColumns(
+          holder = it,
+          definitions = task.manager.customPropertyManager,
+          projectDatabase = projectDatabase,
+          fields = listOf(resourcesPanel::applyEffort, resourcesPanel::applyActualEffort))
         mutator.setCustomProperties(it)
       }
       predecessorsPanel.commit()
