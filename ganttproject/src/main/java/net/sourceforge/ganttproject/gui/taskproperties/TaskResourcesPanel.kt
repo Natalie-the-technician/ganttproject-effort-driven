@@ -53,6 +53,7 @@ import net.sourceforge.ganttproject.task.TaskMutator
 import biz.ganttproject.customproperty.CustomPropertyHolder
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.task.algorithm.EffortInput
+import net.sourceforge.ganttproject.task.algorithm.actualEffortHours
 import net.sourceforge.ganttproject.task.algorithm.effortHours
 import net.sourceforge.ganttproject.task.algorithm.hoursPerDay
 import net.sourceforge.ganttproject.task.algorithm.parseEffortInput
@@ -291,13 +292,53 @@ class TaskResourcesPanel(
     }
   }
 
-  /** Adds the effort editor underneath the cost fields of the right hand pane. */
+  /**
+   * Editor for the hours ACTUALLY spent on this task. Empty means "nothing recorded".
+   *
+   * Sits next to the planned effort on purpose: the two numbers are only useful side by side.
+   * It is a plain record — see [Task.actualEffortHours]; typing a value here must never move a
+   * date, change the completion percentage or touch the planned effort.
+   */
+  private val actualEffortField = TextField().apply {
+    prefColumnCount = 6
+    text = task.actualEffortHours(task.manager.customPropertyManager)?.let { formatHours(it) } ?: ""
+  }
+
+  /**
+   * Writes the edited actual effort into the custom property holder that the properties dialog is
+   * about to commit. Same rules as [applyEffort]:
+   *
+   * - never write to `task.customValues` directly, or CustomColumnsPanel.save() overwrites it with
+   *   the copy it took when the dialog was opened,
+   * - reuse [parseEffortInput] instead of parsing here, so that a comma keeps working and both
+   *   fields accept exactly the same input,
+   * - create the definition only when a value is actually entered.
+   *
+   * Invalid input leaves the stored value alone. It is deliberately NOT reset to the old text in
+   * the field: a typo should stay visible for correction instead of vanishing on OK.
+   */
+  fun applyActualEffort(holder: CustomPropertyHolder) {
+    val definitions = task.manager.customPropertyManager
+    when (val input = parseEffortInput(actualEffortField.text)) {
+      is EffortInput.Clear ->
+        // Only clear when the property exists; do not create it just to write nothing into it.
+        definitions.getCustomPropertyDefinition(
+          EffortDrivenProperties.TASK_EFFORT_ACTUAL_HOURS)?.let { holder.setValue(it, null) }
+      is EffortInput.Hours ->
+        holder.setValue(EffortDrivenProperties.findOrCreateTaskActualEffort(definitions), input.value)
+      is EffortInput.Invalid -> Unit
+    }
+  }
+
+  /** Adds the effort editors underneath the cost fields of the right hand pane. */
   private fun addEffortEditor(propertyPane: PropertyPane) {
     propertyPane.add(Label(EFFORT_LABEL_SECTION).apply {
       styleClass.add("section-title")
     }, 0, 3, 2, 1)
     propertyPane.add(Label(EFFORT_LABEL_EFFORT_HOURS), 0, 4)
     propertyPane.add(effortField, 1, 4)
+    propertyPane.add(Label(EFFORT_LABEL_ACTUAL_HOURS), 0, 5)
+    propertyPane.add(actualEffortField, 1, 5)
   }
 
   // [Fork-Aenderung] ---- Ende des neuen Blocks ----
@@ -355,6 +396,7 @@ private val i18n = RootLocalizer
 private const val EFFORT_LABEL_SECTION = "Aufwand"
 private const val EFFORT_LABEL_EFFORT_HOURS = "Stunden"
 private const val EFFORT_LABEL_HOURS_PER_DAY = "Std./Tag"
+private const val EFFORT_LABEL_ACTUAL_HOURS = "Ist-Stunden"
 
 /**
  * [Fork-Aenderung] Neue Hilfsfunktion: Stunden ohne ueberfluessige Nachkommastelle anzeigen,

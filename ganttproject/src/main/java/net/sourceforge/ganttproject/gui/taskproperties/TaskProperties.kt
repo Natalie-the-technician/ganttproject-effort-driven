@@ -59,18 +59,23 @@ class TaskPropertiesController(private val task: Task, roleManager: RoleManager,
     task.createMutator().also { mutator ->
       mainPropertiesPanel.save(mutator)
       customPropertiesPanel.save {
-        // [Fork-Aenderung] Der Aufwand wird in DENSELBEN Halter geschrieben, den die
-        // Custom-Property-Registerkarte gleich committet. Wuerde das Aufwandsfeld direkt auf
-        // task.customValues schreiben, wuerde dieser Aufruf es mit der beim Oeffnen gezogenen
+        // [Fork-Aenderung] Aufwand und Ist-Stunden werden in DENSELBEN Halter geschrieben, den die
+        // Custom-Property-Registerkarte gleich committet. Wuerden die Felder direkt auf
+        // task.customValues schreiben, wuerde dieser Aufruf sie mit der beim Oeffnen gezogenen
         // Kopie stillschweigend ueberschreiben.
         resourcesPanel.applyEffort(it)
-        // [Fork-Aenderung] Die Spiegeltabelle in der H2-Datenbank braucht eine Spalte fuer jede
-        // Property. Legt applyEffort die Definition neu an, entsteht diese Spalte sonst nicht
+        resourcesPanel.applyActualEffort(it)
+        // [Fork-Aenderung] REIHENFOLGE BEACHTEN: Dieser Abgleich muss NACH allen apply*-Aufrufen
+        // stehen. Die Spiegeltabelle in der H2-Datenbank braucht eine Spalte fuer jede Property.
+        // Legt einer der Aufrufe oben eine Definition neu an, entsteht diese Spalte sonst nicht
         // rechtzeitig: das UPDATE scheitert dann mit `Column "effort_hours" not found`, und weil
         // die Definition trotzdem existiert, schlaegt danach JEDER weitere Schreibvorgang fehl -
         // es lassen sich keine Vorgaenge mehr anlegen, bis das Programm neu gestartet wird.
-        // Der Aufruf ist idempotent: er vergleicht Definitionen und Spalten und tut nichts,
-        // wenn bereits alles passt.
+        // Ein weiteres Feld gehoert deshalb ueber diese Zeile, nicht darunter.
+        // Der Aufruf gilt fuer den ganzen Property-Manager und ist idempotent: er vergleicht
+        // Definitionen und Spalten und tut nichts, wenn bereits alles passt.
+        // Abgesichert durch EffortPropertyStorageTest, insbesondere
+        // `effort and actual effort are stored together by one dialog commit`.
         projectDatabase.onCustomColumnChange(task.manager.customPropertyManager)
         mutator.setCustomProperties(it)
       }
