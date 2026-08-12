@@ -72,9 +72,26 @@ class TogglConnectionAction @JvmOverloads constructor(
   private val today: () -> LocalDate = { LocalDate.now() }
 ) : GPAction("toggl.checkConnection") {
 
+  companion object {
+    /**
+     * Heading of the notification box, for whoever presents the message.
+     *
+     * A getter, not a `const`: the language can change while the program runs, and a constant
+     * would keep whatever language was active when the class was first touched. `@JvmStatic` so
+     * `GanttProject.java` can reach it without going through the file facade class.
+     */
+    @JvmStatic
+    val notificationTitle: String get() = forkText("fork.toggl.check.title")
+  }
+
   /**
    * The label comes from the fork bundle, not from GanttProject's translations — the key does not
    * exist there and the menu would show the bare id.
+   *
+   * CAREFUL when changing this: `GPAction`'s constructor calls `updateName()` (GPAction.java:112),
+   * which calls this method while the base class is still being built — before any property of
+   * this class exists. It works only because nothing here reads a field. Use one, and the label is
+   * null at construction time with nothing to indicate why.
    */
   override fun getLocalizedName(): String = forkText("fork.toggl.checkConnection")
 

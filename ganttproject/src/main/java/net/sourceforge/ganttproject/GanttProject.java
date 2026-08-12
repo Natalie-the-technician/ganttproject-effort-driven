@@ -155,10 +155,20 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     mHuman.add(resourceActionSet.getCloudResourceList());
     // [Fork-Aenderung] Verbindungstest zu Toggl. Steht im Ressourcen-Menue, weil der Token an der
     // Ressource haengt. Der Test liest nur und schreibt nichts.
+    // Die Meldung wird hier SELBST gebaut statt ueber showNotificationDialog. Jenes bettet den
+    // Text in die Vorlagen <kanal>.channel.itemTitle/itemBody ein -- und fuer den Kanal RSS gibt es
+    // diese Vorlagen nicht. Der Kasten haette dann "rss.channel.itemBody" angezeigt und unsere
+    // Meldung stillschweigend verschluckt, weil MessageFormat ohne {0} das Argument verwirft.
     mHuman.add(new TogglConnectionAction(
         getHumanResourceManager(),
-        (isProblem, message) -> getUIFacade().showNotificationDialog(
-            isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS, message)));
+        (isProblem, message) -> {
+          var manager = getUIFacade().getNotificationManager();
+          manager.addNotifications(List.of(manager.createNotification(
+              isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS,
+              TogglConnectionAction.getNotificationTitle(),
+              "<p>" + message.replace("\n", "<br>") + "</p>",
+              null)));
+        }));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
     bar.add(mHuman);
