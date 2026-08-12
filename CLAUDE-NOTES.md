@@ -1341,11 +1341,15 @@ verpackten Plugin nur auf den ersten, weil `plugin.xml` `resources/` zur Bibliot
 Ressourcenpfad nicht von einem falschen unterscheiden. Der Kommentar im Test behauptete das
 zunächst — die Behauptung ist korrigiert, statt sie stehen zu lassen.
 
-Geprüft wurde die Verpackung darum am **gebauten Stand**: `:ganttproject:copyPlugin`, dann
-nachgesehen. Ergebnis: die Dateien liegen unter
-`dist-bin/plugins/base/ganttproject/resources/language/fork/`, und ein `resources/resources` gibt
-es dort **nicht** — der Sabotage-Pfad liefe im Betrieb also wirklich ins Leere. Wer den Pfad ändert,
-muss das hier wiederholen; grüne Tests sagen dazu nichts.
+Geprüft wird die Verpackung darum außerhalb der Testsuite, mit **`tools/packcheck/`**. Das Programm
+setzt als Klassenpfad ausschließlich die echte Bibliothekswurzel des gebauten Plugins und löst die
+Schlüssel dort auf. Aufruf und Gegenprobe stehen in `tools/packcheck/README.md`.
+
+**Gegentest 24 (bestanden):** dieselbe Prüfung mit der Wurzel eine Ebene höher → alle vier
+Aussagen kippten (`ERGEBNIS=FEHLER(4)`). Die Prüfung unterscheidet also wirklich, anders als der
+Einheitstest.
+
+Wer den Ressourcenpfad ändert, muss `packcheck` laufen lassen. Grüne Tests sagen dazu nichts.
 
 **Falle, die dabei fast zugeschnappt wäre:** `Properties.load(InputStream)` nimmt ISO-8859-1 an.
 So gelesen wird aus „prüfen" ein „prÃ¼fen" — falsch, sieht aber aus wie Text und fällt erst im
