@@ -1,0 +1,9 @@
+.text-left {
+  -fx-alignment: center-left;
+}
+
+.text-right {
+  -fx-alignment: center-right;
+}
+
+/*# sourceMappingURL=typography.css.map */

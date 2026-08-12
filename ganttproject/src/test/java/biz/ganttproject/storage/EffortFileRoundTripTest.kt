@@ -24,6 +24,8 @@ import biz.ganttproject.core.time.CalendarFactory
 import net.sourceforge.ganttproject.GanttProjectImpl
 import net.sourceforge.ganttproject.io.GanttXMLSaver
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
+import net.sourceforge.ganttproject.timetracking.TogglTokenOptions
+import net.sourceforge.ganttproject.timetracking.withToken
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -58,6 +60,9 @@ class EffortFileRoundTripTest {
       }
     }
   }
+
+  /** Distinctive enough that a match cannot be a coincidence. */
+  private val SECRET = "zzTOKEN-nicht-in-die-projektdatei-42"
 
   private fun saveToXml(project: GanttProjectImpl): String {
     val out = ByteArrayOutputStream()
@@ -119,6 +124,38 @@ class EffortFileRoundTripTest {
     val xml = saveToXml(project)
     assertTrue(xml.contains("duration=\"$durationBefore\""),
       "recorded hours changed the planned duration; file was:\n$xml")
+  }
+
+  /**
+   * The security-relevant promise of the token store, checked where it can actually be checked:
+   * in the saved project file.
+   *
+   * The project file is shared and kept in a vault. A Toggl token in it would be handed to
+   * everyone who receives the file and would grant full access to that person's Toggl account.
+   * The token belongs in the application settings, and nowhere near this file.
+   */
+  @Test
+  fun `a Toggl token never reaches the project file`() {
+    val project = GanttProjectImpl()
+    val resource = project.humanResourceManager.create("Test", 1).also {
+      it.mail = "test@example.org"
+    }
+    val task = project.taskManager.newTaskBuilder().withName("Testvorgang").build()
+    task.assignmentCollection.addAssignment(resource).load = 100f
+
+    // Exactly what the resource dialog does when a token is entered.
+    TogglTokenOptions.tokens.value =
+      withToken(TogglTokenOptions.tokens.value, resource, SECRET)
+
+    try {
+      val xml = saveToXml(project)
+      assertFalse(xml.contains(SECRET), "the token was written into the project file:\n$xml")
+      // The resource itself must still be there — otherwise the test would pass on an empty file.
+      assertTrue(xml.contains("test@example.org"),
+        "the resource is missing, so this test proves nothing")
+    } finally {
+      TogglTokenOptions.tokens.value = withToken(TogglTokenOptions.tokens.value, resource, "")
+    }
   }
 
   /**

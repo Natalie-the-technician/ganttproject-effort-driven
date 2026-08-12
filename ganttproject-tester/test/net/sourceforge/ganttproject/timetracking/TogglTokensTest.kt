@@ -20,6 +20,7 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.timetracking
 
+import biz.ganttproject.core.option.DefaultStringOption
 import biz.ganttproject.customproperty.CustomColumnsManager
 import junit.framework.TestCase
 import net.sourceforge.ganttproject.resource.HumanResource
@@ -148,6 +149,37 @@ class TogglTokensTest : TestCase() {
     assertEquals(mapOf("mail=nati@example.org" to "geheim123"), decoded)
     assertTrue(decodeTokenMap(null).isEmpty())
     assertTrue(decodeTokenMap("").isEmpty())
+  }
+
+  // --- the way into the settings file ---
+
+  /**
+   * The settings file stores an option through `getPersistentValue` and reads it back through
+   * `loadPersistentValue` (see `OptionSaver`). This is that round trip: what GanttOptions writes
+   * into `~/.ganttproject` must come back as the same token.
+   *
+   * Tested at this layer rather than against the real file, because `GanttOptions.save()` writes
+   * to a fixed path in the home directory and a test must not touch Natalie's settings.
+   */
+  fun testTokenSurvivesTheSettingsRoundTrip() {
+    val person = resource("Nati", 1, "nati@example.org")
+    val option = DefaultStringOption("resourceTokens", "")
+    option.value = withToken("", person, "geheim123")
+
+    val persisted = option.persistentValue
+    val reloaded = DefaultStringOption("resourceTokens", "")
+    reloaded.loadPersistentValue(persisted)
+
+    assertEquals("geheim123", tokenFor(person, reloaded.value))
+  }
+
+  /**
+   * The key under which the token appears in the settings file is `<group>.<option>`. Renaming
+   * either would silently orphan every stored token, so the names are pinned here.
+   */
+  fun testTheSettingsKeyIsStable() {
+    assertEquals("toggl", TogglTokenOptions.optionGroup.id)
+    assertEquals("resourceTokens", TogglTokenOptions.tokens.id)
   }
 
   /** Same content, same text — otherwise the settings file churns on every save. */

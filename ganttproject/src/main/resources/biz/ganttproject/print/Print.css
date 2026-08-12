@@ -1,0 +1,387 @@
+/*
+ * Copyright (c) 2021 Dmitry Barashev, BarD Software s.r.o.
+ *
+ * This file is part of GanttProject, an open-source project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+.btn-regular {
+  -fx-background-color: derive(#e0e0e0, -20%), #e0e0e0;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5;
+}
+.btn-regular:hover {
+  -fx-background-color: derive(#e0e0e0, -20%), derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+}
+.btn-regular:focused {
+  -fx-background-color: derive(#e0e0e0, -20%), derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+  -fx-background-color: derive(#616161, -20%), derive(#e0e0e0, 0%);
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.btn-regular:disabled {
+  -fx-opacity: 0.4;
+}
+
+.btn-regular .secondary {
+  -fx-background-color: transparent;
+}
+
+.btn-attention {
+  -fx-background-color: #ffca28;
+  -fx-border-color: transparent;
+  -fx-border-radius: 0;
+  -fx-text-fill: #424242;
+  /*    -fx-font-size: 110%;*/
+  -fx-font-weight: bold;
+  -fx-padding: 0.75ex 2em;
+  -fx-cursor: hand;
+}
+.btn-attention:hover {
+  -fx-background-color: transparent, #ffca28;
+  -fx-fill: derive(#424242, -20%);
+  -fx-effect: dropshadow(gaussian, #e0e0e0, 4, 0, 0, 4);
+}
+.btn-attention:focused {
+  -fx-background-color: transparent, #ffca28;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.btn-attention:disabled {
+  -fx-opacity: 0.4;
+  -fx-cursor: default;
+}
+.btn-attention:pressed {
+  -fx-effect: none;
+  -fx-background-color: derive(#ffca28, 10%);
+  -fx-text-fill: derive(#424242, -10%);
+}
+.btn-attention.secondary {
+  -fx-background-color: transparent;
+  -fx-border-color: #ffca28;
+}
+.btn-attention.secondary:hover {
+  -fx-background-color: #ffca28, transparent;
+  -fx-fill: derive(#424242, -20%);
+}
+.btn-attention.secondary:focused {
+  -fx-background-color: #ffca28, transparent;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+
+/*
+Copyright 2021 BarD Software s.r.o
+
+This file is part of GanttProject, an open-source project management tool.
+
+GanttProject is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+GanttProject is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+*/
+.dialog-alert {
+  -fx-pref-height: 400;
+  -fx-pref-width: 400;
+}
+.dialog-alert .header {
+  -fx-spacing: 5;
+  -fx-background-color: #f8d7da;
+  -fx-alignment: center-left;
+  -fx-fill-width: true;
+  -fx-padding: 15;
+  -fx-background-insets: 0 0 4 0;
+  -fx-effect: dropshadow(gaussian, #ccc, 4, 0, 0, 4);
+}
+.dialog-alert .header .title {
+  -fx-font-size: 110%;
+  -fx-font-weight: bold;
+}
+.dialog-alert .content-pane {
+  -fx-padding: 1ex 1em;
+  -fx-border-width: 0;
+}
+
+/*!
+ * Copyright (c) 2025 Dmitry Barashev, BarD Software s.r.o.
+ *
+ * This file is part of GanttProject, an open-source project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/*
+ * Copyright (c) 2021 Dmitry Barashev, BarD Software s.r.o.
+ *
+ * This file is part of GanttProject, an open-source project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+.btn-regular {
+  -fx-background-color: derive(#e0e0e0, -20%), #e0e0e0;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5;
+}
+.btn-regular:hover {
+  -fx-background-color: derive(#e0e0e0, -20%), derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+}
+.btn-regular:focused {
+  -fx-background-color: derive(#e0e0e0, -20%), derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+  -fx-background-color: derive(#616161, -20%), derive(#e0e0e0, 0%);
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.btn-regular:disabled {
+  -fx-opacity: 0.4;
+}
+
+.btn-regular .secondary {
+  -fx-background-color: transparent;
+}
+
+.btn-attention {
+  -fx-background-color: #ffca28;
+  -fx-border-color: transparent;
+  -fx-border-radius: 0;
+  -fx-text-fill: #424242;
+  /*    -fx-font-size: 110%;*/
+  -fx-font-weight: bold;
+  -fx-padding: 0.75ex 2em;
+  -fx-cursor: hand;
+}
+.btn-attention:hover {
+  -fx-background-color: transparent, #ffca28;
+  -fx-fill: derive(#424242, -20%);
+  -fx-effect: dropshadow(gaussian, #e0e0e0, 4, 0, 0, 4);
+}
+.btn-attention:focused {
+  -fx-background-color: transparent, #ffca28;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.btn-attention:disabled {
+  -fx-opacity: 0.4;
+  -fx-cursor: default;
+}
+.btn-attention:pressed {
+  -fx-effect: none;
+  -fx-background-color: derive(#ffca28, 10%);
+  -fx-text-fill: derive(#424242, -10%);
+}
+.btn-attention.secondary {
+  -fx-background-color: transparent;
+  -fx-border-color: #ffca28;
+}
+.btn-attention.secondary:hover {
+  -fx-background-color: #ffca28, transparent;
+  -fx-fill: derive(#424242, -20%);
+}
+.btn-attention.secondary:focused {
+  -fx-background-color: #ffca28, transparent;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+
+.dlg-print-preview {
+  /* ------- OPEN BUTTON ------- */
+}
+.dlg-print-preview .header {
+  -fx-spacing: 5;
+  -fx-background-color: #e0e0e0;
+  -fx-alignment: center-left;
+  -fx-fill-width: true;
+  -fx-padding: 15;
+  -fx-background-insets: 0 0 4 0;
+  -fx-effect: dropshadow(gaussian, #ccc, 4, 0, 0, 4);
+  -fx-font-weight: normal;
+}
+.dlg-print-preview .header .title {
+  -fx-font-size: 110%;
+  -fx-font-weight: bold;
+}
+.dlg-print-preview .content-pane {
+  -fx-background-color: white;
+}
+.dlg-print-preview .content-pane .controls {
+  -fx-background-color: whitesmoke;
+  -fx-padding: 1ex 1em 0 1em;
+}
+.dlg-print-preview .content-pane .controls .titled-pane .title {
+  -fx-background-color: transparent;
+}
+.dlg-print-preview .content-pane .controls .titled-pane > *.content {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-border-color: transparent;
+  -fx-padding: 0;
+}
+.dlg-print-preview .content-pane .scroll-pane {
+  -fx-pref-height: 600;
+  -fx-pref-width: 800;
+  -fx-background-color: white;
+}
+.dlg-print-preview .content-pane .scroll-pane > .viewport {
+  -fx-background-color: transparent;
+  -fx-border-insets: 5 5 5 5;
+}
+.dlg-print-preview .content-pane .scroll-pane:hover .scroll-bar {
+  -fx-opacity: 1;
+}
+.dlg-print-preview .content-pane .scroll-pane .scroll-bar {
+  -fx-background-color: transparent;
+  -fx-opacity: 0.8;
+  -fx-max-width: 15;
+  -fx-pref-width: 15;
+}
+.dlg-print-preview .content-pane .scroll-pane .scroll-bar > .track {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-background-radius: 0.5em;
+}
+.dlg-print-preview .content-pane .scroll-pane .scroll-bar > .track-background {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0, 1;
+}
+.dlg-print-preview .content-pane .scroll-pane .scroll-bar > .thumb {
+  -fx-background-color: #e0e0e0;
+}
+.dlg-print-preview .content-pane .scroll-pane .scroll-bar > .increment-button, .dlg-print-preview .content-pane .scroll-pane .scroll-bar .decrement-button {
+  -fx-background-color: transparent;
+  -fx-background-radius: 0em;
+  -fx-padding: 0;
+}
+.dlg-print-preview .content-pane .scroll-pane .scroll-bar > .increment-button .increment-arrow, .dlg-print-preview .content-pane .scroll-pane .scroll-bar > .increment-button .decrement-arrow, .dlg-print-preview .content-pane .scroll-pane .scroll-bar .decrement-button .increment-arrow, .dlg-print-preview .content-pane .scroll-pane .scroll-bar .decrement-button .decrement-arrow {
+  -fx-shape: " ";
+  -fx-padding: 0;
+}
+.dlg-print-preview .content-pane .page {
+  -fx-padding: 1;
+  -fx-background-color: white;
+  -fx-border-color: #424242;
+  -fx-effect: dropshadow(gaussian, #ccc, 2, 0, 2, 2);
+}
+.dlg-print-preview .slider .thumb {
+  -fx-background-color: derive(#e0e0e0, -20%), #e0e0e0;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 1em; /* makes sure this remains circular */
+  -fx-padding: 0.583333em; /* 7 */
+}
+.dlg-print-preview .slider:focused .thumb, .dlg-print-preview .slider:hover:focused .thumb {
+  -fx-background-color: #ffca28, derive(#424242, -20%), derive(#e0e0e0, 20%);
+  -fx-background-insets: -2, 0, 1;
+  -fx-background-radius: 1em; /* makes sure this remains circular */
+}
+.dlg-print-preview .slider:hover .thumb {
+  -fx-background-color: derive(#424242, -20%), derive(#e0e0e0, 20%);
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 1em; /* makes sure this remains circular */
+}
+.dlg-print-preview .btn-small-attention {
+  -fx-background-color: #ffca28;
+  -fx-text-fill: #424242;
+  -fx-padding: 0.5ex 1em 0.5ex 1em;
+  -fx-cursor: hand;
+}
+.dlg-print-preview .button-pane {
+  -fx-padding: 2ex 1em 1ex 1em;
+  -fx-background-color: whitesmoke;
+}
+.dlg-print-preview .button-pane .button-bar {
+  -fx-background-color: transparent;
+}
+.dlg-print-preview .combo-box-base {
+  -fx-background-color: derive(#e0e0e0, -20%), #e0e0e0;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5;
+}
+.dlg-print-preview .combo-box-base .arrow-button {
+  -fx-background-color: transparent, #e0e0e0;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5;
+}
+.dlg-print-preview .combo-box-base:hover {
+  -fx-background-color: derive(#e0e0e0, -20%), derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+}
+.dlg-print-preview .combo-box-base:hover .arrow-button {
+  -fx-background-color: transparent, derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+}
+.dlg-print-preview .combo-box-base:focused {
+  -fx-background-color: derive(#e0e0e0, -20%), derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+  -fx-background-color: derive(#616161, -20%), derive(#e0e0e0, 0%);
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.dlg-print-preview .combo-box-base:focused .arrow-button {
+  -fx-background-color: transparent, derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+}
+.dlg-print-preview .combo-box-base:disabled {
+  -fx-opacity: 0.4;
+}
+.dlg-print-preview .combo-box-base:showing > .arrow-button,
+.dlg-print-preview .date-picker:showing > .arrow-button {
+  -fx-color: -fx-pressed-base;
+}
+
+/*# sourceMappingURL=Print.css.map */

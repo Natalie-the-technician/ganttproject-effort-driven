@@ -1,0 +1,60 @@
+/*
+ * Copyright 2024 BarD Software s.r.o., Dmitry Barashev.
+ *
+ * This file is part of GanttProject, an opensource project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+.dlg-list-view-editor.dlg-settings .content-pane .list-view {
+  -fx-background-color: transparent;
+  -fx-border-width: 0;
+  -fx-padding: 2ex 0 2ex 0;
+}
+.dlg-list-view-editor.dlg-settings .content-pane .column-item-cell {
+  -fx-background-color: transparent;
+  -fx-padding: 10;
+}
+.dlg-list-view-editor.dlg-settings .content-pane .column-item-cell.settings-item-header {
+  -fx-font-weight: bold;
+  -fx-font-size: 120%;
+  -fx-border-color: #616161;
+  -fx-border-width: 0 0 2 0;
+  -fx-padding: 5 10 5 0;
+  -fx-background-insets: 1ex 0 0 0;
+  -fx-border-insets: 10 0 5 10;
+}
+.dlg-list-view-editor.dlg-settings .content-pane .column-item-cell.settings-item-page {
+  -fx-fill: #424242;
+  -fx-text-fill: #424242;
+  -fx-border-color: transparent;
+  -fx-border-width: 0 0 0 2;
+}
+.dlg-list-view-editor.dlg-settings .content-pane .column-item-cell.settings-item-page:hover {
+  -fx-cursor: hand;
+  -fx-fill: #616161;
+  -fx-background-color: whitesmoke;
+}
+.dlg-list-view-editor.dlg-settings .content-pane .column-item-cell.settings-item-page:selected {
+  -fx-border-color: transparent;
+  -fx-background-color: #ffca28;
+  -fx-border-width: 0 0 0 2;
+}
+.dlg-list-view-editor.dlg-settings .content-pane .column-item-cell.settings-item-page {
+  -fx-background-color: transparent;
+}
+.dlg-list-view-editor.dlg-settings .content-pane .column-item-cell-empty {
+  -fx-background-color: transparent;
+}
+
+/*# sourceMappingURL=SettingsDialog.css.map */

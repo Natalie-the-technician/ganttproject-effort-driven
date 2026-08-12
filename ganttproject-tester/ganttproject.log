@@ -1,0 +1,115 @@
+16:00:45 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: The logical order of SELECT operations doesn't match the lexical (syntactic) order of operations. Learn more about this here: https://blog.jooq.org/a-beginners-guide-to-the-true-order-of-sql-operations/
+
+16:00:45 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+16:04:51 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: Thinking of building a query with jOOQ and executing it elsewhere? Think again: https://blog.jooq.org/why-you-should-execute-jooq-queries-with-jooq/
+
+16:04:51 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+16:07:01 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: Different jOOQ editions support multiple JDK versions. Check out the complete list here: https://www.jooq.org/download/support-matrix-jdk
+
+16:07:01 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+16:15:05 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: If you're using Liquibase to migrate your schema, the jOOQ code generator can simulate a Liquibase migration to produce its generated code, rather than connecting to an actual database: https://www.jooq.org/doc/latest/manual/code-generation/codegen-liquibase/
+
+16:15:05 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+16:29:24 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: In order to improve cardinality estimates, it can be valuable to auto-inline bind variables on certain columns, e.g. on enum types: https://www.jooq.org/doc/latest/manual/sql-building/dsl-context/custom-settings/settings-auto-inline-bind-values/
+
+16:29:24 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+16:30:08 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: The logical order of SELECT operations doesn't match the lexical (syntactic) order of operations. Learn more about this here: https://blog.jooq.org/a-beginners-guide-to-the-true-order-of-sql-operations/
+
+16:30:08 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+16:42:25 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: In order to improve cardinality estimates, it can be valuable to auto-inline bind variables on certain columns, e.g. on enum types: https://www.jooq.org/doc/latest/manual/sql-building/dsl-context/custom-settings/settings-auto-inline-bind-values/
+
+16:42:25 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+16:46:09 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: You don't have to use jOOQ's DSL. You can use all of jOOQ's API with native SQL as well: https://blog.jooq.org/using-java-13-text-blocks-for-plain-sql-with-jooq/
+
+16:46:09 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+16:49:28 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: You don't have to register your Converters or Bindings with the code generator. You can use ad-hoc converters on any Field expression: https://www.jooq.org/doc/latest/manual/sql-execution/fetching/ad-hoc-converter/
+
+16:49:28 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+17:35:13 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: You don't have to use jOOQ's DSL. You can use all of jOOQ's API with native SQL as well: https://blog.jooq.org/using-java-13-text-blocks-for-plain-sql-with-jooq/
+
+17:35:13 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+18:45:29 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: When it comes to using Converter or Binding, only the first UNION subquery is relevant. Learn more about this here: https://blog.jooq.org/how-to-use-jooqs-converters-with-union-operations/
+
+18:45:29 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+19:45:04 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: Want to upgrade your jOOQ experience? Check out these commercial only features of the jOOQ Professional and Enterprise Editions: https://www.jooq.org/commercial-only-features/
+
+19:45:04 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+19:48:28 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: You don't have to use jOOQ's DSL. You can use all of jOOQ's API with native SQL as well: https://blog.jooq.org/using-java-13-text-blocks-for-plain-sql-with-jooq/
+
+19:48:28 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+16:15:27 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: Most formats that can be exported can be imported again: https://www.jooq.org/doc/latest/manual/sql-execution/importing/
+
+16:15:27 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+13:29:57 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: Multi tenancy is best implemented in jOOQ using runtime schema and table mapping: https://www.jooq.org/doc/latest/manual/sql-building/dsl-context/custom-settings/settings-render-mapping/
+
+13:29:57 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+14:39:18 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: When creating dynamic SQL Conditions, the DSL.trueCondition(), DSL.falseCondition(), DSL.noCondition(): https://blog.jooq.org/create-empty-optional-sql-clauses-with-jooq/
+
+14:39:18 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+14:45:41 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: jOOQ offers out of the box functionality for common scenarios related to audit columns: https://www.jooq.org/doc/latest/manual/code-generation/codegen-advanced/codegen-config-database/codegen-database-forced-types/codegen-database-forced-types-audit/
+
+14:45:41 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+14:47:34 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: Views (and table valued functions) are the most underrated SQL feature! They work very well together with jOOQ and jOOQ's code generator! https://www.jooq.org/doc/latest/manual/code-generation/codegen-advanced/codegen-config-database/codegen-database-table-valued-functions/
+
+14:47:34 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+18:36:50 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: Thinking of building a query with jOOQ and executing it elsewhere? Think again: https://blog.jooq.org/why-you-should-execute-jooq-queries-with-jooq/
+
+18:36:50 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+18:42:57 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: When it comes to using Converter or Binding, only the first UNION subquery is relevant. Learn more about this here: https://blog.jooq.org/how-to-use-jooqs-converters-with-union-operations/
+
+18:42:57 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+18:54:46 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: When creating dynamic SQL Conditions, the DSL.trueCondition(), DSL.falseCondition(), DSL.noCondition(): https://blog.jooq.org/create-empty-optional-sql-clauses-with-jooq/
+
+18:54:46 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+19:10:41 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: If you must be using OFFSET pagination (you probably shouldn't!), then do it right, and without extra round trips: https://blog.jooq.org/calculating-pagination-metadata-without-extra-roundtrips-in-sql/
+
+19:10:41 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)
+19:18:06 [Test worker] INFO  org.jooq.Constants - 
+
+jOOQ tip of the day: jOOQ supports a variety of out-of-the-box export formats, including CSV, XML, JSON, HTML, and Text: https://www.jooq.org/doc/latest/manual/sql-execution/exporting/
+
+19:18:06 [Test worker] INFO  o.j.i.D.logVersionSupport - Version                  : Database version is supported by dialect H2: 2.3.232 (2024-08-11)

@@ -1,0 +1,175 @@
+/*
+Copyright 2021 BarD Software s.r.o
+
+This file is part of GanttProject, an open-source project management tool.
+
+GanttProject is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+GanttProject is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+*/
+.dialog-alert {
+  -fx-pref-height: 400;
+  -fx-pref-width: 400;
+}
+.dialog-alert .header {
+  -fx-spacing: 5;
+  -fx-background-color: #f8d7da;
+  -fx-alignment: center-left;
+  -fx-fill-width: true;
+  -fx-padding: 15;
+  -fx-background-insets: 0 0 4 0;
+  -fx-effect: dropshadow(gaussian, #ccc, 4, 0, 0, 4);
+}
+.dialog-alert .header .title {
+  -fx-font-size: 110%;
+  -fx-font-weight: bold;
+}
+.dialog-alert .content-pane {
+  -fx-padding: 1ex 1em;
+  -fx-border-width: 0;
+}
+
+.text-left {
+  -fx-alignment: center-left;
+}
+
+.text-right {
+  -fx-alignment: center-right;
+}
+
+/*!
+ * Copyright 2024 BarD Software s.r.o., Dmitry Barashev.
+ *
+ * This file is part of GanttProject, an opensource project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+.toggle-switch:selected .thumb-area {
+  -fx-background-color: linear-gradient(to bottom, derive(-fx-text-box-border, -20%), derive(-fx-text-box-border, -30%)), linear-gradient(to bottom, derive(#ffca28, 30%), #ffca28);
+  -fx-background-insets: 0, 1;
+}
+
+.dlg-list-view-editor .header {
+  -fx-spacing: 5;
+  -fx-background-color: #ffca28;
+  -fx-alignment: center-left;
+  -fx-fill-width: true;
+  -fx-padding: 15;
+  -fx-background-insets: 0 0 4 0;
+  -fx-effect: dropshadow(gaussian, #ccc, 4, 0, 0, 4);
+}
+.dlg-list-view-editor .header .title {
+  -fx-font-size: 110%;
+  -fx-font-weight: bold;
+}
+.dlg-list-view-editor .content-pane .list-view {
+  -fx-border-width: 0 1 0 0;
+  -fx-border-color: #e0e0e0;
+  -fx-min-width: 20em;
+  -fx-font-size: 100%;
+}
+.dlg-list-view-editor .content-pane .column-item-cell {
+  -fx-fill: #424242;
+  -fx-text-fill: #424242;
+  -fx-padding: 5 10 5 15;
+  -fx-strikethrough: false;
+}
+.dlg-list-view-editor .content-pane .column-item-cell .glyph-icon {
+  -glyph-size: 18;
+  -fx-alignment: center;
+}
+.dlg-list-view-editor .content-pane .column-item-cell .glyph-icon:hover {
+  -fx-cursor: hand;
+  -fx-fill: #292929;
+  -glyph-size: 18;
+}
+.dlg-list-view-editor .content-pane .column-item-cell.is-visible {
+  -fx-font-weight: bold;
+}
+.dlg-list-view-editor .content-pane .column-item-cell.is-hidden {
+  -fx-font-weight: normal;
+}
+.dlg-list-view-editor .content-pane .column-item-cell.is-hidden > * {
+  -fx-fill: #949494;
+}
+.dlg-list-view-editor .content-pane .column-item-cell:selected {
+  -fx-background-color: #e0e0e0;
+}
+.dlg-list-view-editor .content-pane .column-item-cell:selected > * {
+  -fx-fill: #424242;
+  -fx-text-fill: #424242;
+}
+.dlg-list-view-editor .content-pane .property-sheet-box {
+  -fx-background-color: whitesmoke;
+}
+.dlg-list-view-editor .content-pane .property-sheet-box .visibility-pane {
+  -fx-padding: 10 10 30 10;
+}
+.dlg-list-view-editor .content-pane .property-sheet-box .title {
+  -fx-padding: 10 10 10 10;
+  -fx-font-size: 110%;
+}
+.dlg-list-view-editor .content-pane .property-sheet-box HBox .property-sheet .validation-error {
+  -fx-background-color: #f69289, -fx-control-inner-background, transparent, linear-gradient(from 0px 0px to 0px 5px, derive(-fx-control-inner-background, -9%), -fx-control-inner-background);
+}
+.dlg-list-view-editor .content-pane .property-sheet-box HBox .property-sheet .validation-error .text-field {
+  -fx-text-fill: #424242;
+}
+.dlg-list-view-editor .content-pane .property-sheet-box HBox .property-sheet:disabled * {
+  -fx-opacity: 0.9;
+}
+.dlg-list-view-editor .content-pane .property-sheet-box .hint-validation {
+  -fx-padding: 3 2 3 0;
+  -fx-text-fill: #424242;
+}
+.dlg-list-view-editor .content-pane .property-sheet-box .hint-validation-pane {
+  -fx-background-color: #ffca28;
+  -fx-background-radius: 3;
+  -fx-border-color: #ffca28;
+  -fx-border-radius: 3;
+  -fx-border-width: 5;
+  -fx-pref-width: 100%;
+  -fx-min-width: 400;
+  visibility: visible;
+}
+.dlg-list-view-editor .content-pane .property-sheet-box .hint-validation-pane.noerror {
+  -fx-background-color: whitesmoke;
+  -fx-border-color: transparent;
+}
+.dlg-list-view-editor .content-pane .property-sheet-box .hint .glyph-icon {
+  -fx-fill: #424242;
+  -fx-padding: 3 3 3 3;
+}
+.dlg-list-view-editor .content-pane .property-sheet-box .hint-validation-pane {
+  -fx-border-insets: 3 20 3 20;
+  -fx-background-insets: 3 20 3 20;
+}
+.dlg-list-view-editor .button-pane {
+  -fx-padding: 2ex 1em 1ex 1em;
+  -fx-background-color: whitesmoke;
+}
+.dlg-list-view-editor .button-pane .button-bar {
+  -fx-background-color: transparent;
+}
+
+/*# sourceMappingURL=ListViewEditorDialog.css.map */

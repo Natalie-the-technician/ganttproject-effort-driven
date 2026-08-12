@@ -1,0 +1,52 @@
+.context-menu .menu-item {
+  -fx-padding: 0.5ex 1em;
+  -fx-text-fill: #424242;
+}
+.context-menu .menu-item .check-box {
+  -fx-padding: 0;
+  -fx-background-color: transparent;
+}
+.context-menu .menu-item .check-box .box {
+  -fx-padding: 0;
+  -fx-background-color: transparent;
+}
+.context-menu .menu-item .check-box .box .glyph-icon {
+  -fx-padding: 2;
+  -glyph-size: 30px;
+}
+.context-menu .menu-item .custom-checkbox-menu-item {
+  -fx-padding: 2 5 2 5;
+}
+.context-menu .menu-item .custom-checkbox-menu-item .label {
+  -fx-text-fill: #424242;
+}
+.context-menu .menu-item .custom-checkbox-menu-item .title {
+  -fx-font-weight: bold;
+  -fx-text-fill: #424242;
+  -fx-padding: 0;
+}
+.context-menu .menu-item .custom-checkbox-menu-item .help {
+  -fx-font-size: 80%;
+  -fx-text-fill: dimgray;
+  -fx-padding: 0;
+}
+.context-menu .menu-item .custom-label-menu-item {
+  -fx-padding: 5px;
+}
+.context-menu .menu-item .custom-label-menu-item .glyph-icon {
+  -glyph-size: 18px;
+  -fx-fill: #424242;
+}
+.context-menu .menu-item .custom-label-menu-item.blank_icon .glyph-icon {
+  -fx-fill: transparent;
+}
+.context-menu .menu-item:focused {
+  -fx-background: -fx-accent;
+  -fx-background-color: #e0e0e0;
+  -fx-text-fill: #424242;
+}
+.context-menu .menu-item:focused .label {
+  -fx-text-fill: #424242;
+}
+
+/*# sourceMappingURL=menu.css.map */

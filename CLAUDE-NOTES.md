@@ -1270,6 +1270,45 @@ Speichers abgeschnitten, und der Token der nächsten Person wäre still verschwu
 `GPCloudOptions.INSTANCE.getOptionGroup()` registriert werden, damit die Werte wirklich in
 `~/.ganttproject` landen. Dazu fehlt noch die Eingabemöglichkeit in der Ressourcenverwaltung.
 
+### Token-Ablage geprüft — dateisichtbar, ohne Bildschirm
+
+Nach Regel 0 aufgeteilt. Zwei Prüfungen, beide ohne Oberfläche:
+
+**Der Token landet NICHT in der Projektdatei.** `EffortFileRoundTripTest` setzt einen Token wie
+der Ressourcendialog, speichert das Projekt und durchsucht das XML. Das ist die
+sicherheitsrelevante Zusage, und sie ist jetzt ausgeführt statt behauptet.
+**Gegentest 20:** Token über die Projektbeschreibung in die Datei gebracht → der Test schlug fehl.
+Die Prüfung sieht also wirklich in die gespeicherte Datei.
+
+**Der Weg in die Einstellungsdatei trägt.** `GanttOptions.save()` schreibt fest nach
+`~/.ganttproject` und ist nicht umleitbar — ein Test darf Natalies Einstellungen nicht anfassen.
+Geprüft wird deshalb genau die Schicht, die dabei benutzt wird: `getPersistentValue` /
+`loadPersistentValue`, also der Weg, den `OptionSaver` geht. Zusätzlich sind Gruppen- und
+Optionsname festgenagelt (`toggl.resourceTokens`) — eine Umbenennung würde jeden gespeicherten
+Token stillschweigend verwaisen lassen.
+
+### Prüfpfad zur Toggl-Verbindung (liest nur)
+
+`checkTogglConnection` holt sieben Tage Einträge und meldet Anzahl, unlesbare Einträge und
+Fehlerart. **Schreibt nichts.** Zweck: Die beiden ungeprüften Annahmen klären, bevor etwas in
+Vorgänge geschrieben wird — Token im **Benutzernamen** (`api_token` ins Passwort) und die
+geschätzten Zeitlimits.
+
+**Gegentest 19:** Token ins Passwort getauscht → der neue Test **und** der bestehende
+`TogglClientTest.testTokenGoesIntoTheUsername` schlugen fehl.
+
+`TogglClient` hat dafür `timeEntriesWithProblems` bekommen; der gemeinsame Teil steckt in
+`fetchBody`. Die 15 vorhandenen Tests laufen unverändert.
+
+### Was jetzt NUR noch Oberfläche ist
+
+Alle Bausteine der Zeiterfassung sind gebaut und geprüft. Es fehlen ausschließlich:
+
+- Menüpunkt „Toggl-Verbindung testen" — **muss in einem eigenen Thread laufen**, sonst steht die
+  Oberfläche bis zu 30 Sekunden am Zeitlimit.
+- Zuordnungsdialog (Schritt 6), bedient `TimeEntryMatching.kt`.
+- Menüpunkt für den Import selbst.
+
 ### Noch offen aus dieser Sitzung
 
 - **Handtest zu Schritt 2** (Abschnitt 4.3 der Übergabe) — von Claude nicht prüfbar.

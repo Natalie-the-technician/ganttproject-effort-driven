@@ -1,0 +1,121 @@
+/*!
+ * Copyright 2024 BarD Software s.r.o., Dmitry Barashev.
+ *
+ * This file is part of GanttProject, an opensource project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+.context-menu .menu-item {
+  -fx-padding: 0.5ex 1em;
+  -fx-text-fill: #424242;
+}
+.context-menu .menu-item .check-box {
+  -fx-padding: 0;
+  -fx-background-color: transparent;
+}
+.context-menu .menu-item .check-box .box {
+  -fx-padding: 0;
+  -fx-background-color: transparent;
+}
+.context-menu .menu-item .check-box .box .glyph-icon {
+  -fx-padding: 2;
+  -glyph-size: 30px;
+}
+.context-menu .menu-item .custom-checkbox-menu-item {
+  -fx-padding: 2 5 2 5;
+}
+.context-menu .menu-item .custom-checkbox-menu-item .label {
+  -fx-text-fill: #424242;
+}
+.context-menu .menu-item .custom-checkbox-menu-item .title {
+  -fx-font-weight: bold;
+  -fx-text-fill: #424242;
+  -fx-padding: 0;
+}
+.context-menu .menu-item .custom-checkbox-menu-item .help {
+  -fx-font-size: 80%;
+  -fx-text-fill: dimgray;
+  -fx-padding: 0;
+}
+.context-menu .menu-item .custom-label-menu-item {
+  -fx-padding: 5px;
+}
+.context-menu .menu-item .custom-label-menu-item .glyph-icon {
+  -glyph-size: 18px;
+  -fx-fill: #424242;
+}
+.context-menu .menu-item .custom-label-menu-item.blank_icon .glyph-icon {
+  -fx-fill: transparent;
+}
+.context-menu .menu-item:focused {
+  -fx-background: -fx-accent;
+  -fx-background-color: #e0e0e0;
+  -fx-text-fill: #424242;
+}
+.context-menu .menu-item:focused .label {
+  -fx-text-fill: #424242;
+}
+
+.menu-bar .menu-item {
+  -fx-padding: 0.5ex 1em;
+  -fx-text-fill: #424242;
+}
+.menu-bar .menu-item .check-box {
+  -fx-padding: 0;
+  -fx-background-color: transparent;
+}
+.menu-bar .menu-item .check-box .box {
+  -fx-padding: 0;
+  -fx-background-color: transparent;
+}
+.menu-bar .menu-item .check-box .box .glyph-icon {
+  -fx-padding: 2;
+  -glyph-size: 30px;
+}
+.menu-bar .menu-item .custom-checkbox-menu-item {
+  -fx-padding: 2 5 2 5;
+}
+.menu-bar .menu-item .custom-checkbox-menu-item .label {
+  -fx-text-fill: #424242;
+}
+.menu-bar .menu-item .custom-checkbox-menu-item .title {
+  -fx-font-weight: bold;
+  -fx-text-fill: #424242;
+  -fx-padding: 0;
+}
+.menu-bar .menu-item .custom-checkbox-menu-item .help {
+  -fx-font-size: 80%;
+  -fx-text-fill: dimgray;
+  -fx-padding: 0;
+}
+.menu-bar .menu-item .custom-label-menu-item {
+  -fx-padding: 5px;
+}
+.menu-bar .menu-item .custom-label-menu-item .glyph-icon {
+  -glyph-size: 18px;
+  -fx-fill: #424242;
+}
+.menu-bar .menu-item .custom-label-menu-item.blank_icon .glyph-icon {
+  -fx-fill: transparent;
+}
+.menu-bar .menu-item:focused {
+  -fx-background: -fx-accent;
+  -fx-background-color: #e0e0e0;
+  -fx-text-fill: #424242;
+}
+.menu-bar .menu-item:focused .label {
+  -fx-text-fill: #424242;
+}
+
+/*# sourceMappingURL=Main.css.map */

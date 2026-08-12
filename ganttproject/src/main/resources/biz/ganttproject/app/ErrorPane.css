@@ -1,0 +1,72 @@
+/*!
+ * Copyright (c) 2025 Dmitry Barashev, BarD Software s.r.o.
+ *
+ * This file is part of GanttProject, an open-source project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/*!
+ * Copyright 2024 BarD Software s.r.o., Dmitry Barashev.
+ *
+ * This file is part of GanttProject, an opensource project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/**
+ This will show an error label with red borders from top and bottom and some vertical padding around.
+ */
+.hint-validation {
+  -fx-padding: 3 2 3 0;
+  -fx-text-fill: #424242;
+}
+
+.hint-validation-pane.error {
+  -fx-border-width: 0 0 0 5;
+  -fx-padding: 0.75ex 0.75ex;
+  -fx-border-insets: 2ex 1em;
+  -fx-background-insets: 2ex 1em;
+  -fx-border-color: #f69289;
+  -fx-background-color: #f9beb9;
+}
+.hint-validation-pane.warning {
+  -fx-border-width: 0 0 0 5;
+  -fx-padding: 0.75ex 0.75ex;
+  -fx-border-insets: 2ex 1em;
+  -fx-background-insets: 2ex 1em;
+  -fx-border-color: #ffca28;
+  -fx-background-color: #ffd75b;
+}
+.hint-validation-pane.noerror {
+  /*visibility: hidden;*/
+  -fx-background-color: transparent;
+  -fx-border-color: transparent;
+}
+
+.hint .glyph-icon {
+  -fx-fill: -gp-dark-gray;
+  -fx-padding: 3 3 3 3;
+}
+
+/*# sourceMappingURL=ErrorPane.css.map */

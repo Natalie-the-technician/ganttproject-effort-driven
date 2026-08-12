@@ -1,0 +1,29 @@
+.text-left {
+  -fx-alignment: center-left;
+}
+
+.text-right {
+  -fx-alignment: center-right;
+}
+
+.popover-content {
+  -fx-padding: 2ex 2em;
+}
+.popover-content .section {
+  -fx-opacity: 0.8;
+  -fx-padding: 0 0 1.5ex 0.75em;
+}
+.popover-content .section .title {
+  -fx-font-size: 110%;
+  -fx-font-weight: bold;
+}
+.popover-content .section .helpline {
+  -fx-fill: #616161;
+  -fx-font-size: 80%;
+  -fx-font-weight: normal;
+}
+.popover-content .section.selected {
+  -fx-opacity: 1;
+}
+
+/*# sourceMappingURL=DateRangePicker.css.map */

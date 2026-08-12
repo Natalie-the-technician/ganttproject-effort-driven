@@ -1,0 +1,104 @@
+/*
+ * Copyright 2024 BarD Software s.r.o., Dmitry Barashev.
+ *
+ * This file is part of GanttProject, an opensource project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/*
+Copyright 2021 BarD Software s.r.o
+
+This file is part of GanttProject, an open-source project management tool.
+
+GanttProject is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+GanttProject is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+*/
+.dialog-alert {
+  -fx-pref-height: 400;
+  -fx-pref-width: 400;
+}
+.dialog-alert .header {
+  -fx-spacing: 5;
+  -fx-background-color: #f8d7da;
+  -fx-alignment: center-left;
+  -fx-fill-width: true;
+  -fx-padding: 15;
+  -fx-background-insets: 0 0 4 0;
+  -fx-effect: dropshadow(gaussian, #ccc, 4, 0, 0, 4);
+}
+.dialog-alert .header .title {
+  -fx-font-size: 110%;
+  -fx-font-weight: bold;
+}
+.dialog-alert .content-pane {
+  -fx-padding: 1ex 1em;
+  -fx-border-width: 0;
+}
+
+.text-left {
+  -fx-alignment: center-left;
+}
+
+.text-right {
+  -fx-alignment: center-right;
+}
+
+.dlg .header {
+  -fx-spacing: 5;
+  -fx-background-color: #ffca28;
+  -fx-alignment: center-left;
+  -fx-fill-width: true;
+  -fx-padding: 15;
+  -fx-background-insets: 0 0 4 0;
+  -fx-effect: dropshadow(gaussian, #ccc, 4, 0, 0, 4);
+}
+.dlg .header .title {
+  -fx-font-size: 110%;
+  -fx-font-weight: bold;
+}
+.dlg .column-item-cell {
+  -fx-padding: 10 5;
+  -fx-pref-width: 38em;
+}
+.dlg .column-item-cell .timestamp {
+  -fx-font-size: 80%;
+  -fx-text-fill: dimgray;
+  -fx-wrap-text: true;
+}
+.dlg .column-item-cell:disabled {
+  -fx-opacity: 0.5;
+}
+.dlg .column-item-cell:selected {
+  -fx-background-color: #e0e0e0;
+}
+.dlg .column-item-cell:selected > * {
+  -fx-fill: #424242;
+  -fx-text-fill: #424242;
+}
+
+.notification {
+  -fx-pref-width: 40em;
+}
+
+/*# sourceMappingURL=NotificationManager.css.map */

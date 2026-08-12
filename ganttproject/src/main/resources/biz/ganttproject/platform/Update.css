@@ -1,0 +1,525 @@
+/*!
+ * Copyright (c) 2022 Dmitry Barashev, BarD Software s.r.o.
+ *
+ * This file is part of GanttProject, an open-source project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/*
+Copyright 2021 BarD Software s.r.o
+
+This file is part of GanttProject, an open-source project management tool.
+
+GanttProject is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+GanttProject is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+*/
+.dialog-alert {
+  -fx-pref-height: 400;
+  -fx-pref-width: 400;
+}
+.dialog-alert .header {
+  -fx-spacing: 5;
+  -fx-background-color: #f8d7da;
+  -fx-alignment: center-left;
+  -fx-fill-width: true;
+  -fx-padding: 15;
+  -fx-background-insets: 0 0 4 0;
+  -fx-effect: dropshadow(gaussian, #ccc, 4, 0, 0, 4);
+}
+.dialog-alert .header .title {
+  -fx-font-size: 110%;
+  -fx-font-weight: bold;
+}
+.dialog-alert .content-pane {
+  -fx-padding: 1ex 1em;
+  -fx-border-width: 0;
+}
+
+/*
+ * Copyright (c) 2021 Dmitry Barashev, BarD Software s.r.o.
+ *
+ * This file is part of GanttProject, an open-source project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+.btn-regular {
+  -fx-background-color: derive(#e0e0e0, -20%), #e0e0e0;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5;
+}
+.btn-regular:hover {
+  -fx-background-color: derive(#e0e0e0, -20%), derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+}
+.btn-regular:focused {
+  -fx-background-color: derive(#e0e0e0, -20%), derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+  -fx-background-color: derive(#616161, -20%), derive(#e0e0e0, 0%);
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.btn-regular:disabled {
+  -fx-opacity: 0.4;
+}
+
+.btn-regular .secondary {
+  -fx-background-color: transparent;
+}
+
+.btn-attention {
+  -fx-background-color: #ffca28;
+  -fx-border-color: transparent;
+  -fx-border-radius: 0;
+  -fx-text-fill: #424242;
+  /*    -fx-font-size: 110%;*/
+  -fx-font-weight: bold;
+  -fx-padding: 0.75ex 2em;
+  -fx-cursor: hand;
+}
+.btn-attention:hover {
+  -fx-background-color: transparent, #ffca28;
+  -fx-fill: derive(#424242, -20%);
+  -fx-effect: dropshadow(gaussian, #e0e0e0, 4, 0, 0, 4);
+}
+.btn-attention:focused {
+  -fx-background-color: transparent, #ffca28;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.btn-attention:disabled {
+  -fx-opacity: 0.4;
+  -fx-cursor: default;
+}
+.btn-attention:pressed {
+  -fx-effect: none;
+  -fx-background-color: derive(#ffca28, 10%);
+  -fx-text-fill: derive(#424242, -10%);
+}
+.btn-attention.secondary {
+  -fx-background-color: transparent;
+  -fx-border-color: #ffca28;
+}
+.btn-attention.secondary:hover {
+  -fx-background-color: #ffca28, transparent;
+  -fx-fill: derive(#424242, -20%);
+}
+.btn-attention.secondary:focused {
+  -fx-background-color: #ffca28, transparent;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+
+/*!
+ * Copyright 2024 BarD Software s.r.o., Dmitry Barashev.
+ *
+ * This file is part of GanttProject, an opensource project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/**
+ This will show an error label with red borders from top and bottom and some vertical padding around.
+ */
+/*!
+ * Copyright 2024 BarD Software s.r.o., Dmitry Barashev.
+ *
+ * This file is part of GanttProject, an opensource project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/*
+ * Copyright (c) 2025 Dmitry Barashev, BarD Software s.r.o.
+ *
+ * This file is part of GanttProject, an open-source project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+/*
+ * Copyright (c) 2021 Dmitry Barashev, BarD Software s.r.o.
+ *
+ * This file is part of GanttProject, an open-source project management tool.
+ *
+ * GanttProject is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ * GanttProject is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+ */
+.btn-regular {
+  -fx-background-color: derive(#e0e0e0, -20%), #e0e0e0;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5;
+}
+.btn-regular:hover {
+  -fx-background-color: derive(#e0e0e0, -20%), derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+}
+.btn-regular:focused {
+  -fx-background-color: derive(#e0e0e0, -20%), derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+  -fx-background-color: derive(#616161, -20%), derive(#e0e0e0, 0%);
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.btn-regular:disabled {
+  -fx-opacity: 0.4;
+}
+
+.btn-regular .secondary {
+  -fx-background-color: transparent;
+}
+
+.btn-attention {
+  -fx-background-color: #ffca28;
+  -fx-border-color: transparent;
+  -fx-border-radius: 0;
+  -fx-text-fill: #424242;
+  /*    -fx-font-size: 110%;*/
+  -fx-font-weight: bold;
+  -fx-padding: 0.75ex 2em;
+  -fx-cursor: hand;
+}
+.btn-attention:hover {
+  -fx-background-color: transparent, #ffca28;
+  -fx-fill: derive(#424242, -20%);
+  -fx-effect: dropshadow(gaussian, #e0e0e0, 4, 0, 0, 4);
+}
+.btn-attention:focused {
+  -fx-background-color: transparent, #ffca28;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+.btn-attention:disabled {
+  -fx-opacity: 0.4;
+  -fx-cursor: default;
+}
+.btn-attention:pressed {
+  -fx-effect: none;
+  -fx-background-color: derive(#ffca28, 10%);
+  -fx-text-fill: derive(#424242, -10%);
+}
+.btn-attention.secondary {
+  -fx-background-color: transparent;
+  -fx-border-color: #ffca28;
+}
+.btn-attention.secondary:hover {
+  -fx-background-color: #ffca28, transparent;
+  -fx-fill: derive(#424242, -20%);
+}
+.btn-attention.secondary:focused {
+  -fx-background-color: #ffca28, transparent;
+  -fx-background-insets: 0, 1;
+  -fx-background-radius: 5, 3;
+  -fx-border-color: transparent;
+  -fx-border-width: 0;
+}
+
+/* A single item in the list of available updates */
+.dlg-platform-update {
+  -fx-min-height: 400;
+}
+.dlg-platform-update .header {
+  -fx-spacing: 5;
+  -fx-background-color: #ffca28;
+  -fx-alignment: center-left;
+  -fx-fill-width: true;
+  -fx-padding: 15;
+  -fx-background-insets: 0 0 4 0;
+  -fx-effect: dropshadow(gaussian, #ccc, 4, 0, 0, 4);
+}
+.dlg-platform-update .header .title {
+  -fx-font-size: 110%;
+  -fx-font-weight: bold;
+}
+.dlg-platform-update .content-pane {
+  -fx-padding: 20 20 20 20;
+}
+.dlg-platform-update .content-pane .hint-validation {
+  -fx-padding: 3 2 3 0;
+  -fx-text-fill: #424242;
+}
+.dlg-platform-update .content-pane .hint-validation-pane {
+  -fx-background-color: #ffca28;
+  -fx-background-radius: 3;
+  -fx-border-color: #ffca28;
+  -fx-border-radius: 3;
+  -fx-border-width: 5;
+  -fx-pref-width: 100%;
+  -fx-min-width: 400;
+  visibility: visible;
+}
+.dlg-platform-update .content-pane .hint-validation-pane.noerror {
+  -fx-background-color: whitesmoke;
+  -fx-border-color: transparent;
+}
+.dlg-platform-update .content-pane .hint .glyph-icon {
+  -fx-fill: #424242;
+  -fx-padding: 3 3 3 3;
+}
+.dlg-platform-update .content-pane .hint-validation-pane {
+  -fx-background-insets: 0 10 0 0;
+  -fx-border-insets: 0 10 0 0;
+}
+.dlg-platform-update .content-pane .label-updates {
+  -fx-padding: 2ex 0 0.3ex 0;
+  -fx-font-size: 150%;
+  -fx-border-width: 0 0 2 0;
+  -fx-border-color: #e0e0e0;
+  -fx-border-insets: 0 0 20 0;
+}
+.dlg-platform-update .content-pane .help {
+  -fx-padding: 0 0 2ex 0;
+}
+.dlg-platform-update .content-pane .minor-update {
+  -fx-background-color: transparent;
+}
+.dlg-platform-update .content-pane .minor-update .title {
+  -fx-font-weight: bold;
+  -fx-font-size: 120%;
+}
+.dlg-platform-update .content-pane .minor-update .subtitle {
+  -fx-text-fill: #616161;
+  -fx-font-size: 80%;
+  -fx-font-weight: normal;
+}
+.dlg-platform-update .content-pane .minor-update .par {
+  -fx-fill: #616161;
+  -fx-padding: 0ex 0 0.5ex 0;
+}
+.dlg-platform-update .content-pane .minor-update .progress {
+  -fx-font-size: 80%;
+  -fx-fill: #616161;
+  -fx-padding: 0 0 2ex 0;
+}
+.dlg-platform-update .content-pane .major-update {
+  -fx-border-color: transparent;
+  -fx-border-insets: 20 0 0 0;
+  -fx-background-insets: 20 0 0 0;
+}
+.dlg-platform-update .content-pane .major-update .title {
+  -fx-font-weight: bold;
+  -fx-font-size: 120%;
+}
+.dlg-platform-update .content-pane .major-update .subtitle {
+  -fx-text-fill: #616161;
+  -fx-font-size: 80%;
+  -fx-font-weight: normal;
+}
+.dlg-platform-update .content-pane .major-update .par {
+  -fx-fill: #616161;
+  -fx-padding: 2ex 0 0.5ex 0;
+  -mdfx-font-color: #616161;
+}
+.dlg-platform-update .content-pane .update-from-zip .title {
+  -fx-font-weight: bold;
+  -fx-font-size: 120%;
+}
+.dlg-platform-update .content-pane .update-from-zip .subtitle {
+  -fx-text-fill: #616161;
+  -fx-font-size: 80%;
+  -fx-font-weight: normal;
+}
+.dlg-platform-update .content-pane .update-from-zip .property-pane {
+  -fx-border-color: transparent;
+  -fx-border-insets: 20 0 0 0;
+  -fx-background-insets: 20 0 0 0;
+}
+.dlg-platform-update .content-pane .update-from-zip .property-pane .zip-file-chooser {
+  -fx-border-color: green;
+  -fx-border-width: 0;
+}
+.dlg-platform-update .content-pane .update-from-zip .property-pane .zip-file-chooser:right-node-visible .right-pane {
+  -fx-padding: 0;
+  -fx-border-width: 0;
+  -fx-background-insets: 0;
+}
+.dlg-platform-update .content-pane .update-from-zip .property-pane .zip-file-chooser:right-node-visible .right-pane .button {
+  -fx-background-color: #e0e0e0;
+  -fx-fill: #424242;
+  -fx-text-fill: #424242;
+  -fx-border-insets: 0;
+  -fx-border-radius: 0;
+  -fx-background-insets: 1;
+  -fx-background-radius: 0;
+}
+.dlg-platform-update .content-pane .update-from-zip .property-pane .zip-file-chooser:right-node-visible .right-pane .button .glyph-icon {
+  -fx-fill: #424242;
+}
+.dlg-platform-update .content-pane .update-from-zip .property-pane .zip-file-chooser:right-node-visible .right-pane .button:hover {
+  -fx-background-color: derive(#e0e0e0, 20%);
+  -fx-fill: derive(#424242, -20%);
+  -fx-cursor: hand;
+  -fx-effect: none;
+}
+.dlg-platform-update .content-pane .update-from-zip .apply-pane {
+  -fx-border-color: transparent;
+  -fx-border-insets: 0.75ex 0 0 0;
+  -fx-background-insets: 0.75ex 0 0 0;
+}
+.dlg-platform-update .content-pane .scroll-pane {
+  -fx-border-color: transparent;
+  -fx-background-color: white;
+}
+.dlg-platform-update .content-pane .scroll-pane > .viewport {
+  -fx-background-color: transparent;
+}
+.dlg-platform-update .content-pane .scroll-pane:hover .scroll-bar {
+  -fx-opacity: 1;
+}
+.dlg-platform-update .content-pane .scroll-pane .scroll-bar {
+  -fx-background-color: transparent;
+  -fx-opacity: 0.8;
+  -fx-max-width: 15;
+  -fx-pref-width: 15;
+}
+.dlg-platform-update .content-pane .scroll-pane .scroll-bar > .track {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-background-radius: 0.5em;
+}
+.dlg-platform-update .content-pane .scroll-pane .scroll-bar > .track-background {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0, 1;
+}
+.dlg-platform-update .content-pane .scroll-pane .scroll-bar > .thumb {
+  -fx-background-color: #e0e0e0;
+}
+.dlg-platform-update .content-pane .scroll-pane .scroll-bar > .increment-button, .dlg-platform-update .content-pane .scroll-pane .scroll-bar .decrement-button {
+  -fx-background-color: transparent;
+  -fx-background-radius: 0em;
+  -fx-padding: 0;
+}
+.dlg-platform-update .content-pane .scroll-pane .scroll-bar > .increment-button .increment-arrow, .dlg-platform-update .content-pane .scroll-pane .scroll-bar > .increment-button .decrement-arrow, .dlg-platform-update .content-pane .scroll-pane .scroll-bar .decrement-button .increment-arrow, .dlg-platform-update .content-pane .scroll-pane .scroll-bar .decrement-button .decrement-arrow {
+  -fx-shape: " ";
+  -fx-padding: 0;
+}
+.dlg-platform-update .content-pane .scroll-pane .scroll-body {
+  -fx-background-color: transparent;
+  -fx-padding: 1em 0 0 0;
+}
+.dlg-platform-update .toggle-switch {
+  -fx-content-display: left;
+  -fx-graphic-text-gap: 0;
+}
+.dlg-platform-update .button-pane {
+  -fx-padding: 2ex 1em 1ex 1em;
+  -fx-background-color: whitesmoke;
+  -fx-background-color: transparent;
+  -fx-border-color: green;
+  -fx-border-width: 0;
+}
+.dlg-platform-update .button-pane .button-bar {
+  -fx-background-color: transparent;
+}
+.dlg-platform-update .button-pane .button-bar {
+  -fx-border-color: green;
+  -fx-border-width: 0;
+}
+.dlg-platform-update .alert-embedded-box {
+  -fx-border-color: green;
+}
+.dlg-platform-update .alert-embedded-box.error {
+  -fx-border-color: red;
+  -fx-border-width: 0 0 0 5;
+  -fx-padding: 0.75ex 0.75ex;
+  -fx-border-insets: 2ex 1em;
+  -fx-background-insets: 2ex 1em;
+  -fx-border-color: #f69289;
+  -fx-background-color: #f9beb9;
+}
+.dlg-platform-update .alert-embedded-box.warning {
+  -fx-border-width: 0 0 0 5;
+  -fx-padding: 0.75ex 0.75ex;
+  -fx-border-insets: 2ex 1em;
+  -fx-background-insets: 2ex 1em;
+  -fx-border-color: #ffca28;
+  -fx-background-color: #ffd75b;
+}
+.dlg-platform-update .alert-embedded-box .alert-error {
+  -fx-text-fill: #616161;
+  -fx-font-weight: bold;
+  -fx-font-size: 85%;
+}
+
+/*# sourceMappingURL=Update.css.map */
