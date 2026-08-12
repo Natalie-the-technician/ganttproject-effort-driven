@@ -1300,6 +1300,86 @@ geschätzten Zeitlimits.
 `TogglClient` hat dafür `timeEntriesWithProblems` bekommen; der gemeinsame Teil steckt in
 `fetchBody`. Die 15 vorhandenen Tests laufen unverändert.
 
+### Übersetzungen — geklärt, mit eigenem Textbündel
+
+Die offene Frage aus der letzten Sitzung ist beantwortet, und zwar durch Nachlesen im Quelltext,
+nicht durch Vermutung.
+
+**Warum das Submodul ausscheidet.** `.gitmodules` zeigt für `biz.ganttproject.app.localization` auf
+`bardsoftware/…`, Zweig `BRANCH_3.3`. Ein dort hinzugefügter Text ließe sich aus diesem Fork nicht
+pushen, und der Submodul-Zeiger im Fork verwiese auf ein Objekt, das niemand sonst holen kann —
+jeder Klon wäre kaputt. Technische Grenze, keine rechtliche.
+
+**Warum ein zweites Plugin AUCH nicht geht.** `InternationalizationImpl.kt:87` wählt seine Datei mit
+`find` — der **erste** Anbieter von `i18n_de_DE.properties` gewinnt, alle weiteren werden ignoriert.
+**Bündel verschmelzen nicht.** Das war bisher ausdrücklich als ungeprüft vermerkt; jetzt geprüft.
+
+**Der gewählte Weg.** Eigenes Bündel in `resources/language/fork/`, davorgeschaltet, Fallkette
+Land → Sprache → Englisch. Schlüssel tragen alle das Präfix `fork.`, ein Zusammenstoß mit Upstream
+ist damit ausgeschlossen. **Kein einziger Upstream-Text wird angefasst** — das ist der Punkt: der
+Fork bleibt zusammenführbar, und der Mechanismus wäre so, wie er ist, für das Original übernehmbar.
+
+Zwei Dinge, die den Weg tragen und die ich verifiziert habe:
+- `GanttLanguage.getText` (Swing) delegiert an `RootLocalizer` (JavaFX). **Ein** Mechanismus deckt
+  beide Oberflächen ab.
+- `ganttproject/build.gradle:44` legt `src/main/resources/resources` direkt auf den Klassenpfad,
+  und Zeile 167 packt `resources/language/**` mit ins Plugin. Pfad im Test = Pfad im Betrieb.
+- Der ausgelieferte Start geht über eclipsito mit `--app net.sourceforge.ganttproject.GanttProject`.
+  `App.kt:main` ist nur der Entwicklerpfad — dort wird `RootLocalizer` überschrieben, im Betrieb
+  nicht. `ForkLocalizer` liest `RootLocalizer` deshalb bei jedem Aufruf neu statt ihn zu merken.
+
+**Gegentest 21 (bestanden):** Bündel als ISO-8859-1 gelesen → der Umlauttest schlug fehl, mit genau
+dem „prÃ¼fen", das im Kommentar vorhergesagt war.
+
+**Gegentest 22 (NICHT ausgelöst — wichtiger als die bestandenen).** Ich habe den Pfad auf
+`/resources/language/fork` verbogen, und **alle 11 Tests blieben grün**. Ursache: `build.gradle`
+meldet `src/main/resources/resources` als Klassenpfadeintrag (Z. 44) *und* `src/main/resources` als
+Ressourcenwurzel (Z. 114). Unter Test antwortet das Bündel deshalb auf **beide** Pfade; im
+verpackten Plugin nur auf den ersten, weil `plugin.xml` `resources/` zur Bibliothekswurzel macht.
+
+**Daraus die Regel:** Ein Einheitstest in diesem Projekt kann einen betriebstauglichen
+Ressourcenpfad nicht von einem falschen unterscheiden. Der Kommentar im Test behauptete das
+zunächst — die Behauptung ist korrigiert, statt sie stehen zu lassen.
+
+Geprüft wurde die Verpackung darum am **gebauten Stand**: `:ganttproject:copyPlugin`, dann
+nachgesehen. Ergebnis: die Dateien liegen unter
+`dist-bin/plugins/base/ganttproject/resources/language/fork/`, und ein `resources/resources` gibt
+es dort **nicht** — der Sabotage-Pfad liefe im Betrieb also wirklich ins Leere. Wer den Pfad ändert,
+muss das hier wiederholen; grüne Tests sagen dazu nichts.
+
+**Falle, die dabei fast zugeschnappt wäre:** `Properties.load(InputStream)` nimmt ISO-8859-1 an.
+So gelesen wird aus „prüfen" ein „prÃ¼fen" — falsch, sieht aber aus wie Text und fällt erst im
+Bildschirmfoto auf. `ForkI18n` liest darum ausdrücklich UTF-8, und ein Test prüft ein Wort mit
+Umlaut.
+
+### Feste Texte: alle Fork-Dateien durchgesehen
+
+Nicht nur die zwei offensichtlichen. Ergebnis der Durchsicht aller 26 geänderten Produktivdateien:
+
+| Fund | sichtbar? | erledigt |
+|---|---|---|
+| 6 Beschriftungen in `TaskResourcesPanel` / `MainPropertiesPanel` | ja | ins Bündel |
+| **Anzeigenamen der eigenen Spalten** (`Effort (h)`, `Actual effort (h)`, `Hours per day`, `Toggl imported`) | ja — sie **sind** der Spaltenkopf | ins Bündel |
+| Prüfmeldungen beim Aufteilen (`TimeEntryMatching`) | ja, im Zuordnungsdialog | `SplitResult.Invalid` trägt jetzt **Schlüssel + Zahlen** statt fertigem Satz |
+| Meldungen in `TogglClient` / `HttpClientBackend` | **noch nicht** | siehe unten |
+| Treffer in `GanttProject.java`, `TaskManagerImpl`, `TaskTableModel:174`, `GanttProjectImpl` | — | Upstream, nicht von uns |
+
+Dass der Anzeigename einer benutzerdefinierten Eigenschaft der Spaltenkopf ist, steht nicht im
+Kommentar irgendwo, sondern folgt aus `ColumnManager.kt:305` (`title = column.name`) und
+`ColumnStub(def.id, def.name, …)` — nachgesehen, bevor ich es behauptet habe.
+
+**Warum das Übersetzen der Spaltennamen ungefährlich ist:** `findEffortDefinition` sucht über die
+technische **id** (`effort_hours`), der Anzeigename spielt dabei keine Rolle. Die id wird bewusst
+NICHT übersetzt. Würde man sie mitübersetzen, fände eine englische Installation die Spalte eines
+deutschen Projekts nicht mehr, der Aufwand läse sich als „nicht vorhanden", und jeder Vorgang fiele
+stumm auf die Standarddauer zurück — ohne jede Fehlermeldung. Genau dagegen sichert ein Test.
+
+**Noch offen und bewusst so gelassen:** `ConnectionCheckResult.Failed.message` reicht die englische
+Meldung aus `TogglException` durch. Heute sieht die niemand — es gibt noch keinen Dialog. Beim Bau
+des Verbindungstests darf dieser Text **nicht** einfach angezeigt werden; die Meldung gehört aus
+`TogglFailure` über das Bündel aufgebaut. Sonst steht „Toggl refused the token…" auf Englisch im
+deutschen Dialog.
+
 ### Was jetzt NUR noch Oberfläche ist
 
 Alle Bausteine der Zeiterfassung sind gebaut und geprüft. Es fehlen ausschließlich:

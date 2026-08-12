@@ -37,6 +37,7 @@ import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RoleManager
 // [Fork-Aenderung] Neue Importe fuer den Toggl-Token.
+import net.sourceforge.ganttproject.fork.forkText
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions
 import net.sourceforge.ganttproject.timetracking.tokenFor
 import net.sourceforge.ganttproject.timetracking.withToken
@@ -117,11 +118,11 @@ class MainPropertiesPanel(private val resource: HumanResource) {
 
 }
 
-// [Fork-Aenderung] Feste Beschriftungen: die Uebersetzungsdateien liegen im Submodul des
-// Original-Repositories (siehe CLAUDE-NOTES.md), ein unbekannter Schluessel erschiene sonst
-// woertlich im Dialog.
-private const val TOGGL_SECTION_LABEL = "Zeiterfassung"
-private const val TOGGL_TOKEN_LABEL = "Toggl-Token"
+// [Fork-Aenderung] Beschriftungen aus dem eigenen Textbuendel dieses Forks. Die
+// Uebersetzungsdateien des Originals liegen in einem Submodul, das aus diesem Fork nicht
+// beschrieben werden kann; siehe ForkI18n.kt.
+private val TOGGL_SECTION_LABEL get() = forkText("fork.toggl.section")
+private val TOGGL_TOKEN_LABEL get() = forkText("fork.toggl.token")
 
 private val roleStringConverter = object : StringConverter<Role>() {
   override fun toString(role: Role): String  = role.name

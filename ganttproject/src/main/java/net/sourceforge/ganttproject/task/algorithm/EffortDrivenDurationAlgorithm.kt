@@ -24,6 +24,7 @@ package net.sourceforge.ganttproject.task.algorithm
 import biz.ganttproject.customproperty.CustomPropertyClass
 import biz.ganttproject.customproperty.CustomPropertyDefinition
 import biz.ganttproject.customproperty.CustomPropertyManager
+import net.sourceforge.ganttproject.fork.forkText
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskContainmentHierarchyFacade
@@ -70,19 +71,27 @@ object EffortDrivenProperties {
   /** Used when a resource carries no explicit value. */
   const val DEFAULT_HOURS_PER_DAY = 8.0
 
+  /**
+   * [Fork-Aenderung] Die Anzeigenamen kommen aus dem Textbuendel dieses Forks, denn sie erscheinen
+   * als Spaltenkopf. Gesucht wird dagegen ueber die technische id ([TASK_EFFORT_HOURS] usw.), die
+   * bewusst NICHT uebersetzt wird — sonst faende [findEffortDefinition] die Spalte nach einem
+   * Sprachwechsel nicht mehr wieder.
+   */
   fun findOrCreateTaskEffort(manager: CustomPropertyManager): CustomPropertyDefinition =
     manager.findEffortDefinition(TASK_EFFORT_HOURS)
-      ?: manager.createDefinition(TASK_EFFORT_HOURS, CustomPropertyClass.DOUBLE.iD, "Effort (h)", null)
+      ?: manager.createDefinition(TASK_EFFORT_HOURS, CustomPropertyClass.DOUBLE.iD,
+                                  forkText("fork.column.effort"), null)
 
   /** [Fork-Aenderung] Counterpart of [findOrCreateTaskEffort] for the recorded actual effort. */
   fun findOrCreateTaskActualEffort(manager: CustomPropertyManager): CustomPropertyDefinition =
     manager.findEffortDefinition(TASK_EFFORT_ACTUAL_HOURS)
       ?: manager.createDefinition(TASK_EFFORT_ACTUAL_HOURS, CustomPropertyClass.DOUBLE.iD,
-                                  "Actual effort (h)", null)
+                                  forkText("fork.column.actualEffort"), null)
 
   fun findOrCreateResourceHours(manager: CustomPropertyManager): CustomPropertyDefinition =
     manager.findEffortDefinition(RESOURCE_HOURS_PER_DAY)
-      ?: manager.createDefinition(RESOURCE_HOURS_PER_DAY, CustomPropertyClass.DOUBLE.iD, "Hours per day", null)
+      ?: manager.createDefinition(RESOURCE_HOURS_PER_DAY, CustomPropertyClass.DOUBLE.iD,
+                                  forkText("fork.column.hoursPerDay"), null)
 }
 
 /**

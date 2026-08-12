@@ -57,6 +57,7 @@ import net.sourceforge.ganttproject.task.algorithm.actualEffortHours
 import net.sourceforge.ganttproject.task.algorithm.effortHours
 import net.sourceforge.ganttproject.task.algorithm.findEffortDefinition
 import net.sourceforge.ganttproject.task.algorithm.hoursPerDay
+import net.sourceforge.ganttproject.fork.forkText
 import net.sourceforge.ganttproject.task.algorithm.parseEffortInput
 import org.controlsfx.control.tableview2.TableColumn2
 import org.controlsfx.control.tableview2.TableView2
@@ -396,12 +397,14 @@ class TaskResourcesPanel(
 // --------------------------------------------------------------------------------------------------------------------
 private val i18n = RootLocalizer
 
-// [Fork-Aenderung] Feste Beschriftungen der neuen Bedienelemente. Nicht in den
-// i18n-Dateien, weil diese im Submodul des Original-Repositories liegen.
-private const val EFFORT_LABEL_SECTION = "Aufwand"
-private const val EFFORT_LABEL_EFFORT_HOURS = "Stunden"
-private const val EFFORT_LABEL_HOURS_PER_DAY = "Std./Tag"
-private const val EFFORT_LABEL_ACTUAL_HOURS = "Ist-Stunden"
+// [Fork-Aenderung] Beschriftungen der neuen Bedienelemente. Sie stehen im eigenen Textbuendel
+// dieses Forks, nicht in den i18n-Dateien des Originals: diese liegen in einem Submodul, das auf
+// das Repository von bardsoftware zeigt und aus diesem Fork nicht beschrieben werden kann.
+// Begruendung und Mechanik siehe ForkI18n.kt.
+private val EFFORT_LABEL_SECTION get() = forkText("fork.effort.section")
+private val EFFORT_LABEL_EFFORT_HOURS get() = forkText("fork.effort.hours")
+private val EFFORT_LABEL_HOURS_PER_DAY get() = forkText("fork.effort.hoursPerDay")
+private val EFFORT_LABEL_ACTUAL_HOURS get() = forkText("fork.effort.actualHours")
 
 /**
  * [Fork-Aenderung] Neue Hilfsfunktion: Stunden ohne ueberfluessige Nachkommastelle anzeigen,

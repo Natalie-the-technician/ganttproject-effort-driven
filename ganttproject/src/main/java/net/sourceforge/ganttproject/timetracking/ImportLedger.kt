@@ -23,6 +23,7 @@ package net.sourceforge.ganttproject.timetracking
 import biz.ganttproject.customproperty.CustomPropertyClass
 import biz.ganttproject.customproperty.CustomPropertyDefinition
 import biz.ganttproject.customproperty.CustomPropertyManager
+import net.sourceforge.ganttproject.fork.forkText
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.algorithm.findEffortDefinition
 
@@ -149,8 +150,10 @@ object TimeTrackingProperties {
 
   fun findOrCreateImportedEntries(manager: CustomPropertyManager): CustomPropertyDefinition =
     manager.findEffortDefinition(TASK_IMPORTED_ENTRIES)
+      // [Fork-Aenderung] Anzeigename aus dem Textbuendel: er erscheint als Spaltenkopf. Die id
+      // bleibt unuebersetzt, weil die Suche darueber laeuft.
       ?: manager.createDefinition(TASK_IMPORTED_ENTRIES, CustomPropertyClass.TEXT.iD,
-                                  "Toggl imported", null)
+                                  forkText("fork.column.togglImported"), null)
 }
 
 /**

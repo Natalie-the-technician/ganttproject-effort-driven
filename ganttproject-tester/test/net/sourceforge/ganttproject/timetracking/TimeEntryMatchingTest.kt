@@ -151,7 +151,10 @@ class TimeEntryMatchingTest : TestCase() {
   fun testSplitThatDoesNotAddUpIsRejected() {
     val r = validateSplit(4.0, listOf(SplitPart(332, 2.0), SplitPart(333, 1.0)))
     assertTrue(r is SplitResult.Invalid)
-    assertTrue((r as SplitResult.Invalid).reason.contains("add up"))
+    // The KEY, not the wording: a reworded message must not break this test, a renamed key must.
+    assertEquals(SPLIT_ERROR_SUM_MISMATCH, (r as SplitResult.Invalid).reasonKey)
+    // Both figures have to reach the message, otherwise it cannot say what is wrong.
+    assertEquals(listOf(3.0, 4.0), r.args)
   }
 
   fun testSplitRejectsZeroAndNegativeParts() {
@@ -164,7 +167,7 @@ class TimeEntryMatchingTest : TestCase() {
   fun testSplitRejectsTheSameTaskTwice() {
     val r = validateSplit(4.0, listOf(SplitPart(332, 2.0), SplitPart(332, 2.0)))
     assertTrue(r is SplitResult.Invalid)
-    assertTrue((r as SplitResult.Invalid).reason.contains("twice"))
+    assertEquals(SPLIT_ERROR_DUPLICATE_TASK, (r as SplitResult.Invalid).reasonKey)
   }
 
   fun testSplitToleratesRounding() {

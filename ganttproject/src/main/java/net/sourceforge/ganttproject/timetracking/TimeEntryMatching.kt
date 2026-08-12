@@ -19,6 +19,7 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 // NEUE DATEI DIESES FORKS
 package net.sourceforge.ganttproject.timetracking
 
+import net.sourceforge.ganttproject.fork.forkText
 import java.time.LocalDate
 
 /**
@@ -171,11 +172,29 @@ data class SplitPart(val taskId: Int, val hours: Double)
 
 sealed interface SplitResult {
   data class Ok(val parts: List<SplitPart>) : SplitResult
-  data class Invalid(val reason: String) : SplitResult
+
+  /**
+   * [Fork-Aenderung] Carries a TEXT KEY, not a finished sentence.
+   *
+   * This reason is shown in the matching dialog, so it has to be translatable. Holding the key
+   * instead of English prose also means the dialog cannot accidentally display an untranslated
+   * message: there is no English string here to display. [message] resolves it.
+   */
+  data class Invalid(val reasonKey: String, val args: List<Any> = emptyList()) : SplitResult {
+    val message: String get() = forkText(reasonKey, *args.toTypedArray())
+  }
 }
 
 /** Rounding slack when checking that the parts add up, in hours. */
 const val SPLIT_TOLERANCE_HOURS = 0.005
+
+// [Fork-Aenderung] Text keys for the reasons a split can be rejected. Kept as constants so a
+// test asserts on the key rather than on the wording -- a reworded message must not break a test,
+// a renamed key must.
+const val SPLIT_ERROR_EMPTY = "fork.split.empty"
+const val SPLIT_ERROR_NOT_POSITIVE = "fork.split.notPositive"
+const val SPLIT_ERROR_DUPLICATE_TASK = "fork.split.duplicateTask"
+const val SPLIT_ERROR_SUM_MISMATCH = "fork.split.sumMismatch"
 
 /**
  * Checks a manual split of one entry.
@@ -184,17 +203,18 @@ const val SPLIT_TOLERANCE_HOURS = 0.005
  * error nobody notices until the calibration is wrong.
  */
 fun validateSplit(totalHours: Double, parts: List<SplitPart>): SplitResult {
-  if (parts.isEmpty()) return SplitResult.Invalid("no parts given")
+  if (parts.isEmpty()) return SplitResult.Invalid(SPLIT_ERROR_EMPTY)
   if (parts.any { it.hours <= 0.0 || !it.hours.isFinite() }) {
-    return SplitResult.Invalid("every part must be a positive number of hours")
+    return SplitResult.Invalid(SPLIT_ERROR_NOT_POSITIVE)
   }
   if (parts.map { it.taskId }.toSet().size != parts.size) {
-    return SplitResult.Invalid("the same task appears twice")
+    return SplitResult.Invalid(SPLIT_ERROR_DUPLICATE_TASK)
   }
   val sum = parts.sumOf { it.hours }
   if (kotlin.math.abs(sum - totalHours) > SPLIT_TOLERANCE_HOURS) {
-    return SplitResult.Invalid(
-      "the parts add up to %.2f h, the entry has %.2f h".format(sum, totalHours))
+    // The two figures go in as numbers, so the translation decides how they are formatted --
+    // a German text writes 1,50 where an English one writes 1.50.
+    return SplitResult.Invalid(SPLIT_ERROR_SUM_MISMATCH, listOf(sum, totalHours))
   }
   return SplitResult.Ok(parts)
 }
