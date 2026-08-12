@@ -88,7 +88,24 @@ class TogglClient(private val backend: HttpBackend) {
    * Entries that are still running are dropped: they have no end and would be imported with a
    * negative duration.
    */
-  fun timeEntries(token: String, from: String, to: String): List<TogglTimeEntry> {
+  fun timeEntries(token: String, from: String, to: String): List<TogglTimeEntry> =
+    parseTimeEntries(fetchBody(token, from, to)).filterNot { it.isRunning }
+
+  /**
+   * [Fork-Aenderung] Same request, but also reports the entries that could not be read.
+   *
+   * Used by the connection check: on a first run against the real service it matters whether
+   * something arrived that this code cannot make sense of — silently dropping it would hide
+   * exactly the surprise the check is meant to surface.
+   */
+  fun timeEntriesWithProblems(
+    token: String, from: String, to: String
+  ): Pair<List<TogglTimeEntry>, List<String>> {
+    val (entries, problems) = parseTimeEntriesWithProblems(fetchBody(token, from, to))
+    return entries.filterNot { it.isRunning } to problems
+  }
+
+  private fun fetchBody(token: String, from: String, to: String): String {
     require(token.isNotBlank()) { "token must not be blank" }
     val url = "${TogglApi.BASE_URL}/me/time_entries?start_date=$from&end_date=$to"
     val (status, body) = backend.get(url, authorizationHeader(token))
@@ -103,7 +120,7 @@ class TogglClient(private val backend: HttpBackend) {
         "Toggl rate limit reached. At most one request per second.")
       else -> throw TogglException(TogglFailure.UNAVAILABLE, "Toggl answered with status $status.")
     }
-    return parseTimeEntries(body).filterNot { it.isRunning }
+    return body
   }
 
   /**
