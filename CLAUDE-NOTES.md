@@ -1175,6 +1175,33 @@ gesperrt und werden stillschweigend nicht ersetzt.
 grep -a -o "Ist-Stunden" <pfad>/plugins/base/ganttproject/lib/ganttproject-*.jar.lib
 ```
 
+### Schritt 2 ist geprüft — Bildschirm und Datei getrennt
+
+Nach Natalies neuer Regel 0 aufgeteilt: was in einer Datei sichtbar ist, wird nicht am Bildschirm
+geprüft.
+
+**Am Bildschirm geprüft (Cowork, 12.08.):** Feld „Ist-Stunden" ist im Aufgabendialog unter
+„Stunden" vorhanden, vollständig sichtbar, richtig beschriftet. Gegenprobe im selben Dialog:
+ein erfundenes Feld „Soll-Stunden" gibt es **nicht** — die Beobachtung unterscheidet also.
+
+**In der Datei geprüft (`EffortFileRoundTripTest`, 3 Tests):** Aufwand und Ist-Stunden landen als
+Definition und Wert im `.gan`; 12,5 bleibt 12,5; Ist-Stunden ändern die geplante Dauer nicht; ein
+unberührtes Projekt bekommt die Spalten nicht ungefragt.
+
+Damit ist die Entwurfsentscheidung aus Sitzung 2 (Custom Properties statt neuer XML-Attribute)
+erstmals **ausgeführt** belegt, nicht nur aus `TaskSaver.kt` gelesen.
+
+**Richtigstellung fürs Protokoll:** Der Prüfbericht vermutete, das Feature sei „zwischenzeitlich
+in den Build gekommen". Das stimmt nicht — es lag die ganze Zeit im Quelltext, die Anwendung lud
+nur die alte Programmdatei (siehe die Falle oben). Es gibt keinen Commit, der das Feld
+nachgereicht hätte.
+
+**Gegentest 13, und was er über Testaufbau lehrt:** Ist-Stunden versuchsweise in die
+Dauerberechnung eingeschleust → Test blieb **grün**. Die Testaufgabe hatte keine Ressource, der
+Algorithmus brach vorher ab, der geprüfte Pfad wurde nie erreicht. Mit Zuweisung und einer
+ausdrücklichen Vorbedingung („der Vorgang darf nicht schon die Dauer haben, die ein Leck erzeugen
+würde") schlug er fehl. **Dieselbe Falle wie in Sitzung 3.**
+
 ### Noch offen aus dieser Sitzung
 
 - **Handtest zu Schritt 2** (Abschnitt 4.3 der Übergabe) — von Claude nicht prüfbar.
