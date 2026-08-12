@@ -1202,6 +1202,45 @@ Algorithmus brach vorher ab, der geprüfte Pfad wurde nie erreicht. Mit Zuweisun
 ausdrücklichen Vorbedingung („der Vorgang darf nicht schon die Dauer haben, die ein Leck erzeugen
 würde") schlug er fehl. **Dieselbe Falle wie in Sitzung 3.**
 
+### Schritte 4 und 5 (Kern) — gebaut, ohne Netz
+
+**Schritt 4, Ablage entschieden.** Die Übergabe schlug „Custom Property am Projekt oder in den
+Projektoptionen" vor. **Beides gibt es nicht:** `IGanttProject` kennt genau zwei Property-Manager,
+für Aufgaben und Ressourcen. Natalie hat entschieden: **eine Eigenschaft je Vorgang
+(`toggl_imported`), beim Import projektweit zusammengeführt.** Grund gegen die
+Anwendungseinstellungen: Die Projektdatei liegt im Vault; ein Schutz auf einem Rechner ließe
+einen Kollegen dieselben Stunden ein zweites Mal buchen.
+
+`projectImportLedger(...)` liest **alle** Vorgänge — genau der Fall, den die Übergabe als Risiko
+dieser Ablage nannte (ein Eintrag, der letztes Mal einem anderen Vorgang zugeordnet war).
+
+**Schritt 5, Kern.** Zweigeteilt: `planTaskImport` rechnet nur (Vorschau kann verworfen werden),
+`applyTaskImport` schreibt und entscheidet nichts. `applyImportAsSingleEdit` legt den ganzen
+Import in **eine** Undo-Klammer — und öffnet **keine**, wenn nichts zu schreiben ist.
+
+Unantastbar: Fortschritt, Status, geplante Dauer, geplanter Aufwand. Überschreitung wird über
+`exceedsPlanned` gemeldet, nicht korrigiert.
+
+### WICHTIGER BEFUND: „Zurücklesen" las das Modell, nicht die Datenbank
+
+`applyTaskImport` liest nach dem Schreiben zurück — aber über `task.actualEffortHours(...)`, also
+aus der Aufgabe **im Speicher**. Der Mutator aktualisiert das Modell unabhängig davon, was die
+Datenbank tut.
+
+**Gegentest 16b:** Spaltenabgleich gelöscht → die Prüfung meldete weiterhin Erfolg. Der Test war
+wertlos. Umgestellt auf eine **direkte H2-Abfrage**, danach schlug er fehl.
+
+**Lehre, über dieses Feature hinaus:** „Zurücklesen statt Ausnahmen prüfen" genügt nicht — es muss
+aus der Quelle gelesen werden, um die es geht. Beim Modell zu bleiben prüft nur, dass der Mutator
+funktioniert hat. Die Beschreibung von `applyTaskImport` sagt das jetzt ausdrücklich.
+
+### Aufgeräumt
+
+- Der Zweig „Feld geleert" suchte in beiden Aufwandsfeldern nur über die Kennung — eine selbst
+  angelegte Spalte ließ sich damit nicht leeren. Jetzt Kennung ODER Name.
+- Aufwand direkt in eine Tabellenspalte getippt löste keine Neuberechnung aus.
+  `TaskTableModel.setValue` rechnet jetzt **nach** dem eigenen Commit nach (Gegentest 15).
+
 ### Noch offen aus dieser Sitzung
 
 - **Handtest zu Schritt 2** (Abschnitt 4.3 der Übergabe) — von Claude nicht prüfbar.

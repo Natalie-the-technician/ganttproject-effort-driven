@@ -32,6 +32,10 @@ import net.sourceforge.ganttproject.task.TaskManager
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.task.algorithm.actualEffortHours
 import net.sourceforge.ganttproject.timetracking.TogglTimeEntry
+import net.sourceforge.ganttproject.timetracking.applyImportAsSingleEdit
+import net.sourceforge.ganttproject.undo.GPUndoListener
+import net.sourceforge.ganttproject.undo.GPUndoManager
+import net.sourceforge.ganttproject.undo.UndoableEditTxnFactory
 import net.sourceforge.ganttproject.timetracking.applyTaskImport
 import net.sourceforge.ganttproject.timetracking.importedEntries
 import net.sourceforge.ganttproject.timetracking.planTaskImport
@@ -232,6 +236,64 @@ class ImportApplyTest {
         }
       }
     }
+
+  // --- one import, one undo step ---
+
+  /** Counts how many undoable edits were opened, and runs them. */
+  private class CountingUndoManager : GPUndoManager {
+    var edits = 0
+    val names = mutableListOf<String>()
+    override fun undoableEdit(localizedName: String, runnableEdit: Runnable) {
+      edits++
+      names.add(localizedName)
+      runnableEdit.run()
+    }
+    override fun canUndo() = false
+    override fun canRedo() = false
+    override fun undo() {}
+    override fun redo() {}
+    override val undoPresentationName = ""
+    override val redoPresentationName = ""
+    override fun addUndoableEditListener(listener: GPUndoListener) {}
+    override fun removeUndoableEditListener(listener: GPUndoListener) {}
+    override fun die() {}
+    override fun addUndoableEditTxnFactory(factory: UndoableEditTxnFactory) {}
+  }
+
+  /**
+   * However many tasks an import touches, undoing it must take one press. Otherwise the user has
+   * to undo task by task and can stop halfway, leaving the hours half imported.
+   */
+  @Test
+  fun `an import over several tasks is a single undo step`() {
+    val first = newTask("A")
+    val second = newTask("B")
+    val undo = CountingUndoManager()
+
+    val plan = planTaskImport(
+      listOf(entry(1L, 2.0) to first, entry(2L, 3.0) to second), emptyMap(), properties)
+    applyImportAsSingleEdit(plan, properties, projectDatabase, undo, "Import")
+
+    assertEquals(1, undo.edits, "an import must open exactly one undoable edit")
+    assertEquals(2.0, first.actualEffortHours(properties)!!, 0.001)
+    assertEquals(3.0, second.actualEffortHours(properties)!!, 0.001)
+  }
+
+  /** Re-importing unchanged data must not leave an empty step in the undo history. */
+  @Test
+  fun `an import with nothing to write opens no undo step`() {
+    val task = newTask("A")
+    val undo = CountingUndoManager()
+    applyImportAsSingleEdit(
+      planTaskImport(listOf(entry(1L, 2.0) to task), emptyMap(), properties),
+      properties, projectDatabase, undo, "Import")
+
+    val secondPlan = planTaskImport(
+      listOf(entry(1L, 2.0) to task), ledgerOfProject(), properties)
+    applyImportAsSingleEdit(secondPlan, properties, projectDatabase, undo, "Import")
+
+    assertEquals(1, undo.edits, "the unchanged second run added an undo step")
+  }
 
   // --- what must stay untouched ---
 
