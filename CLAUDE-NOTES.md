@@ -1413,6 +1413,26 @@ Text hinterlegt ist, fällt das hier auf und nicht vor der Benutzerin.
 **Falle beim Einhängen:** Kotlin-Standardparameter sind für Java unsichtbar. `GanttProject.java`
 konnte den Konstruktor nicht aufrufen, bis `@JvmOverloads` dranstand.
 
+### Falle: dist-bin\ganttproject.exe startet NICHT
+
+Kostete einen ganzen Testlauf, deshalb ausführlich.
+
+`ganttproject-launch4j.xml` verweist auf eine mitgelieferte Laufzeit unter `.\runtime\`. Die legt
+aber nur `distWin` an, **`distBin` nicht**. Ohne `runtime\` fällt die `.exe` auf die System-Java
+zurück, und die ist hier ein Microsoft-JDK **ohne JavaFX**. Ergebnis: der Dialog „GanttProject
+needs Java 21+ with JavaFX modules", bevor überhaupt ein Fenster erscheint.
+
+**Zum Ausprobieren immer `tools/start-testbuild.bat` benutzen.** Das setzt `JAVA_HOME` auf das
+Liberica-JDK mit JavaFX — dasselbe, mit dem gebaut wird — und ruft `ganttproject.bat` auf.
+Geprüft: Oberfläche kommt hoch, `ProjectOpenActivityCompleted` im Protokoll.
+
+Zwei Fallstricke, die beim Bauen dieses Starters aufgetreten sind:
+- **PowerShells `Set-Location` ändert das Arbeitsverzeichnis fremder Programme nicht.** Ein
+  `Start-Process cmd /c tools\...` scheitert dann mit „Befehl nicht gefunden", obwohl die Datei da
+  ist. Immer mit vollem Pfad arbeiten.
+- Im Starter selbst schlug `CALL ganttproject.bat` nach einem `CD /D` fehl, je nachdem wie der
+  Starter aufgerufen wurde. Deshalb steht dort jetzt der volle Pfad.
+
 ### Was jetzt NUR noch Oberfläche ist
 
 - Zuordnungsdialog (Schritt 6), bedient `TimeEntryMatching.kt`. Die Prüfmeldungen liegen als
