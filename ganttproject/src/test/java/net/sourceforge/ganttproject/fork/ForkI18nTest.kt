@@ -21,6 +21,7 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject.fork
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -180,6 +181,58 @@ class ForkI18nTest {
     // separator depends on the language, so only the digits are asserted.
     assertTrue(Regex("3[.,]00").containsMatchIn(message), "the sum is missing from: $message")
     assertTrue(Regex("4[.,]00").containsMatchIn(message), "the total is missing from: $message")
+  }
+
+  /**
+   * The result of the connection check is built from the failure KIND, never from the exception
+   * message. That message is English prose written for the log; showing it would put
+   * "Toggl refused the token…" into a German dialog.
+   *
+   * Every failure kind is walked, so a new one added to the enum without a text shows up here as
+   * a bare key rather than in front of the user.
+   */
+  @Test
+  fun `no english exception text reaches the connection check message`() {
+    val developerText = "Toggl refused the token. Note that the token goes into the USERNAME field"
+
+    net.sourceforge.ganttproject.timetracking.TogglFailure.entries.forEach { failure ->
+      val message = net.sourceforge.ganttproject.timetracking.connectionCheckMessage(
+        net.sourceforge.ganttproject.timetracking.ConnectionCheckResult.Failed(
+          "Nati", failure, developerText))
+
+      assertFalse(message.contains("USERNAME"),
+        "the english developer text reached the user for $failure: $message")
+      assertFalse(message.startsWith("fork."), "no text is defined for $failure: $message")
+    }
+  }
+
+  /**
+   * The successful case has to name the person and the count -- a bare "it works" would not tell
+   * the user whether the right account was reached.
+   */
+  @Test
+  fun `the successful check names the person and the count`() {
+    val message = net.sourceforge.ganttproject.timetracking.connectionCheckMessage(
+      net.sourceforge.ganttproject.timetracking.ConnectionCheckResult.Ok("Nati", 7, listOf()))
+
+    assertTrue(message.contains("Nati"), "the person is missing from: $message")
+    assertTrue(message.contains("7"), "the count is missing from: $message")
+  }
+
+  /**
+   * Entries the code could not read must be mentioned. On a first run against the real service
+   * that is the interesting part, and swallowing it would hide the surprise the check exists for.
+   */
+  @Test
+  fun `unreadable entries are mentioned in the message`() {
+    val quiet = net.sourceforge.ganttproject.timetracking.connectionCheckMessage(
+      net.sourceforge.ganttproject.timetracking.ConnectionCheckResult.Ok("Nati", 7, listOf()))
+    val noisy = net.sourceforge.ganttproject.timetracking.connectionCheckMessage(
+      net.sourceforge.ganttproject.timetracking.ConnectionCheckResult.Ok(
+        "Nati", 7, listOf("entry #3 skipped: missing start")))
+
+    assertNotEquals(quiet, noisy, "the unreadable entry left no trace in the message")
+    assertTrue(noisy.contains("entry #3"), "the entry is not named in: $noisy")
   }
 
   private fun keysOf(path: String): Set<String> =

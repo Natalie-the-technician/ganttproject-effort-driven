@@ -23,7 +23,9 @@ import biz.ganttproject.app.*;
 import biz.ganttproject.lib.fx.TreeTableCellsKt;
 import biz.ganttproject.platform.UpdateOptions;
 import biz.ganttproject.storage.cloud.GPCloudOptions;
-// [Fork-Aenderung] Neuer Import fuer die Toggl-Token-Ablage.
+// [Fork-Aenderung] Neue Importe fuer die Toggl-Token-Ablage und den Verbindungstest.
+import net.sourceforge.ganttproject.gui.NotificationChannel;
+import net.sourceforge.ganttproject.timetracking.TogglConnectionAction;
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions;
 import biz.ganttproject.storage.cloud.GPCloudStatusBar;
 import com.beust.jcommander.Parameter;
@@ -151,6 +153,12 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     }
     mHuman.add(resourceActionSet.getResourceSendMailAction());
     mHuman.add(resourceActionSet.getCloudResourceList());
+    // [Fork-Aenderung] Verbindungstest zu Toggl. Steht im Ressourcen-Menue, weil der Token an der
+    // Ressource haengt. Der Test liest nur und schreibt nichts.
+    mHuman.add(new TogglConnectionAction(
+        getHumanResourceManager(),
+        (isProblem, message) -> getUIFacade().showNotificationDialog(
+            isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS, message)));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
     bar.add(mHuman);

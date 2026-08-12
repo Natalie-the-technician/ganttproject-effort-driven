@@ -1380,14 +1380,46 @@ des Verbindungstests darf dieser Text **nicht** einfach angezeigt werden; die Me
 `TogglFailure` über das Bündel aufgebaut. Sonst steht „Toggl refused the token…" auf Englisch im
 deutschen Dialog.
 
+### Verbindungstest: Menüpunkt gebaut
+
+Sitzt im **Ressourcen-Menü**, weil der Token an der Ressource hängt. `TogglConnectionAction`.
+**Liest nur, schreibt nichts** — kein Vorgang, keine Eigenschaft, kein Register.
+
+Drei Entscheidungen, die man beim Lesen sonst für willkürlich hält:
+
+- **Eigener Thread.** Die Antwort kann am Zeitlimit von 30 Sekunden hängen. Auf dem
+  Oberflächen-Thread stünde das ganze Fenster so lange — kein Neuzeichnen, kein Menü, sieht aus
+  wie ein Absturz. Zurück auf den Oberflächen-Thread geht es über `SwingUtilities.invokeLater`;
+  eine Swing-Komponente vom Hintergrund-Thread anzufassen funktioniert meist und zerlegt
+  gelegentlich die Anzeige.
+- **Die Ressourcenliste wird VOR dem Thread gelesen**, auf dem Thread, dem sie gehört. Sonst wäre
+  es ein Wettlauf um Werte, die gleichzeitig auf dem Bildschirm stehen.
+- **Die Meldung wird aus `TogglFailure` gebaut, nicht aus `Failed.message`.** Letztere ist
+  englischer Text fürs Protokoll. Zeigte man ihn an, stünde „Toggl refused the token…" im
+  deutschen Dialog. Genau das war der Punkt, den ich beim Textdurchgang offen gelassen hatte.
+  `connectionCheckMessage` ist bewusst eine **reine Funktion** — dadurch ist die Zusage prüfbar,
+  ohne Oberfläche.
+
+**Gegentest 23 (bestanden):** `connectionCheckMessage` gab für `Failed` die Ausnahmemeldung zurück
+→ der Test schlug fehl, und zwar genau mit dem englischen Satz im Fehlertext.
+
+Der Test läuft über **alle** Werte von `TogglFailure`. Kommt eine Fehlerart dazu, ohne dass ein
+Text hinterlegt ist, fällt das hier auf und nicht vor der Benutzerin.
+
+**Falle beim Einhängen:** Kotlin-Standardparameter sind für Java unsichtbar. `GanttProject.java`
+konnte den Konstruktor nicht aufrufen, bis `@JvmOverloads` dranstand.
+
 ### Was jetzt NUR noch Oberfläche ist
 
-Alle Bausteine der Zeiterfassung sind gebaut und geprüft. Es fehlen ausschließlich:
-
-- Menüpunkt „Toggl-Verbindung testen" — **muss in einem eigenen Thread laufen**, sonst steht die
-  Oberfläche bis zu 30 Sekunden am Zeitlimit.
-- Zuordnungsdialog (Schritt 6), bedient `TimeEntryMatching.kt`.
+- Zuordnungsdialog (Schritt 6), bedient `TimeEntryMatching.kt`. Die Prüfmeldungen liegen als
+  Schlüssel bereit, der Dialog kann also gar keinen unübersetzten Text zeigen.
 - Menüpunkt für den Import selbst.
+
+**Noch nie gegen den echten Dienst gelaufen.** `HttpClientBackend` hat bis heute nur mit
+aufgezeichneten Antworten gesprochen. Der Verbindungstest ist gebaut, damit dieser erste echte
+Lauf stattfindet, **bevor** etwas in Vorgänge geschrieben wird. Die beiden ungeprüften Annahmen:
+Token im Benutzernamen, und die geschätzten Zeitlimits (15 s Verbindung, 30 s Antwort — meine
+Schätzung, nicht gemessen).
 
 ### Noch offen aus dieser Sitzung
 
