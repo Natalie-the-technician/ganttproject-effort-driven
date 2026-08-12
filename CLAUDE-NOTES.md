@@ -1138,6 +1138,43 @@ verrutschen.
 **Lehre:** Ein Test, der eine Reihenfolge nachbaut statt sie aufzurufen, prüft sich selbst. Wenn
 eine Reihenfolge zählt, muss sie in einer Funktion stehen, die die Produktion wirklich benutzt.
 
+### FALLE, die einen kompletten Handtest gekostet hat: alte Programmdateien bleiben liegen
+
+Der Handtest am 12.08. meldete, das Feld „Ist-Stunden" **fehle komplett**. Es fehlte nicht.
+
+Die Versionsnummer enthält das **Datum**: `ganttproject-26.08.10-SNAPSHOT.jar.lib`. Jeder Bau an
+einem neuen Tag legt eine **weitere** Datei daneben, ohne die alte zu entfernen. Im
+Plugin-Verzeichnis lagen drei:
+
+```
+ganttproject-26.08.10-SNAPSHOT.jar.lib   10.08.  <- geladen, ohne Ist-Stunden
+ganttproject-26.08.11-SNAPSHOT.jar.lib   11.08.
+ganttproject-26.08.12-SNAPSHOT.jar.lib   12.08.  <- frisch gebaut, MIT Ist-Stunden
+```
+
+Geladen wurde die **älteste**. `BUILD SUCCESSFUL` und „21 executed" sagen also nichts darüber,
+welche Fassung startet — der Agent hatte korrekt gebaut und trotzdem den alten Stand vor sich.
+
+**Nachgewiesen, nicht vermutet:** Im Archiv vom 10.08. steht „Aufwand" und „Std./Tag", aber kein
+„Ist-Stunden"; im Archiv vom 12.08. stehen alle drei. Zusätzlich ließ sich die Datei vom 10.08.
+nicht löschen („Device or resource busy") — die laufende Anwendung hielt genau sie offen.
+
+**Richtiges Rezept ab jetzt:**
+
+```powershell
+.\gradlew.bat :ganttproject-builder:clean :ganttproject-builder:distBin
+```
+
+`clean` löscht `dist-bin` (siehe `ganttproject-builder/build.gradle`, Z. 30–32). Ohne `clean`
+sammeln sich die Fassungen an. **Vor dem Bauen die Anwendung schließen**, sonst sind die Dateien
+gesperrt und werden stillschweigend nicht ersetzt.
+
+**Prüfen statt hoffen** — welche Fassung enthält was:
+
+```bash
+grep -a -o "Ist-Stunden" <pfad>/plugins/base/ganttproject/lib/ganttproject-*.jar.lib
+```
+
 ### Noch offen aus dieser Sitzung
 
 - **Handtest zu Schritt 2** (Abschnitt 4.3 der Übergabe) — von Claude nicht prüfbar.
