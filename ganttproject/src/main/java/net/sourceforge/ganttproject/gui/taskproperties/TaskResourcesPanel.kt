@@ -55,6 +55,7 @@ import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.task.algorithm.EffortInput
 import net.sourceforge.ganttproject.task.algorithm.actualEffortHours
 import net.sourceforge.ganttproject.task.algorithm.effortHours
+import net.sourceforge.ganttproject.task.algorithm.findEffortDefinition
 import net.sourceforge.ganttproject.task.algorithm.hoursPerDay
 import net.sourceforge.ganttproject.task.algorithm.parseEffortInput
 import org.controlsfx.control.tableview2.TableColumn2
@@ -283,7 +284,10 @@ class TaskResourcesPanel(
     when (val input = parseEffortInput(effortField.text)) {
       is EffortInput.Clear ->
         // Only clear when the property exists; do not create it just to write nothing into it.
-        definitions.getCustomPropertyDefinition(EffortDrivenProperties.TASK_EFFORT_HOURS)?.let {
+        // [Fork-Aenderung] Kennung ODER Name: eine vom Nutzer selbst angelegte Spalte traegt den
+        // getippten Text nur im Namen. Mit reiner Kennungssuche liess sich so ein Feld nicht mehr
+        // leeren - der alte Wert waere stehen geblieben, ohne Hinweis.
+        definitions.findEffortDefinition(EffortDrivenProperties.TASK_EFFORT_HOURS)?.let {
           holder.setValue(it, null)
         }
       is EffortInput.Hours ->
@@ -322,7 +326,8 @@ class TaskResourcesPanel(
     when (val input = parseEffortInput(actualEffortField.text)) {
       is EffortInput.Clear ->
         // Only clear when the property exists; do not create it just to write nothing into it.
-        definitions.getCustomPropertyDefinition(
+        // [Fork-Aenderung] Kennung ODER Name, siehe applyEffort.
+        definitions.findEffortDefinition(
           EffortDrivenProperties.TASK_EFFORT_ACTUAL_HOURS)?.let { holder.setValue(it, null) }
       is EffortInput.Hours ->
         holder.setValue(EffortDrivenProperties.findOrCreateTaskActualEffort(definitions), input.value)

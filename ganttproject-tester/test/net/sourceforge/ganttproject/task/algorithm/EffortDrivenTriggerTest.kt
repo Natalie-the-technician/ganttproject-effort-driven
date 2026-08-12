@@ -29,6 +29,7 @@ import biz.ganttproject.core.time.TimeUnitStack
 import biz.ganttproject.core.time.impl.GPTimeUnitStack
 import biz.ganttproject.customproperty.CustomColumnsManager
 import biz.ganttproject.customproperty.CustomPropertyClass
+import biz.ganttproject.ganttview.TaskTableModel
 import junit.framework.TestCase
 import net.sourceforge.ganttproject.gui.NotificationManager
 import net.sourceforge.ganttproject.resource.HumanResource
@@ -193,5 +194,28 @@ class EffortDrivenTriggerTest : TestCase() {
     r2.delete()
     // 40 h at 2 h/day
     assertEquals(20, durationDays(task))
+  }
+
+  /**
+   * The effort typed straight into a table column instead of the dialog.
+   *
+   * `TaskTableModel.setValue` commits its own mutator and then runs the algorithm — the same order
+   * the dialog uses, and for the same reason: while a mutator is running, `createMutator()` hands
+   * out a re-entered one whose `commit()` does nothing, so a duration written then is lost.
+   */
+  fun testEffortTypedIntoTheTableColumnRecalculatesTheDuration() {
+    val task = taskManager.createTask()
+    val resource = resourceManager.getById(1)
+    setHoursPerDayAsTheUserWould(resource, 2.0)
+    task.assignmentCollection.addAssignment(resource).load = 100f
+    val before = durationDays(task)
+
+    val model = TaskTableModel(taskManager.customPropertyManager)
+    val def = EffortDrivenProperties.findOrCreateTaskEffort(taskManager.customPropertyManager)
+    model.setValue(20.0, task, def)
+
+    assertTrue("typing the effort into the table must recalculate too",
+      before != durationDays(task))
+    assertEquals(10, durationDays(task))
   }
 }
