@@ -36,6 +36,10 @@ import javafx.util.StringConverter
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RoleManager
+// [Fork-Aenderung] Neue Importe fuer den Toggl-Token.
+import net.sourceforge.ganttproject.timetracking.TogglTokenOptions
+import net.sourceforge.ganttproject.timetracking.tokenFor
+import net.sourceforge.ganttproject.timetracking.withToken
 
 class MainPropertiesPanel(private val resource: HumanResource) {
   val title: String = RootLocalizer.formatText("general")
@@ -54,6 +58,16 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   private val totalLoadOption = ObservableDouble("totalLoad", resource.totalLoad).also {
     it.setWritable(false)
   }
+  /**
+   * [Fork-Aenderung] Der Toggl-Token dieser Person.
+   *
+   * Liegt NICHT im Projekt, sondern in den Anwendungseinstellungen — die Projektdatei wird
+   * geteilt und liegt im Vault. Siehe TogglTokenOptions; dort steht auch, dass der Token
+   * kodiert, aber nicht verschluesselt abgelegt wird.
+   */
+  private val togglTokenOption = ObservableString(
+    "togglToken", tokenFor(resource, TogglTokenOptions.tokens.value))
+
   private var onRequestFocus = {}
 
   private fun getFxNode() = StackPane().apply {
@@ -71,6 +85,15 @@ class MainPropertiesPanel(private val resource: HumanResource) {
       money(rateOption)
       money(totalCostOption)
       numeric(totalLoadOption)
+
+      // [Fork-Aenderung] Zeiterfassung. Beschriftungen fest verdrahtet, weil die
+      // Uebersetzungsdateien im Submodul des Original-Repositories liegen und ein unbekannter
+      // Schluessel sonst als Schluessel im Dialog stuende.
+      skip()
+      title(TOGGL_SECTION_LABEL)
+      text(togglTokenOption) {
+        labelText = TOGGL_TOKEN_LABEL
+      }
     }
     onRequestFocus = pane::requestFocus
     children.add(pane.node)
@@ -84,9 +107,21 @@ class MainPropertiesPanel(private val resource: HumanResource) {
     emailOption.ifChanged(resource::setMail)
     roleOption.ifChanged(resource::setRole)
     rateOption.ifChanged(resource::setStandardPayRate)
+    // [Fork-Aenderung] Der Token wandert in die Anwendungseinstellungen, nicht ins Projekt.
+    // Ein leeres Feld entfernt den Eintrag.
+    togglTokenOption.ifChanged { token ->
+      TogglTokenOptions.tokens.value =
+        withToken(TogglTokenOptions.tokens.value, resource, token?.trim().orEmpty())
+    }
   }
 
 }
+
+// [Fork-Aenderung] Feste Beschriftungen: die Uebersetzungsdateien liegen im Submodul des
+// Original-Repositories (siehe CLAUDE-NOTES.md), ein unbekannter Schluessel erschiene sonst
+// woertlich im Dialog.
+private const val TOGGL_SECTION_LABEL = "Zeiterfassung"
+private const val TOGGL_TOKEN_LABEL = "Toggl-Token"
 
 private val roleStringConverter = object : StringConverter<Role>() {
   override fun toString(role: Role): String  = role.name

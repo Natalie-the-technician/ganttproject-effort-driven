@@ -23,6 +23,8 @@ import biz.ganttproject.app.*;
 import biz.ganttproject.lib.fx.TreeTableCellsKt;
 import biz.ganttproject.platform.UpdateOptions;
 import biz.ganttproject.storage.cloud.GPCloudOptions;
+// [Fork-Aenderung] Neuer Import fuer die Toggl-Token-Ablage.
+import net.sourceforge.ganttproject.timetracking.TogglTokenOptions;
 import biz.ganttproject.storage.cloud.GPCloudStatusBar;
 import com.beust.jcommander.Parameter;
 import com.google.common.base.Supplier;
@@ -189,6 +191,9 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     options.addOptions(GPCloudOptions.INSTANCE.getOptionGroup());
     options.addOptions(getRssFeedChecker().getOptions());
     options.addOptions(UpdateOptions.INSTANCE.getOptionGroup());
+    // [Fork-Aenderung] Toggl-Token je Person. Gehoert in die Anwendungseinstellungen
+    // (~/.ganttproject) und ausdruecklich NICHT in die Projektdatei - die wird geteilt.
+    options.addOptions(TogglTokenOptions.INSTANCE.getOptionGroup());
     options.addOptions(myTaskManagerConfig.getTaskOptions());
     startupLogger.debug("2. loading options");
     initOptions();
