@@ -1241,6 +1241,35 @@ funktioniert hat. Die Beschreibung von `applyTaskImport` sagt das jetzt ausdrüc
 - Aufwand direkt in eine Tabellenspalte getippt löste keine Neuberechnung aus.
   `TaskTableModel.setValue` rechnet jetzt **nach** dem eigenen Commit nach (Gegentest 15).
 
+### Schritt 7: Token-Ablage — mit einer bewussten Abweichung von der Übergabe
+
+Ablage in den **Anwendungseinstellungen** (`~/.ganttproject`), Muster nach `GPCloudOptions`.
+Niemals in der Projektdatei: die wird geteilt und liegt im Vault.
+
+**Abweichung, begründet:** Die Übergabe sagt „Zuordnung **Ressourcen-ID** → Token". Das geht
+nicht. Ressourcen-IDs werden **je Projekt** vergeben (1, 2, 3 …), die Einstellungen sind aber
+**global**. Ressource 1 ist in jedem Projekt jemand anderes — zwei Projekte würden sich die
+Token gegenseitig überschreiben, und schlimmer: Es würde der Token einer Person für die Einträge
+einer anderen Person geschickt.
+
+Der Schlüssel ist deshalb die **E-Mail-Adresse**, ersatzweise der Name. Die Adresse identifiziert
+das Toggl-Konto und überlebt eine Umbenennung. Beides ist durch Tests belegt
+(`testTwoPeopleWithTheSameIdInDifferentProjectsDoNotCollide`, `testRenamingKeepsTheKey`).
+
+**Was NICHT geschützt ist, ausdrücklich:** `~/.ganttproject` ist eine Klartextdatei. Der Token
+wird **kodiert, nicht verschlüsselt** — die Kodierung sorgt nur dafür, dass Trennzeichen im Token
+das Format nicht zerreißen. Wer unter demselben Benutzerkonto etwas ausführt, kann ihn lesen.
+Ziel ist, ihn aus der geteilten Projektdatei herauszuhalten; ein Schutz gegen den lokalen Rechner
+ist es nicht, und der Code darf nicht so gelesen werden.
+
+**Gegentest 18:** Kodierung entfernt → `testSeparatorsInsideATokenSurvive` und
+`testAwkwardNamesSurvive` schlugen fehl. Ohne sie hätte ein Token mit Semikolon den Rest des
+Speichers abgeschnitten, und der Token der nächsten Person wäre still verschwunden.
+
+**Noch nicht verdrahtet:** `TogglTokenOptions.optionGroup` muss in `GanttProject.java` neben
+`GPCloudOptions.INSTANCE.getOptionGroup()` registriert werden, damit die Werte wirklich in
+`~/.ganttproject` landen. Dazu fehlt noch die Eingabemöglichkeit in der Ressourcenverwaltung.
+
 ### Noch offen aus dieser Sitzung
 
 - **Handtest zu Schritt 2** (Abschnitt 4.3 der Übergabe) — von Claude nicht prüfbar.
