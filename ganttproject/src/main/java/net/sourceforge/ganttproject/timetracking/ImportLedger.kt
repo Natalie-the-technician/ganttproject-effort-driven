@@ -20,6 +20,12 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.timetracking
 
+import biz.ganttproject.customproperty.CustomPropertyClass
+import biz.ganttproject.customproperty.CustomPropertyDefinition
+import biz.ganttproject.customproperty.CustomPropertyManager
+import net.sourceforge.ganttproject.task.Task
+import net.sourceforge.ganttproject.task.algorithm.findEffortDefinition
+
 /**
  * Records which Toggl entry already contributed how many hours, so that a second import does not
  * count the same time twice — the most likely serious bug of this feature, see [planImport].
@@ -122,3 +128,53 @@ fun ledgerAfterImport(
 /** Hours without a trailing `.0`, and always with a decimal point. */
 private fun formatHours(hours: Double): String =
   if (hours == hours.toLong().toDouble()) hours.toLong().toString() else hours.toString()
+
+/**
+ * WHERE the ledger is stored, decided by Natalie on 12.08.2026: one custom property per TASK,
+ * assembled into the project-wide view when an import runs.
+ *
+ * The alternative — keeping it in the application settings — was rejected on purpose: the project
+ * file lives in a shared vault, so a guard that sits on one machine would let a colleague import
+ * the same hours a second time. Storing it in the file means the guard travels with the data.
+ *
+ * GanttProject offers no project-wide custom property; `IGanttProject` has exactly two managers,
+ * for tasks and for resources. Hence "per task, merged" rather than "one entry for the project".
+ *
+ * The price is that the column is visible in stock GanttProject and can be edited there by hand.
+ * That is why [decodeImportLedger] skips what it cannot read instead of failing.
+ */
+object TimeTrackingProperties {
+  /** Which Toggl entries contributed hours to this task. Custom property on tasks. */
+  const val TASK_IMPORTED_ENTRIES = "toggl_imported"
+
+  fun findOrCreateImportedEntries(manager: CustomPropertyManager): CustomPropertyDefinition =
+    manager.findEffortDefinition(TASK_IMPORTED_ENTRIES)
+      ?: manager.createDefinition(TASK_IMPORTED_ENTRIES, CustomPropertyClass.TEXT.iD,
+                                  "Toggl imported", null)
+}
+
+/**
+ * What this task has recorded. Empty when the task carries nothing, which is the normal case.
+ *
+ * Looks the property up by id OR name, because a column that the user created in the column
+ * manager carries the typed text as its name only — the trap that made `hours_per_day` silently
+ * fall back to the default in session 3.
+ */
+fun Task.importedEntries(manager: CustomPropertyManager): Map<Long, Double> {
+  val def = manager.findEffortDefinition(TimeTrackingProperties.TASK_IMPORTED_ENTRIES)
+    ?: return emptyMap()
+  return decodeImportLedger(this.customValues.getValue(def)?.toString())
+}
+
+/**
+ * The project-wide view: what has been imported ANYWHERE. This is what [planImport] needs.
+ *
+ * Reading every task is the point. Asking only the task an entry is about to land on would miss
+ * the case that made per-task storage look risky in the first place: an entry that was assigned
+ * to a different task last time.
+ */
+fun projectImportLedger(tasks: Iterable<Task>, manager: CustomPropertyManager): Map<Long, Double> {
+  val def = manager.findEffortDefinition(TimeTrackingProperties.TASK_IMPORTED_ENTRIES)
+    ?: return emptyMap()
+  return mergeLedgers(tasks.map { task -> task.customValues.getValue(def)?.toString() })
+}
