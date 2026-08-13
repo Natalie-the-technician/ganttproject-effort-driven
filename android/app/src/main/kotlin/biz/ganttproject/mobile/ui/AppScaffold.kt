@@ -56,6 +56,17 @@ import biz.ganttproject.mobile.R
 
 private enum class Tab { GANTT, RESOURCES, IMPORT }
 
+/**
+ * Tabs survive rotation as an ordinal rather than as the enum itself.
+ * rememberSaveable only accepts what a Bundle accepts, and relying on enums
+ * being Serializable would fail at runtime, not at compile time - the worst
+ * kind of bug to ship in a screen the user reaches on first launch.
+ */
+private val TabSaver = androidx.compose.runtime.saveable.Saver<Tab, Int>(
+  save = { it.ordinal },
+  restore = { Tab.entries[it] }
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppScaffold(
@@ -63,7 +74,7 @@ fun AppScaffold(
   importState: ImportState,
   viewModel: ProjectViewModel
 ) {
-  var tab by rememberSaveable { mutableStateOf(Tab.GANTT) }
+  var tab by rememberSaveable(stateSaver = TabSaver) { mutableStateOf(Tab.GANTT) }
   var menuOpen by remember { mutableStateOf(false) }
   var aboutOpen by remember { mutableStateOf(false) }
   var confirmCloseOpen by remember { mutableStateOf(false) }
