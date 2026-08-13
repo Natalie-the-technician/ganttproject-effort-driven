@@ -526,3 +526,20 @@ haette sich einen Import gemerkt, der nie in der Datei ankam.
 gelesen ist — und pruefen, ob eine Vorgabe den Schluessel oder den Ablageort
 meint. Diese beiden zu verwechseln haette hier eine funktionierende Loesung
 gekostet.
+
+### README und README.md muessen inhaltsgleich bleiben
+
+Das Repo hat beide Dateien, beide aus dem Original. Sie duerfen nicht
+auseinanderlaufen:
+
+- **`README.md`** ist die gepflegte Fassung und wird auf GitHub gerendert.
+- **`README`** (ohne Endung) wird in das Desktop-Paket eingeschlossen —
+  `ganttproject-builder/build.gradle` Zeile 143 und
+  `build-bin/build-deb.xml` Zeile 32. Loeschen bricht also die Paketierung.
+
+Natalie berichtet, dass GitHub bei ihr den endungslosen `README` anzeigt.
+Ein blosser Tausch der beiden waere riskant gewesen: faellt die Wahl doch auf
+`.md`, stuende dort der alte Text — genau das Gegenteil des Ziels. Deshalb
+tragen jetzt **beide denselben Inhalt**.
+
+**Beim Aendern also immer beide anfassen:** `cp README.md README`.
