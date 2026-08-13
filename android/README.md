@@ -48,10 +48,22 @@ That is not an accident of implementation; it is the reason the app parses with
 SAX and keeps its own tree rather than using the standard DOM, which reorders
 every attribute in the file on save. See `XmlTree.kt` for the details.
 
-The extra fields (planned effort, actual hours, hours per day) are stored as
-GanttProject **custom properties**, which desktop GanttProject reads and writes
-as a normal feature. A file can move phone → desktop → phone without losing
-them.
+Every field this app adds is stored as a GanttProject **custom property**,
+which desktop GanttProject reads and writes as a normal feature. A file can
+move phone → desktop → phone without losing them; in the desktop they simply
+show up as ordinary (if inert) columns.
+
+| Property | On | Meaning |
+|---|---|---|
+| `effort_hours` | task | Planned effort in hours |
+| `effort_actual_hours` | task | Hours actually spent |
+| `hours_per_day` | resource | Working hours per day; unset means 8 |
+| `toggl_match_keys` | task | Confirmed time-entry descriptions, `\|`-separated |
+| `toggl_imported` | task | Imported time entries as `entryId=hours`, `\|`-separated |
+
+New XML attributes were **not** an option: GanttProject's `TaskSaver` writes a
+hard-coded attribute list, so anything it does not know is silently dropped the
+next time the desktop saves — data gone, no error.
 
 File access goes through Android's document picker, so the app works with local
 storage and with any cloud provider installed on the device (Drive, Nextcloud,
@@ -95,7 +107,7 @@ have no SDK — including CI containers where the SDK download is blocked.
 
 ```
 android/
-├── gantt-core/          Pure Kotlin. No Android. 150 tests.
+├── gantt-core/          Pure Kotlin. No Android. Unit-tested, no emulator.
 │   ├── XmlTree.kt           SAX-based tree that preserves attribute order
 │   ├── GanttDocument.kt     Load, read, edit in place, save
 │   ├── Model.kt             Read-only snapshot types
