@@ -26,6 +26,8 @@ import biz.ganttproject.storage.cloud.GPCloudOptions;
 // [Fork-Aenderung] Neue Importe fuer die Toggl-Token-Ablage und den Verbindungstest.
 import net.sourceforge.ganttproject.gui.NotificationChannel;
 import net.sourceforge.ganttproject.timetracking.ConnectionCheckMessageSink;
+// Kotlin legt Deklarationen auf Dateiebene in eine Klasse <Dateiname>Kt.
+import net.sourceforge.ganttproject.timetracking.ImportPeriodDialogKt;
 import net.sourceforge.ganttproject.timetracking.TogglConnectionAction;
 import net.sourceforge.ganttproject.timetracking.TogglImportAction;
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions;
@@ -187,7 +189,8 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
             new Action[] {
                 OkAction.create("ok", () -> { answer.accept(true); return Unit.INSTANCE; }),
                 CancelAction.create("cancel", () -> { answer.accept(false); return Unit.INSTANCE; })
-            })));
+            }),
+        ImportPeriodDialogKt.getASK_FOR_THE_PERIOD()));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
     bar.add(mHuman);

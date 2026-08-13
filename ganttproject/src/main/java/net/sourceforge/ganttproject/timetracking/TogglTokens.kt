@@ -20,8 +20,10 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.timetracking
 
+import biz.ganttproject.core.option.DefaultIntegerOption
 import biz.ganttproject.core.option.DefaultStringOption
 import biz.ganttproject.core.option.GPOptionGroup
+import biz.ganttproject.core.option.IntegerOption
 import biz.ganttproject.core.option.StringOption
 import net.sourceforge.ganttproject.resource.HumanResource
 
@@ -51,7 +53,44 @@ object TogglTokenOptions {
   /** All tokens in one option, encoded by [encodeTokenMap]. */
   val tokens: StringOption = DefaultStringOption("resourceTokens", "")
 
-  val optionGroup: GPOptionGroup = GPOptionGroup("toggl", tokens)
+  /**
+   * [Fork-Aenderung] Wie weit der Import zurueckschaut, in Tagen.
+   *
+   * Gemerkt statt jedes Mal neu getippt: wer einmal 180 Tage gewaehlt hat, will das meistens
+   * wieder. Steht in den Anwendungseinstellungen, nicht im Projekt — der Zeitraum ist eine
+   * Gewohnheit der Person, keine Eigenschaft des Plans.
+   */
+  val importDays: IntegerOption = DefaultIntegerOption("importDays", DEFAULT_IMPORT_DAYS)
+
+  val optionGroup: GPOptionGroup = GPOptionGroup("toggl", tokens, importDays)
+}
+
+/** Voreinstellung des Importzeitraums. */
+const val DEFAULT_IMPORT_DAYS = 30
+
+/** Untergrenze: weniger als ein Tag ergibt keinen Zeitraum. */
+const val MIN_IMPORT_DAYS = 1
+
+/**
+ * Obergrenze, zehn Jahre.
+ *
+ * Nicht aus Vorsicht gewaehlt, sondern weil Toggl die Antwort sonst nach Belieben kuerzt und der
+ * Import dann stillschweigend unvollstaendig waere — schlimmer als eine Grenze, die man sieht.
+ */
+const val MAX_IMPORT_DAYS = 3650
+
+/**
+ * [Fork-Aenderung] Liest die eingetippte Tageszahl.
+ *
+ * Eigene Funktion statt `toIntOrNull()` an der Aufrufstelle, damit die Grenzfaelle geprueft werden
+ * koennen: leeres Feld, Buchstaben, 0, negative Zahlen. Jeder davon wuerde sonst einen Zeitraum
+ * ergeben, den niemand gemeint hat.
+ *
+ * @return die Tageszahl, oder null wenn der Text keine brauchbare ergibt.
+ */
+fun parseImportDays(text: String?): Int? {
+  val value = text?.trim()?.toIntOrNull() ?: return null
+  return if (value in MIN_IMPORT_DAYS..MAX_IMPORT_DAYS) value else null
 }
 
 /**

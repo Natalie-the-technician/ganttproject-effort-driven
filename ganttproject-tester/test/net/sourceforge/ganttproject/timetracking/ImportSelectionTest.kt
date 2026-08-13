@@ -107,6 +107,40 @@ class ImportSelectionTest : TestCase() {
     assertTrue(selection.hasAnythingToImport)
   }
 
+  // --- Zeitraum des Imports ---
+
+  fun testAPlainNumberIsAccepted() {
+    assertEquals(30, parseImportDays("30"))
+    assertEquals(180, parseImportDays(" 180 "))
+    assertEquals(MIN_IMPORT_DAYS, parseImportDays("$MIN_IMPORT_DAYS"))
+    assertEquals(MAX_IMPORT_DAYS, parseImportDays("$MAX_IMPORT_DAYS"))
+  }
+
+  /**
+   * Every one of these would otherwise become a period nobody meant: an empty field and letters
+   * silently become the default, zero and negative numbers a range that ends before it starts.
+   * Returning null lets the dialog say so instead.
+   */
+  fun testNonsenseIsRefusedRatherThanGuessed() {
+    assertNull(parseImportDays(null))
+    assertNull(parseImportDays(""))
+    assertNull(parseImportDays("   "))
+    assertNull(parseImportDays("dreissig"))
+    assertNull(parseImportDays("30 Tage"))
+    assertNull(parseImportDays("0"))
+    assertNull(parseImportDays("-5"))
+    assertNull(parseImportDays("2,5"))
+  }
+
+  /**
+   * Beyond the upper bound Toggl may truncate the answer without saying so, and the import would
+   * be silently incomplete. A bound the user can see beats an invisible one.
+   */
+  fun testTooLargeAPeriodIsRefused() {
+    assertNull(parseImportDays("${MAX_IMPORT_DAYS + 1}"))
+    assertNull(parseImportDays("999999"))
+  }
+
   fun testNothingToImportIsReportedAsSuch() {
     val selection = selectUnambiguousImports(listOf(entry(1, "Firmware")), tasks)
     assertFalse(selection.hasAnythingToImport)

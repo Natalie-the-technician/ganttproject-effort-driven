@@ -71,6 +71,8 @@ class TogglImportAction @JvmOverloads constructor(
   private val showMessage: ConnectionCheckMessageSink,
   /** Confirmation before anything is written. Answering with false must change nothing. */
   private val confirm: ImportConfirmation,
+  /** Asks how far back to look. Not answering means the import does not start. */
+  private val askForPeriod: ImportPeriodAsker,
   private val runInBackground: (() -> Unit) -> Unit = { work ->
     Thread(work, "Toggl-Import").also { it.isDaemon = true }.start()
   },
@@ -92,17 +94,25 @@ class TogglImportAction @JvmOverloads constructor(
       return
     }
 
-    showMessage.show(false, forkText("fork.toggl.import.running"))
+    askForPeriod.ask(TogglTokenOptions.importDays.value ?: DEFAULT_IMPORT_DAYS) { days ->
+      // Remember the choice: the next import usually wants the same period.
+      TogglTokenOptions.importDays.value = days
+      fetchAndPlan(token, person.name.orEmpty(), days.toLong())
+    }
+  }
+
+  private fun fetchAndPlan(token: String, personName: String, days: Long) {
+    showMessage.show(false, forkText("fork.toggl.import.running", days))
 
     runInBackground {
       val entries = try {
         TogglClient(backendFactory()).timeEntries(
-          token, today().minusDays(IMPORT_DAYS).toString(), today().plusDays(1).toString())
+          token, today().minusDays(days).toString(), today().plusDays(1).toString())
       } catch (ex: TogglException) {
         GPLogger.log("Toggl import failed: ${ex.failure} ${ex.message}")
         runOnUiThread {
           showMessage.show(true, connectionCheckMessage(
-            ConnectionCheckResult.Failed(person.name.orEmpty(), ex.failure, ex.message.orEmpty())))
+            ConnectionCheckResult.Failed(personName, ex.failure, ex.message.orEmpty())))
         }
         return@runInBackground
       } catch (ex: Exception) {
@@ -110,7 +120,7 @@ class TogglImportAction @JvmOverloads constructor(
         GPLogger.log(ex)
         runOnUiThread {
           showMessage.show(true, connectionCheckMessage(ConnectionCheckResult.Failed(
-            person.name.orEmpty(), TogglFailure.UNAVAILABLE, ex.message.orEmpty())))
+            personName, TogglFailure.UNAVAILABLE, ex.message.orEmpty())))
         }
         return@runInBackground
       }
@@ -148,9 +158,6 @@ class TogglImportAction @JvmOverloads constructor(
     }
   }
 }
-
-/** Days of history the import asks for. */
-private const val IMPORT_DAYS = 30L
 
 /**
  * What the confirmation says. Names the totals AND what is being left out — an import that

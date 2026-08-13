@@ -104,7 +104,14 @@ task distRuntime(dependsOn: distBin) {
                 "Mit JAVA_HOME auf ein JDK MIT JavaFX bauen, hier zuletzt jdk-21.0.12-full.")
         }
         def target = new File(distBinDir, 'runtime')
-        injected.fs.delete { delete target }
+        // Vorhandene Laufzeit stehen lassen. Zwei Gruende: 200 MB bei jedem Bau neu zu erzeugen
+        // ist Verschwendung, und Windows gibt die geladenen DLLs (jvm.dll) nach dem Beenden nicht
+        // sofort frei -- das Loeschen scheiterte dann mit "Zugriff verweigert", obwohl kein
+        // Prozess mehr lief. `clean` raeumt dist-bin ohnehin komplett weg.
+        if (new File(target, 'bin/java.exe').isFile()) {
+            println "= Mitgelieferte Laufzeit ist vorhanden, bleibt stehen (fuer Neubau: clean)."
+            return
+        }
         println "= Baue mitgelieferte Laufzeit nach ${target} ..."
         injected.exec.exec {
             commandLine new File(jdk, 'bin/jlink').toString(),
@@ -113,6 +120,65 @@ task distRuntime(dependsOn: distBin) {
                 '--strip-debug', '--no-header-files', '--no-man-pages', '--compress=zip-6',
                 '--output', target.toString()
         }
+    }
+}
+
+// [Fork-Aenderung] Baut einen echten Windows-Starter mit jpackage.
+//
+// WARUM NICHT DIE VORHANDENE ganttproject.exe: die ist eine EINGECHECKTE, vorgebaute
+// launch4j-Datei und laut PE-Kopf 32-Bit (i386). Sie laedt die JVM im selben Prozess und kann
+// deshalb keine 64-Bit-Laufzeit laden -- nachgemessen: jstack meldet "Unable to attach to 32-bit
+// process running under WOW64". Der Prozess startet, tut nichts, das Protokoll bleibt leer, und
+// weil <errTitle> leer ist, kommt nicht einmal eine Meldung. Neu erzeugen laesst sie sich hier
+// nicht: die launch4j-Aufrufe im Bau sind auskommentiert und zeigen auf /opt/launch4j, einen
+// Linux-Pfad.
+//
+// jpackage liegt im JDK, erzeugt einen 64-Bit-Starter und bindet die Laufzeit ein. Der Aufruf
+// bildet nach, was ganttproject.bat tut: eclipsito als Hauptklasse, dieselben Argumente,
+// dieselben --add-exports aus javaExportOptions (die Liste, die auch runApp benutzt).
+task distApp(dependsOn: [distBin, distRuntime]) {
+    doLast {
+        def jdk = file(System.getProperty('java.home'))
+        def target = file('dist-app')
+        // Zwischenstand ohne runtime/: was in --input liegt, kopiert jpackage mit. Die Laufzeit
+        // kommt ueber --runtime-image und waere sonst doppelt im Ergebnis, rund 200 MB umsonst.
+        def staging = file("${layout.buildDirectory.get().asFile}/jpackage-input")
+        injected.fs.delete { delete staging, target }
+        injected.fs.copy {
+            from distBinDir
+            into staging
+            exclude 'runtime/**', 'ganttproject.exe', '*.l4j.ini'
+        }
+
+        def args = [new File(jdk, 'bin/jpackage').toString(),
+                    '--type', 'app-image',
+                    '--name', 'GanttProject',
+                    '--app-version', "${project.version}".replaceAll('[^0-9.].*$', ''),
+                    '--dest', target.toString(),
+                    '--input', staging.toString(),
+                    '--runtime-image', new File(distBinDir, 'runtime').toString(),
+                    '--main-jar', 'eclipsito.jar',
+                    '--main-class', 'com.bardsoftware.eclipsito.Launch',
+                    '--icon', file('ganttproject.ico').toString()]
+        // Ein eigenes --arguments je Argument. Ein einziger String wuerde von jpackage anders
+        // zerlegt, als hier gemeint ist -- der Pfad mit dem Semikolon ist genau so ein Fall.
+        ['--verbosity', '1',
+         '--version-dirs', 'plugins;~/.ganttproject.d/updates',
+         '--app', 'net.sourceforge.ganttproject.GanttProject'].each {
+            args += ['--arguments', it]
+        }
+        args += ['--java-options', '-Xmx2048m', '--java-options', '-Dgpcloud=prod',
+                 '--java-options', '-Dorg.jooq.no-logo=true',
+                 '--java-options', '-Dsun.java2d.d3d=false']
+        // javaExportOptions ist eine flache Liste aus Schalter und Wert; jpackage will beides in
+        // EINEM --java-options, sonst fehlt dem Schalter sein Argument.
+        javaExportOptions.collate(2).each { pair ->
+            args += ['--java-options', pair.join('=').replaceFirst('=', ' ')]
+        }
+
+        println '= Baue Windows-Starter mit jpackage ...'
+        injected.exec.exec { commandLine args }
+        println "= Fertig: ${new File(target, 'GanttProject/GanttProject.exe')}"
     }
 }
 

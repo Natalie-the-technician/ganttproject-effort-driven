@@ -1471,7 +1471,94 @@ Drei Dinge, die man beim Lesen sonst für willkürlich hält:
 **Gegentest 29 bestanden:** Raten eingebaut (ohne Nummer den ersten Vorgang nehmen) → drei Tests
 fielen, einer wörtlich mit „an entry was assigned without anybody choosing".
 
-### `ganttproject.exe` startet wieder — mitgelieferte Laufzeit
+### Importzeitraum einstellbar — Zahl statt Haken
+
+Natalie fragte nach „einem Haken, der auch ältere Einträge abfragt". Bewusst **anders** gebaut,
+und das gehört begründet: „älter" hat kein Ende. Ein Haken hieße entweder „alles seit Kontobeginn"
+— eine Antwort, die Toggl nach Belieben kürzen darf, womit der Import **stillschweigend
+unvollständig** wäre — oder eine versteckte Zahl, die niemand sieht. Ein Feld zeigt genau, was
+abgefragt wird.
+
+**Gefragt wird bei jedem Import**, nicht in einer Einstellungsseite: der Zeitraum ist die eine
+Entscheidung, die sich pro Lauf ändert (der erste Import will Monate, der tägliche eine Woche).
+Der Wert wird gemerkt (`toggl.importDays`), der Normalfall ist also Enter drücken.
+
+**Warum keine Seite unter „Bearbeiten → Einstellungen":** GanttProject baut solche Seiten aus
+**seinen** Übersetzungsdateien. Unsere Schlüssel stehen dort nicht — es kämen nackte Schlüssel
+heraus, dasselbe Problem wie beim Textbündel. Ein eigener Dialog umgeht das vollständig.
+
+`parseImportDays` ist eine eigene Funktion statt eines `toIntOrNull()` an der Aufrufstelle, damit
+die Grenzfälle prüfbar sind: leeres Feld, Buchstaben, `0`, negative Zahlen, `2,5`. Jeder davon
+ergäbe sonst einen Zeitraum, den niemand gemeint hat. **Ungültiges wird abgewiesen, nicht still zur
+Voreinstellung gemacht** — sonst würde ein anderer Zeitraum importiert als der auf dem Bildschirm.
+
+**Gegentest 30 bestanden:** stille Voreinstellung eingebaut und die Grenzen entfernt → zwei Tests
+fielen (`Expected: <null> but was: 30` und `… but was: 3651`).
+
+### Upstream-Fehler abgefangen: ein Fehltritt legte die Vorgangstabelle lahm
+
+Natalie klickte mehrfach schnell auf ein Werkzeugleisten-Symbol, danach reagierte das Fenster
+nicht mehr. Im Protokoll:
+`IllegalStateException: this must be error: editing completed when state is SCROLLING`
+(`TaskTableContextActor.kt:210`) — Upstreams **eigene** Absicherung für einen Zustand, den der
+Kommentar zwei Zeilen davor für unmöglich hält.
+
+Alle vier beteiligten Dateien trägt unser Fork nicht; das Symbol ist auch nicht von uns, der Fork
+hat **keinen** Knopf in die Werkzeugleiste gehängt.
+
+**Warum es hängen blieb, und warum ein `SupervisorJob` allein nicht genügt hätte:** die Ausnahme
+beendet die Schleife in `start()`. Der Akteur liest dann keine Nachricht mehr — Bearbeiten und
+Neuanlegen in der Tabelle sind tot, unabhängig davon, ob der Geltungsbereich überlebt. Der Fang
+muss **in** die Schleife, und danach wird auf denselben Stand zurückgesetzt, den der reguläre
+Abschluss herstellt (`newTask`/`newTreeItem` leeren, `state = IDLE`). Ohne das Zurücksetzen wäre
+der Akteur genauso unbenutzbar, nur leiser.
+
+Der eigentliche Zustandsfehler bleibt **unangetastet** und wird weiter laut protokolliert. Ihn zu
+beheben hieße, Upstreams Zustandsmaschine umzubauen — ein größerer Eingriff mit eigenem Risiko.
+
+Damit sind es **drei** Upstream-Fehler: `projectCreated`, das Beenden, und dieser.
+
+### Der Uhr-Knopf ist „Neuer Vorgang"
+
+`fontawesome.properties`: `task.new = ` — und `` ist in FontAwesome das **Uhr-Symbol**
+(`fa-clock-o`). Inhaltlich unpassend (`artefact.new` benutzt ein Plus-Zeichen), aber so steht es
+im Original.
+
+Damit ist der Absturz vollständig erklärt: mehrfaches schnelles Klicken legte mehrfach schnell
+**neue Vorgänge** an. Genau das steuert `NewTaskActor` — anlegen, in die Zeile springen,
+Bearbeitung starten, dabei scrollen. Bei schneller Wiederholung überholte sich das: „Bearbeitung
+abgeschlossen" traf ein, während der Zustand noch `SCROLLING` war.
+
+### `ganttproject.exe`: die alte geht NICHT, die neue schon
+
+**Die eingecheckte `ganttproject.exe` ist 32-Bit** (i386, aus dem PE-Kopf gelesen), unsere Laufzeit
+64-Bit. Der launch4j-Starter lädt die JVM im selben Prozess — `jstack` meldet
+„Unable to attach to 32-bit process running under WOW64". Ergebnis: Prozess startet, tut nichts,
+Protokoll bleibt leer, und weil `<errTitle>` leer ist, kommt nicht einmal eine Meldung.
+
+Neu erzeugen lässt sie sich hier nicht: die launch4j-Aufrufe im Bau sind auskommentiert und zeigen
+auf `/opt/launch4j`, einen Linux-Pfad.
+
+**Lösung: `:ganttproject-builder:distApp`** — baut mit `jpackage` (liegt im JDK) einen echten
+64-Bit-Starter unter `dist-app/GanttProject/GanttProject.exe`, mit eingebundener Laufzeit. Der
+Aufruf bildet `ganttproject.bat` nach: eclipsito als Hauptklasse, dieselben Argumente, dieselben
+`--add-exports` aus `javaExportOptions` (die Liste, die auch `runApp` benutzt und die
+nachweislich trägt).
+
+**Ausprobiert, nicht behauptet:** 64-Bit bestätigt, gestartet, `ProjectOpenActivityCompleted` im
+Protokoll.
+
+Zwei Feinheiten im Bau:
+- `--input` erhält einen Zwischenstand **ohne** `runtime/`. Was dort liegt, kopiert `jpackage` mit;
+  die Laufzeit kommt über `--runtime-image` und wäre sonst doppelt drin, 200 MB umsonst.
+- Ein eigenes `--arguments` je Argument. Ein einziger String würde anders zerlegt als gemeint —
+  der Pfad mit dem Semikolon ist genau so ein Fall.
+
+**`distRuntime` lässt eine vorhandene Laufzeit stehen.** Windows gibt `jvm.dll` nach dem Beenden
+nicht sofort frei; das Löschen scheiterte mit „Zugriff verweigert", obwohl kein Prozess mehr lief.
+Für einen echten Neubau: `clean`.
+
+### Die alte `ganttproject.exe` — mitgelieferte Laufzeit
 
 Neue Bau-Aufgabe **`:ganttproject-builder:distRuntime`**. Sie erzeugt mit `jlink` die Laufzeit
 unter `dist-bin/runtime/`, auf die `ganttproject-launch4j.xml` verweist.

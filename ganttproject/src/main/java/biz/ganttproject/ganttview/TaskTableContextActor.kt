@@ -106,9 +106,39 @@ class NewTaskActor<T> {
   private var newTask: T? = null
   private var newTreeItem: TreeItem<T>? = null
 
+  /**
+   * [Fork-Aenderung] Ein Fehltritt der Zustandsmaschine legt die Vorgangstabelle nicht mehr lahm.
+   *
+   * FEHLER IM ORIGINAL, am Bildschirm nachgewiesen: mehrfaches schnelles Klicken in der
+   * Werkzeugleiste fuehrte zu
+   * `IllegalStateException: this must be error: editing completed when state is SCROLLING`
+   * (die `error(...)`-Zeile weiter unten, Upstreams eigene Absicherung fuer einen Zustand, den der
+   * Kommentar zwei Zeilen davor fuer unmoeglich haelt). Danach reagierte das Fenster nicht mehr.
+   *
+   * WARUM ES HAENGEN BLIEB, und warum ein SupervisorJob allein nicht genuegt haette: die Ausnahme
+   * beendet die Schleife hier. Der Akteur liest dann keine Nachricht mehr, und Bearbeiten wie
+   * Neuanlegen in der Tabelle sind tot -- unabhaengig davon, ob der Geltungsbereich ueberlebt.
+   * Der Fang muss deshalb IN die Schleife.
+   *
+   * Der eigentliche Zustandsfehler bleibt unangetastet und wird weiterhin laut protokolliert. Ihn
+   * zu beheben hiesse, Upstreams Zustandsmaschine umzubauen; das waere ein groesserer Eingriff mit
+   * eigenem Risiko. Hier geht es nur darum, dass ein einzelner Fehltritt nicht die ganze Tabelle
+   * kostet.
+   */
   fun start() = ourCoroutineScope.launch {
     for (msg in inboxChannel) {
-      processMessage(msg)
+      try {
+        processMessage(msg)
+      } catch (e: Exception) {
+        LOG.error("The new-task actor could not process a message; returning to IDLE",
+          exception = e)
+        // Auf denselben Stand zuruecksetzen, den der regulaere Abschluss herstellt
+        // (Zweig EDIT_COMPLETING). Ohne das bliebe der Akteur in einem Zustand, in dem er jede
+        // weitere Nachricht ablehnt -- also genau so unbenutzbar wie vorher, nur leiser.
+        newTask = null
+        newTreeItem = null
+        state = IDLE
+      }
     }
   }
 

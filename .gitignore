@@ -11,3 +11,6 @@ ganttproject-builder/runtime
 
 # [Fork-Aenderung] Laufzeit-Protokolle. Entstehen beim Testlauf im Modulordner.
 **/ganttproject.log
+
+# [Fork-Aenderung] Ergebnis von distApp (jpackage): Bauausgabe samt Laufzeit, ~200 MB.
+ganttproject-builder/dist-app
