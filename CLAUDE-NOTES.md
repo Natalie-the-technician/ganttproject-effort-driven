@@ -1529,6 +1529,95 @@ Gegentest dazu: die `require`-Zeile auskommentieren → beide neuen Tests müsse
 Zusätzlich lohnt der Blick, ob der erste Test dann tatsächlich **8** statt 4 Stunden bucht — das
 ist der Schaden, den die Vorbedingung verhindert.
 
+Für die Token-Ablage gilt dasselbe: `TokenStoreTest` lief hier, der Dialog nicht.
+
+```powershell
+.\gradlew.bat :ganttproject-tester:test --tests "*TokenStore*" --tests "*TogglTokens*"
+.\gradlew.bat :ganttproject:test --tests "*EffortFileRoundTrip*"
+```
+
+**Handprobe zum zweiten Fund** (von Claude nicht prüfbar): Ressource ohne E-Mail anlegen, Token
+eintragen, speichern. Dann dieselbe Ressource öffnen, **nur die E-Mail nachtragen**, speichern.
+Danach erneut öffnen — im Token-Feld muss der Token noch stehen. In `~/.ganttproject` darf unter
+`toggl.resourceTokens` **nur ein** Eintrag stehen, nicht zwei.
+
+### ZWEITER FUND: eine geänderte E-Mail-Adresse verlor den Token — samt Karteileiche
+
+Der Schlüssel der Token-Ablage wird aus der E-Mail-Adresse gebildet, ersatzweise aus dem Namen.
+**Beide werden in genau dem Dialog geändert, der auch den Token speichert** — und die Änderung
+stand in `MainPropertiesPanel.save()` **vor** dem Token-Block:
+
+```kotlin
+emailOption.ifChanged(resource::setMail)      // Schluessel wechselt hier
+...
+togglTokenOption.ifChanged { ... }            // schreibt unter dem NEUEN Schluessel
+```
+
+Zwei Folgen, beide still:
+
+1. **Der Token wird unauffindbar.** Wer nur die Adresse berichtigt und das Token-Feld nicht
+   anfasst, löst `ifChanged` gar nicht aus — der Eintrag bleibt unter dem alten Schlüssel liegen.
+   Der Verbindungstest meldet danach „kein Token", obwohl einer eingetragen ist.
+2. **Ein Geheimnis bleibt zurück.** Der alte Eintrag steht weiter in `~/.ganttproject`, unter
+   einem Schlüssel, den niemand mehr abfragt.
+
+Der wahrscheinlichste Fall ist nicht einmal eine geänderte Adresse, sondern die übliche
+Reihenfolge: Ressource mit Namen anlegen, Token eintragen, **später die E-Mail nachtragen** — in
+dem Moment wechselt der Schlüssel von `name=…` auf `mail=…`.
+
+Das widerspricht der Zusage aus Sitzung 6, die Adresse „überlebe eine Umbenennung".
+`testRenamingKeepsTheKey` belegt den Fall *Name geändert, Adresse vorhanden* — nicht diesen.
+
+**Behoben:** `save()` merkt sich den Schlüssel **vor** den Namens- und Adressänderungen und ruft
+`movedToken(...)`: alter Eintrag raus, Token unter dem neuen Schlüssel rein. Bewusst **nicht** mehr
+an `ifChanged` gehängt, denn der Umzug muss auch bei unberührtem Token-Feld stattfinden.
+Geschrieben wird nur, wenn sich der Speicher wirklich ändert.
+
+### Reine Speicherlogik abgetrennt — damit sie sich überhaupt prüfen lässt
+
+`TogglTokens.kt` importierte `HumanResource` und war deshalb in einer Web-Sitzung nicht
+übersetzbar. Die Textbehandlung (kodieren, entschlüsseln, Eintrag ändern) steht jetzt in
+**`TokenStore.kt`**, ohne Modell, ohne Datenbank, ohne JavaFX. `TogglTokens.kt` behält die drei
+Adapter, die eine Ressource kennen. Aufrufer sehen keinen Unterschied — gleiches Paket, gleiche
+Namen.
+
+Das war keine Ordnungsliebe: dadurch ließ sich der Fund **hier ausgeführt** absichern statt nur
+behauptet. **13 Tests in `TokenStoreTest`, grün**, dazu die 29 der Toggl-Kette unverändert grün.
+
+### Gegentest — und zwei Sabotagen, die NICHT ansprangen
+
+| Sabotage | Ergebnis |
+|---|---|
+| alter Schlüssel wird nicht geräumt | **gefangen** (4 Tests, plus „andere Personen unberührt") |
+| keine URL-Kodierung | **gefangen** — erst nach Nachbesserung, siehe unten |
+| keine feste Reihenfolge | gefangen |
+| leerer Token wird doch geschrieben | gefangen |
+| leerer Token entfernt den neuen Schlüssel nicht | **nicht gefangen — und das ist richtig so** |
+
+**Der blinde Test, wieder einmal.** `testSeparatorsInsideAKeySurviveAMove` blieb grün, als ich die
+URL-Kodierung entfernte. Grund: ohne Kodierung zerfällt der Speichertext beim Lesen, der alte
+Eintrag ist einfach weg — und der Umzug schreibt den neuen trotzdem. Beide Behauptungen des Tests
+galten, während der Speicher kaputt war. Behoben durch eine **ausdrückliche Vorbedingung**: der
+verquere Schlüssel muss die Kodierung erst einmal überstehen. Danach fiel die Sabotage.
+
+**Die fünfte Sabotage ist kein Mangel des Tests.** Der Zweig „leerer Token entfernt den Eintrag"
+ist doppelt abgesichert — `encodeTokenMap` lässt leere Werte ohnehin weg. Die Zeile ist damit für
+einen Gegentest unerreichbar. Sie bleibt trotzdem stehen, weil sie den Vertrag schon auf der
+Abbildung wahr macht; **an der Zeile steht jetzt, dass kein Test sie isoliert.** Lieber
+vermerkt als stillschweigend für geprüft gehalten.
+
+### Weitere Durchsicht, ohne Fund
+
+Gelesen und für in Ordnung befunden: `TogglTokens` (URL-Kodierung deckt beide Trennzeichen ab,
+leerer Speicher und Müll sauber behandelt), `ConnectionCheck`/`TogglConnectionAction` (liest nur,
+eigener Thread, Meldung aus `TogglFailure` gebaut), die Registrierung der Optionsgruppe.
+
+**Noch eine überholte Notiz aus Sitzung 6:** Unter Schritt 7 steht „Noch nicht verdrahtet:
+`TogglTokenOptions.optionGroup` muss in `GanttProject.java` registriert werden … dazu fehlt noch
+die Eingabemöglichkeit in der Ressourcenverwaltung." Beides ist inzwischen da
+(`GanttProject.java:214`, und das Feld in `MainPropertiesPanel`), von späteren Commits derselben
+Sitzung. Die Registrierung steht richtig **vor** `initOptions()`.
+
 ### Korrektur an den Notizen der Sitzung 6
 
 Der letzte Punkt unter „Noch offen aus dieser Sitzung" behauptete, der Zweig „Feld geleert" suche

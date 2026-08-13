@@ -39,8 +39,9 @@ import net.sourceforge.ganttproject.roles.RoleManager
 // [Fork-Aenderung] Neue Importe fuer den Toggl-Token.
 import net.sourceforge.ganttproject.fork.forkText
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions
+import net.sourceforge.ganttproject.timetracking.movedToken
 import net.sourceforge.ganttproject.timetracking.tokenFor
-import net.sourceforge.ganttproject.timetracking.withToken
+import net.sourceforge.ganttproject.timetracking.tokenKeyFor
 
 class MainPropertiesPanel(private val resource: HumanResource) {
   val title: String = RootLocalizer.formatText("general")
@@ -103,16 +104,42 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   fun requestFocus() = onRequestFocus()
 
   fun save() {
+    // [Fork-Aenderung] Der Schluessel der Token-Ablage wird aus E-Mail bzw. Name gebildet - und
+    // BEIDE werden in den Zeilen direkt darunter geaendert. Deshalb muss der alte Schluessel
+    // vorher feststehen, sonst bleibt der Token unter ihm liegen: fuer die Person unauffindbar
+    // (der Verbindungstest meldet "kein Token", obwohl sie einen eingetragen hat) und als
+    // Geheimnis in ~/.ganttproject zurueck. Siehe movedToken.
+    val previousTokenKey = tokenKeyFor(resource)
+
     nameOption.ifChanged(resource::setName)
     phoneOption.ifChanged(resource::setPhone)
     emailOption.ifChanged(resource::setMail)
     roleOption.ifChanged(resource::setRole)
     rateOption.ifChanged(resource::setStandardPayRate)
-    // [Fork-Aenderung] Der Token wandert in die Anwendungseinstellungen, nicht ins Projekt.
-    // Ein leeres Feld entfernt den Eintrag.
-    togglTokenOption.ifChanged { token ->
-      TogglTokenOptions.tokens.value =
-        withToken(TogglTokenOptions.tokens.value, resource, token?.trim().orEmpty())
+    saveTogglToken(previousTokenKey)
+  }
+
+  /**
+   * [Fork-Aenderung] Der Token wandert in die Anwendungseinstellungen, nicht ins Projekt. Ein
+   * leeres Feld entfernt den Eintrag.
+   *
+   * Bewusst NICHT an `togglTokenOption.ifChanged` gehaengt: der Eintrag muss auch dann umziehen,
+   * wenn nur die E-Mail-Adresse geaendert wurde und das Token-Feld unberuehrt blieb. Genau das ist
+   * der haeufigste Fall — Ressource mit Namen anlegen, Token eintragen, spaeter die Adresse
+   * nachtragen.
+   *
+   * Geschrieben wird nur, wenn sich der Speicher wirklich aendert, damit ein Dialog, in dem
+   * niemand etwas angefasst hat, die Einstellungsdatei nicht anfasst.
+   */
+  private fun saveTogglToken(previousTokenKey: String) {
+    val current = TogglTokenOptions.tokens.value
+    val updated = movedToken(
+      storedTokens = current,
+      previousKey = previousTokenKey,
+      newKey = tokenKeyFor(resource),
+      token = togglTokenOption.value?.trim().orEmpty())
+    if (updated != current) {
+      TogglTokenOptions.tokens.value = updated
     }
   }
 

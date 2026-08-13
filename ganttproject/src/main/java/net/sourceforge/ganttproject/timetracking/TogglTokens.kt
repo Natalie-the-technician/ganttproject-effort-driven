@@ -24,8 +24,6 @@ import biz.ganttproject.core.option.DefaultStringOption
 import biz.ganttproject.core.option.GPOptionGroup
 import biz.ganttproject.core.option.StringOption
 import net.sourceforge.ganttproject.resource.HumanResource
-import java.net.URLDecoder
-import java.net.URLEncoder
 
 /**
  * Where the Toggl access tokens live: in the APPLICATION settings (`~/.ganttproject`), never in
@@ -44,6 +42,10 @@ import java.net.URLEncoder
  * different person in every project, while these settings are global. Two projects would
  * overwrite each other's tokens, and one person's token would be sent for another person's
  * entries. The key is therefore the e-mail address, and the name when no address is set.
+ *
+ * This file holds the half that knows about resources and settings. The text handling itself —
+ * encoding, decoding, changing an entry — sits in `TokenStore.kt`, which needs neither the model
+ * nor JavaFX and can therefore be run in any session.
  */
 object TogglTokenOptions {
   /** All tokens in one option, encoded by [encodeTokenMap]. */
@@ -52,66 +54,24 @@ object TogglTokenOptions {
   val optionGroup: GPOptionGroup = GPOptionGroup("toggl", tokens)
 }
 
-private const val PAIR_SEPARATOR = ";"
-private const val FIELD_SEPARATOR = ":"
-
 /**
  * How a person is identified in the token store.
  *
  * The e-mail address first: it identifies a Toggl account and survives a rename. The name is the
  * fallback, prefixed so that a name can never be mistaken for an address.
+ *
+ * The key therefore CHANGES when the address is added or edited. Whoever saves a token has to deal
+ * with that — see [movedToken].
  */
 fun tokenKeyFor(resource: HumanResource): String {
   val mail = resource.mail?.trim().orEmpty()
   return if (mail.isNotEmpty()) "mail=$mail" else "name=${resource.name?.trim().orEmpty()}"
 }
 
-/**
- * Encodes the whole store into one line.
- *
- * Key and token are URL-encoded, because both may contain the separators — a token is an opaque
- * string from Toggl, and an e-mail address or a name may contain almost anything. Without the
- * encoding a token containing a semicolon would silently truncate the store.
- */
-fun encodeTokenMap(tokens: Map<String, String>): String =
-  tokens.entries
-    .filter { it.value.isNotEmpty() }
-    .sortedBy { it.key }
-    .joinToString(PAIR_SEPARATOR) { "${it.key.urlEncoded()}$FIELD_SEPARATOR${it.value.urlEncoded()}" }
-
-/** Reads the store back. Unreadable pairs are skipped rather than failing the whole settings file. */
-fun decodeTokenMap(text: String?): Map<String, String> {
-  val result = mutableMapOf<String, String>()
-  text?.split(PAIR_SEPARATOR)?.forEach { pair ->
-    val fields = pair.split(FIELD_SEPARATOR)
-    if (fields.size == 2) {
-      val key = fields[0].urlDecodedOrNull()
-      val token = fields[1].urlDecodedOrNull()
-      if (!key.isNullOrEmpty() && !token.isNullOrEmpty()) {
-        result[key] = token
-      }
-    }
-  }
-  return result
-}
-
 /** The token for this person, or null when none is stored. */
 fun tokenFor(resource: HumanResource, storedTokens: String?): String? =
-  decodeTokenMap(storedTokens)[tokenKeyFor(resource)]
+  tokenForKey(tokenKeyFor(resource), storedTokens)
 
 /** The store with this person's token set. An empty token removes the entry. */
-fun withToken(storedTokens: String?, resource: HumanResource, token: String): String {
-  val tokens = decodeTokenMap(storedTokens).toMutableMap()
-  val key = tokenKeyFor(resource)
-  if (token.isEmpty()) tokens.remove(key) else tokens[key] = token
-  return encodeTokenMap(tokens)
-}
-
-private fun String.urlEncoded(): String = URLEncoder.encode(this, Charsets.UTF_8)
-
-private fun String.urlDecodedOrNull(): String? =
-  try {
-    URLDecoder.decode(this, Charsets.UTF_8)
-  } catch (e: IllegalArgumentException) {
-    null
-  }
+fun withToken(storedTokens: String?, resource: HumanResource, token: String): String =
+  tokenKeyFor(resource).let { key -> movedToken(storedTokens, key, key, token) }
