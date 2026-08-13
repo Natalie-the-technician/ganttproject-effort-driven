@@ -177,18 +177,21 @@ fun AppScaffold(
     }
   ) { padding ->
     Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+      // Bound to a local so the screens take a non-null ProjectUi without
+      // relying on a smart cast through two negated when-conditions.
+      val project = state.project
       when {
-        state.busy && state.project == null -> LoadingBox()
-        state.project == null -> HomeScreen(
+        state.busy && project == null -> LoadingBox()
+        project == null -> HomeScreen(
           state = state,
           onOpenClick = { openFile.launch(arrayOf("*/*")) },
           onRecentClick = viewModel::openUri,
           onClearRecent = viewModel::clearRecentFiles
         )
         else -> when (tab) {
-          Tab.GANTT -> GanttScreen(state.project, viewModel)
-          Tab.RESOURCES -> ResourcesScreen(state.project, viewModel)
-          Tab.IMPORT -> ImportScreen(state.project, importState, viewModel)
+          Tab.GANTT -> GanttScreen(project, viewModel)
+          Tab.RESOURCES -> ResourcesScreen(project, viewModel)
+          Tab.IMPORT -> ImportScreen(project, importState, viewModel)
         }
       }
     }
