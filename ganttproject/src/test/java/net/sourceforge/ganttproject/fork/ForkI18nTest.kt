@@ -235,6 +235,46 @@ class ForkI18nTest {
     assertTrue(noisy.contains("entry #3"), "the entry is not named in: $noisy")
   }
 
+  /**
+   * Button labels have to stay short.
+   *
+   * Found on screen, not by reasoning: "Neuen behalten (bisherigen verwerfen)" was rendered as
+   * "Neuen behalten (bisherigen verwerf…" — the buttons have a fixed width and truncate, even with
+   * the window maximised. The one thing that must not be cut off is what the button costs you.
+   *
+   * The consequence now lives in the dialog text; the labels only name the action. 24 characters
+   * is well under the ~36 at which truncation was observed, and covers translations being longer
+   * than the German original.
+   */
+  @Test
+  fun `button labels are short enough not to be cut off`() {
+    val labels = listOf("fork.toggl.collision.overwrite", "fork.toggl.collision.discard")
+
+    listOf(Locale.GERMANY, Locale.US).forEach { locale ->
+      labels.forEach { key ->
+        val label = ForkI18n.textOrNull(key, locale)
+        assertNotNull(label, "no text for $key in $locale")
+        assertTrue(label!!.length <= 24,
+          "the label would be truncated on the button and the consequence unreadable: " +
+            "$key in $locale is ${label.length} characters: $label")
+      }
+    }
+  }
+
+  /**
+   * Whatever the buttons no longer say has to be said in the dialog text instead, otherwise
+   * shortening them quietly removed the very information the dialog exists for.
+   */
+  @Test
+  fun `the dialog text still names what each choice costs`() {
+    val text = ForkI18n.textOrNull("fork.toggl.collision.choice", Locale.GERMANY)
+
+    assertNotNull(text, "the explanation of the two choices is missing")
+    assertTrue(text!!.contains("Neuen behalten"), "the first choice is not explained: $text")
+    assertTrue(text.contains("Bisherigen behalten"), "the second choice is not explained: $text")
+    assertTrue(text.contains("verwirft"), "the text does not say that something is discarded: $text")
+  }
+
   private fun keysOf(path: String): Set<String> =
     java.util.Properties().also { properties ->
       ForkI18n::class.java.getResourceAsStream(path)?.use {

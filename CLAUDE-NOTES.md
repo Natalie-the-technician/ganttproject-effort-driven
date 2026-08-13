@@ -1613,6 +1613,51 @@ in einem Feld steht, die Tabelle muss ihn aus dem Speicher lesen. Alles danach i
 Zwei Fälle, die bewusst **keine** Frage auslösen: ein geleertes Feld (das ist ein Entfernen) und
 eine Änderung ohne Schlüsselwechsel (man ersetzt den eigenen Eintrag).
 
+### Am Bildschirm bestätigt: der Zusammenstoß-Dialog
+
+Cowork-Lauf, alle Beobachtungen wie erwartet:
+- **Gegenprobe grün:** Adresse eintragen, unter der noch nichts liegt → **kein** Dialog. Er
+  erscheint also nicht einfach immer.
+- Zweite Adresse mit fremdem Token → Dialog erscheint, Überschrift stimmt.
+- **Kein Token im Dialog**, nur die Adresse. Wie beabsichtigt.
+- Erklärungstext buchstabengetreu wie im Bündel.
+
+**Das Ergebnis dateisichtbar geprüft**, nicht vom Bildschirm abgelesen: in `~/.ganttproject` steht
+nach „Bisherigen behalten" nur noch der bisherige Token unter der Zieladresse. Der verworfene ist
+weg, und unter den alten Schlüsseln liegt **nichts** — keine Karteileiche.
+
+### SECHSTER FUND (eigener): Knopfbeschriftung wurde abgeschnitten
+
+`Neuen behalten (bisherigen verwerfen)` erschien als `Neuen behalten (bisherigen verwerf…` — feste
+Knopfbreite, auch bei maximiertem Fenster. Ausgerechnet **die Folge** war damit unlesbar, also
+genau das, wofür der Dialog gebaut wurde.
+
+Nur am Bildschirm zu finden. Kein Test hätte das gezeigt — deshalb war der Cowork-Lauf richtig.
+
+Die Folge steht jetzt im **Text**, die Knöpfe benennen nur noch die Handlung (`Neuen behalten` /
+`Bisherigen behalten`). Ein Test hält die Länge künftig unter 24 Zeichen; beobachtet wurde die
+Abschneidung bei 37.
+
+**Gegentest 28 bestanden:** lange Beschriftung zurück → der Test fiel, mit genau der Zeichenzahl 37.
+
+### SIEBTER FUND: „Beenden" beendete das Programm nicht — Upstream
+
+`Projekt → Beenden`, dann „Nicht speichern": das Hauptfenster blieb offen. Dreimal reproduziert.
+
+**Ursache, nachgelesen:** `MainApplication.java` setzte im Beenden-Rückruf nur `myLock` und rief
+`notify()`. Der Block, der darauf **wartet**, ist auskommentiert — Upstream-Commit *„commented out
+or removed usages of the main application window"*. Also wartet niemand, `launch()` kehrt zurück,
+und das `System.exit(0)` weiter unten läuft, während `myLock` noch `false` ist.
+
+`quitApplication()` macht dabei alles richtig: Optionen speichern, Projekt schließen. Nur beendet
+niemand den Prozess.
+
+**Nicht unser Fehler** — die Datei trägt keine Fork-Markierung, und die letzten Commits daran sind
+Upstream. Behoben wie beim `projectCreated`-Fehler: im Fork repariert, für das Original meldenswert.
+
+Wichtig bei der Behebung: `withSystemExit` ist **nicht** immer `true` — der Aktualisierer benutzt
+`false`, um neu zu starten statt zu beenden. Deshalb die Bedingung.
+
 ### Umgebungsfalle: `GanttChartSelectionTest` kann rot sein, ohne dass etwas kaputt ist
 
 `java.lang.IllegalStateException: cannot open system clipboard` aus `WClipboard.openClipboard0`.

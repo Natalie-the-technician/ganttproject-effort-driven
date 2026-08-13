@@ -45,6 +45,12 @@ val ASK_IN_A_DIALOG = TokenCollisionAsker { collision, apply ->
       box.children.add(Label(forkText("fork.toggl.collision.consequence")).also {
         it.isWrapText = true
       })
+      // Was verloren geht, steht HIER und nicht auf den Knoepfen. Die Knoepfe haben feste Breite;
+      // eine laengere Beschriftung wird mit "…" abgeschnitten, auch bei maximiertem Fenster --
+      // am Bildschirm nachgewiesen. Damit waere ausgerechnet die Folge unlesbar gewesen.
+      box.children.add(Label(forkText("fork.toggl.collision.choice")).also {
+        it.isWrapText = true
+      })
     })
 
     // Keep the moving token: what was stored under the key until now is lost.
