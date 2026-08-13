@@ -25,12 +25,29 @@ Der Desktop-Build ist unverändert. `android/` ist ein eigenes Gradle-Projekt.
 
 Es gibt keine APK aus dem Container — das Android-SDK liegt hinter
 `dl.google.com`, und das ist durch die Netzregel gesperrt. Die APK entsteht
-deshalb bei GitHub:
+deshalb bei GitHub.
 
-1. Im Repo auf **Actions** → Workflow **Android app** → letzter Lauf auf
-   `claude/gantt-android-app-wxxu9o`
-2. Unten unter **Artifacts**: `ganttproject-mobile-debug-apk` herunterladen
-3. ZIP entpacken, APK auf das Telefon, Installation aus unbekannter Quelle erlauben
+**Der bequeme Weg — Release (geht in der GitHub-App):**
+
+1. **Actions** → **Android app** → **Run workflow**, Haken bei
+   *Publish the APK as a GitHub release* stehen lassen
+2. Wenn der Lauf grün ist: **Releases** öffnen, neuesten Eintrag antippen,
+   die `.apk` antippen, Installation aus unbekannter Quelle erlauben
+
+Kein ZIP, kein Browser, läuft nicht nach 90 Tagen ab.
+
+**Wichtig:** Der Knopf „Run workflow" erscheint erst, wenn der Workflow auf dem
+**Standard-Branch** liegt. Solange die Android-App nur auf
+`claude/gantt-android-app-wxxu9o` liegt, ist er nicht da — dann bleibt der
+Artefakt-Weg. Das ist eine Eigenart von GitHub, kein Fehler im Workflow.
+
+**Der Notweg — Artefakt:** Jeder Push baut eine APK und hängt sie als
+`ganttproject-mobile-debug-apk` an den Lauf. Nur über einen **Browser**
+herunterladbar (die GitHub-App kann das nicht), kommt als ZIP, läuft nach
+90 Tagen ab.
+
+Beides sind Debug-Builds, signiert mit dem Standard-Debug-Schlüssel — zum
+Seitwärtsinstallieren richtig, für den Play Store untauglich.
 
 Braucht Android 8.0 oder neuer.
 

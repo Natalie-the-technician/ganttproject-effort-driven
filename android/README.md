@@ -74,9 +74,21 @@ touch a file you handed it.
 
 ## Install
 
-Grab an APK from the **Android app** workflow run on GitHub Actions — open the
-latest run and download `ganttproject-mobile-debug-apk` from the artifacts.
-Then allow installation from your browser or file manager when prompted.
+**From a release (easiest, works in the GitHub mobile app).** Open
+**Releases**, take the newest `GanttProject Mobile …` entry and tap the `.apk`
+attached to it. Allow installation from unknown sources when asked.
+
+Releases are cut on demand: **Actions → Android app → Run workflow**, leave
+*Publish the APK as a GitHub release* ticked. Every push builds an APK, but
+only a manual run publishes one, so the release list stays meaningful.
+
+**From a build artifact.** Every push to `android/` attaches
+`ganttproject-mobile-debug-apk` to its workflow run. Artifacts download as a
+ZIP and only through a browser — the GitHub mobile app cannot fetch them — and
+they expire after 90 days.
+
+Builds are signed with the standard Android debug key, which is fine for
+sideloading and unfit for the Play Store.
 
 Requires Android 8.0 (API 26) or newer.
 
