@@ -82,6 +82,9 @@ Releases are cut on demand: **Actions → Android app → Run workflow**, leave
 *Publish the APK as a GitHub release* ticked. Every push builds an APK, but
 only a manual run publishes one, so the release list stays meaningful.
 
+The **Run workflow** button appears once the workflow is on the repository's
+default branch. Until then the same thing can be triggered through the API.
+
 **From a build artifact.** Every push to `android/` attaches
 `ganttproject-mobile-debug-apk` to its workflow run. Artifacts download as a
 ZIP and only through a browser — the GitHub mobile app cannot fetch them — and

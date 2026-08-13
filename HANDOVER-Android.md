@@ -36,10 +36,13 @@ deshalb bei GitHub.
 
 Kein ZIP, kein Browser, läuft nicht nach 90 Tagen ab.
 
-**Wichtig:** Der Knopf „Run workflow" erscheint erst, wenn der Workflow auf dem
-**Standard-Branch** liegt. Solange die Android-App nur auf
-`claude/gantt-android-app-wxxu9o` liegt, ist er nicht da — dann bleibt der
-Artefakt-Weg. Das ist eine Eigenart von GitHub, kein Fehler im Workflow.
+**Geprüft:** Der Start vom Feature-Branch aus funktioniert — Build 14 ist so
+entstanden. GitHubs Dokumentation sagt, der Workflow müsse auf dem
+**Standard-Branch** liegen; für den Start über die API stimmt das
+offensichtlich nicht. Ob der Knopf „Run workflow" in der Oberfläche auch ohne
+Standard-Branch erscheint, habe ich nicht geprüft. Falls du ihn nicht siehst:
+das ist der Grund, und dann bleibt der Artefakt-Weg, bis der Branch
+zusammengeführt ist.
 
 **Der Notweg — Artefakt:** Jeder Push baut eine APK und hängt sie als
 `ganttproject-mobile-debug-apk` an den Lauf. Nur über einen **Browser**
