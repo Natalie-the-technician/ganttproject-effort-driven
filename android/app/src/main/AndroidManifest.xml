@@ -31,10 +31,27 @@
             </intent-filter>
 
             <!--
-              Lets the app be offered when a .gan file is tapped elsewhere.
-              GanttProject files have no registered MIME type, so they arrive
-              as application/octet-stream or text/xml depending on the
-              provider; the path pattern narrows it back down.
+              Being offered when a .gan file is tapped.
+
+              Three filters, because no single one works everywhere:
+
+              1. By file name. Only usable when the URI actually carries the
+                 name, which is true for file:// and for some providers.
+                 The repeated patterns are not a mistake: Android's
+                 PatternMatcher does not backtrack, so ".*\\.gan" fails on any
+                 path that already contains a dot ("/Drive.sync/plan.gan").
+                 One pattern per additional dot is the documented workaround.
+                 pathSuffix does it properly but exists only from API 31.
+
+              2. By content type. Cloud providers hand over a content:// URI
+                 with no file name in the path at all, so filter 1 can never
+                 match them; a .gan file is XML, and providers that sniff the
+                 content report it as such.
+
+              3. The share sheet, as the fallback that always works: whatever
+                 the provider claims a file is, "Share -> GanttProject Mobile"
+                 reaches us. Restricted to octet-stream and XML so the app
+                 does not clutter the share sheet for photos and messages.
             -->
             <intent-filter android:label="@string/open_with_label">
                 <action android:name="android.intent.action.VIEW" />
@@ -42,9 +59,32 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" />
                 <data android:scheme="file" />
-                <data android:mimeType="*/*" />
                 <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathSuffix=".gan" />
                 <data android:pathPattern=".*\\.gan" />
+                <data android:pathPattern=".*\\..*\\.gan" />
+                <data android:pathPattern=".*\\..*\\..*\\.gan" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.gan" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.gan" />
+            </intent-filter>
+
+            <intent-filter android:label="@string/open_with_label">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/xml" />
+            </intent-filter>
+
+            <intent-filter android:label="@string/open_with_label">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/xml" />
             </intent-filter>
         </activity>
     </application>

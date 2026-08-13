@@ -71,6 +71,12 @@ storage and with any cloud provider installed on the device (Drive, Nextcloud,
 OneDrive, Dropbox) and needs no storage permission at all: it can only ever
 touch a file you handed it.
 
+Tapping a `.gan` file elsewhere offers this app too — and if your file manager
+or cloud app does not, **Share → GanttProject Mobile** always reaches it. Note
+that a file arriving through a share sheet usually carries **read permission
+only**; the app says so in the title bar and disables saving rather than
+failing at the moment you walk away. Reopen it through *Open project* to edit.
+
 ---
 
 ## Install

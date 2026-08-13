@@ -43,6 +43,8 @@ data class ProjectUi(
   val displayName: String,
   val model: ProjectModel,
   val isDirty: Boolean,
+  /** Opened without write access — usually via a share sheet. */
+  val isReadOnly: Boolean,
   /**
    * Bumped on every edit. [ProjectModel] is a value snapshot, but the
    * enclosing [OpenProject] is mutable, so an explicit revision keeps
@@ -142,6 +144,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
   fun save() {
     val project = open ?: return
+    if (project.isReadOnly) return
     viewModelScope.launch {
       _state.update { it.copy(busy = true, fileError = null) }
       when (val result = store.save(project)) {
@@ -165,7 +168,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    */
   fun saveIfDirty(onDone: () -> Unit = {}) {
     val project = open
-    if (project == null || !project.isDirty) {
+    // A read-only file is not silently attempted and silently failed; the UI
+    // has already said it cannot be saved.
+    if (project == null || !project.isDirty || project.isReadOnly) {
       onDone()
       return
     }
@@ -258,7 +263,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     edit { it.unassignResource(taskId, resourceId) }
 
   private fun snapshot(project: OpenProject) =
-    ProjectUi(project.displayName, project.model, project.isDirty, revision)
+    ProjectUi(project.displayName, project.model, project.isDirty, project.isReadOnly, revision)
 
   // ---------------------------------------------------------------- Import
 

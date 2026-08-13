@@ -34,7 +34,16 @@ sealed interface FileResult<out T> {
 class OpenProject(
   val uri: Uri,
   val displayName: String,
-  val document: GanttDocument
+  val document: GanttDocument,
+  /**
+   * True when the app holds read access but not write access.
+   *
+   * Happens for files handed over by a share sheet, which usually grant
+   * read only. It has to be known up front: with auto-saving on, the
+   * alternative is a save that fails at the moment the user walks away,
+   * which is the one failure mode this app must not have.
+   */
+  val isReadOnly: Boolean = false
 ) {
   /**
    * Snapshot for the UI. Rebuilt after every edit rather than mutated,
@@ -131,7 +140,7 @@ class ProjectStore(private val context: Context) {
         }
       )
     }
-    FileResult.Ok(OpenProject(uri, displayName(uri), document))
+    FileResult.Ok(OpenProject(uri, displayName(uri), document, isReadOnly = !canWrite(uri)))
   }
 
   /**
@@ -154,6 +163,22 @@ class ProjectStore(private val context: Context) {
     project.markSaved()
     FileResult.Ok(Unit)
   }
+
+  /**
+   * Whether this URI may be written back.
+   *
+   * Asked rather than assumed: a document picked through the picker is
+   * writable, one arriving from a share sheet usually is not, and the
+   * difference decides whether auto-saving may run at all.
+   */
+  private fun canWrite(uri: Uri): Boolean = runCatching {
+    context.checkUriPermission(
+      uri,
+      android.os.Process.myPid(),
+      android.os.Process.myUid(),
+      Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+  }.getOrDefault(false)
 
   /** Human-readable file name, falling back to the last path segment. */
   fun displayName(uri: Uri): String {

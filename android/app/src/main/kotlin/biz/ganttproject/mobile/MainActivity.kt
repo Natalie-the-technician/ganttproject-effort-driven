@@ -7,6 +7,7 @@ package biz.ganttproject.mobile
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -57,6 +58,24 @@ class MainActivity : ComponentActivity() {
     intentUri(intent)?.let(viewModel::openUri)
   }
 
-  private fun intentUri(intent: Intent?): Uri? =
-    if (intent?.action == Intent.ACTION_VIEW) intent.data else null
+  /**
+   * The URI a launch intent points at, whether the file was tapped
+   * (ACTION_VIEW) or sent to us from a share sheet (ACTION_SEND).
+   *
+   * Share is the fallback that works when no filter matched: a cloud
+   * provider may hand over a content:// URI with no file name in it and a
+   * MIME type of its own choosing, and then "Share -> GanttProject Mobile"
+   * is the only route that reaches us.
+   */
+  private fun intentUri(intent: Intent?): Uri? = when (intent?.action) {
+    Intent.ACTION_VIEW -> intent.data
+    Intent.ACTION_SEND ->
+      @Suppress("DEPRECATION")
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+      } else {
+        intent.getParcelableExtra(Intent.EXTRA_STREAM)
+      }
+    else -> null
+  }
 }

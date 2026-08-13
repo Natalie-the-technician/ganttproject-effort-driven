@@ -147,4 +147,5 @@
     <string name="task_no_assignment_for_effort">Weise eine Ressource zu, um zu sehen, wie vielen Tagen dieser Aufwand entspricht.</string>
     <string name="collapse_group">Gruppe zuklappen</string>
     <string name="expand_group">Gruppe aufklappen</string>
+    <string name="read_only">Nur lesbar — über „Projekt öffnen“ erneut öffnen, um speichern zu können</string>
 </resources>

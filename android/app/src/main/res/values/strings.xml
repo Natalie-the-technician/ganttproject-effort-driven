@@ -152,4 +152,5 @@
     <string name="task_no_assignment_for_effort">Assign a resource to see how many days this effort corresponds to.</string>
     <string name="collapse_group">Collapse group</string>
     <string name="expand_group">Expand group</string>
+    <string name="read_only">Read-only — reopen it with “Open project” to be able to save</string>
 </resources>

@@ -111,7 +111,13 @@ fun AppScaffold(
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
             )
-            if (state.project?.isDirty == true) {
+            if (state.project?.isReadOnly == true) {
+              Text(
+                text = stringResource(R.string.read_only),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error
+              )
+            } else if (state.project?.isDirty == true) {
               Text(
                 text = stringResource(R.string.unsaved_changes),
                 style = MaterialTheme.typography.labelSmall,
@@ -122,7 +128,10 @@ fun AppScaffold(
         },
         actions = {
           if (state.project != null) {
-            IconButton(onClick = viewModel::save, enabled = state.project.isDirty && !state.busy) {
+            IconButton(
+              onClick = viewModel::save,
+              enabled = state.project.isDirty && !state.project.isReadOnly && !state.busy
+            ) {
               Icon(Icons.Default.Save, contentDescription = stringResource(R.string.action_save))
             }
           }
