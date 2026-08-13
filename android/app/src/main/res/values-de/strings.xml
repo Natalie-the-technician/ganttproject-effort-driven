@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GanttProject Mobile</string>
+    <string name="open_with_label">In GanttProject Mobile öffnen</string>
+
+    <!-- Start -->
+    <string name="home_title">GanttProject Mobile</string>
+    <string name="home_empty_title">Kein Projekt geöffnet</string>
+    <string name="home_empty_body">Öffne eine GanttProject-Datei (.gan) vom Gerät oder aus einem Cloud-Ordner wie Drive, Nextcloud oder OneDrive.</string>
+    <string name="action_open_file">Projekt öffnen</string>
+    <string name="recent_files">Zuletzt geöffnet</string>
+    <string name="recent_clear">Liste leeren</string>
+
+    <!-- Kopfleiste -->
+    <string name="action_save">Speichern</string>
+    <string name="action_saved">Gespeichert</string>
+    <string name="action_close">Projekt schließen</string>
+    <string name="action_settings">Einstellungen</string>
+    <string name="action_about">Über die App</string>
+    <string name="unsaved_changes">Nicht gespeicherte Änderungen</string>
+    <string name="discard_title">Änderungen verwerfen?</string>
+    <string name="discard_body">Das Projekt hat nicht gespeicherte Änderungen. Beim Schließen gehen sie verloren.</string>
+    <string name="discard_confirm">Verwerfen</string>
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_ok">OK</string>
+    <string name="action_apply">Übernehmen</string>
+
+    <!-- Reiter -->
+    <string name="tab_gantt">Diagramm</string>
+    <string name="tab_resources">Ressourcen</string>
+    <string name="tab_import">Zeitimport</string>
+
+    <!-- Diagramm -->
+    <string name="gantt_zoom_in">Vergrößern</string>
+    <string name="gantt_zoom_out">Verkleinern</string>
+    <string name="gantt_today">Heute</string>
+    <string name="gantt_no_tasks">Dieses Projekt hat keine Vorgänge.</string>
+    <string name="milestone">Meilenstein</string>
+    <string name="summary_task">Sammelvorgang</string>
+
+    <!-- Vorgangsdetails -->
+    <string name="task_details">Vorgang</string>
+    <string name="task_name">Name</string>
+    <string name="task_dates">Zeitraum</string>
+    <string name="task_duration_days">%1$d Arbeitstage</string>
+    <string name="task_duration_note">Zeitraum und Dauer werden am Desktop bearbeitet: eine Änderung hier würde abhängige Vorgänge nicht mitverschieben, weil der Terminplaner auf dem Telefon nicht läuft.</string>
+    <string name="task_progress">Fortschritt</string>
+    <string name="task_progress_percent">%1$d %%</string>
+    <string name="task_progress_summary_locked">GanttProject berechnet den Fortschritt eines Sammelvorgangs aus seinen Untervorgängen. Er lässt sich hier deshalb nicht setzen.</string>
+    <string name="task_progress_milestone_locked">Ein Meilenstein ist erreicht oder nicht; er hat keinen Fortschritt.</string>
+    <string name="task_effort_hours">Geplanter Aufwand (Stunden)</string>
+    <string name="task_actual_hours">Ist-Stunden</string>
+    <string name="task_effort_hint">Leer lassen, um den Wert zu entfernen.</string>
+    <string name="task_effort_invalid">Bitte eine Zahl eingeben, zum Beispiel 7,5.</string>
+    <string name="task_effort_vs_actual">%1$s von %2$s h</string>
+    <string name="task_effort_over">Die Ist-Stunden überschreiten den Plan um %1$s h.</string>
+    <string name="task_derived_duration">Bei der aktuellen Zuweisung entspricht dieser Aufwand %1$d Arbeitstagen.</string>
+    <string name="task_notes">Notizen</string>
+
+    <!-- Zuweisungen -->
+    <string name="assignments">Zugewiesene Ressourcen</string>
+    <string name="assignments_none">Diesem Vorgang ist niemand zugewiesen.</string>
+    <string name="assignment_add">Ressource zuweisen</string>
+    <string name="assignment_remove">Entfernen</string>
+    <string name="assignment_load">Auslastung</string>
+    <string name="assignment_load_percent">%1$s %%</string>
+    <string name="assignment_responsible">Verantwortlich</string>
+    <string name="assignment_hours_per_day">%1$s h pro Tag</string>
+    <string name="assignment_all_assigned">Alle Ressourcen sind diesem Vorgang bereits zugewiesen.</string>
+
+    <!-- Ressourcen -->
+    <string name="resources_none">Dieses Projekt hat keine Ressourcen.</string>
+    <string name="resource_hours_per_day">Stunden pro Tag</string>
+    <string name="resource_hours_per_day_hint">Wie viele Stunden diese Person tatsächlich pro Tag arbeitet. Leer bedeutet den Standard von 8 Stunden.</string>
+    <string name="resource_utilisation">Auslastung</string>
+    <string name="resource_peak">Spitze %1$s %%</string>
+    <string name="resource_overload_days">An %1$d Tagen überlastet</string>
+    <string name="resource_no_overload">Keine Überlastung</string>
+    <string name="resource_not_assigned">Nichts zugewiesen</string>
+    <string name="resource_task_count">%1$d Vorgänge</string>
+    <string name="resource_overload_explained">Das normale GanttProject lässt die Auslastung bei der Terminplanung unberücksichtigt und meldet das deshalb nie. Der Wert hier ist die Summe aller Zuweisungen pro Tag gegen die Stunden pro Tag dieser Ressource.</string>
+
+    <!-- Zeitimport -->
+    <string name="import_title">Import aus Toggl Track</string>
+    <string name="import_token">API-Token</string>
+    <string name="import_token_hint">Steht in Toggl unter „Profile settings“. Es wird verschlüsselt nur auf diesem Gerät gespeichert und nie in die Projektdatei geschrieben.</string>
+    <string name="import_token_save">Token speichern</string>
+    <string name="import_token_verify">Token prüfen</string>
+    <string name="import_token_ok">Token angenommen%1$s</string>
+    <string name="import_token_missing">Bitte zuerst ein Token eintragen.</string>
+    <string name="import_from">Von</string>
+    <string name="import_to">Bis</string>
+    <string name="import_range_week">Letzte 7 Tage</string>
+    <string name="import_range_month">Letzte 30 Tage</string>
+    <string name="import_fetch">Einträge laden</string>
+    <string name="import_loading">Wird geladen …</string>
+    <string name="import_no_entries">Keine Zeiteinträge in diesem Zeitraum.</string>
+    <string name="import_entries_found">%1$d Einträge, zusammen %2$s h</string>
+    <string name="import_entry_hours">%1$s h</string>
+    <string name="import_assign_task">Vorgang</string>
+    <string name="import_choose_task">Vorgang wählen …</string>
+    <string name="import_certain">Sicher</string>
+    <string name="import_uncertain">Bitte prüfen</string>
+    <string name="import_skip_entry">Überspringen</string>
+    <string name="import_already_imported">Schon importiert</string>
+    <string name="import_preview_title">Das wird geschrieben</string>
+    <string name="import_preview_total">%1$s h auf %2$d Vorgänge</string>
+    <string name="import_preview_nothing">Nichts zu schreiben — alle Einträge waren schon importiert.</string>
+    <string name="import_apply">Stunden hinzufügen</string>
+    <string name="import_done">%1$s h hinzugefügt. Nicht vergessen zu speichern.</string>
+    <string name="import_learn_keys">Diese Zuordnungen für das nächste Mal merken</string>
+    <string name="import_reason_id">Vorgangsnummer in der Beschreibung</string>
+    <string name="import_reason_learned">Aus einem früheren Import gelernt</string>
+    <string name="import_reason_name">Name stimmt überein</string>
+    <string name="import_reason_contained">Name kommt in der Beschreibung vor</string>
+    <string name="import_reason_words">Einzelne Wörter stimmen überein</string>
+    <string name="import_no_project">Bitte zuerst ein Projekt öffnen.</string>
+    <string name="import_ledger_note">Importierte Einträge werden auf diesem Gerät gemerkt, damit ein zweiter Lauf dieselben Stunden nicht doppelt hinzufügt.</string>
+
+    <!-- Fehler -->
+    <string name="error_title">Etwas ist schiefgegangen</string>
+    <string name="error_open_failed">Die Datei ließ sich nicht öffnen.</string>
+    <string name="error_not_xml">Diese Datei ist kein lesbares XML.</string>
+    <string name="error_not_a_project">Das ist keine GanttProject-Datei.</string>
+    <string name="error_save_failed">Die Datei ließ sich nicht speichern. Vielleicht ist sie schreibgeschützt oder nicht mehr erreichbar.</string>
+    <string name="error_permission_lost">Der Zugriff auf diese Datei ist abgelaufen. Bitte erneut öffnen.</string>
+    <string name="error_toggl_token">Toggl hat das Token abgelehnt. Bitte in den Einstellungen prüfen.</string>
+    <string name="error_toggl_forbidden">Toggl verweigert den Zugriff auf diese Daten.</string>
+    <string name="error_toggl_rate">Toggl bremst die Anfragen. Bitte kurz warten und erneut versuchen.</string>
+    <string name="error_toggl_server">Toggl meldet einen Serverfehler (HTTP %1$d). Bitte später erneut versuchen.</string>
+    <string name="error_toggl_network">Keine Verbindung zu Toggl: %1$s</string>
+    <string name="error_toggl_malformed">Die Antwort von Toggl war nicht lesbar.</string>
+    <string name="error_toggl_unexpected">Unerwartete Antwort von Toggl (HTTP %1$d).</string>
+    <string name="error_toggl_range">Das Enddatum liegt vor dem Startdatum.</string>
+    <string name="error_split_empty">Es ist kein Vorgang ausgewählt.</string>
+    <string name="error_split_nonpositive">Jeder Anteil muss größer als 0 Stunden sein.</string>
+    <string name="error_split_duplicate">Ein Vorgang darf nur einmal vorkommen.</string>
+    <string name="error_split_sum">Die Anteile ergeben %1$s h, der Eintrag hat aber %2$s h.</string>
+
+    <!-- Über die App -->
+    <string name="about_body">Liest und bearbeitet GanttProject-Dateien (.gan) unter Android.\n\nDateien werden an Ort und Stelle bearbeitet: Einstellungen, Kalender, Baselines und alles Weitere, was diese App nicht kennt, bleiben unangetastet erhalten. Ein Projekt kann so frei zwischen Telefon und Desktop wechseln.\n\nFreie Software unter der GNU GPL v3.</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_source">Quellcode</string>
+</resources>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Material 3 with a dynamic colour scheme applied from Compose. The XML
+      theme only needs to hand the activity a sensible window background
+      before Compose takes over, so it stays deliberately small.
+    -->
+    <style name="Theme.GanttMobile" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

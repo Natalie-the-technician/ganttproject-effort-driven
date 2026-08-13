@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and below. The encrypted Toggl token is excluded: its encryption
+  key lives in this device's keystore and cannot leave it, so a restored copy
+  would be undecryptable anyway - and an API token has no business travelling
+  through a backup.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="secure_prefs.xml" />
+</full-backup-content>

@@ -1,0 +1,17 @@
+# Build output
+build/
+.gradle/
+.kotlin/
+
+# Local SDK location, machine-specific and must never be committed
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+
+# Signing material - keep every key and its password out of the repository
+*.jks
+*.keystore
+keystore.properties
