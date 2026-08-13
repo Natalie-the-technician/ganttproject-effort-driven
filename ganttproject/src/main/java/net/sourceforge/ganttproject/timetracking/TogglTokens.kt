@@ -89,9 +89,40 @@ fun withToken(storedTokens: String?, resource: HumanResource, token: String): St
  * Deliberately no token argument: nobody is editing the token here, it only has to follow. The
  * settings are written only when something actually moved — see [tokensAfterKeyChange].
  */
-fun HumanResource.keepingTokenReachable(change: () -> Unit) {
+fun HumanResource.keepingTokenReachable(
+  askOnCollision: TokenCollisionAsker = TokenCollisionAsker.LEAVE_EVERYTHING_ALONE,
+  change: () -> Unit
+) {
   val previousKey = tokenKeyFor(this)
   change()
-  tokensAfterKeyChange(TogglTokenOptions.tokens.value, previousKey, tokenKeyFor(this))
-    ?.let { TogglTokenOptions.tokens.value = it }
+  when (val outcome = tokenKeyChange(TogglTokenOptions.tokens.value, previousKey, tokenKeyFor(this))) {
+    is TokenKeyChange.Unchanged -> Unit
+    is TokenKeyChange.Move -> TogglTokenOptions.tokens.value = outcome.tokens
+    is TokenKeyChange.Collision ->
+      askOnCollision.ask(outcome) { chosen -> TogglTokenOptions.tokens.value = chosen }
+  }
+}
+
+/**
+ * [Fork-Aenderung] Asks which of two tokens survives when both claim the same key.
+ *
+ * ASYNCHRONOUS ON PURPOSE. The edit that changed the key happens on the interface thread, and a
+ * dialog must not block it. [apply] may therefore be called much later — or never, which is a
+ * valid outcome meaning "leave the store as it is". The token move is independent of the edit
+ * itself, so nothing is inconsistent in between.
+ */
+fun interface TokenCollisionAsker {
+  fun ask(collision: TokenKeyChange.Collision, apply: (String) -> Unit)
+
+  companion object {
+    /**
+     * For callers that cannot ask — tests, and any import path with nobody at the screen.
+     *
+     * Does nothing at all, and that is the deliberate choice: overwriting would destroy a token
+     * behind the user's back, and discarding would do the same to the other one. Leaving both
+     * where they are loses nothing; the person can sort it out in the resource dialog.
+     */
+    @JvmField
+    val LEAVE_EVERYTHING_ALONE = TokenCollisionAsker { _, _ -> }
+  }
 }

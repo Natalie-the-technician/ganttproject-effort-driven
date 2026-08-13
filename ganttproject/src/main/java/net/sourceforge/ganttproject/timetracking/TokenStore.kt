@@ -102,22 +102,76 @@ fun movedToken(storedTokens: String?, previousKey: String, newKey: String, token
 }
 
 /**
- * [Fork-Aenderung] The store after a key changed WITHOUT the token itself being edited, or null
- * when there is nothing to write.
+ * [Fork-Aenderung] What has to happen to the store after a person's key changed.
+ *
+ * Deliberately a result type rather than a plain string: the interesting case is the one where
+ * TWO tokens claim the same key, and that one cannot be decided here — it costs a secret either
+ * way, so the person has to say which.
+ */
+sealed interface TokenKeyChange {
+  /** Key unchanged, or nothing stored to move. The settings file stays untouched. */
+  object Unchanged : TokenKeyChange
+
+  /** Unambiguous: write [tokens]. */
+  data class Move(val tokens: String) : TokenKeyChange
+
+  /**
+   * Two DIFFERENT tokens claim [key], and one of them will be gone whatever happens.
+   *
+   * Carries the two finished store texts rather than the tokens themselves, so whoever asks the
+   * question never has to handle a secret — it picks one of these and writes it.
+   *
+   * @property ifOverwritten the moving token wins; the one stored under [key] until now is lost.
+   * @property ifDiscarded the stored token stays; the moving one is dropped — deliberately dropped
+   * and not left under the old key, because a token under a key nobody looks up is exactly the
+   * abandoned secret this whole mechanism exists to avoid.
+   */
+  data class Collision(
+    val key: String,
+    val ifOverwritten: String,
+    val ifDiscarded: String
+  ) : TokenKeyChange
+}
+
+/**
+ * [Fork-Aenderung] Works out what a changed key means for the store.
  *
  * Counterpart to [movedToken] for the second way a key can change. [movedToken] is used where the
  * token field is on screen and its value is known. Here the token is not being edited at all —
- * somebody renamed a resource or filled in its e-mail address in the resource table, and the token
- * simply has to follow. Reading it out of the store is the whole point.
+ * somebody renamed a resource or filled in its e-mail address, and the token simply has to follow.
  *
- * Returns null rather than the unchanged text so the caller can tell "nothing happened" from
- * "rewrite the settings", and leave the settings file alone in the first case.
+ * WHY A COLLISION IS POSSIBLE AT ALL: the key is the e-mail address, which identifies the Toggl
+ * ACCOUNT. Two resources with the same address are therefore the same account — and a collision
+ * means two different tokens were entered for one account. One of them is stale, but which one
+ * cannot be told from here.
+ *
+ * Same token under both keys is NOT a collision: nothing is lost by dropping the duplicate.
  */
-fun tokensAfterKeyChange(storedTokens: String?, previousKey: String, newKey: String): String? {
-  if (newKey == previousKey) return null
-  val token = tokenForKey(previousKey, storedTokens) ?: return null
-  return movedToken(storedTokens, previousKey, newKey, token)
+fun tokenKeyChange(storedTokens: String?, previousKey: String, newKey: String): TokenKeyChange {
+  if (newKey == previousKey) return TokenKeyChange.Unchanged
+  val moving = tokenForKey(previousKey, storedTokens) ?: return TokenKeyChange.Unchanged
+
+  val occupying = tokenForKey(newKey, storedTokens)
+  if (occupying == null || occupying == moving) {
+    return TokenKeyChange.Move(movedToken(storedTokens, previousKey, newKey, moving))
+  }
+
+  return TokenKeyChange.Collision(
+    key = newKey,
+    ifOverwritten = movedToken(storedTokens, previousKey, newKey, moving),
+    ifDiscarded = encodeTokenMap(decodeTokenMap(storedTokens).toMutableMap().also {
+      it.remove(previousKey)
+    }))
 }
+
+/**
+ * [Fork-Aenderung] The key without its technical prefix, for showing to a person.
+ *
+ * `mail=nati@example.org` is not something to put in front of somebody who never asked how the
+ * store is built. A key without a prefix is shown unchanged rather than as an empty string — a
+ * blank in a question about losing a secret would be worse than an odd-looking one.
+ */
+fun readableKey(key: String): String = key.substringAfter('=', key)
 
 private fun String.urlEncoded(): String = URLEncoder.encode(this, Charsets.UTF_8)
 

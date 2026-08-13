@@ -1521,6 +1521,58 @@ Alles aus dem Abschnitt darunter wurde lokal ausgeführt. Ergebnis:
 
 Der Abschnitt darunter bleibt als Beleg stehen, warum damals nicht geprüft werden konnte.
 
+### Zusammenführen von Ressourcen: geprüft, und die Frage war kleiner als gedacht
+
+Ich hatte das als offene Entscheidung notiert („wessen Token gilt?"). Nachgesehen statt vermutet:
+
+| Weg | führt zusammen? | bewusste Handlung? |
+|---|---|---|
+| Import (MS Project, CSV, `.gan`) | ja, Auswahl im Importdialog | ja |
+| Einfügen mit Strg+V | **nein** — `PasteAction` setzt fest `MergeResourcesEnum.NO` | — |
+| GanttProject Cloud | ja, `BY_ID`, ohne Rückfrage | nein (wird hier nicht benutzt) |
+
+**Und es gibt beim Import nichts zu fragen.** Token stehen nie in einer Projektdatei — das ist die
+Sicherheitsentscheidung, und sie ist getestet. Eine importierte Ressource kann also gar keinen
+Token mitbringen. Es gibt nur den lokalen Token derselben Person, dessen Zuordnungsdaten
+korrigiert werden; er wandert einfach mit.
+
+Riskant sind dabei `BY_ID` und `BY_NAME`, weil dort die E-Mail überschrieben wird und der
+Schlüssel von `name=` auf `mail=` springen kann. Bei `BY_EMAIL` ändert er sich nicht.
+
+### VIERTER FUND: zwei Token auf demselben Schlüssel — stilles Überschreiben
+
+Beim Nachsehen der Zusammenführung aufgefallen, und es betraf **auch die Behebung von eben**:
+`movedToken` schreibt `tokens[newKey] = token` — eine Zuweisung auf eine Abbildung. Lag dort schon
+ein anderer Token, war er weg, ohne ein Wort.
+
+Erreichbar so: „Nati" ohne Adresse hat Token A, eine zweite Ressource hat bereits
+`nati@example.org` mit Token B. Trägt man bei „Nati" dieselbe Adresse nach, ist B verloren. Genau
+das kann ein Import mit `BY_NAME` erzeugen.
+
+**Entscheidung von Natalie:** fragen, mit Erklärung, was verloren geht.
+
+Umgesetzt als `TokenKeyChange` (`Unchanged` / `Move` / `Collision`) in `TokenStore.kt` — reine
+Logik, ohne Modell und ohne JavaFX. `Collision` trägt die **beiden fertigen Speichertexte**, nicht
+die Token: wer die Frage stellt, muss so nie ein Geheimnis anfassen.
+
+Drei Dinge, die man beim Lesen sonst für willkürlich hält:
+- **Derselbe Token unter beiden Schlüsseln ist kein Zusammenstoß.** Es geht nichts verloren, also
+  wäre die Frage eine mit nur einer sinnvollen Antwort.
+- **„Bisherigen behalten" verwirft den anderen wirklich**, statt ihn unter dem alten Schlüssel
+  liegen zu lassen. Ein Token unter einem Schlüssel, den niemand abfragt, ist genau die
+  Karteileiche, gegen die dieser ganze Mechanismus gebaut wurde.
+- **Ohne Antwort passiert nichts.** Der Dialog ist **asynchron** — die Änderung am Namen läuft auf
+  dem Oberflächen-Thread, dort darf nichts blockieren. Der Token-Umzug ist davon unabhängig, also
+  ist zwischendurch nichts widersprüchlich. Abbrechen lässt beide Token, wo sie sind.
+- Aufrufer ohne Bildschirm (Tests, Importpfade) bekommen `LEAVE_EVERYTHING_ALONE`: lieber nichts
+  tun als raten, denn beide Alternativen kosten ein Geheimnis.
+
+**Gegentest 26 bestanden:** Erkennung ausgehängt, also still überschreiben → drei Tests fielen,
+einer wörtlich mit „no question was asked, so a token was destroyed silently".
+
+Der Dialog zeigt **keinen Token** — die Person erkennt die Lage an der Adresse, und ein Token auf
+dem Bildschirm ist ein Token im Bildschirmfoto.
+
 ### Umgebungsfalle: `GanttChartSelectionTest` kann rot sein, ohne dass etwas kaputt ist
 
 `java.lang.IllegalStateException: cannot open system clipboard` aus `WClipboard.openClipboard0`.

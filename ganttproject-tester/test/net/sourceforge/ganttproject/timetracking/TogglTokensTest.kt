@@ -159,6 +159,129 @@ class TogglTokensTest : TestCase() {
     }
   }
 
+  // --- zwei Token beanspruchen denselben Schluessel ---
+
+  /**
+   * The case that needs a person to decide: "Nati" has no address and a token; another resource
+   * already uses that address with a DIFFERENT token. Adding the address to "Nati" makes both
+   * claim the same key, and one token is lost whichever way it goes.
+   *
+   * Nothing may happen without an answer. Silently overwriting would destroy a secret behind the
+   * user's back — and the loss would only surface much later, as a connection check that fails.
+   */
+  fun testACollisionChangesNothingUntilSomebodyDecides() {
+    val nati = resource("Nati", 1)
+    val other = resource("Anders", 2, "nati@example.org")
+    val before = TogglTokenOptions.tokens.value
+    TogglTokenOptions.tokens.value =
+      withToken(withToken("", nati, "TOKEN-NEU"), other, "TOKEN-ALT")
+    try {
+      val stored = TogglTokenOptions.tokens.value
+      var asked = false
+
+      // The asker that never answers — exactly what closing the dialog does.
+      nati.keepingTokenReachable({ _, _ -> asked = true }) { nati.mail = "nati@example.org" }
+
+      assertTrue("no question was asked, so a token was destroyed silently", asked)
+      assertEquals("the store was changed although nobody had decided yet",
+        stored, TogglTokenOptions.tokens.value)
+    } finally {
+      TogglTokenOptions.tokens.value = before
+    }
+  }
+
+  /** "Keep the new one": the moving token wins, the stored one is gone. */
+  fun testKeepingTheMovingTokenReplacesTheStoredOne() {
+    val nati = resource("Nati", 1)
+    val other = resource("Anders", 2, "nati@example.org")
+    val before = TogglTokenOptions.tokens.value
+    TogglTokenOptions.tokens.value =
+      withToken(withToken("", nati, "TOKEN-NEU"), other, "TOKEN-ALT")
+    try {
+      nati.keepingTokenReachable({ collision, apply -> apply(collision.ifOverwritten) }) {
+        nati.mail = "nati@example.org"
+      }
+
+      assertEquals("TOKEN-NEU", tokenFor(nati, TogglTokenOptions.tokens.value))
+      assertNull("the old key was left behind as a secret nobody looks up",
+        tokenForKey("name=Nati", TogglTokenOptions.tokens.value))
+    } finally {
+      TogglTokenOptions.tokens.value = before
+    }
+  }
+
+  /**
+   * "Keep the stored one": the moving token is dropped — and REALLY dropped, not left under the
+   * old key. A token under a key nobody looks up is the abandoned secret this whole mechanism
+   * exists to avoid.
+   */
+  fun testKeepingTheStoredTokenDropsTheMovingOneEntirely() {
+    val nati = resource("Nati", 1)
+    val other = resource("Anders", 2, "nati@example.org")
+    val before = TogglTokenOptions.tokens.value
+    TogglTokenOptions.tokens.value =
+      withToken(withToken("", nati, "TOKEN-NEU"), other, "TOKEN-ALT")
+    try {
+      nati.keepingTokenReachable({ collision, apply -> apply(collision.ifDiscarded) }) {
+        nati.mail = "nati@example.org"
+      }
+
+      assertEquals("TOKEN-ALT", tokenFor(nati, TogglTokenOptions.tokens.value))
+      assertNull("the discarded token stayed behind under the old key",
+        tokenForKey("name=Nati", TogglTokenOptions.tokens.value))
+      assertFalse("the discarded token is still somewhere in the store",
+        TogglTokenOptions.tokens.value.orEmpty().contains("TOKEN-NEU"))
+    } finally {
+      TogglTokenOptions.tokens.value = before
+    }
+  }
+
+  /**
+   * The SAME token under both keys is not a collision — nothing is lost by dropping the duplicate,
+   * so asking would be a question with only one sensible answer.
+   */
+  fun testTheSameTokenUnderBothKeysIsNoCollision() {
+    val nati = resource("Nati", 1)
+    val other = resource("Anders", 2, "nati@example.org")
+    val before = TogglTokenOptions.tokens.value
+    TogglTokenOptions.tokens.value =
+      withToken(withToken("", nati, "DERSELBE"), other, "DERSELBE")
+    try {
+      var asked = false
+      nati.keepingTokenReachable({ _, _ -> asked = true }) { nati.mail = "nati@example.org" }
+
+      assertFalse("asked although nothing could be lost", asked)
+      assertEquals("DERSELBE", tokenFor(nati, TogglTokenOptions.tokens.value))
+      assertNull(tokenForKey("name=Nati", TogglTokenOptions.tokens.value))
+    } finally {
+      TogglTokenOptions.tokens.value = before
+    }
+  }
+
+  /** Callers that cannot ask must change nothing rather than guess. */
+  fun testWithoutAnAskerACollisionLeavesEverythingAlone() {
+    val nati = resource("Nati", 1)
+    val other = resource("Anders", 2, "nati@example.org")
+    val before = TogglTokenOptions.tokens.value
+    TogglTokenOptions.tokens.value =
+      withToken(withToken("", nati, "TOKEN-NEU"), other, "TOKEN-ALT")
+    try {
+      val stored = TogglTokenOptions.tokens.value
+      nati.keepingTokenReachable { nati.mail = "nati@example.org" }
+      assertEquals(stored, TogglTokenOptions.tokens.value)
+    } finally {
+      TogglTokenOptions.tokens.value = before
+    }
+  }
+
+  /** The dialog shows the address, not the internal `mail=` prefix. */
+  fun testTheKeyIsShownWithoutItsPrefix() {
+    assertEquals("nati@example.org", readableKey("mail=nati@example.org"))
+    assertEquals("Nati", readableKey("name=Nati"))
+    // Nothing to strip: show it as it is rather than an empty string.
+    assertEquals("kaputt", readableKey("kaputt"))
+  }
+
   // --- storing ---
 
   fun testTokenIsReadBack() {
