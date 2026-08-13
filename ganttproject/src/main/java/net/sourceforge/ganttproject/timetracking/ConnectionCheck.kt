@@ -74,6 +74,7 @@ fun connectionCheckMessage(result: ConnectionCheckResult): String = when (result
 
   is ConnectionCheckResult.Failed -> forkText(
     when (result.failure) {
+      TogglFailure.BAD_REQUEST -> "fork.toggl.check.badRequest"
       TogglFailure.NOT_AUTHORISED -> "fork.toggl.check.notAuthorised"
       TogglFailure.RATE_LIMITED -> "fork.toggl.check.rateLimited"
       TogglFailure.QUOTA_EXHAUSTED -> "fork.toggl.check.quotaExhausted"

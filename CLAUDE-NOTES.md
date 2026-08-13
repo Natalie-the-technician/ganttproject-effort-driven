@@ -1518,6 +1518,31 @@ beheben hieße, Upstreams Zustandsmaschine umzubauen — ein größerer Eingriff
 
 Damit sind es **drei** Upstream-Fehler: `projectCreated`, das Beenden, und dieser.
 
+### Toggl liefert höchstens 90 Tage — nachgemessen
+
+Der Import meldete bei 99 und 300 Tagen „Toggl nicht erreichbar". Naheliegende Vermutung war ein
+erschöpftes Anfragekontingent. **Falsch.** Das Protokoll:
+
+```
+Toggl import failed: UNAVAILABLE Toggl answered with status 400.
+```
+
+**400** heißt „Bad Request" — der Dienst weist die *Anfrage* ab. Kontingent wäre 402, zu viele
+Anfragen 429. `/me/time_entries` liefert höchstens drei Monate auf einmal.
+
+**Die Grenze ist gemessen, nicht aus der Dokumentation übernommen:** 90 Tage gehen, 93 nicht.
+`MAX_IMPORT_DAYS = 90`.
+
+Zwei eigene Fehler steckten darin:
+- **Die alte Obergrenze von 3650 Tagen war erfunden** („zehn Jahre"). Damit nahm das Feld Werte an,
+  die der Dienst sicher abweist — eine Grenze, die es gar nicht gibt, ist schlimmer als keine.
+- **400 wurde als `UNAVAILABLE` gemeldet**, also „nicht erreichbar". Das schickt die Benutzerin zur
+  Internetverbindung, während die Abhilfe ein kürzerer Zeitraum ist. Es gibt jetzt
+  `TogglFailure.BAD_REQUEST` mit einer Meldung, die den Zeitraum nennt.
+
+Der Test `testAPlainNumberIsAccepted` prüfte `180` und hielt damit die **falsche** Grenze fest —
+korrigiert, und `testTheUpperBoundIsTheOneTogglAllows` nagelt die echte fest.
+
 ### Der Uhr-Knopf ist „Neuer Vorgang"
 
 `fontawesome.properties`: `task.new = ` — und `` ist in FontAwesome das **Uhr-Symbol**

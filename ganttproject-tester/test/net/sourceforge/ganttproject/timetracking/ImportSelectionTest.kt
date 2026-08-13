@@ -111,9 +111,21 @@ class ImportSelectionTest : TestCase() {
 
   fun testAPlainNumberIsAccepted() {
     assertEquals(30, parseImportDays("30"))
-    assertEquals(180, parseImportDays(" 180 "))
+    assertEquals(60, parseImportDays(" 60 "))
     assertEquals(MIN_IMPORT_DAYS, parseImportDays("$MIN_IMPORT_DAYS"))
     assertEquals(MAX_IMPORT_DAYS, parseImportDays("$MAX_IMPORT_DAYS"))
+  }
+
+  /**
+   * The upper bound is Toggl's, not ours: `/me/time_entries` answers at most three months and
+   * rejects longer periods with status 400. Pinned here because a larger value would produce a
+   * field that accepts input the service is certain to refuse — seen live with 99 and 300 days.
+   */
+  fun testTheUpperBoundIsTheOneTogglAllows() {
+    assertEquals(90, MAX_IMPORT_DAYS)
+    assertEquals(90, parseImportDays("90"))
+    assertNull("91 Tage sind mehr als drei Monate und werden von Toggl abgewiesen",
+      parseImportDays("91"))
   }
 
   /**

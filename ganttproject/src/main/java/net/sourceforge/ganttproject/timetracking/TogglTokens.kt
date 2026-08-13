@@ -72,12 +72,15 @@ const val DEFAULT_IMPORT_DAYS = 30
 const val MIN_IMPORT_DAYS = 1
 
 /**
- * Obergrenze, zehn Jahre.
+ * Obergrenze: 90 Tage.
  *
- * Nicht aus Vorsicht gewaehlt, sondern weil Toggl die Antwort sonst nach Belieben kuerzt und der
- * Import dann stillschweigend unvollstaendig waere — schlimmer als eine Grenze, die man sieht.
+ * NICHT selbst gewaehlt, sondern die Grenze von Toggl. `/me/time_entries` liefert hoechstens drei
+ * Monate auf einmal und beantwortet groessere Zeitraeume mit Status 400.
+ *
+ * Am lebenden Dienst gesehen: 30 Tage gehen, 99 und 300 nicht. Vorher stand hier 3650 — eine
+ * Grenze, die es gar nicht gibt, wodurch das Feld Werte annahm, die der Dienst sicher abweist.
  */
-const val MAX_IMPORT_DAYS = 3650
+const val MAX_IMPORT_DAYS = 90
 
 /**
  * [Fork-Aenderung] Liest die eingetippte Tageszahl.

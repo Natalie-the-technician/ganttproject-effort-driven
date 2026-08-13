@@ -62,6 +62,15 @@ data class TogglTimeEntry(
 
 /** What went wrong, in terms the user can act on. */
 enum class TogglFailure {
+  /**
+   * [Fork-Aenderung] 400 — Toggl refused the request itself.
+   *
+   * In practice this is the period: `/me/time_entries` answers at most three months and rejects
+   * anything longer. Seen live: 30 days fine, 99 and 300 rejected. Kept apart from [UNAVAILABLE]
+   * because "not reachable" sends the user looking at their internet connection, while the actual
+   * remedy is a shorter period.
+   */
+  BAD_REQUEST,
   /** 403 — wrong token, or token supplied as the password instead of the username. */
   NOT_AUTHORISED,
   /** 429 — asked too often. Wait and retry. */
@@ -111,6 +120,8 @@ class TogglClient(private val backend: HttpBackend) {
     val (status, body) = backend.get(url, authorizationHeader(token))
     when (status) {
       200 -> Unit
+      400 -> throw TogglException(TogglFailure.BAD_REQUEST,
+        "Toggl refused the request. The period is the usual cause: at most three months.")
       402 -> throw TogglException(TogglFailure.QUOTA_EXHAUSTED,
         "Toggl request quota exhausted for this billing period.")
       403 -> throw TogglException(TogglFailure.NOT_AUTHORISED,
