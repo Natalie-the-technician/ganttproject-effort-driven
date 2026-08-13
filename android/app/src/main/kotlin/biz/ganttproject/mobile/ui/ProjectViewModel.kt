@@ -153,6 +153,43 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  /**
+   * Saves only if there is anything to save.
+   *
+   * Called when the app goes to the background and before closing a project,
+   * so edits made on a phone are not lost to a swiped-away task or a killed
+   * process. Silent by design: an unprompted dialog when the user is already
+   * leaving would be worse than the save itself.
+   *
+   * @param onDone runs after the attempt, whether or not anything was written
+   */
+  fun saveIfDirty(onDone: () -> Unit = {}) {
+    val project = open
+    if (project == null || !project.isDirty) {
+      onDone()
+      return
+    }
+    viewModelScope.launch {
+      when (val result = store.save(project)) {
+        is FileResult.Ok ->
+          _state.update { it.copy(project = snapshot(project), notice = Notice.Saved) }
+        is FileResult.Err ->
+          // A failure must be visible: the user is about to walk away
+          // believing their changes are safe.
+          _state.update { it.copy(fileError = result.error) }
+      }
+      onDone()
+    }
+  }
+
+  /** Saves first, then closes. The normal way to leave a project. */
+  fun saveAndCloseProject() = saveIfDirty { closeProject() }
+
+  /**
+   * Drops the project without writing. The escape hatch that makes
+   * auto-saving safe: a mistaken import or a fat-fingered slider can still be
+   * abandoned, as long as the user says so explicitly.
+   */
   fun closeProject() {
     open = null
     _state.update { it.copy(project = null, fileError = null) }

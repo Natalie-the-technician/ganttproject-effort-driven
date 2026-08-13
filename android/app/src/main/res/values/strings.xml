@@ -24,7 +24,7 @@
     <string name="action_about">About</string>
     <string name="unsaved_changes">Unsaved changes</string>
     <string name="discard_title">Discard changes?</string>
-    <string name="discard_body">The project has unsaved changes. Closing it now loses them.</string>
+    <string name="discard_body">The project has unsaved changes. Closing it without saving loses them.</string>
     <string name="discard_confirm">Discard</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_ok">OK</string>
@@ -112,7 +112,7 @@
     <string name="import_preview_total">%1$s h onto %2$d tasks</string>
     <string name="import_preview_nothing">Nothing to write — every entry was already imported.</string>
     <string name="import_apply">Add hours</string>
-    <string name="import_done">%1$s h added. Do not forget to save.</string>
+    <string name="import_done">%1$s h added.</string>
     <string name="import_learn_keys">Remember these assignments for next time</string>
     <string name="import_reason_id">Task number in the description</string>
     <string name="import_reason_learned">Learned from an earlier import</string>
@@ -120,7 +120,7 @@
     <string name="import_reason_contained">Name occurs in the description</string>
     <string name="import_reason_words">Some words match</string>
     <string name="import_no_project">Open a project first.</string>
-    <string name="import_ledger_note">Imported entries are remembered on this device so a second run cannot add the same hours twice.</string>
+    <string name="import_ledger_note">Imported entries are recorded in the project file itself, so a second run — from this or any other device — cannot add the same hours twice.</string>
 
     <!-- Errors -->
     <string name="error_title">Something went wrong</string>
@@ -146,4 +146,8 @@
     <string name="about_body">Reads and edits GanttProject files (.gan) on Android.\n\nFiles are edited in place: settings, calendars, baselines and anything else this app does not know about are preserved untouched, so a project can move between phone and desktop freely.\n\nFree software under the GNU GPL v3.</string>
     <string name="about_version">Version %1$s</string>
     <string name="about_source">Source code</string>
+    <string name="action_close_discard">Close without saving</string>
+    <string name="autosave_hint">Changes are saved automatically when you leave the app or close the project.</string>
+    <string name="task_effort_duration_mismatch">The planned duration of %1$d working days does not match this effort. At the current assignment it would be %2$d days.</string>
+    <string name="task_no_assignment_for_effort">Assign a resource to see how many days this effort corresponds to.</string>
 </resources>

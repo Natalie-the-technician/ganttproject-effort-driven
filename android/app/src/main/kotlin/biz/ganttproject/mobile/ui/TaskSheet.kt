@@ -201,16 +201,40 @@ private fun HoursSection(task: TaskNode, model: ProjectModel, viewModel: Project
       }
     }
 
-    // How many days this effort implies at the current assignment. Shown for
-    // information only - the phone does not reschedule anything.
-    if (planned != null && planned > 0) {
-      val availability = availableHoursPerDay(model.allocationsOfTask(task.id)) { model.resource(it) }
-      if (availability > 0) {
+    // Effort-driven duration, recomputed on every edit: the availability
+    // comes from the assignments and each resource's hours per day, so
+    // changing either of those updates this line immediately.
+    //
+    // Shown, never written. Writing a new duration would leave every
+    // dependent task where it was, because GanttProject's scheduler does not
+    // run here — a file that looks right and is wrong. Flagging the
+    // disagreement lets the user fix it on the desktop, where the scheduler
+    // will move the rest of the plan with it.
+    if (planned != null && planned > 0 && !task.isMilestone) {
+      val availability =
+        availableHoursPerDay(model.allocationsOfTask(task.id)) { model.resource(it) }
+      if (availability <= 0.0) {
         Text(
-          stringResource(R.string.task_derived_duration, computeDurationDays(planned, availability)),
+          stringResource(R.string.task_no_assignment_for_effort),
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+      } else {
+        val derived = computeDurationDays(planned, availability)
+        Text(
+          stringResource(R.string.task_derived_duration, derived),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (task.isLeaf && derived != task.durationDays) {
+          Text(
+            stringResource(
+              R.string.task_effort_duration_mismatch, task.durationDays, derived
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error
+          )
+        }
       }
     }
   }

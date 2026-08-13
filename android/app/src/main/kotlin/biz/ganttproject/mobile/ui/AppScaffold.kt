@@ -137,11 +137,16 @@ fun AppScaffold(
             if (state.project != null) {
               DropdownMenuItem(
                 text = { Text(stringResource(R.string.action_close)) },
-                onClick = {
-                  menuOpen = false
-                  if (state.project.isDirty) confirmCloseOpen = true else viewModel.closeProject()
-                }
+                onClick = { menuOpen = false; viewModel.saveAndCloseProject() }
               )
+              // The escape hatch that makes auto-saving safe. Only offered
+              // when there is actually something to discard.
+              if (state.project.isDirty) {
+                DropdownMenuItem(
+                  text = { Text(stringResource(R.string.action_close_discard)) },
+                  onClick = { menuOpen = false; confirmCloseOpen = true }
+                )
+              }
             }
             DropdownMenuItem(
               text = { Text(stringResource(R.string.action_about)) },

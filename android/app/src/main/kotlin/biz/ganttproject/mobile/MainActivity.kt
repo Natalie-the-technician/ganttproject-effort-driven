@@ -13,8 +13,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import biz.ganttproject.mobile.ui.AppScaffold
 import biz.ganttproject.mobile.ui.ProjectViewModel
@@ -30,6 +30,18 @@ class MainActivity : ComponentActivity() {
 
     // Opening straight from a file manager or a cloud app.
     intentUri(intent)?.let(viewModel::openUri)
+
+    // Auto-save whenever the app leaves the foreground.
+    //
+    // ON_STOP rather than ON_PAUSE: pause fires for a dialog or the
+    // notification shade, which would write the file constantly. Stop is the
+    // point at which Android may kill the process without warning, so it is
+    // the last moment where saving still helps.
+    lifecycle.addObserver(object : DefaultLifecycleObserver {
+      override fun onStop(owner: LifecycleOwner) {
+        viewModel.saveIfDirty()
+      }
+    })
 
     setContent {
       GanttMobileTheme {

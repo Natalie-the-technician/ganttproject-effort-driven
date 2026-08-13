@@ -19,7 +19,7 @@
     <string name="action_about">Über die App</string>
     <string name="unsaved_changes">Nicht gespeicherte Änderungen</string>
     <string name="discard_title">Änderungen verwerfen?</string>
-    <string name="discard_body">Das Projekt hat nicht gespeicherte Änderungen. Beim Schließen gehen sie verloren.</string>
+    <string name="discard_body">Das Projekt hat nicht gespeicherte Änderungen. Beim Schließen ohne Speichern gehen sie verloren.</string>
     <string name="discard_confirm">Verwerfen</string>
     <string name="action_cancel">Abbrechen</string>
     <string name="action_ok">OK</string>
@@ -107,7 +107,7 @@
     <string name="import_preview_total">%1$s h auf %2$d Vorgänge</string>
     <string name="import_preview_nothing">Nichts zu schreiben — alle Einträge waren schon importiert.</string>
     <string name="import_apply">Stunden hinzufügen</string>
-    <string name="import_done">%1$s h hinzugefügt. Nicht vergessen zu speichern.</string>
+    <string name="import_done">%1$s h hinzugefügt.</string>
     <string name="import_learn_keys">Diese Zuordnungen für das nächste Mal merken</string>
     <string name="import_reason_id">Vorgangsnummer in der Beschreibung</string>
     <string name="import_reason_learned">Aus einem früheren Import gelernt</string>
@@ -115,7 +115,7 @@
     <string name="import_reason_contained">Name kommt in der Beschreibung vor</string>
     <string name="import_reason_words">Einzelne Wörter stimmen überein</string>
     <string name="import_no_project">Bitte zuerst ein Projekt öffnen.</string>
-    <string name="import_ledger_note">Importierte Einträge werden auf diesem Gerät gemerkt, damit ein zweiter Lauf dieselben Stunden nicht doppelt hinzufügt.</string>
+    <string name="import_ledger_note">Importierte Einträge werden in der Projektdatei selbst vermerkt. Ein zweiter Lauf — von hier oder von einem anderen Gerät — fügt dieselben Stunden deshalb nicht doppelt hinzu.</string>
 
     <!-- Fehler -->
     <string name="error_title">Etwas ist schiefgegangen</string>
@@ -141,4 +141,8 @@
     <string name="about_body">Liest und bearbeitet GanttProject-Dateien (.gan) unter Android.\n\nDateien werden an Ort und Stelle bearbeitet: Einstellungen, Kalender, Baselines und alles Weitere, was diese App nicht kennt, bleiben unangetastet erhalten. Ein Projekt kann so frei zwischen Telefon und Desktop wechseln.\n\nFreie Software unter der GNU GPL v3.</string>
     <string name="about_version">Version %1$s</string>
     <string name="about_source">Quellcode</string>
+    <string name="action_close_discard">Schließen ohne Speichern</string>
+    <string name="autosave_hint">Änderungen werden automatisch gespeichert, wenn du die App verlässt oder das Projekt schließt.</string>
+    <string name="task_effort_duration_mismatch">Die geplante Dauer von %1$d Arbeitstagen passt nicht zu diesem Aufwand. Bei der aktuellen Zuweisung wären es %2$d Tage.</string>
+    <string name="task_no_assignment_for_effort">Weise eine Ressource zu, um zu sehen, wie vielen Tagen dieser Aufwand entspricht.</string>
 </resources>
