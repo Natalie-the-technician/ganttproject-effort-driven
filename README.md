@@ -1,152 +1,147 @@
-GanttProject — Fork mit Aufwandsplanung und Zeiterfassung
-=========================================================
+GanttProject — fork with effort-driven scheduling and time tracking
+===================================================================
 
-> **English:** this is a private fork of [bardsoftware/ganttproject](https://github.com/bardsoftware/ganttproject),
-> adding effort-driven scheduling and Toggl Track time import. Documentation is in German.
-> Upstream's own README is preserved unchanged in [`README`](README).
-
-Dieser Fork von [GanttProject](https://github.com/bardsoftware/ganttproject) ergänzt zwei Dinge,
-die das Original nicht hat: **die Dauer eines Vorgangs aus Aufwand und Verfügbarkeit rechnen**
-und **die tatsächlich aufgewendeten Stunden festhalten**, wahlweise importiert aus
+A fork of [GanttProject](https://github.com/bardsoftware/ganttproject) that adds two things the
+original does not have: **deriving the duration of a task from its effort and the availability of
+the assigned resources**, and **recording the hours actually spent**, optionally imported from
 [Toggl Track](https://toggl.com/track/).
 
-Der erste Punkt ist im Original seit 2013 als
-[Issue #83](https://github.com/bardsoftware/ganttproject/issues/83) offen.
+The first one has been open upstream since 2013 as
+[issue #83](https://github.com/bardsoftware/ganttproject/issues/83).
+
+> The working documents (`CLAUDE-NOTES.md`, `HANDOVER-Zeiterfassung.md` and the design notes) are
+> written in German — they are this project's shared memory, not user documentation.
 
 ---
 
-## Was dieser Fork kann — mit Prüfstand
+## What this fork does, and how far it has been verified
 
-Ehrlichkeit vor Vollständigkeit: hier steht auch, was gebaut, aber noch nicht in der laufenden
-Anwendung geprüft ist.
+Honesty before completeness: the table says what is built but **not yet** exercised in the running
+application.
 
-| Baustein | Stand |
+| Part | State |
 |---|---|
-| **Dauer aus Aufwand** — Aufwandsfeld je Vorgang, Tagesstunden je Ressource, Dauer = Aufwand ÷ verfügbare Stunden | **fertig, in der Anwendung geprüft** |
-| **Ist-Stunden** — Feld im Aufgabendialog, Ablage als Custom Property | **fertig, in Datei und Bildschirm geprüft** |
-| **Toggl-Anbindung** — Abruf, Auth, Fehlerarten, Wartezeit zwischen Anfragen | gebaut, **nur gegen aufgezeichnete Antworten** getestet |
-| **Zuordnung** — Vorschläge, Aufteilung, Schutz gegen Doppelimport | gebaut, mit Tests |
-| **Übernahme in die Aufgaben** — Vorschau, eine einzige Undo-Klammer, Zurücklesen aus der Datenbank | gebaut, mit Tests |
-| **Token je Person** — in den Anwendungseinstellungen, nie in der Projektdatei | gebaut, mit Tests |
-| **Verbindungstest** — Menüpunkt „Ressourcen", liest nur | gebaut |
-| **Eigenes Textbündel** — der Fork wird übersetzbar, ohne Upstream-Dateien anzufassen | gebaut, mit Verpackungsprüfung |
-| **Zuordnungsdialog und Import-Menüpunkt** | **offen** — das ist der nächste Schritt |
+| **Duration from effort** — an effort field per task, daily hours per resource, duration = effort ÷ available hours per day | **done, verified in the running application** |
+| **Recorded hours** — input field in the task dialog, stored as a custom property | **done, verified on screen and in the saved file** |
+| **Toggl connection** — fetching, authentication, error kinds, rate limit | built, tested **against recorded answers only** |
+| **Matching** — suggestions, splitting, protection against a second import | built, with tests |
+| **Applying to tasks** — preview, one single undo step, values read back from the database | built, with tests |
+| **Token per person** — kept in the application settings, never in the project file | built, with tests |
+| **Connection check** — menu item under *Resources*, reads only | built |
+| **Own message bundle** — the fork becomes translatable without touching upstream files | built, with a packaging check |
+| **Matching dialog and import menu item** | **open** — this is the next step |
 
-**Noch nie gegen den echten Toggl-Dienst gelaufen.** Der Verbindungstest ist genau dafür gebaut:
-den ersten echten Abruf zu machen, **bevor** etwas in Vorgänge geschrieben wird.
+**It has never talked to the real Toggl service.** The connection check exists precisely for that:
+to make the first real request **before** anything is written into tasks.
 
-### Was ausdrücklich NICHT gebaut wird
+### Deliberately out of scope
 
-- Kein automatischer Hintergrund-Abgleich — Import auf Anforderung, mit Vorschau.
-- Keine Rückrichtung nach Toggl.
-- Keine Ableitung von Fortschritt oder Fertigstellung aus Zeitdaten.
-- **Keine Rückkopplung von Ist-Stunden auf die geplante Dauer.** Aufgewendete Zeit ist nicht
-  dasselbe wie geleistete Arbeit; ein Vorgang darf seinen eigenen Plan nicht umschreiben, während
-  er noch läuft.
+- No automatic background sync — import on request, with a preview.
+- Nothing is ever sent back to Toggl.
+- Progress and completion are never derived from time data.
+- **Recorded hours never feed back into the planned duration.** Time spent is not the same as work
+  done; a task must not rewrite its own plan while it is still being worked on.
 
 ---
 
-## Bauen und starten
+## Building and running
 
-Gebraucht wird ein **JDK 21 mit JavaFX** (etwa Liberica oder Zulu „full"). Ein JDK ohne JavaFX
-bricht den Bau mit `Unresolved reference 'javafx'` ab.
+You need a **JDK 21 with JavaFX** (for example Liberica or Zulu "full"). A JDK without JavaFX
+fails the build with `Unresolved reference 'javafx'`.
 
 ```bash
-git clone <dieses Repo>
-git submodule update --init        # Uebersetzungen des Originals
+git clone <this repository>
+git submodule update --init        # upstream translations
 ```
 
-### Zum Ausprobieren von Hand
+### Running a build by hand
 
 ```powershell
 .\gradlew.bat :ganttproject-builder:clean :ganttproject-builder:distBin
 .\tools\start-testbuild.bat
 ```
 
-Zwei Fallen, die hier je einen kompletten Prüflauf gekostet haben:
+Two traps, each of which has cost a full round of manual testing here:
 
-- **`clean` ist nicht optional.** Die Versionsnummer enthält das Datum, jeder Bau an einem neuen
-  Tag legt eine **weitere** Programmdatei daneben, ohne die alte zu entfernen — und geladen wird
-  die **älteste**. `BUILD SUCCESSFUL` sagt also nichts darüber, welche Fassung startet.
-  Vor dem Bauen außerdem die laufende Anwendung schließen, sonst sind die Dateien gesperrt und
-  werden stillschweigend nicht ersetzt.
-- **`dist-bin\ganttproject.exe` startet nicht.** Sie erwartet eine mitgelieferte Laufzeit, die nur
-  `distWin` anlegt, und fällt sonst auf die System-Java ohne JavaFX zurück.
-  `tools\start-testbuild.bat` setzt stattdessen `JAVA_HOME` auf das JDK, mit dem gebaut wurde —
-  **der Pfad darin gehört auf den eigenen Rechner angepasst.**
+- **`clean` is not optional.** The version number contains the date, so every build on a new day
+  drops *another* program file next to the old ones — and the **oldest** one is loaded.
+  `BUILD SUCCESSFUL` therefore tells you nothing about which version starts. Close the running
+  application first as well, or the files are locked and silently not replaced.
+- **`dist-bin\ganttproject.exe` does not start.** It expects a bundled runtime that only `distWin`
+  produces, and otherwise falls back to the system Java, which may have no JavaFX.
+  `tools\start-testbuild.bat` sets `JAVA_HOME` to the JDK the build used instead — **adjust the
+  path in that file for your machine.**
 
 ### Tests
 
-**Getrennt aufrufen**, nicht in einem Befehl:
+Run the two modules **separately**, not in one command:
 
 ```powershell
 .\gradlew.bat :ganttproject-tester:test
 .\gradlew.bat :ganttproject:test
 ```
 
-`:ganttproject:test` bricht am vorbestehenden `GPCloudDocumentTest` ab (Pfadfehler des Originals
-unter Windows). In einem gemeinsamen Aufruf läuft `:ganttproject-tester:test` dann **gar nicht**,
-und man liest alte Ergebnisdateien für neue.
+`:ganttproject:test` aborts in the pre-existing `GPCloudDocumentTest` (an upstream path problem on
+Windows). In a combined invocation `:ganttproject-tester:test` then does not run **at all**, and
+you end up reading stale result files as if they were new.
 
-Zuletzt lokal gemessen (Sitzung 6): **370 Tests im Modul `ganttproject-tester`, 0 Fehler.**
-Danach hinzugekommene Tests sind darin nicht enthalten; die jeweils aktuellen Zahlen und der
-Prüfstand stehen in `CLAUDE-NOTES.md`.
+Last measured locally: **370 tests in `ganttproject-tester`, 0 failures.** Tests added after that
+are not included; current numbers and the verification state live in `CLAUDE-NOTES.md`.
 
-Wer den Ressourcenpfad des Textbündels ändert, muss zusätzlich `tools/packcheck/` laufen lassen —
-ein Einheitstest kann einen betriebstauglichen Pfad hier nicht von einem falschen unterscheiden
-(Begründung in `tools/packcheck/README.md`).
+Anyone changing the resource path of the message bundle also has to run `tools/packcheck/` — a
+unit test cannot tell a working path from a broken one here, for the reason explained in
+`tools/packcheck/README.md`.
 
 ---
 
-## Wo die Dokumentation liegt
+## Where the documentation is
 
-| Datei | Inhalt |
+| File | Contents |
 |---|---|
-| `CLAUDE-NOTES.md` | **das Arbeitsgedächtnis**: Stand jeder Sitzung, jede gefundene Falle, jeder Gegentest |
-| `HANDOVER-Zeiterfassung.md` | Übergabe an die jeweils nächste Sitzung: was fertig, was ungeprüft, was als Nächstes |
-| `ENTWURF-Ist-Stunden-Import.md` | der Umsetzungsentwurf mit den Fallen je Schritt |
-| `NOTIZ-Ist-Stunden.md`, `NOTIZ-Zeiterfassung-Import.md` | die ursprünglichen Vormerkungen |
-| `ISSUE-upstream-projectCreated.md` | Fehlerbericht ans Original, fertig zum Einreichen |
+| `CLAUDE-NOTES.md` | **the working memory**: state of every session, every trap found, every counter-test |
+| `HANDOVER-Zeiterfassung.md` | handover to the next session: what is done, what is unverified, what comes next |
+| `ENTWURF-Ist-Stunden-Import.md` | the implementation design, with the traps listed per step |
+| `NOTIZ-Ist-Stunden.md`, `NOTIZ-Zeiterfassung-Import.md` | the original proposals |
+| `ISSUE-upstream-projectCreated.md` | a bug report for the upstream project, ready to file |
 
-Wer hier weiterarbeitet, liest `CLAUDE-NOTES.md` und `HANDOVER-Zeiterfassung.md` **zuerst**.
-Die Fallen darin sind teuer bezahlt: verschluckte Datenbankfehler, Custom Properties ohne
-Datenbankspalte, Tests, die eine Reihenfolge nachbauen statt sie aufzurufen.
+Read `CLAUDE-NOTES.md` and `HANDOVER-Zeiterfassung.md` **first** if you continue this work. The
+traps recorded there were paid for dearly: swallowed database errors, custom properties without
+their database column, tests that rebuild an ordering instead of calling it.
 
 ---
 
-## Änderungen gegenüber dem Original finden
+## Finding the changes against the original
 
-Der Fork ist absichtlich zusammenführbar gehalten — kein Upstream-Text wird angefasst, keine
-Datei des Originals ohne Not verändert.
+The fork is deliberately kept mergeable — no upstream text is touched, and no upstream file is
+changed without need.
 
 ```bash
-grep -rn "Fork-Aenderung" --include=*.kt --include=*.java .   # Aenderungen an Bestandsdateien
-grep -rln "NEUE DATEI DIESES FORKS" .                          # neue Dateien
+grep -rn "Fork-Aenderung" --include=*.kt --include=*.java .   # changes to existing files
+grep -rln "NEUE DATEI DIESES FORKS" .                          # new files
 ```
 
-**Branches:** `master` spiegelt das Original plus Notizen, `effort-driven` trägt die
-Aufwandsplanung, `zeiterfassung` ist der aktuelle Arbeitszweig.
+**Branches:** `master` mirrors upstream plus the notes, `effort-driven` carries the scheduling
+work, `zeiterfassung` is the current working branch.
 
 ---
 
-## Zwei Befunde, die zurück ans Original gehören
+## Two findings that belong upstream
 
-Beim Bauen sind zwei Fehler im **Original** aufgefallen, nicht in dieser Arbeit:
+Two defects turned up in the **original** while building this, not in the new work:
 
-1. **`projectCreated` blieb unbehandelt.** Nach „Projekt → Neu" wurde jede Änderung an
-   benutzerdefinierten Spalten stillschweigend verworfen — kein Fehler, kein Logeintrag, keine
-   Spalte. Betrifft jede benutzerdefinierte Spalte, nicht nur die dieses Forks.
-   Fertiger Bericht: `ISSUE-upstream-projectCreated.md`.
-2. **`DOUBLE` wurde auf `numeric` abgebildet.** In H2 hat `NUMERIC` ohne Angabe **null**
-   Nachkommastellen — aus 12,5 wurde 13,0. Betrifft jede benutzerdefinierte Dezimalspalte.
+1. **`projectCreated` was never handled.** After *Project → New*, every change to custom columns
+   was silently discarded — no error, no log entry, no column. This affects any custom column, not
+   just the ones this fork creates. Written up in `ISSUE-upstream-projectCreated.md`.
+2. **`DOUBLE` was mapped to `numeric`.** In H2, `NUMERIC` without a scale has **zero** decimal
+   places, so 12.5 came back as 13.0. This affects any custom decimal column.
 
 ---
 
-## Lizenz und Herkunft
+## License and provenance
 
-GanttProject ist freie Software unter der **GNU General Public License v3**; dieser Fork steht
-unter derselben Lizenz. Alle Rechte und Verdienste am Original liegen bei
-[BarD Software s.r.o. und den GanttProject-Mitwirkenden](https://github.com/bardsoftware/ganttproject).
+GanttProject is free software under the **GNU General Public License v3**, and so is this fork.
+All credit for the original belongs to
+[BarD Software s.r.o. and the GanttProject contributors](https://github.com/bardsoftware/ganttproject).
 
-Der Text des Originals steht unverändert in [`README`](README); mehr zum Original unter
+Upstream's own README text is kept unchanged in [`README`](README); more about the original at
 [ganttproject.biz](https://www.ganttproject.biz).
