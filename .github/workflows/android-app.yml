@@ -143,6 +143,10 @@ jobs:
           apk="ganttproject-mobile-${version}-build${RUN_NUMBER}.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$apk"
 
+          # Deliberately NOT --prerelease. GitHub hides prereleases from
+          # /releases/latest and from the "Latest" badge, which is exactly the
+          # shortcut that makes a release worth having on a phone. The notes
+          # below say plainly what kind of build this is instead.
           {
             echo "Debug build of GanttProject Mobile, signed with the standard"
             echo "Android debug key. Install it by tapping the .apk below and"
@@ -161,5 +165,4 @@ jobs:
           gh release create "$tag" "$apk" \
             --title "GanttProject Mobile $version (build ${RUN_NUMBER})" \
             --notes-file release-notes.md \
-            --target "${COMMIT_SHA}" \
-            --prerelease
+            --target "${COMMIT_SHA}"
