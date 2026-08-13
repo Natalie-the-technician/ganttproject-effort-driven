@@ -1,0 +1,116 @@
+/*
+Copyright 2026 Noctuvo
+
+NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+
+This file is part of GanttProject, an opensource project management tool.
+
+GanttProject is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+GanttProject is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
+*/
+package net.sourceforge.ganttproject.timetracking
+
+import junit.framework.TestCase
+import java.time.OffsetDateTime
+
+/**
+ * Which entries the import may take without asking.
+ *
+ * The whole point of these tests is the NEGATIVE side: an entry that does not clearly name its
+ * task must NOT be imported. Writing hours onto the wrong task is silent — nobody notices until
+ * the calibration is wrong — so "imports less" has to beat "guesses".
+ */
+class ImportSelectionTest : TestCase() {
+
+  private fun entry(id: Long, description: String, tags: List<String> = emptyList(), seconds: Long = 3600) =
+    TogglTimeEntry(
+      id = id,
+      start = OffsetDateTime.parse("2026-08-10T09:00:00+02:00"),
+      durationSeconds = seconds,
+      description = description,
+      projectId = null,
+      projectName = null,
+      tags = tags)
+
+  private val tasks = setOf(332, 333)
+
+  fun testAnEntryNamingItsTaskIsImported() {
+    val selection = selectUnambiguousImports(listOf(entry(1, "#332 Firmware")), tasks)
+
+    assertEquals(1, selection.assignments.size)
+    assertEquals(332, selection.assignments[0].second)
+    assertTrue(selection.withoutNumber.isEmpty())
+    assertTrue(selection.unknownNumber.isEmpty())
+  }
+
+  /** The number may sit in a tag rather than in the text. */
+  fun testTheNumberMayComeFromATag() {
+    val selection = selectUnambiguousImports(listOf(entry(1, "Firmware", listOf("#333"))), tasks)
+
+    assertEquals(333, selection.assignments.single().second)
+  }
+
+  /**
+   * THE case this narrow rule exists for. "Firmware" resembles a task name, was perhaps booked on
+   * the right day, maybe even imported to that task before — all of that is a guess, and a guess
+   * writes hours onto a task nobody chose.
+   */
+  fun testAnEntryWithoutANumberIsNotImported() {
+    val selection = selectUnambiguousImports(listOf(entry(1, "Firmware")), tasks)
+
+    assertTrue("an entry was assigned without anybody choosing", selection.assignments.isEmpty())
+    assertEquals(1, selection.withoutNumber.size)
+  }
+
+  /**
+   * A number naming no task is reported SEPARATELY: it is almost certainly a typo in Toggl, and
+   * that is worth telling apart from "needs the matching dialog".
+   */
+  fun testANumberThatNamesNoTaskIsReportedApart() {
+    val selection = selectUnambiguousImports(listOf(entry(1, "#999 Firmware")), tasks)
+
+    assertTrue(selection.assignments.isEmpty())
+    assertEquals(1, selection.unknownNumber.size)
+    assertTrue("a typo was lumped in with the entries needing the dialog",
+      selection.withoutNumber.isEmpty())
+  }
+
+  /** A running entry has a negative duration and no end. Importing it would credit negative hours. */
+  fun testARunningEntryIsNotImported() {
+    val selection = selectUnambiguousImports(listOf(entry(1, "#332 Firmware", seconds = -1)), tasks)
+
+    assertTrue("a running entry was imported", selection.assignments.isEmpty())
+  }
+
+  fun testTheThreeBucketsTogetherAccountForEveryEntry() {
+    val entries = listOf(
+      entry(1, "#332 Firmware"),
+      entry(2, "Firmware"),
+      entry(3, "#999 Firmware"),
+      entry(4, "#333 Test"))
+
+    val selection = selectUnambiguousImports(entries, tasks)
+
+    assertEquals("entries went missing between the buckets", entries.size,
+      selection.assignments.size + selection.unknownNumber.size + selection.withoutNumber.size)
+    assertEquals(2, selection.assignments.size)
+    assertTrue(selection.hasAnythingToImport)
+  }
+
+  fun testNothingToImportIsReportedAsSuch() {
+    val selection = selectUnambiguousImports(listOf(entry(1, "Firmware")), tasks)
+    assertFalse(selection.hasAnythingToImport)
+
+    assertFalse(selectUnambiguousImports(emptyList(), tasks).hasAnythingToImport)
+  }
+}

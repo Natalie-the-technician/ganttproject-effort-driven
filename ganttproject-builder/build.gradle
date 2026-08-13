@@ -83,6 +83,39 @@ tasks.register('distZip', Zip) {
 }
 tasks.distZip.dependsOn distBin
 
+// [Fork-Aenderung] Baut die mitgelieferte Java-Laufzeit, damit ganttproject.exe startet.
+//
+// WARUM DAS NOETIG IST: ganttproject-launch4j.xml verweist auf eine Laufzeit unter .\runtime\.
+// Erzeugt wurde die hier nie -- der jlink-Block in der Wurzel-build.gradle ist auskommentiert, und
+// distWin kopiert ein runtime/ aus dem Projektstamm, das es nicht gibt. Ohne runtime\ faellt die
+// exe auf die System-Java zurueck und bricht mit "GanttProject needs Java 21+ with JavaFX modules"
+// ab, bevor ein Fenster erscheint. Am Bildschirm nachgewiesen.
+//
+// ALL-MODULE-PATH statt einer Modulliste: GanttProject laedt seine Erweiterungen ueber eclipsito
+// zur Laufzeit nach. Was dabei gebraucht wird, ist statisch nicht zuverlaessig zu ermitteln, und
+// ein fehlendes Modul faellt erst im Betrieb auf. Der Preis sind rund 200 MB.
+task distRuntime(dependsOn: distBin) {
+    doLast {
+        def jdk = file(System.getProperty('java.home'))
+        def jmods = new File(jdk, 'jmods')
+        if (!jmods.isDirectory()) {
+            throw new GradleException(
+                "Keine jmods in ${jdk} -- die mitgelieferte Laufzeit braucht ein volles JDK.\n" +
+                "Mit JAVA_HOME auf ein JDK MIT JavaFX bauen, hier zuletzt jdk-21.0.12-full.")
+        }
+        def target = new File(distBinDir, 'runtime')
+        injected.fs.delete { delete target }
+        println "= Baue mitgelieferte Laufzeit nach ${target} ..."
+        injected.exec.exec {
+            commandLine new File(jdk, 'bin/jlink').toString(),
+                '--module-path', jmods.toString(),
+                '--add-modules', 'ALL-MODULE-PATH',
+                '--strip-debug', '--no-header-files', '--no-man-pages', '--compress=zip-6',
+                '--output', target.toString()
+        }
+    }
+}
+
 task distWin(dependsOn: distBin) {
     doLast {
         println '======== Building Windows Installer ========'

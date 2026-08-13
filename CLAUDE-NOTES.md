@@ -1433,17 +1433,65 @@ Zwei Fallstricke, die beim Bauen dieses Starters aufgetreten sind:
 - Im Starter selbst schlug `CALL ganttproject.bat` nach einem `CD /D` fehl, je nachdem wie der
   Starter aufgerufen wurde. Deshalb steht dort jetzt der volle Pfad.
 
+### MEILENSTEIN: erster echter Lauf gegen Toggl — geglückt
+
+Natalie hat ihren Token eingetragen und den Verbindungstest ausgeführt. **Hat geklappt.**
+
+Damit sind die beiden Annahmen belegt, die bis dahin nur Papier waren:
+- Der Token gehört ins **Benutzernamen**-Feld, das Literal `api_token` ins Passwort.
+- Die geschätzten Zeitlimits (15 s Verbindung, 30 s Antwort) reichen.
+
+`HttpClientBackend` hatte bis dahin ausschließlich mit aufgezeichneten Antworten gesprochen.
+Genau dafür war der Verbindungstest gebaut: damit dieser erste echte Lauf stattfindet, **bevor**
+etwas in Vorgänge geschrieben wird.
+
+### Import-Menüpunkt gebaut — bewusst eng
+
+`Ressourcen → Toggl-Zeiten importieren`. Importiert **nur Einträge, die ihren Vorgang selbst
+nennen** (`#332 Firmware`, im Text oder als Schlagwort).
+
+**Warum so eng:** Ohne den Zuordnungsdialog müsste alles andere geraten werden, und falsch
+gebuchte Stunden fallen niemandem auf — sie stehen einfach am falschen Vorgang. `MatchReason`
+vergibt `EXPLICIT_TASK_NUMBER` das Gewicht 1000 mit dem Vermerk „No question needed"; das ist
+diese Regel, angewendet. Die übrigen Gründe — gelernter Text, Projektverknüpfung, Ähnlichkeit,
+plausibles Datum — sind genau die, die eine Bestätigung brauchen. Sie bleiben dem Dialog.
+
+Übersprungenes wird **nach Ursache getrennt** gemeldet: eine Nummer, die keinen Vorgang trifft,
+ist ein Tippfehler, den man in Sekunden behebt; gar keine Nummer braucht den Dialog. Beides in
+einen Topf zu werfen würde den Tippfehler verstecken.
+
+Drei Dinge, die man beim Lesen sonst für willkürlich hält:
+- **Abruf im Hintergrund, alles am Projekt auf dem Oberflächen-Thread.** Das Modell ist nicht
+  nebenläufigkeitssicher und steht gleichzeitig auf dem Bildschirm.
+- **Vor dem Schreiben wird gefragt**, und die Vorschau nennt die Summen **und** das
+  Übersprungene — ein Import, der die Hälfte stillschweigend auslässt, sähe vollständig aus.
+- **Laufende Einträge** haben eine negative Dauer. `TogglClient` wirft sie schon weg, die Auswahl
+  prüft es noch einmal: negative Stunden gutzuschreiben wäre still falsch statt laut falsch.
+
+**Gegentest 29 bestanden:** Raten eingebaut (ohne Nummer den ersten Vorgang nehmen) → drei Tests
+fielen, einer wörtlich mit „an entry was assigned without anybody choosing".
+
+### `ganttproject.exe` startet wieder — mitgelieferte Laufzeit
+
+Neue Bau-Aufgabe **`:ganttproject-builder:distRuntime`**. Sie erzeugt mit `jlink` die Laufzeit
+unter `dist-bin/runtime/`, auf die `ganttproject-launch4j.xml` verweist.
+
+Erzeugt wurde die hier nie: der `jlink`-Block in der Wurzel-`build.gradle` ist **auskommentiert**,
+und `distWin` kopiert ein `runtime/` aus dem Projektstamm, das es nicht gibt. Die `.exe` selbst ist
+eine **eingecheckte** launch4j-Datei; ihre Erzeugung ist ebenfalls auskommentiert und zeigt auf
+`/opt/launch4j/launch4j`, einen Linux-Pfad.
+
+`ALL-MODULE-PATH` statt einer Modulliste: GanttProject lädt seine Erweiterungen über eclipsito zur
+Laufzeit nach, was dabei gebraucht wird ist statisch nicht zuverlässig zu ermitteln, und ein
+fehlendes Modul fällt erst im Betrieb auf. Preis: rund 200 MB. Sieben JavaFX-Module sind drin.
+
+Braucht ein **volles JDK mit jmods** — die Aufgabe bricht sonst mit klarer Meldung ab.
+
 ### Was jetzt NUR noch Oberfläche ist
 
 - Zuordnungsdialog (Schritt 6), bedient `TimeEntryMatching.kt`. Die Prüfmeldungen liegen als
-  Schlüssel bereit, der Dialog kann also gar keinen unübersetzten Text zeigen.
-- Menüpunkt für den Import selbst.
-
-**Noch nie gegen den echten Dienst gelaufen.** `HttpClientBackend` hat bis heute nur mit
-aufgezeichneten Antworten gesprochen. Der Verbindungstest ist gebaut, damit dieser erste echte
-Lauf stattfindet, **bevor** etwas in Vorgänge geschrieben wird. Die beiden ungeprüften Annahmen:
-Token im Benutzernamen, und die geschätzten Zeitlimits (15 s Verbindung, 30 s Antwort — meine
-Schätzung, nicht gemessen).
+  Schlüssel bereit, der Dialog kann also gar keinen unübersetzten Text zeigen. Danach kann der
+  Import auch Einträge ohne Vorgangsnummer übernehmen.
 
 ### Noch offen aus dieser Sitzung
 

@@ -25,7 +25,9 @@ import biz.ganttproject.platform.UpdateOptions;
 import biz.ganttproject.storage.cloud.GPCloudOptions;
 // [Fork-Aenderung] Neue Importe fuer die Toggl-Token-Ablage und den Verbindungstest.
 import net.sourceforge.ganttproject.gui.NotificationChannel;
+import net.sourceforge.ganttproject.timetracking.ConnectionCheckMessageSink;
 import net.sourceforge.ganttproject.timetracking.TogglConnectionAction;
+import net.sourceforge.ganttproject.timetracking.TogglImportAction;
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions;
 import biz.ganttproject.storage.cloud.GPCloudStatusBar;
 import com.beust.jcommander.Parameter;
@@ -159,16 +161,33 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     // Text in die Vorlagen <kanal>.channel.itemTitle/itemBody ein -- und fuer den Kanal RSS gibt es
     // diese Vorlagen nicht. Der Kasten haette dann "rss.channel.itemBody" angezeigt und unsere
     // Meldung stillschweigend verschluckt, weil MessageFormat ohne {0} das Argument verwirft.
-    mHuman.add(new TogglConnectionAction(
+    ConnectionCheckMessageSink togglMessages = (isProblem, message) -> {
+      var manager = getUIFacade().getNotificationManager();
+      manager.addNotifications(List.of(manager.createNotification(
+          isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS,
+          TogglConnectionAction.getNotificationTitle(),
+          "<p>" + message.replace("\n", "<br>") + "</p>",
+          null)));
+    };
+    mHuman.add(new TogglConnectionAction(getHumanResourceManager(), togglMessages));
+
+    // [Fork-Aenderung] Import der Toggl-Zeiten. Vor dem Schreiben wird gefragt: die Vorschau nennt
+    // die Summen UND was uebersprungen wird. showOptionDialog ist nicht blockierend, deshalb
+    // bekommt die Aktion einen Rueckruf statt eines Rueckgabewerts.
+    mHuman.add(new TogglImportAction(
+        getTaskManager(),
         getHumanResourceManager(),
-        (isProblem, message) -> {
-          var manager = getUIFacade().getNotificationManager();
-          manager.addNotifications(List.of(manager.createNotification(
-              isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS,
-              TogglConnectionAction.getNotificationTitle(),
-              "<p>" + message.replace("\n", "<br>") + "</p>",
-              null)));
-        }));
+        getProject().getTaskCustomColumnManager(),
+        getProjectDatabase(),
+        getUndoManager(),
+        togglMessages,
+        (message, answer) -> getUIFacade().showOptionDialog(
+            JOptionPane.QUESTION_MESSAGE,
+            message,
+            new Action[] {
+                OkAction.create("ok", () -> { answer.accept(true); return Unit.INSTANCE; }),
+                CancelAction.create("cancel", () -> { answer.accept(false); return Unit.INSTANCE; })
+            })));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
     bar.add(mHuman);
