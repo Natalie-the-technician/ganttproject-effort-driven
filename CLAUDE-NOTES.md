@@ -1623,11 +1623,52 @@ fehlendes Modul fällt erst im Betrieb auf. Preis: rund 200 MB. Sieben JavaFX-Mo
 
 Braucht ein **volles JDK mit jmods** — die Aufgabe bricht sonst mit klarer Meldung ab.
 
+### Schritt 6 gebaut: Zuordnungsdialog und benannte Einträge
+
+Ausgangspunkt war Natalies Frage: Der Import meldete gefundene, aber nicht zuordenbare Einträge —
+**und sie hatte keine Möglichkeit, an sie heranzukommen.** Zwei Antworten darauf:
+
+**1. Übersprungenes wird aufgezählt, nicht nur gezählt.** „7 Einträge übersprungen" sagt, dass
+etwas fehlt, aber nicht *welche* — und ohne das kann niemand handeln. Jetzt mit Datum, Text und
+Stunden, sodass man sie in Toggl wiederfindet. Höchstens 12 Zeilen, und die Kürzung sagt sich
+selbst an: eine Liste, die stillschweigend aufhört, liest sich als vollständig und widerspräche
+der Zahl darüber.
+
+**Gegentest 31 bestanden:** Hinweis auf das Weggelassene entfernt → der Test fiel
+(`expected:<13> but was:<12>`).
+
+**2. Der Zuordnungsdialog** (`TaskChoiceDialog.kt`). Tabelle mit einer Zeile je Eintrag, daneben
+eine Auswahlliste der Vorgänge, sortiert nach Vorschlagsgüte aus `suggestTasks`.
+
+Drei Entscheidungen, die man sonst für willkürlich hält:
+- **Vorausgewählt wird nur bei `LEARNED` oder `PROJECT_LINK`.** Ein schwacher Vorschlag, der
+  vorausgewählt dasteht, ist eine Vermutung, die wie eine Entscheidung aussieht — und würde
+  ungeprüft bestätigt. Ähnlichkeit und plausibles Datum reichen dafür nicht.
+- **„nicht zuordnen" ist ein Eintrag in derselben Liste**, kein eigenes Bedienelement: Es ist eine
+  Wahl wie jede andere und muss erreichbar bleiben, nachdem etwas gewählt wurde.
+- **Abbrechen kostet nichts** — die eindeutigen Einträge werden trotzdem importiert.
+
+**Was der Dialog bewusst NICHT kann: einen Eintrag aufteilen.** `validateSplit` gäbe es, aber
+`planTaskImport` besteht auf **einer** Zuordnung je Eintrag und begründet das: dafür bräuchte es
+einen eigenen Stundenwert je Zuordnung (`EntryAssignment(entry, task, hours)`) statt eines Paars.
+Ein Aufteilen anzubieten, bevor das existiert, erzeugte genau die Doppelzählung, gegen die die
+Vorbedingung eingebaut wurde.
+
+**Feinheit, die sonst widersprüchlich wäre:** Was von Hand zugeordnet wurde, zählt in der Meldung
+nicht mehr als „ohne Vorgangsnummer übersprungen" — sonst widerspräche der Bericht der eigenen
+Buchung.
+
+`learnedKeys` bleibt leer: die Buchführung merkt sich Eintrags-**Kennungen** und Stunden, nicht
+deren Texte. Es gibt also noch nichts zu lernen, und etwas anderes zu behaupten ergäbe Vorschläge
+mit einem Grund, den es nicht gibt.
+
 ### Was jetzt NUR noch Oberfläche ist
 
-- Zuordnungsdialog (Schritt 6), bedient `TimeEntryMatching.kt`. Die Prüfmeldungen liegen als
-  Schlüssel bereit, der Dialog kann also gar keinen unübersetzten Text zeigen. Danach kann der
-  Import auch Einträge ohne Vorgangsnummer übernehmen.
+Nichts mehr aus der ursprünglichen Planung. Offen sind nur noch Erweiterungen:
+- **Aufteilen eines Eintrags** auf mehrere Vorgänge — braucht zuerst `EntryAssignment` mit
+  Stundenwert in `planTaskImport`.
+- **Gelernte Zuordnungen**: dafür müsste die Buchführung auch den Eintragstext merken, dann greift
+  `MatchReason.LEARNED` wirklich.
 
 ### Noch offen aus dieser Sitzung
 

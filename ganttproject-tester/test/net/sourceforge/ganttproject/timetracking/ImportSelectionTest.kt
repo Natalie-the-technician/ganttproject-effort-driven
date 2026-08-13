@@ -107,6 +107,50 @@ class ImportSelectionTest : TestCase() {
     assertTrue(selection.hasAnythingToImport)
   }
 
+  // --- Uebersprungene Eintraege benennen ---
+
+  /**
+   * Reporting only a COUNT tells the user that something is missing but not which — and without
+   * that they cannot act. The line has to carry enough to find the entry again in Toggl: the day
+   * it was booked, its text, and its hours.
+   */
+  fun testASkippedEntryIsNamedWithDateTextAndHours() {
+    val line = describeEntry(entry(1, "Firmware", seconds = 5400))
+
+    assertTrue("das Datum fehlt: $line", line.contains("2026-08-10"))
+    assertTrue("der Text fehlt: $line", line.contains("Firmware"))
+    assertTrue("die Stunden fehlen: $line", line.contains("1,50") || line.contains("1.50"))
+  }
+
+  /** An empty line in a list of skipped items would read as a display fault. */
+  fun testAnEntryWithoutTextStillShowsSomething() {
+    val line = describeEntry(entry(1, "   "))
+    assertTrue("nichts Erkennbares in: $line", line.contains("ohne Text"))
+  }
+
+  /**
+   * The cap must not be silent: a list that stops without saying so reads as complete, and would
+   * then contradict the count in the message above it.
+   */
+  fun testALongListSaysHowManyItLeftOut() {
+    val many = (1..20).map { entry(it.toLong(), "Eintrag $it") }
+
+    val text = describeEntries(many, limit = 12)
+
+    assertEquals("es muessen 12 Zeilen plus die Restzeile sein", 13, text.lines().size)
+    assertTrue("die Restzeile fehlt: $text", text.contains("8 weitere"))
+  }
+
+  fun testAShortListHasNoRemainderLine() {
+    val text = describeEntries(listOf(entry(1, "Firmware")), limit = 12)
+    assertFalse(text.contains("weitere"))
+    assertEquals(1, text.lines().size)
+  }
+
+  fun testAnEmptyListYieldsNothing() {
+    assertEquals("", describeEntries(emptyList()))
+  }
+
   // --- Zeitraum des Imports ---
 
   fun testAPlainNumberIsAccepted() {

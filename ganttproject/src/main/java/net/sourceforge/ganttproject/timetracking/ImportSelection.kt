@@ -55,6 +55,36 @@ data class ImportSelection(
 }
 
 /**
+ * [Fork-Aenderung] One entry, short enough for a list and complete enough to find it again in
+ * Toggl: date, text, hours.
+ *
+ * WHY THIS EXISTS: reporting only "7 entries were skipped" tells the user that something is
+ * missing but not WHICH — and without that they cannot act at all. Naming them turns a dead end
+ * into a to-do list.
+ *
+ * An entry with no description shows a placeholder rather than a blank: an empty line in a list
+ * of skipped items looks like a display fault.
+ */
+fun describeEntry(entry: TogglTimeEntry): String {
+  val text = entry.description.trim().ifEmpty { "(ohne Text)" }
+  return "%s  %s  (%.2f h)".format(entry.start.toLocalDate(), text, entry.hours)
+}
+
+/**
+ * [Fork-Aenderung] The entries as a list, at most [limit] of them.
+ *
+ * The cap is not silent: when more were left out, the last line says how many. A list that stops
+ * without saying so reads as if it were complete — and the count in the message above it would
+ * then contradict it.
+ */
+fun describeEntries(entries: List<TogglTimeEntry>, limit: Int = 12): String {
+  if (entries.isEmpty()) return ""
+  val shown = entries.take(limit).joinToString("\n") { "• ${describeEntry(it)}" }
+  val rest = entries.size - limit
+  return if (rest > 0) "$shown\n… und $rest weitere" else shown
+}
+
+/**
  * Sorts entries into the three buckets above.
  *
  * @param knownTaskIds every task id in the project. An entry naming an id outside this set is

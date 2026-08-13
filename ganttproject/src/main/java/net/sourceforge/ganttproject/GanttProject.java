@@ -28,6 +28,7 @@ import net.sourceforge.ganttproject.gui.NotificationChannel;
 import net.sourceforge.ganttproject.timetracking.ConnectionCheckMessageSink;
 // Kotlin legt Deklarationen auf Dateiebene in eine Klasse <Dateiname>Kt.
 import net.sourceforge.ganttproject.timetracking.ImportPeriodDialogKt;
+import net.sourceforge.ganttproject.timetracking.TaskChoiceDialogKt;
 import net.sourceforge.ganttproject.timetracking.TogglConnectionAction;
 import net.sourceforge.ganttproject.timetracking.TogglImportAction;
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions;
@@ -190,7 +191,8 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
                 OkAction.create("ok", () -> { answer.accept(true); return Unit.INSTANCE; }),
                 CancelAction.create("cancel", () -> { answer.accept(false); return Unit.INSTANCE; })
             }),
-        ImportPeriodDialogKt.getASK_FOR_THE_PERIOD()));
+        ImportPeriodDialogKt.getASK_FOR_THE_PERIOD(),
+        TaskChoiceDialogKt.getASK_FOR_THE_TASKS()));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
     bar.add(mHuman);
