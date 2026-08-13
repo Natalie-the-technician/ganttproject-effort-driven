@@ -33,6 +33,53 @@ class TokenStoreTest : TestCase() {
   private val nameKey = "name=Natalie"
   private val mailKey = "mail=natalie@example.org"
 
+  // --- Der Weg ueber den Ressourcendialog: der Token steht in einem Feld ---
+
+  /**
+   * The resource dialog KNOWS the token, because it is in a field on screen. That is the only
+   * difference to the table; the collision rule has to be the same, or the same mistake is caught
+   * on one path and destroys a token on the other. It did, until this was unified.
+   */
+  fun testTheDialogPathAlsoAsksOnACollision() {
+    val stored = encodeTokenMap(mapOf(nameKey to "TOKEN-A", mailKey to "TOKEN-B"))
+
+    val outcome = tokenKeyChange(stored, nameKey, mailKey, editedToken = "TOKEN-A")
+
+    assertTrue("the dialog would have destroyed TOKEN-B silently, got $outcome",
+      outcome is TokenKeyChange.Collision)
+  }
+
+  /** Emptying the field removes the entry. That is a removal, not a question. */
+  fun testAnEmptiedFieldIsNoCollision() {
+    val stored = encodeTokenMap(mapOf(nameKey to "TOKEN-A", mailKey to "TOKEN-B"))
+
+    val outcome = tokenKeyChange(stored, nameKey, mailKey, editedToken = "")
+
+    assertTrue("expected a plain move, got $outcome", outcome is TokenKeyChange.Move)
+    assertNull("the entry was not removed",
+      tokenForKey(nameKey, (outcome as TokenKeyChange.Move).tokens))
+    assertEquals("somebody else's token was taken along", "TOKEN-B",
+      tokenForKey(mailKey, outcome.tokens))
+  }
+
+  /** Editing the token without changing the key replaces one's own entry — nothing to ask. */
+  fun testEditingTheTokenWithoutChangingTheKeyIsNoCollision() {
+    val stored = encodeTokenMap(mapOf(mailKey to "ALT"))
+
+    val outcome = tokenKeyChange(stored, mailKey, mailKey, editedToken = "NEU")
+
+    assertTrue("expected a plain move, got $outcome", outcome is TokenKeyChange.Move)
+    assertEquals("NEU", tokenForKey(mailKey, (outcome as TokenKeyChange.Move).tokens))
+  }
+
+  /** A dialog nobody touched must not rewrite the settings file. */
+  fun testAnUntouchedDialogChangesNothing() {
+    val stored = encodeTokenMap(mapOf(mailKey to "GEHEIM"))
+
+    assertTrue(tokenKeyChange(stored, mailKey, mailKey, editedToken = "GEHEIM")
+      is TokenKeyChange.Unchanged)
+  }
+
   // --- Der Fund: der Schluessel aendert sich, der Token muss mit ---
 
   /**
@@ -76,13 +123,34 @@ class TokenStoreTest : TestCase() {
     assertEquals(2, decodeTokenMap(after).size)
   }
 
-  /** An emptied field removes the person entirely — under the old key as well as the new one. */
-  fun testAnEmptyTokenRemovesBothKeys() {
-    val before = encodeTokenMap(mapOf(nameKey to "ALT", mailKey to "NEU"))
+  /**
+   * An emptied field removes the entry — the OWN one.
+   *
+   * [Fork-Aenderung] Diese Erwartung wurde geaendert. Vorher stand hier, dass ein leeres Feld
+   * BEIDE Schluessel raeumt. Das kostete fremde Token: wer das Feld leerte und zugleich eine
+   * Adresse eintrug, unter der bereits jemand anderes gespeichert war, loeschte dessen Eintrag mit.
+   *
+   * Der urspruenglich gemeinte Fall — dieselbe Person unter zwei Schluesseln — entsteht durch
+   * normalen Gebrauch nie, weil jeder Schreibvorgang den Eintrag verschiebt statt zu verdoppeln.
+   * Der neue Fall entsteht durch normalen Gebrauch sehr wohl. Deshalb gilt jetzt: unter dem neuen
+   * Schluessel Liegendes gehoert jemand anderem und bleibt.
+   */
+  fun testAnEmptyTokenRemovesTheOwnEntry() {
+    val before = encodeTokenMap(mapOf(nameKey to "MEINS", mailKey to "FREMD"))
 
     val after = movedToken(before, nameKey, mailKey, "")
 
-    assertTrue("nothing may be left over: $after", decodeTokenMap(after).isEmpty())
+    assertNull("der eigene Eintrag blieb stehen: $after", tokenForKey(nameKey, after))
+    assertEquals("ein fremder Token wurde mitgeloescht", "FREMD", tokenForKey(mailKey, after))
+  }
+
+  /** Ohne Schluesselwechsel ist der Eintrag unter dem Schluessel der eigene und muss weg. */
+  fun testAnEmptyTokenRemovesTheEntryWhenTheKeyDidNotChange() {
+    val before = encodeTokenMap(mapOf(mailKey to "MEINS"))
+
+    val after = movedToken(before, mailKey, mailKey, "")
+
+    assertTrue("nichts darf uebrig bleiben: $after", decodeTokenMap(after).isEmpty())
   }
 
   /**

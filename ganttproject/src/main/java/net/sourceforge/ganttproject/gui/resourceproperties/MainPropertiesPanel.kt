@@ -39,7 +39,9 @@ import net.sourceforge.ganttproject.roles.RoleManager
 // [Fork-Aenderung] Neue Importe fuer den Toggl-Token.
 import net.sourceforge.ganttproject.fork.forkText
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions
-import net.sourceforge.ganttproject.timetracking.movedToken
+import net.sourceforge.ganttproject.timetracking.ASK_IN_A_DIALOG
+import net.sourceforge.ganttproject.timetracking.TokenKeyChange
+import net.sourceforge.ganttproject.timetracking.tokenKeyChange
 import net.sourceforge.ganttproject.timetracking.tokenFor
 import net.sourceforge.ganttproject.timetracking.tokenKeyFor
 
@@ -132,14 +134,20 @@ class MainPropertiesPanel(private val resource: HumanResource) {
    * niemand etwas angefasst hat, die Einstellungsdatei nicht anfasst.
    */
   private fun saveTogglToken(previousTokenKey: String) {
-    val current = TogglTokenOptions.tokens.value
-    val updated = movedToken(
-      storedTokens = current,
+    val outcome = tokenKeyChange(
+      storedTokens = TogglTokenOptions.tokens.value,
       previousKey = previousTokenKey,
       newKey = tokenKeyFor(resource),
-      token = togglTokenOption.value?.trim().orEmpty())
-    if (updated != current) {
-      TogglTokenOptions.tokens.value = updated
+      editedToken = togglTokenOption.value?.trim().orEmpty())
+
+    when (outcome) {
+      is TokenKeyChange.Unchanged -> Unit
+      is TokenKeyChange.Move -> TogglTokenOptions.tokens.value = outcome.tokens
+      // [Fork-Aenderung] Frueher wurde hier still ueberschrieben. Liegt unter der neuen Adresse
+      // bereits ein ANDERER Token, kostet jeder Ausgang ein Geheimnis -- das entscheidet nicht
+      // dieser Dialog, sondern die Person. Der Ressourcentabelle liegt dieselbe Regel zugrunde.
+      is TokenKeyChange.Collision ->
+        ASK_IN_A_DIALOG.ask(outcome) { chosen -> TogglTokenOptions.tokens.value = chosen }
     }
   }
 

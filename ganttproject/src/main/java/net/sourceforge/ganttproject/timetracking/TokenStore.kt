@@ -93,11 +93,16 @@ fun tokenForKey(key: String, storedTokens: String?): String? = decodeTokenMap(st
 fun movedToken(storedTokens: String?, previousKey: String, newKey: String, token: String): String {
   val tokens = decodeTokenMap(storedTokens).toMutableMap()
   tokens.remove(previousKey)
-  // EHRLICH VERMERKT: der Zweig fuer den leeren Token ist doppelt abgesichert -- [encodeTokenMap]
-  // laesst leere Werte ohnehin weg. Ein Gegentest kann diese Zeile deshalb nicht isolieren
-  // (nachgewiesen: entfernt man sie, bleiben alle Tests gruen). Sie bleibt trotzdem, weil sie den
-  // Vertrag schon auf der Abbildung wahr macht und nicht erst im Text.
-  if (token.isEmpty()) tokens.remove(newKey) else tokens[newKey] = token
+  if (token.isEmpty()) {
+    // [Fork-Aenderung] NUR den eigenen Eintrag entfernen. Frueher stand hier ein
+    // `tokens.remove(newKey)` ohne Bedingung -- wer im Dialog das Token-Feld leerte UND zugleich
+    // eine Adresse eintrug, unter der bereits jemand anderes gespeichert war, loeschte damit
+    // dessen Token. Ist der Schluessel unveraendert, ist der Eintrag unter [newKey] der eigene und
+    // muss weg; hat er sich geaendert, gehoert dort Liegendes jemand anderem.
+    if (newKey == previousKey) tokens.remove(newKey)
+  } else {
+    tokens[newKey] = token
+  }
   return encodeTokenMap(tokens)
 }
 
@@ -147,21 +152,39 @@ sealed interface TokenKeyChange {
  *
  * Same token under both keys is NOT a collision: nothing is lost by dropping the duplicate.
  */
-fun tokenKeyChange(storedTokens: String?, previousKey: String, newKey: String): TokenKeyChange {
-  if (newKey == previousKey) return TokenKeyChange.Unchanged
-  val moving = tokenForKey(previousKey, storedTokens) ?: return TokenKeyChange.Unchanged
+fun tokenKeyChange(
+  storedTokens: String?,
+  previousKey: String,
+  newKey: String,
+  editedToken: String? = null
+): TokenKeyChange {
+  // Two callers, one rule. The resource dialog KNOWS the token, because it is in a field on
+  // screen; the resource table does not and has to read it out of the store. Everything after
+  // this line is identical for both — otherwise the same collision would be caught on one path
+  // and silently destroy a token on the other, which is exactly what happened before.
+  val moving = editedToken ?: tokenForKey(previousKey, storedTokens) ?: return TokenKeyChange.Unchanged
 
-  val occupying = tokenForKey(newKey, storedTokens)
-  if (occupying == null || occupying == moving) {
-    return TokenKeyChange.Move(movedToken(storedTokens, previousKey, newKey, moving))
+  val target = movedToken(storedTokens, previousKey, newKey, moving)
+  // Compare against the NORMALISED text, not the raw one: a store that was written by an older
+  // version may differ in order or encoding without differing in content, and rewriting it for
+  // that reason alone would churn the settings file.
+  if (target == encodeTokenMap(decodeTokenMap(storedTokens))) return TokenKeyChange.Unchanged
+
+  // A collision needs the key to actually move, a token to move there, and a DIFFERENT one
+  // already sitting in the way. An emptied field is a removal, not a collision.
+  if (newKey != previousKey && moving.isNotEmpty()) {
+    val occupying = tokenForKey(newKey, storedTokens)
+    if (occupying != null && occupying != moving) {
+      return TokenKeyChange.Collision(
+        key = newKey,
+        ifOverwritten = target,
+        ifDiscarded = encodeTokenMap(decodeTokenMap(storedTokens).toMutableMap().also {
+          it.remove(previousKey)
+        }))
+    }
   }
 
-  return TokenKeyChange.Collision(
-    key = newKey,
-    ifOverwritten = movedToken(storedTokens, previousKey, newKey, moving),
-    ifDiscarded = encodeTokenMap(decodeTokenMap(storedTokens).toMutableMap().also {
-      it.remove(previousKey)
-    }))
+  return TokenKeyChange.Move(target)
 }
 
 /**

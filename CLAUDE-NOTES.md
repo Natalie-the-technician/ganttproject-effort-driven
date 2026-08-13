@@ -1573,6 +1573,46 @@ einer wörtlich mit „no question was asked, so a token was destroyed silently"
 Der Dialog zeigt **keinen Token** — die Person erkennt die Lage an der Adresse, und ein Token auf
 dem Bildschirm ist ein Token im Bildschirmfoto.
 
+### FÜNFTER FUND: geleertes Token-Feld löschte einen fremden Token mit
+
+Aufgefallen beim Vereinheitlichen der beiden Speicherwege — **durch einen Test, den ich für den
+Dialogweg schrieb und der beim ersten Lauf fehlschlug**. Nicht der Test war falsch.
+
+`movedToken` entfernte bei leerem Token **beide** Schlüssel:
+
+```kotlin
+tokens.remove(previousKey)
+if (token.isEmpty()) tokens.remove(newKey)   // <- auch wenn dort jemand anderes liegt
+```
+
+Wer im Ressourcendialog das Token-Feld leerte **und** zugleich eine Adresse eintrug, unter der
+bereits jemand anderes gespeichert war, löschte dessen Token mit. Jetzt wird `newKey` nur geräumt,
+wenn der Schlüssel sich gar nicht geändert hat — dann ist der Eintrag dort der eigene.
+
+**Gegentest 27 bestanden:** Bedingung wieder heraus → zwei Tests fielen, einer wörtlich mit
+„ein fremder Token wurde mitgelöscht".
+
+**Eine fremde Erwartung wurde dabei geändert**, das gehört gesagt: `testAnEmptyTokenRemovesBothKeys`
+hielt fest, dass ein leeres Feld beide Schlüssel räumt. Der dort gemeinte Fall — dieselbe Person
+unter zwei Schlüsseln — entsteht durch normalen Gebrauch nie, weil jeder Schreibvorgang den Eintrag
+**verschiebt** statt ihn zu verdoppeln. Der neue Fall entsteht durch normalen Gebrauch sehr wohl.
+Der Test heißt jetzt `testAnEmptyTokenRemovesTheOwnEntry`, und ein zweiter deckt den unveränderten
+Schlüssel ab. Umkehrbar, falls die ursprüngliche Absicht doch die wichtigere war.
+
+Damit gilt auch der frühere Vermerk nicht mehr, dieser Zweig sei nicht gegentestbar — er ist es.
+
+### Beide Speicherwege benutzen jetzt dieselbe Regel
+
+Vorher fragte nur die **Tabelle** bei einem Zusammenstoß; der **Ressourcendialog** überschrieb
+weiter still, weil er `movedToken` direkt aufrief. Derselbe Fehler auf dem zweiten Weg — genau das
+Muster wie beim dritten Fund.
+
+`tokenKeyChange` nimmt jetzt einen optionalen `editedToken`: der Dialog **kennt** den Token, weil er
+in einem Feld steht, die Tabelle muss ihn aus dem Speicher lesen. Alles danach ist identisch.
+
+Zwei Fälle, die bewusst **keine** Frage auslösen: ein geleertes Feld (das ist ein Entfernen) und
+eine Änderung ohne Schlüsselwechsel (man ersetzt den eigenen Eintrag).
+
 ### Umgebungsfalle: `GanttChartSelectionTest` kann rot sein, ohne dass etwas kaputt ist
 
 `java.lang.IllegalStateException: cannot open system clipboard` aus `WClipboard.openClipboard0`.
