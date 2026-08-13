@@ -75,3 +75,23 @@ fun tokenFor(resource: HumanResource, storedTokens: String?): String? =
 /** The store with this person's token set. An empty token removes the entry. */
 fun withToken(storedTokens: String?, resource: HumanResource, token: String): String =
   tokenKeyFor(resource).let { key -> movedToken(storedTokens, key, key, token) }
+
+/**
+ * [Fork-Aenderung] Runs [change] and takes the stored token along if the key changed.
+ *
+ * WHY THIS EXISTS BESIDE THE DIALOG: `MainPropertiesPanel.save()` already handles the case where
+ * name or e-mail are edited in the resource dialog. But both can ALSO be edited straight in the
+ * resource table (`ResourceTable.setValue`), which never goes through that dialog. Without this,
+ * typing an address into the e-mail cell has exactly the effect the dialog was fixed for: the
+ * connection check reports "no token" although one was entered, and the secret stays behind in
+ * `~/.ganttproject` under a key nobody looks up any more.
+ *
+ * Deliberately no token argument: nobody is editing the token here, it only has to follow. The
+ * settings are written only when something actually moved — see [tokensAfterKeyChange].
+ */
+fun HumanResource.keepingTokenReachable(change: () -> Unit) {
+  val previousKey = tokenKeyFor(this)
+  change()
+  tokensAfterKeyChange(TogglTokenOptions.tokens.value, previousKey, tokenKeyFor(this))
+    ?.let { TogglTokenOptions.tokens.value = it }
+}

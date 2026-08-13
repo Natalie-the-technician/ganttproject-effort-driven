@@ -101,6 +101,24 @@ fun movedToken(storedTokens: String?, previousKey: String, newKey: String, token
   return encodeTokenMap(tokens)
 }
 
+/**
+ * [Fork-Aenderung] The store after a key changed WITHOUT the token itself being edited, or null
+ * when there is nothing to write.
+ *
+ * Counterpart to [movedToken] for the second way a key can change. [movedToken] is used where the
+ * token field is on screen and its value is known. Here the token is not being edited at all —
+ * somebody renamed a resource or filled in its e-mail address in the resource table, and the token
+ * simply has to follow. Reading it out of the store is the whole point.
+ *
+ * Returns null rather than the unchanged text so the caller can tell "nothing happened" from
+ * "rewrite the settings", and leave the settings file alone in the first case.
+ */
+fun tokensAfterKeyChange(storedTokens: String?, previousKey: String, newKey: String): String? {
+  if (newKey == previousKey) return null
+  val token = tokenForKey(previousKey, storedTokens) ?: return null
+  return movedToken(storedTokens, previousKey, newKey, token)
+}
+
 private fun String.urlEncoded(): String = URLEncoder.encode(this, Charsets.UTF_8)
 
 private fun String.urlDecodedOrNull(): String? =

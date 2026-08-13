@@ -84,6 +84,81 @@ class TogglTokensTest : TestCase() {
     assertEquals(keyBefore, tokenKeyFor(person))
   }
 
+  // --- der zweite Weg, auf dem sich der Schluessel aendert ---
+
+  /**
+   * Name and e-mail can be edited straight in the RESOURCE TABLE, which never opens the resource
+   * dialog and therefore never runs `MainPropertiesPanel.save()`. The fix that moves the token
+   * along lives in that dialog — so this second path had the same defect: type an address into
+   * the e-mail cell and the token becomes unreachable, while the secret stays in the settings
+   * under a key nobody looks up.
+   *
+   * Uses the global option store because that is what the production path writes to; restored in
+   * `finally` so no other test inherits it.
+   */
+  fun testEditingTheMailOutsideTheDialogKeepsTheTokenReachable() {
+    val person = resource("Nati", 1)
+    val before = TogglTokenOptions.tokens.value
+    TogglTokenOptions.tokens.value = withToken("", person, "geheim123")
+    try {
+      // Precondition: without it the test could pass on a token that was never there.
+      assertEquals("geheim123", tokenFor(person, TogglTokenOptions.tokens.value))
+
+      // Exactly what ResourceTable.setValue does when the e-mail cell is edited.
+      person.keepingTokenReachable { person.mail = "nati@example.org" }
+
+      assertEquals("the token became unreachable when the address was added",
+        "geheim123", tokenFor(person, TogglTokenOptions.tokens.value))
+      assertNull("the old entry stayed behind as a secret nobody looks up",
+        tokenForKey("name=Nati", TogglTokenOptions.tokens.value))
+    } finally {
+      TogglTokenOptions.tokens.value = before
+    }
+  }
+
+  /** Same for a rename while no address is set. */
+  fun testRenamingOutsideTheDialogKeepsTheTokenReachable() {
+    val person = resource("Nati", 1)
+    val before = TogglTokenOptions.tokens.value
+    TogglTokenOptions.tokens.value = withToken("", person, "geheim123")
+    try {
+      person.keepingTokenReachable { person.name = "Natalie" }
+      assertEquals("geheim123", tokenFor(person, TogglTokenOptions.tokens.value))
+    } finally {
+      TogglTokenOptions.tokens.value = before
+    }
+  }
+
+  /**
+   * An edit that does not touch the key must leave the settings text untouched — otherwise the
+   * settings file would be rewritten every time somebody edits a phone number.
+   */
+  fun testAnEditThatDoesNotChangeTheKeyWritesNothing() {
+    val person = resource("Nati", 1, "nati@example.org")
+    val before = TogglTokenOptions.tokens.value
+    TogglTokenOptions.tokens.value = withToken("", person, "geheim123")
+    try {
+      val stored = TogglTokenOptions.tokens.value
+      person.keepingTokenReachable { person.phone = "0123" }
+      assertEquals(stored, TogglTokenOptions.tokens.value)
+    } finally {
+      TogglTokenOptions.tokens.value = before
+    }
+  }
+
+  /** Nothing stored, nothing to move — and nothing invented either. */
+  fun testMovingWithoutAStoredTokenChangesNothing() {
+    val person = resource("Nati", 1)
+    val before = TogglTokenOptions.tokens.value
+    TogglTokenOptions.tokens.value = ""
+    try {
+      person.keepingTokenReachable { person.mail = "nati@example.org" }
+      assertEquals("", TogglTokenOptions.tokens.value)
+    } finally {
+      TogglTokenOptions.tokens.value = before
+    }
+  }
+
   // --- storing ---
 
   fun testTokenIsReadBack() {

@@ -1509,6 +1509,65 @@ mit auf.
 `SplitPart(taskId, hours)` die Anteile bereits in der passenden Form. Solange das nicht gebaut
 ist, hält die neue Vorbedingung den Schaden auf.
 
+### NACHGEHOLT: die offenen Läufe sind gelaufen
+
+Alles aus dem Abschnitt darunter wurde lokal ausgeführt. Ergebnis:
+
+- **`ImportApplyTest`: 14 von 14 grün**, darunter die beiden nie gelaufenen Tests
+  („the same entry on two tasks is refused instead of counted twice" und „the same entry twice on
+  one task is refused"). Die `require`-Vorbedingung trägt.
+- **`ganttproject-tester`: 429 Tests, 0 Fehler.** `ganttproject`: 103 Tests, davon nur der
+  vorbekannte `GPCloudDocumentTest` rot — der war schon vor dem Fork kaputt.
+
+Der Abschnitt darunter bleibt als Beleg stehen, warum damals nicht geprüft werden konnte.
+
+### Umgebungsfalle: `GanttChartSelectionTest` kann rot sein, ohne dass etwas kaputt ist
+
+`java.lang.IllegalStateException: cannot open system clipboard` aus `WClipboard.openClipboard0`.
+Ein nativer Windows-Aufruf: die Zwischenablage ist von einem anderen Programm belegt. Betrifft
+`testDependenciesInTheClipboardProject` und
+`testStartMoveTransactionAndExternalDocumentFlavor_Issue2050`.
+
+**Nicht geraten, sondern gemessen:** eigene Änderungen per `git stash` beiseitegelegt und erneut
+gelaufen → dieselben zwei Tests fallen identisch aus. Sie haben mit dem Fork nichts zu tun.
+
+Die naheliegende Vermutung — das laufende GanttProject hält die Zwischenablage — war **falsch**:
+nach dem Schließen aller Instanzen blieben sie rot. Wahrscheinlicher ist ein
+Zwischenablage-Verwalter oder eine Fernsitzung. Bei einem roten Lauf also erst diese zwei Namen
+prüfen, bevor man den eigenen Änderungen nachjagt.
+
+Damit sind es **zwei** bekannte, fremde Fehlschläge: `GPCloudDocumentTest` (immer) und diese hier
+(umgebungsabhängig).
+
+### DRITTER FUND: derselbe Token-Verlust noch einmal, an der Tabelle vorbei
+
+Beim Durchsehen des zweiten Fundes aufgefallen. Die Behebung sitzt in
+`MainPropertiesPanel.save()` — also im **Ressourcendialog**. Name und E-Mail lassen sich aber
+genauso in der **Ressourcentabelle** ändern (`ResourceTable.setValue`, Zeilen für `NAME` und
+`EMAIL`), und dieser Weg öffnet den Dialog nie. Dort bestand der Fehler unverändert fort: E-Mail in
+die Zelle tippen → der Token ist unerreichbar, und das Geheimnis bleibt unter dem alten Schlüssel
+in `~/.ganttproject` liegen.
+
+**Nicht behauptet, sondern gezeigt.** Gegentest 25: die Absicherung wieder herausgenommen, also
+den Stand vor der Behebung hergestellt →
+`ComparisonFailure: the token became unreachable when the address was added expected:<geheim123>
+but was:<null>`. Genau der Verlust.
+
+Behoben mit `HumanResource.keepingTokenReachable { … }`: Schlüssel vorher merken, Änderung
+ausführen, Token mitnehmen. Die Rechenlogik liegt als reine Funktion `tokensAfterKeyChange` in
+`TokenStore.kt` — sie gibt **null** zurück, wenn nichts zu tun ist, damit eine Änderung am Telefon
+die Einstellungsdatei nicht anfasst. Vier neue Tests in `TogglTokensTest`.
+
+Bewusst **kein** Umbau von `save()`: die dortige Fassung behandelt zusätzlich das geleerte
+Token-Feld und funktioniert. Zwei Aufrufstellen, ein gemeinsames Verständnis — dokumentiert an
+beiden Stellen.
+
+**Noch offen an derselben Stelle:** `OverwritingMerger` und der Projektimport
+(`XmlProjectImporter`, `ResourceLoader`) setzen Name und E-Mail ebenfalls. Beim Laden eines
+Projekts ist das richtig so — dort existiert vorher kein Schlüssel. Beim **Zusammenführen** von
+Ressourcen wäre zu klären, wessen Token gilt; das ist eine Bedienungsfrage und keine, die sich
+raten lässt.
+
 ### Was hier NICHT geprüft werden konnte
 
 Der Gradle-Build bleibt in der Web-Umgebung gesperrt (`mdfx`, Abschnitt 13); die geänderten
