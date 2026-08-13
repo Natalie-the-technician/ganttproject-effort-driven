@@ -96,7 +96,7 @@ class TogglImportAction @JvmOverloads constructor(
       return
     }
 
-    askForPeriod.ask(TogglTokenOptions.importDays.value ?: DEFAULT_IMPORT_DAYS) { days ->
+    askForPeriod.ask(usableImportDays(TogglTokenOptions.importDays.value)) { days ->
       // Remember the choice: the next import usually wants the same period.
       TogglTokenOptions.importDays.value = days
       fetchAndPlan(token, person.name.orEmpty(), days.toLong())

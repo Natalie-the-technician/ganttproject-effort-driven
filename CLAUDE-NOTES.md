@@ -1664,11 +1664,50 @@ mit einem Grund, den es nicht gibt.
 
 ### Was jetzt NUR noch Oberfläche ist
 
-Nichts mehr aus der ursprünglichen Planung. Offen sind nur noch Erweiterungen:
-- **Aufteilen eines Eintrags** auf mehrere Vorgänge — braucht zuerst `EntryAssignment` mit
-  Stundenwert in `planTaskImport`.
-- **Gelernte Zuordnungen**: dafür müsste die Buchführung auch den Eintragstext merken, dann greift
-  `MatchReason.LEARNED` wirklich.
+Nichts mehr aus der ursprünglichen Planung.
+
+### BEWUSST NICHT unbeaufsichtigt gebaut: das Aufteilen
+
+Natalie hat freigegeben, die restlichen Ausbauschritte allein fertigzustellen. Das Aufteilen habe
+ich trotzdem **liegen gelassen**, und der Grund gehört festgehalten, damit ihn niemand für
+Bequemlichkeit hält.
+
+Der naheliegende Entwurf — `EntryAssignment(entry, task, hours)` und je Vorgang der eigene Anteil
+in dessen Buchführung — **bricht den Schutz beim Umhängen**. `ImportApplyTest.an entry reassigned
+to another task is not counted twice` verlangt: wird Eintrag 1 von Vorgang A nach B umgehängt,
+darf B **nichts** dazubekommen. Das funktioniert nur, weil `alreadyImported` **projektweit**
+gemerged wird (`projectImportLedger` über `mergeLedgers`). Mit Anteilen je Vorgang hätte B keinen
+eigenen Vorbestand für diesen Eintrag — und bekäme die vollen Stunden.
+
+Ein tragfähiger Entwurf muss also **beides** können: projektweit erkennen, ob der Eintrag schon
+verbucht ist, und den Zuwachs auf die Anteile verteilen. Die Fälle, die dabei einzeln durchdacht
+gehören:
+- neuer Eintrag, aufgeteilt → Anteile wie eingegeben,
+- schon verbuchter Eintrag, Dauer in Toggl geändert → Differenz auf die Anteile verteilen,
+- schon verbuchter Eintrag, **Aufteilung** geändert → Anteile bei allen beteiligten Vorgängen
+  angleichen, auch bei denen, die keinen mehr bekommen,
+- Umhängen eines aufgeteilten Eintrags.
+
+**Warum nicht über Nacht:** Der Fehlermodus ist *stille falsche Stunden im Plan* — das Schlimmste,
+was diese Funktion anrichten kann. Zugleich müsste ich beim Umbau genau die Tests anfassen, die
+mich davor bewahren; ein Test, den ich selbst umschreibe, fängt mich nicht mehr. Das braucht die
+Gegentest-Runde zu zweit, nicht einen unbeaufsichtigten Lauf.
+
+Bis dahin gilt die Vorbedingung in `planTaskImport` unverändert: **eine** Zuordnung je Eintrag, und
+der Zuordnungsdialog bietet nichts anderes an. `validateSplit` liegt fertig bereit.
+
+### Gelernte Zuordnungen — ebenfalls offen, mit Vorschlag
+
+`MatchReason.LEARNED` greift heute nie, weil die Buchführung nur Eintrags-Kennungen und Stunden
+merkt, nicht die Texte.
+
+**Nicht** in die bestehende Buchführung mischen: die läuft durch die Projektdatei und wird von
+`mergeLedgers` gelesen; ein Formatwechsel dort riskiert bestehende Projekte. Sauberer wäre eine
+**eigene** benutzerdefinierte Eigenschaft (`toggl_learned`), rein additiv.
+
+Zu bedenken: `LEARNED` ist einer der beiden Gründe, bei denen der Zuordnungsdialog **vorauswählt**.
+Ein falsch Gelerntes wird damit leicht ungeprüft bestätigt — die Regel, wann etwas als gelernt
+gilt, ist also eine Bedienentscheidung und keine technische.
 
 ### Noch offen aus dieser Sitzung
 

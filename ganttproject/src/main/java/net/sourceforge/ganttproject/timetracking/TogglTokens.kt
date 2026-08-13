@@ -91,6 +91,21 @@ const val MAX_IMPORT_DAYS = 90
  *
  * @return die Tageszahl, oder null wenn der Text keine brauchbare ergibt.
  */
+/**
+ * [Fork-Aenderung] Der Wert, mit dem der Zeitraum-Dialog vorbelegt wird.
+ *
+ * Der gespeicherte Wert kann ausserhalb der Grenzen liegen — genau so passiert: als die Obergrenze
+ * noch (faelschlich) 3650 war, blieben 93 Tage in den Einstellungen stehen. Ohne Einpassen stuende
+ * beim naechsten Oeffnen eine Zahl im Feld, die Toggl mit 400 abweist, und die Benutzerin muesste
+ * raten, warum.
+ *
+ * Eingepasst statt abgewiesen: Es ist kein Tippfehler, sondern ein Wert aus einer aelteren
+ * Fassung. Ihn stillschweigend auf etwas Brauchbares zu ziehen ist hier richtig, weil er sichtbar
+ * im Feld steht und noch bestaetigt werden muss.
+ */
+fun usableImportDays(stored: Int?): Int =
+  (stored ?: DEFAULT_IMPORT_DAYS).coerceIn(MIN_IMPORT_DAYS, MAX_IMPORT_DAYS)
+
 fun parseImportDays(text: String?): Int? {
   val value = text?.trim()?.toIntOrNull() ?: return null
   return if (value in MIN_IMPORT_DAYS..MAX_IMPORT_DAYS) value else null

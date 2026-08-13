@@ -177,6 +177,24 @@ class ImportSelectionTest : TestCase() {
    * silently become the default, zero and negative numbers a range that ends before it starts.
    * Returning null lets the dialog say so instead.
    */
+  /**
+   * A value stored by an older version can be out of range — exactly what happened: while the
+   * upper bound was wrongly 3650, the number 93 stayed in the settings. Prefilled unchanged it
+   * would put a value in the field that Toggl rejects with 400, and the user would have to guess
+   * why.
+   */
+  fun testAStoredValueOutOfRangeIsPulledIntoIt() {
+    assertEquals(MAX_IMPORT_DAYS, usableImportDays(93))
+    assertEquals(MAX_IMPORT_DAYS, usableImportDays(3650))
+    assertEquals(MIN_IMPORT_DAYS, usableImportDays(0))
+    assertEquals(MIN_IMPORT_DAYS, usableImportDays(-5))
+  }
+
+  fun testAStoredValueInRangeIsKept() {
+    assertEquals(30, usableImportDays(30))
+    assertEquals(DEFAULT_IMPORT_DAYS, usableImportDays(null))
+  }
+
   fun testNonsenseIsRefusedRatherThanGuessed() {
     assertNull(parseImportDays(null))
     assertNull(parseImportDays(""))
