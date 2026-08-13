@@ -150,4 +150,6 @@
     <string name="autosave_hint">Changes are saved automatically when you leave the app or close the project.</string>
     <string name="task_effort_duration_mismatch">The planned duration of %1$d working days does not match this effort. At the current assignment it would be %2$d days.</string>
     <string name="task_no_assignment_for_effort">Assign a resource to see how many days this effort corresponds to.</string>
+    <string name="collapse_group">Collapse group</string>
+    <string name="expand_group">Expand group</string>
 </resources>

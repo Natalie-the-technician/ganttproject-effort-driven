@@ -16,7 +16,8 @@ adjust who works how much, and pull time entries in from Toggl Track.
 
 | | |
 |---|---|
-| **View** | Gantt chart with working-day bars, progress shading, milestones, summary tasks, weekend and today markers |
+| **View** | Gantt chart with working-day bars, progress shading, milestones, weekend and today markers; pinch to zoom, jump to today |
+| **Outline** | Fold and unfold task groups, using the same `expand` attribute the desktop writes |
 | **Progress** | Set completion on leaf tasks |
 | **Hours** | Planned effort and actual hours per task |
 | **Resources** | Hours per day per person, assignment load in percent, assign and unassign |

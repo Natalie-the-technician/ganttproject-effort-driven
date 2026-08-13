@@ -145,4 +145,6 @@
     <string name="autosave_hint">Änderungen werden automatisch gespeichert, wenn du die App verlässt oder das Projekt schließt.</string>
     <string name="task_effort_duration_mismatch">Die geplante Dauer von %1$d Arbeitstagen passt nicht zu diesem Aufwand. Bei der aktuellen Zuweisung wären es %2$d Tage.</string>
     <string name="task_no_assignment_for_effort">Weise eine Ressource zu, um zu sehen, wie vielen Tagen dieser Aufwand entspricht.</string>
+    <string name="collapse_group">Gruppe zuklappen</string>
+    <string name="expand_group">Gruppe aufklappen</string>
 </resources>

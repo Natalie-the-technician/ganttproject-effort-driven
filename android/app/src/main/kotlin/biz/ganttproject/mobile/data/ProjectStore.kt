@@ -62,6 +62,22 @@ class OpenProject(
     return changed
   }
 
+  /**
+   * Applies a change that is view state, not content — folding a task group,
+   * for instance — and refreshes the snapshot **without** marking the project
+   * dirty.
+   *
+   * Merely looking at a project must not rewrite the file. With auto-saving
+   * on, treating a fold as an edit would mean every browse session writes to
+   * a synced folder and churns its history. The change still sits in the
+   * document, so it rides along the next time something real is saved.
+   */
+  fun editViewState(edit: (GanttDocument) -> Boolean): Boolean {
+    val changed = edit(document)
+    if (changed) model = document.read()
+    return changed
+  }
+
   internal fun markSaved() {
     isDirty = false
   }

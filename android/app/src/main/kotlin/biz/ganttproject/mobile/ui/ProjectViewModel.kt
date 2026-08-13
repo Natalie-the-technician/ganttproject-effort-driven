@@ -222,6 +222,19 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     return changed
   }
 
+  /**
+   * Folds or unfolds a task group. Not an edit: see
+   * [OpenProject.editViewState] for why this must not dirty the file.
+   */
+  fun toggleExpanded(taskId: String) {
+    val project = open ?: return
+    val task = project.model.task(taskId) ?: return
+    if (project.editViewState { it.setTaskExpanded(taskId, !task.isExpanded) }) {
+      revision++
+      _state.update { it.copy(project = snapshot(project)) }
+    }
+  }
+
   fun setCompletion(taskId: String, percent: Int) = edit { it.setTaskCompletion(taskId, percent) }
 
   fun setEffortHours(taskId: String, hours: Double?) = edit { it.setTaskEffortHours(taskId, hours) }

@@ -131,7 +131,10 @@ class GanttDocument private constructor(private val root: XmlElement) {
         children = readTasks(el, depth + 1, defs),
         effortHours = effortId?.let { readTaskPropertyValue(el, it)?.toDoubleOrNull() },
         actualEffortHours = actualId?.let { readTaskPropertyValue(el, it)?.toDoubleOrNull() },
-        togglMatchKeys = ForkProperties.decodeMatchKeys(keysId?.let { readTaskPropertyValue(el, it) })
+        togglMatchKeys = ForkProperties.decodeMatchKeys(keysId?.let { readTaskPropertyValue(el, it) }),
+        // Absent means expanded: that is how tasks written before the
+        // attribute existed behave in the desktop too.
+        isExpanded = el.attr("expand") != "false"
       )
     }
   }
@@ -220,6 +223,20 @@ class GanttDocument private constructor(private val root: XmlElement) {
     val el = taskElement(taskId) ?: return false
     if (el.childElements("task").isNotEmpty()) return false
     el.setAttr("complete", percent.coerceIn(0, 100).toString())
+    return true
+  }
+
+  /**
+   * Folds or unfolds a task group, using the same `expand` attribute the
+   * desktop writes — so the state carries between phone and desktop instead
+   * of each keeping its own idea of the outline.
+   *
+   * @return false if the task is unknown or has no subtasks to fold
+   */
+  fun setTaskExpanded(taskId: String, expanded: Boolean): Boolean {
+    val el = taskElement(taskId) ?: return false
+    if (el.childElements("task").isEmpty()) return false
+    el.setAttr("expand", expanded.toString())
     return true
   }
 

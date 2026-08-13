@@ -40,6 +40,26 @@ data class ProjectModel(
     out
   }
 
+  /**
+   * The tasks a collapsible outline actually shows: children of a folded
+   * group are left out.
+   *
+   * Kept separate from [flatTasks] on purpose. Anything that reasons about
+   * the project — matching time entries, resource load, totals — must see
+   * every task regardless of what happens to be folded on screen.
+   */
+  val visibleTasks: List<TaskNode> by lazy {
+    val out = mutableListOf<TaskNode>()
+    fun walk(list: List<TaskNode>) {
+      for (task in list) {
+        out.add(task)
+        if (task.isExpanded) walk(task.children)
+      }
+    }
+    walk(tasks)
+    out
+  }
+
   fun task(id: String): TaskNode? = flatTasks.firstOrNull { it.id == id }
 
   fun resource(id: String): ResourceNode? = resources.firstOrNull { it.id == id }
@@ -75,7 +95,15 @@ data class TaskNode(
   /** Fork field `effort_actual_hours` — hours actually spent, or null if unset. */
   val actualEffortHours: Double?,
   /** Fork field `toggl_match_keys` — confirmed time-entry match keys. */
-  val togglMatchKeys: List<String>
+  val togglMatchKeys: List<String>,
+  /**
+   * The `expand` attribute: whether this task's subtasks are shown.
+   *
+   * Stock GanttProject stores its own collapse state here, so a group folded
+   * on the desktop arrives folded on the phone and vice versa. Missing means
+   * expanded, which is how a task written by an older version behaves.
+   */
+  val isExpanded: Boolean = true
 ) {
   val isLeaf: Boolean get() = children.isEmpty()
 

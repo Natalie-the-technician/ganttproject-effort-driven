@@ -17,15 +17,19 @@ import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
@@ -68,6 +72,7 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 
 private val NAME_COLUMN_WIDTH = 150.dp
+private val CHEVRON_SIZE = 24.dp
 private val ROW_HEIGHT = 44.dp
 private val HEADER_HEIGHT = 38.dp
 private const val MIN_DAY_WIDTH_DP = 2f
@@ -211,14 +216,15 @@ fun GanttScreen(project: ProjectUi, viewModel: ProjectViewModel) {
           }
         }
     ) {
-      items(model.flatTasks, key = { it.id }) { task ->
+      // visibleTasks, not flatTasks: children of a folded group are left out.
+      items(model.visibleTasks, key = { it.id }) { task ->
         Row(
           modifier = Modifier
             .fillMaxWidth()
             .height(ROW_HEIGHT)
             .clickable { selectedTaskId = task.id }
         ) {
-          TaskNameCell(task)
+          TaskNameCell(task, onToggleExpand = { viewModel.toggleExpanded(task.id) })
           TaskBar(task, model.calendar, chartStart, dayWidthPx, offsetPx)
         }
       }
@@ -239,14 +245,33 @@ fun GanttScreen(project: ProjectUi, viewModel: ProjectViewModel) {
 }
 
 @Composable
-private fun TaskNameCell(task: TaskNode) {
+private fun TaskNameCell(task: TaskNode, onToggleExpand: () -> Unit) {
   Row(
     modifier = Modifier
       .width(NAME_COLUMN_WIDTH)
       .fillMaxHeight()
-      .padding(start = (8 + task.depth * 12).dp, end = 4.dp),
+      .padding(start = (4 + task.depth * 10).dp, end = 4.dp),
     verticalAlignment = Alignment.CenterVertically
   ) {
+    if (task.isLeaf) {
+      // Keeps leaf names aligned with the ones that do have a chevron,
+      // instead of letting every level jitter by an icon width.
+      Spacer(modifier = Modifier.width(CHEVRON_SIZE))
+    } else {
+      Icon(
+        imageVector =
+          if (task.isExpanded) Icons.Default.ExpandMore else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = stringResource(
+          if (task.isExpanded) R.string.collapse_group else R.string.expand_group
+        ),
+        modifier = Modifier
+          .size(CHEVRON_SIZE)
+          // A generous touch target: the icon is small, and hitting it must
+          // not be a lottery that opens the task sheet instead.
+          .clickable(onClick = onToggleExpand),
+        tint = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    }
     Column {
       Text(
         text = task.name,
