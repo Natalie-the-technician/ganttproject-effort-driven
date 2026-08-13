@@ -143,7 +143,12 @@ task distApp(dependsOn: [distBin, distRuntime]) {
         // Zwischenstand ohne runtime/: was in --input liegt, kopiert jpackage mit. Die Laufzeit
         // kommt ueber --runtime-image und waere sonst doppelt im Ergebnis, rund 200 MB umsonst.
         def staging = file("${layout.buildDirectory.get().asFile}/jpackage-input")
-        injected.fs.delete { delete staging, target }
+        // ERST neben dist-app bauen, DANN tauschen. Vorher wurde dist-app als Erstes geloescht;
+        // scheiterte das Loeschen an einer Windows-Dateisperre (die Handles eines beendeten
+        // GanttProject bleiben kurz bestehen), blieb ein halb geloeschtes dist-app zurueck -- eine
+        // .exe, die beim Doppelklick nichts tut, weil app/plugins fehlt. Am Bildschirm passiert.
+        def fresh = file("${layout.buildDirectory.get().asFile}/jpackage-out")
+        injected.fs.delete { delete staging, fresh }
         injected.fs.copy {
             from distBinDir
             into staging
@@ -154,7 +159,7 @@ task distApp(dependsOn: [distBin, distRuntime]) {
                     '--type', 'app-image',
                     '--name', 'GanttProject',
                     '--app-version', "${project.version}".replaceAll('[^0-9.].*$', ''),
-                    '--dest', target.toString(),
+                    '--dest', fresh.toString(),
                     '--input', staging.toString(),
                     '--runtime-image', new File(distBinDir, 'runtime').toString(),
                     '--main-jar', 'eclipsito.jar',
@@ -162,22 +167,67 @@ task distApp(dependsOn: [distBin, distRuntime]) {
                     '--icon', file('ganttproject.ico').toString()]
         // Ein eigenes --arguments je Argument. Ein einziger String wuerde von jpackage anders
         // zerlegt, als hier gemeint ist -- der Pfad mit dem Semikolon ist genau so ein Fall.
+        // "-log true" gehoert dazu: ohne das schreibt GanttProject nur den Umgebungsblock und
+        // keine Zeile ueber den Start der Oberflaeche. Bei einem Fenster-Programm gibt es keine
+        // Konsole, das Protokoll ist also die einzige Spur -- ohne sie ist jeder Fehlstart eine
+        // Blackbox. ganttproject.bat uebergibt es ebenfalls.
         ['--verbosity', '1',
-         '--version-dirs', 'plugins;~/.ganttproject.d/updates',
-         '--app', 'net.sourceforge.ganttproject.GanttProject'].each {
+         // $APPDIR statt "plugins": eclipsito loest einen relativen Pfad gegen das
+         // ARBEITSVERZEICHNIS auf, und das ist beim Doppelklick nicht der Programmordner. Es
+         // suchte die Plugins dann dort, wo gestartet wurde, fand nichts und tat gar nichts --
+         // kein Fenster, kein Protokoll. jpackage ersetzt $APPDIR durch den app-Ordner.
+         '--version-dirs', '$APPDIR/plugins;~/.ganttproject.d/updates',
+         '--app', 'net.sourceforge.ganttproject.GanttProject',
+         '-log', 'true'].each {
             args += ['--arguments', it]
         }
         args += ['--java-options', '-Xmx2048m', '--java-options', '-Dgpcloud=prod',
                  '--java-options', '-Dorg.jooq.no-logo=true',
                  '--java-options', '-Dsun.java2d.d3d=false']
-        // javaExportOptions ist eine flache Liste aus Schalter und Wert; jpackage will beides in
-        // EINEM --java-options, sonst fehlt dem Schalter sein Argument.
+        // javaExportOptions ist eine flache Liste aus Schalter und Wert. Beides muss in EIN
+        // --java-options, und zwar mit '=' verbunden: "--add-exports=modul/paket=ALL-UNNAMED".
+        //
+        // NACHGEWIESEN, warum nicht mit Leerzeichen: jpackage zerlegt den Wert daran und schreibt
+        // zwei Zeilen in die .cfg. Der Schalter verliert damit sein Argument, die JVM bricht beim
+        // Start ab -- der Prozess laeuft, zeigt kein Fenster und schreibt kein Protokoll. Genau so
+        // gesehen.
         javaExportOptions.collate(2).each { pair ->
-            args += ['--java-options', pair.join('=').replaceFirst('=', ' ')]
+            args += ['--java-options', pair.join('=')]
         }
 
         println '= Baue Windows-Starter mit jpackage ...'
         injected.exec.exec { commandLine args }
+
+        // Den app-Ordner SELBST auf den Klassenpfad. jpackage traegt dort nur die Jar-Dateien ein;
+        // ganttproject.bat setzt aber zusaetzlich %GP_HOME%, also das Verzeichnis. Ohne das kam
+        // die Oberflaeche nicht hoch -- der Start blieb nach "Starting the UI" stehen, das
+        // Protokoll endete nach dem Umgebungsblock. Mit dem Verzeichnis laeuft er durch.
+        def cfg = new File(fresh, 'GanttProject/app/GanttProject.cfg')
+        if (!cfg.isFile()) {
+            throw new GradleException("jpackage schrieb keine Konfiguration: ${cfg}")
+        }
+        // Ohne regulaeren Ausdruck: in der Ersetzung waere $APPDIR ein Gruppenverweis und der
+        // Aufruf braeche mit "Illegal group reference" ab.
+        def lines = cfg.readLines()
+        def lastCp = lines.findLastIndexOf { it.startsWith('app.classpath=') }
+        if (lastCp < 0) {
+            throw new GradleException("Kein app.classpath in ${cfg} -- Aufbau unerwartet.")
+        }
+        lines.add(lastCp + 1, 'app.classpath=$APPDIR')
+        cfg.text = lines.join(System.lineSeparator()) + System.lineSeparator()
+
+        // Erst jetzt, wo der neue Stand vollstaendig daneben liegt, den alten ersetzen.
+        def built = new File(fresh, 'GanttProject/GanttProject.exe')
+        if (!built.isFile()) {
+            throw new GradleException("jpackage lieferte keinen Starter: ${built}")
+        }
+        injected.fs.delete { delete target }
+        if (target.exists()) {
+            throw new GradleException(
+                "dist-app liess sich nicht ersetzen -- laeuft GanttProject noch?\n" +
+                "Der neue Stand liegt unversehrt in ${fresh}.")
+        }
+        injected.fs.copy { from fresh; into target }
         println "= Fertig: ${new File(target, 'GanttProject/GanttProject.exe')}"
     }
 }

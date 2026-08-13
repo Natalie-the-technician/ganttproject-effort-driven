@@ -1545,8 +1545,32 @@ Aufruf bildet `ganttproject.bat` nach: eclipsito als Hauptklasse, dieselben Argu
 `--add-exports` aus `javaExportOptions` (die Liste, die auch `runApp` benutzt und die
 nachweislich trägt).
 
-**Ausprobiert, nicht behauptet:** 64-Bit bestätigt, gestartet, `ProjectOpenActivityCompleted` im
-Protokoll.
+**Ausprobiert, nicht behauptet:** 64-Bit bestätigt, aus einem **fremden** Arbeitsverzeichnis
+gestartet, `ProjectOpenActivityCompleted` im Protokoll.
+
+**Vier Fehler steckten in dieser einen Bau-Aufgabe.** Alle vier führten zum selben Bild — Prozess
+läuft, kein Fenster, kein Protokoll — und keiner war ohne Nachmessen zu erkennen:
+
+1. **`--add-exports` mit Leerzeichen.** jpackage zerlegt den Wert daran und schreibt zwei
+   `java-options`-Zeilen; der Schalter verliert sein Argument, die JVM bricht beim Start ab.
+   Richtig ist `--add-exports=modul/paket=ALL-UNNAMED`, mit `=`.
+2. **`--version-dirs plugins` ist relativ.** eclipsito löst das gegen das **Arbeitsverzeichnis**
+   auf, beim Doppelklick also nicht gegen den Programmordner. Richtig: `$APPDIR/plugins`.
+3. **Der `app`-Ordner fehlte auf dem Klassenpfad.** `ganttproject.bat` setzt zusätzlich
+   `%GP_HOME%`, also das Verzeichnis selbst. Ohne das blieb der Start nach „Starting the UI"
+   stehen. Wird jetzt nachträglich als `app.classpath=$APPDIR` in die `.cfg` eingetragen.
+4. **`-log true` fehlte.** Ohne das schreibt GanttProject nur den Umgebungsblock. Bei einem
+   Fenster-Programm gibt es keine Konsole — ohne Protokoll ist jeder Fehlstart eine Blackbox.
+
+Beim Eintragen von (3) **nicht** `replaceFirst` mit regulärem Ausdruck benutzen: `$APPDIR` wäre in
+der Ersetzung ein Gruppenverweis und der Aufruf bricht mit „Illegal group reference" ab.
+
+**Zwei Sperren-Fallen, beide selbst erlebt:**
+- Die Aufgabe baut jetzt **neben** `dist-app` und tauscht erst danach. Vorher löschte sie das Ziel
+  als Erstes; scheiterte das an einer Dateisperre, blieb ein **halb gelöschtes** `dist-app`
+  zurück — eine `.exe`, die beim Doppelklick nichts tut, weil `app/plugins` fehlt.
+- **Eine Shell mit Arbeitsverzeichnis innerhalb `dist-app` verhindert das Löschen.** Die
+  Gradle-Meldung sagt es ausdrücklich mit. Vor dem Bau also aus dem Ordner heraus.
 
 Zwei Feinheiten im Bau:
 - `--input` erhält einen Zwischenstand **ohne** `runtime/`. Was dort liegt, kopiert `jpackage` mit;

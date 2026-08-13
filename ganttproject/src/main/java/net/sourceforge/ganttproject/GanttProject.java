@@ -570,7 +570,22 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
       var barrier = getProjectUIFacade().ensureProjectSaved(getProject());
       barrier.await(result -> {
         if (result) {
-          getProject().close();
+          // [Fork-Aenderung] Scheitert das Schliessen, wird trotzdem beendet -- und die Ursache
+          // steht im Protokoll.
+          //
+          // NACHGEWIESEN: Nach "Beenden" und "Nicht speichern" blieb der Prozess ohne Fenster
+          // zurueck. Die letzte Protokollzeile war options.save() aus dieser Methode, danach
+          // nichts. getProject().close() warf also eine Ausnahme, die der Barrier verschluckte;
+          // doQuitApplication wurde nie erreicht. Das Fenster verschwand trotzdem, weil der
+          // zweite Rueckruf am selben Barrier (GanttProjectFxApp) Platform.exit() aufruft.
+          //
+          // Wer beenden will und "nicht speichern" gewaehlt hat, soll beenden -- ein Prozess, der
+          // unsichtbar weiterlaeuft, ist schlimmer als ein unsauber geschlossenes Projekt.
+          try {
+            getProject().close();
+          } catch (Throwable e) {
+            GPLogger.log(e);
+          }
           doQuitApplication(withSystemExit);
         } else {
           //++setVisible(true);
