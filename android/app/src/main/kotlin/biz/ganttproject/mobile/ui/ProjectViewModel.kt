@@ -272,7 +272,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
           val candidates = project.model.flatTasks.map {
             TaskCandidate(it.id, it.name, it.togglMatchKeys, it.isLeaf && !it.isMilestone)
           }
-          val ledger = prefs.importedHours(projectKey())
+          // The ledger comes from the project file, not from this device,
+          // so it is right even when the last import happened elsewhere.
+          val ledger = project.document.importedHoursByEntry()
           val rows = result.value.map { entry ->
             val outcome = Matching.suggestTasks(entry, candidates)
             ImportRow(
@@ -302,16 +304,21 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
   fun dismissImportError() = _importState.update { it.copy(error = null) }
 
   /** The plan that the preview shows and [applyImport] then writes. */
-  fun currentPlan(): ImportPlan =
-    planImport(_importState.value.assignments, prefs.importedHours(projectKey()))
+  fun currentPlan(): ImportPlan {
+    val ledger = open?.document?.importedHoursByEntry() ?: emptyMap()
+    return planImport(_importState.value.assignments, ledger)
+  }
 
   /**
    * Writes the planned hours into the document.
    *
    * Hours are **added**, never set: combined with the ledger this is what
    * makes a second run of the same import a no-op instead of a doubling.
-   * The file itself is not written here — the user still has to save, so a
-   * mistaken import can be abandoned by closing without saving.
+   *
+   * The ledger is written into the document in the same edit as the hours,
+   * so the two can never disagree. The file itself is not written here — the
+   * user still has to save, which means abandoning a mistaken import by
+   * closing without saving discards the record along with the hours.
    */
   fun applyImport() {
     val project = open ?: return
@@ -322,6 +329,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     project.edit { document ->
       for ((taskId, hours) in plan.hoursPerTask) {
         document.addTaskActualEffortHours(taskId, hours)
+      }
+      // Record what was written, on the same task, in the same edit.
+      for (line in plan.lines) {
+        if (line.isSkipped) continue
+        document.recordImportedHours(line.taskId, line.entryId, line.hoursToAdd)
       }
       if (learn) {
         // Remember the confirmed pairing so the next import recognises it
@@ -337,12 +349,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
     revision++
 
-    // Record what was actually written, keyed by entry id alone.
     val addedPerEntry = plan.lines
       .filter { !it.isSkipped }
       .groupBy { it.entryId }
       .mapValues { (_, lines) -> lines.sumOf { it.hoursToAdd } }
-    prefs.recordImportedHours(projectKey(), addedPerEntry)
 
     _state.update {
       it.copy(project = snapshot(project), notice = Notice.HoursImported(plan.totalHours))
@@ -357,6 +367,4 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  /** Ledger scope. The file URI identifies the project across sessions. */
-  private fun projectKey(): String = open?.uri?.toString() ?: ""
 }

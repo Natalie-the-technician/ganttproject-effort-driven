@@ -33,6 +33,28 @@ object ForkProperties {
   /** Learned match keys for the time-tracking import, per task. */
   const val TASK_TOGGL_MATCH_KEYS = "toggl_match_keys"
 
+  /**
+   * Time-entry ids already imported, and how many hours of each.
+   *
+   * Stored per task but **read as a union across every task** (see
+   * [GanttDocument.importedHoursByEntry]), which is what makes it a
+   * project-wide record despite living on individual tasks.
+   *
+   * That indirection is the whole trick. The guard against importing the
+   * same hours twice has to be keyed by time-entry id *alone* — otherwise it
+   * stops working the moment an entry is reassigned to a different task on a
+   * second run. Keying by (entry, task) would break it; storing by task
+   * while looking up by entry does not.
+   *
+   * A project-level home would be tidier, but there is none that survives:
+   * desktop GanttProject writes a fixed sequence of children under
+   * `<project>` and a fixed set of registered options, so any container we
+   * invented there would be silently dropped on its next save. Custom
+   * properties are a first-class desktop feature and are written back
+   * verbatim.
+   */
+  const val TASK_TOGGL_IMPORTED = "toggl_imported"
+
   /** Working hours per day, per resource. */
   const val RESOURCE_HOURS_PER_DAY = "hours_per_day"
 
@@ -62,6 +84,40 @@ object ForkProperties {
       ?.filter { it.isNotEmpty() }
       ?.distinct()
       ?: emptyList()
+
+  /**
+   * Encodes an import ledger as `entryId=hours|entryId=hours`.
+   *
+   * Entries with no hours are dropped rather than written as zero: a zero
+   * would claim the entry was imported and block it forever.
+   */
+  fun encodeImportedHours(ledger: Map<Long, Double>): String =
+    ledger.entries
+      .filter { it.value > 0.0 }
+      .sortedBy { it.key }
+      .joinToString(MATCH_KEY_SEPARATOR) { "${it.key}=${trimNumber(it.value)}" }
+
+  /**
+   * Decodes one task's ledger. Unreadable pairs are skipped rather than
+   * failing the whole read — a corrupted fragment must not make a project
+   * unopenable, and skipping only risks re-offering an import, never a
+   * silent double booking, because the preview still shows it.
+   */
+  fun decodeImportedHours(raw: String?): Map<Long, Double> {
+    if (raw.isNullOrBlank()) return emptyMap()
+    val out = mutableMapOf<Long, Double>()
+    for (pair in raw.split(MATCH_KEY_SEPARATOR)) {
+      val parts = pair.split("=")
+      if (parts.size != 2) continue
+      val id = parts[0].trim().toLongOrNull() ?: continue
+      val hours = parts[1].trim().toDoubleOrNull() ?: continue
+      if (hours <= 0.0) continue
+      // The same entry may appear on several tasks when it was split, so
+      // the shares are summed, never overwritten.
+      out[id] = (out[id] ?: 0.0) + hours
+    }
+    return out
+  }
 }
 
 /**

@@ -95,7 +95,7 @@ have no SDK — including CI containers where the SDK download is blocked.
 
 ```
 android/
-├── gantt-core/          Pure Kotlin. No Android. 133 tests.
+├── gantt-core/          Pure Kotlin. No Android. 150 tests.
 │   ├── XmlTree.kt           SAX-based tree that preserves attribute order
 │   ├── GanttDocument.kt     Load, read, edit in place, save
 │   ├── Model.kt             Read-only snapshot types
@@ -135,11 +135,24 @@ core, with a test.
 Confirmed pairings are remembered on the task as match keys, so the next import
 recognises them outright.
 
-**Known limitation:** the ledger lives on the device, because the GanttProject
-format has no place for project-wide bookkeeping that survives a desktop save.
-Importing the same period from a second device could therefore double the
-hours. The preview always shows what would be written, so it is visible before
-it happens.
+### Where the "already imported" record lives
+
+**In the project file**, as a custom property, so it travels with the project:
+import from a second device, or from the desktop, and the guard still holds.
+
+It is stored *per task* but read as a **union across every task**. That
+indirection is the design. The guard has to be keyed by time-entry id alone —
+key it by (entry, task) and it stops working the moment an entry is reassigned
+on a second run — but there is no project-level home for it: desktop
+GanttProject writes a fixed sequence of children under `<project>` and a fixed
+set of registered options, so any container invented there would be silently
+dropped on its next save. Storing by task while looking up by entry gets both
+properties at once.
+
+Keeping it in the file rather than on the device has a second benefit: if you
+abandon an import by closing without saving, the record is discarded along with
+the hours. A device-local ledger would remember an import that never reached
+the file, and those hours could then never be imported again.
 
 ### What counts as a match
 

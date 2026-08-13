@@ -176,14 +176,36 @@ alte Fassung.
 
 ---
 
-## 8. Offene Punkte
+## 8. Nachtrag: der Import-Merker liegt jetzt in der Datei
 
-- [ ] **Import-Ledger liegt auf dem Gerät, nicht in der Datei.** Das GanttProject-
-      Format hat keinen projektweiten Ablageort, den der Desktop nicht verwirft:
-      unbekannte Elemente und Attribute wirft der `TaskSaver` weg, und Custom
-      Properties hängen an Vorgang oder Ressource, nicht am Projekt — der Schutz
-      muss aber allein an der Eintrags-ID hängen. Folge: Import derselben Periode
-      von einem zweiten Gerät könnte doppelt buchen. Die Vorschau zeigt es vorher.
+In einer ersten Fassung lag der Merker, welche Toggl-Einträge schon importiert
+wurden, auf dem Gerät. Natalies Rückfrage („hatten wir das nicht über die Custom
+Columns gelöst?") war berechtigt — ich hatte einen projektweiten Ablageort für
+unmöglich erklärt, ohne im Code nachzusehen.
+
+**Was stimmt:** `GanttXMLSaver` schreibt unter `<project>` eine feste Kinderfolge
+(views, calendar, tasks, resources, allocations, vacations, history, roles), und
+`OptionSaver` schreibt nur registrierte Optionen. Ein eigenes Element oder eine
+eigene Projektoption dort würde das Original-GanttProject beim nächsten Speichern
+verwerfen. Beides im Code nachgesehen, nicht vermutet.
+
+**Was ich übersehen hatte:** Die Vormerkung sagt „nicht je Vorgang" — das
+betrifft den **Schlüssel** der Abbildung, nicht den **Ablageort**. Der Merker
+liegt jetzt als Custom Property `toggl_imported` an den Vorgängen und wird beim
+Lesen über **alle** Vorgänge vereinigt (`importedHoursByEntry()`). Damit ist er
+projektweit, obwohl er je Vorgang gespeichert ist, und der Fall „Eintrag wird
+beim zweiten Lauf einem anderen Vorgang zugeordnet" ist abgedeckt — es gibt
+einen Test, der genau danach benannt ist.
+
+**Zusätzlicher Gewinn:** Bricht man einen Import ab, indem man ohne Speichern
+schließt, verschwindet der Merker zusammen mit den Stunden. Die Gerätefassung
+hätte sich einen Import gemerkt, der nie in der Datei ankam — diese Stunden
+wären dann nie wieder importierbar gewesen.
+
+---
+
+## 9. Offene Punkte
+
 - [ ] **Aufteilen eines Eintrags auf mehrere Vorgänge** ist im Kern gebaut und
       getestet (`validateSplit`), in der Oberfläche noch nicht bedienbar.
 - [ ] Kein Undo in der App. Ersatz: ohne Speichern schließen verwirft alles.
@@ -191,7 +213,7 @@ alte Fassung.
 
 ---
 
-## 9. Veröffentlichung als eigenes Repo
+## 10. Veröffentlichung als eigenes Repo
 
 `android/` ist absichtlich eigenständig: eigener Gradle-Wrapper, eigene `LICENSE`
 (GPL v3, wie das Original), eigenes `README.md` auf Englisch. Code und Kommentare

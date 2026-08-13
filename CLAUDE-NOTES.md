@@ -490,9 +490,39 @@ lassen und zurueckgenommen. Ergebnis siehe Abschnitt in `HANDOVER-Android.md`.
 
 - [ ] Handpruefung durch Natalie auf einem echten Geraet mit einer echten
       Projektdatei — die Oberflaeche ist hier nicht startbar
-- [ ] Import-Ledger liegt auf dem Geraet, nicht in der Datei. Import derselben
-      Periode von einem zweiten Geraet koennte doppelt buchen. Die Vorschau
-      zeigt es vorher an. Loesung braucht einen projektweiten Ablageort, den
-      der Desktop nicht verwirft — bisher keiner gefunden.
+- [x] **ERLEDIGT, siehe Nachtrag unten:** Import-Merker liegt jetzt in der Datei.
 - [ ] Aufteilen eines Zeiteintrags auf mehrere Vorgaenge ist im Kern gebaut und
       getestet (`validateSplit`), in der Oberflaeche aber noch nicht bedienbar.
+
+### Nachtrag zur Ablage des Import-Merkers
+
+Ich hatte behauptet, es gebe keinen projektweiten Ablageort, der einen
+Desktop-Speichervorgang ueberlebt. Natalie hat nachgefragt. Die Behauptung war
+in einem Punkt richtig und im entscheidenden Punkt falsch.
+
+**Richtig, im Code nachgesehen:** `GanttXMLSaver.save()` schreibt unter
+`<project>` eine feste Kinderfolge (views, calendar, tasks, resources,
+allocations, vacations, history, roles). `OptionSaver` schreibt nur
+registrierte `GPOption`-Instanzen. Ein eigenes Element oder eine eigene
+Projektoption dort wuerde das Original verwerfen.
+
+**Falsch war der Schluss daraus.** Die Vormerkung in
+`HANDOVER-Zeiterfassung.md` Schritt 4 sagt "nicht je Vorgang" — gemeint ist
+der **Schluessel** der Abbildung, nicht der **Ablageort**. Speichert man je
+Vorgang und liest ueber **alle** Vorgaenge vereinigt, ist der Merker
+projektweit, und der Fall "Eintrag wird beim zweiten Lauf einem anderen
+Vorgang zugeordnet" ist trotzdem abgedeckt.
+
+Umgesetzt als Custom Property `toggl_imported` mit Wert
+`eintragsId=stunden|eintragsId=stunden`, gelesen ueber
+`GanttDocument.importedHoursByEntry()` — rekursiv ueber die Hierarchie, Summen
+je Eintrags-ID.
+
+**Nebengewinn:** Bricht man einen Import ab, indem man ohne Speichern
+schliesst, verschwindet der Merker zusammen mit den Stunden. Die Geraetefassung
+haette sich einen Import gemerkt, der nie in der Datei ankam.
+
+**Lehre fuer kuenftige Sitzungen:** "geht nicht" erst sagen, nachdem der Code
+gelesen ist — und pruefen, ob eine Vorgabe den Schluessel oder den Ablageort
+meint. Diese beiden zu verwechseln haette hier eine funktionierende Loesung
+gekostet.

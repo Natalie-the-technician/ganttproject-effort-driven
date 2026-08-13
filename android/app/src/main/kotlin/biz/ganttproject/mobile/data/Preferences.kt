@@ -110,8 +110,12 @@ class SecureStore(context: Context) {
 data class RecentFile(val uri: String, val displayName: String, val openedAt: Long)
 
 /**
- * Ordinary (unencrypted) app preferences: recent files and the import ledger.
+ * Ordinary (unencrypted) app preferences: just the recent-files list.
  * Nothing here is a secret — a file name is already visible in the picker.
+ *
+ * The import ledger deliberately does NOT live here. It is stored in the
+ * project file itself (see [biz.ganttproject.mobile.core.GanttDocument.importedHoursByEntry]),
+ * so it travels with the project instead of being stranded on one device.
  */
 class AppPreferences(context: Context) {
 
@@ -149,49 +153,6 @@ class AppPreferences(context: Context) {
   }
 
   fun clearRecentFiles() = prefs.edit().remove(KEY_RECENT).apply()
-
-  // --------------------------------------------------------- Import ledger
-
-  /**
-   * Hours already imported per time-entry id, scoped to one project file.
-   *
-   * Why on the device and not in the project file: there is no place in the
-   * GanttProject format for project-wide bookkeeping that survives a desktop
-   * save. Unknown elements and attributes are dropped by the desktop writer,
-   * and custom properties are per task or per resource, not per project —
-   * while the double-import guard must be keyed by entry id alone to work
-   * when an entry is later reassigned.
-   *
-   * The trade-off, stated plainly: importing the same period from a second
-   * device could double the hours. The import preview always shows exactly
-   * what would be written, so it is visible before it happens.
-   */
-  fun importedHours(projectKey: String): Map<Long, Double> =
-    prefs.getStringSet(ledgerKey(projectKey), emptySet())
-      .orEmpty()
-      .mapNotNull { entry ->
-        val parts = entry.split("=")
-        if (parts.size != 2) return@mapNotNull null
-        val id = parts[0].toLongOrNull() ?: return@mapNotNull null
-        val hours = parts[1].toDoubleOrNull() ?: return@mapNotNull null
-        id to hours
-      }
-      .toMap()
-
-  fun recordImportedHours(projectKey: String, added: Map<Long, Double>) {
-    if (added.isEmpty()) return
-    val merged = importedHours(projectKey).toMutableMap()
-    for ((entryId, hours) in added) {
-      merged[entryId] = (merged[entryId] ?: 0.0) + hours
-    }
-    prefs.edit()
-      .putStringSet(ledgerKey(projectKey), merged.map { "${it.key}=${it.value}" }.toSet())
-      .apply()
-  }
-
-  fun clearLedger(projectKey: String) = prefs.edit().remove(ledgerKey(projectKey)).apply()
-
-  private fun ledgerKey(projectKey: String) = "ledger_${projectKey.hashCode()}"
 
   companion object {
     private const val KEY_RECENT = "recent_files"

@@ -272,6 +272,69 @@ class GanttDocument private constructor(private val root: XmlElement) {
     return setTaskMatchKeys(taskId, existing + key)
   }
 
+  // ------------------------------------------------------- Import ledger
+
+  /**
+   * Every time entry already imported into this project, with the hours
+   * booked for it — the union over all tasks, summed per entry id.
+   *
+   * The union is what makes a per-task store behave project-wide. An entry
+   * imported onto task A on the first run is found here on the second run
+   * even if the user now assigns it to task B, which is exactly the case a
+   * per-(entry, task) key would miss.
+   *
+   * Living in the file rather than on the device also means the record
+   * travels with the project, and that abandoning an import by closing
+   * without saving discards the record along with the hours — a device-local
+   * ledger would remember an import that never reached the file, and those
+   * hours could then never be imported again.
+   */
+  fun importedHoursByEntry(): Map<Long, Double> {
+    val defId = taskPropertyDefinitionsByName()[ForkProperties.TASK_TOGGL_IMPORTED]
+      ?: return emptyMap()
+    val out = mutableMapOf<Long, Double>()
+    fun walk(parent: XmlElement) {
+      for (task in parent.childElements("task")) {
+        for ((entryId, hours) in
+          ForkProperties.decodeImportedHours(readTaskPropertyValue(task, defId))) {
+          out[entryId] = (out[entryId] ?: 0.0) + hours
+        }
+        walk(task)
+      }
+    }
+    tasksElement()?.let { walk(it) }
+    return out
+  }
+
+  /** The ledger stored on one task alone. Mostly useful for inspection. */
+  fun importedHoursOfTask(taskId: String): Map<Long, Double> {
+    val el = taskElement(taskId) ?: return emptyMap()
+    val defId = taskPropertyDefinitionsByName()[ForkProperties.TASK_TOGGL_IMPORTED]
+      ?: return emptyMap()
+    return ForkProperties.decodeImportedHours(readTaskPropertyValue(el, defId))
+  }
+
+  /**
+   * Records that [hours] of time entry [entryId] were booked onto [taskId].
+   *
+   * Additive, like the hours themselves: importing the growth of an entry
+   * twice must not make the ledger claim more than was actually written.
+   */
+  fun recordImportedHours(taskId: String, entryId: Long, hours: Double): Boolean {
+    if (hours <= 0.0) return false
+    val el = taskElement(taskId) ?: return false
+    val defId = taskPropertyDefinitionsByName()[ForkProperties.TASK_TOGGL_IMPORTED]
+    val existing = ForkProperties.decodeImportedHours(defId?.let { readTaskPropertyValue(el, it) })
+    val merged = existing.toMutableMap()
+    merged[entryId] = (merged[entryId] ?: 0.0) + hours
+    return writeTaskProperty(
+      taskId,
+      ForkProperties.TASK_TOGGL_IMPORTED,
+      "text",
+      ForkProperties.encodeImportedHours(merged).ifEmpty { null }
+    )
+  }
+
   /** Working hours per day for a resource. Passing `null` removes the value. */
   fun setResourceHoursPerDay(resourceId: String, hours: Double?): Boolean =
     writeResourceProperty(
