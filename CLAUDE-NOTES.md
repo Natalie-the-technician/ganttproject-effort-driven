@@ -1448,11 +1448,94 @@ Schätzung, nicht gemessen).
 ### Noch offen aus dieser Sitzung
 
 - **Handtest zu Schritt 2** (Abschnitt 4.3 der Übergabe) — von Claude nicht prüfbar.
-- Kleinigkeit, gesehen aber nicht geändert: In `applyEffort` und `applyActualEffort` benutzt der
-  Zweig „Feld geleert" noch `getCustomPropertyDefinition(...)`, also **nur die Kennung**. Eine
-  vom Nutzer selbst angelegte Spalte gleichen Namens ließe sich damit nicht leeren. Betrifft
-  beide Felder gleichermaßen und ist älter als die Zeiterfassung. Bewusst nicht mitgeändert,
-  weil die Übergabe „erst prüfen, kein neuer Code" verlangt.
+- ~~Kleinigkeit, gesehen aber nicht geändert: In `applyEffort` und `applyActualEffort` benutzt der
+  Zweig „Feld geleert" noch `getCustomPropertyDefinition(...)`, also **nur die Kennung**.~~
+  **Erledigt** — nachgesehen in Sitzung 7: beide Zweige rufen `findEffortDefinition(...)`, also
+  Kennung ODER Name (siehe „Aufgeräumt" weiter oben in diesem Abschnitt). Dieser Punkt war beim
+  Schreiben der Notizen stehen geblieben und hätte die nächste Sitzung dieselbe Arbeit noch einmal
+  machen lassen.
+
+---
+
+## 16. Sitzung 7 (Web) — Durchsicht der Sitzung 6, ein Fund in der Buchführung
+
+Auftrag: ansehen, wie weit Sitzung 6 gekommen ist, und beitragen, was ohne Build geht. Die 370
+Tests aus Sitzung 6 wurden **nicht** nachgerechnet — sie sind lokal gemessen und dokumentiert,
+ein Nachlauf hier hätte nichts hinzugefügt. Stattdessen die neue Logik gelesen.
+
+### FUND: derselbe Eintrag auf zwei Vorgängen verdoppelt die Stunden — still
+
+`planTaskImport` nimmt `List<Pair<TogglTimeEntry, Task>>` und kennt damit **keine Anteile**.
+Taucht ein Eintrag zweimal auf, bekommt **jeder** betroffene Vorgang die **vollen** Stunden:
+
+- `hoursDelta()` liefert für einen neuen Eintrag `entry.hours`,
+- `ledgerAfterImport(...)` schreibt ebenfalls die vollen Stunden in die Buchführung **jedes**
+  Vorgangs.
+
+Aus einer Vier-Stunden-Buchung werden acht — in den Vorgängen **und** in der Buchführung, ohne
+Meldung. Also genau der Schaden, gegen den dieses Feature gebaut wurde.
+
+Das ist kein theoretischer Fall: `ImportLedgerTest.testMergeAddsUpAnEntrySplitOverTwoTasks` hält
+ausdrücklich fest, dass ein Eintrag über mehrere Vorgänge aufgeteilt sein kann und
+`mergeLedgers` die Teile zusammenzählt. **Die Produktion kann solche Teile aber nie erzeugen** —
+sie schreibt immer die vollen Stunden. Die beiden Hälften des Entwurfs widersprechen sich, und
+`ImportApplyTest` hatte für die Aufteilung keinen Test.
+
+**Vorerst abgesichert, nicht geraten:** `planTaskImport` weist eine doppelt zugeordnete Buchung
+jetzt mit `require(...)` ab und nennt die Kennung. Eine Aufteilung ließe sich hier nicht raten —
+gleichmäßig? nach Aufwand? Das ist eine Entscheidung der Bedienung, keine Rechenregel. Lieber
+laut scheitern als falsch rechnen. Zwei neue Tests in `ImportApplyTest` (zwei Vorgänge; derselbe
+Vorgang doppelt).
+
+### Zweiter, selteneren Fall mit derselben Ursache: verschoben UND geändert
+
+- Import 1: Eintrag 111 mit 2 h auf Vorgang A. A merkt sich `{111:2}`.
+- Import 2: Toggl meldet für 111 jetzt 3 h, die Zuordnung wandert auf B.
+  → UPDATE, Zuwachs 1 h auf B, B merkt sich `{111:3}`, A behält `{111:2}`.
+- Zusammengezählt steht die Buchführung auf **5 h**, tatsächlich importiert wurden **3 h**.
+- Wächst der Eintrag später auf 6 h, wird nur 1 h nachgetragen statt 3. **Zwei Stunden fallen
+  still unter den Tisch.**
+
+Reines Verschieben **ohne** Änderung ist sauber (SKIP, durch
+`an entry reassigned to another task is not counted twice` belegt) — es ist die Kombination.
+
+**Beide Fälle haben dieselbe Wurzel und dieselbe Lösung:** Die Buchführung eines Vorgangs muss
+**seinen Anteil** festhalten, nicht die Gesamtstunden des Eintrags. Dann stimmt das
+Zusammenzählen in `mergeLedgers` wieder, die Aufteilung wird möglich, und der Fall oben löst sich
+mit auf.
+
+**Konkret für Schritt 6:** je Zuordnung einen eigenen Stundenwert führen, etwa
+`EntryAssignment(entry, task, hours)` statt eines Paars. `validateSplit(...)` liefert mit
+`SplitPart(taskId, hours)` die Anteile bereits in der passenden Form. Solange das nicht gebaut
+ist, hält die neue Vorbedingung den Schaden auf.
+
+### Was hier NICHT geprüft werden konnte
+
+Der Gradle-Build bleibt in der Web-Umgebung gesperrt (`mdfx`, Abschnitt 13); die geänderten
+Dateien hängen am Modell und an H2, die Teilübersetzung aus Abschnitt 14 reicht dafür nicht.
+
+Geprüft wurde deshalb nur, was ohne das Modul geht: der **zugefügte Ausdruck selbst** wurde gegen
+Platzhaltertypen übersetzt und ausgeführt — sauber `[]`, zwei Vorgänge `[1]`, derselbe Vorgang
+doppelt `[7]`, leere Liste `[]`, und die Meldung enthält die Kennung. Das schließt einen
+API-Fehler aus, **nicht** mehr.
+
+**Die beiden neuen Tests sind ungelaufen.** Bitte lokal:
+
+```powershell
+.\gradlew.bat :ganttproject:test --tests "*ImportApply*"
+```
+
+Gegentest dazu: die `require`-Zeile auskommentieren → beide neuen Tests müssen fehlschlagen.
+Zusätzlich lohnt der Blick, ob der erste Test dann tatsächlich **8** statt 4 Stunden bucht — das
+ist der Schaden, den die Vorbedingung verhindert.
+
+### Korrektur an den Notizen der Sitzung 6
+
+Der letzte Punkt unter „Noch offen aus dieser Sitzung" behauptete, der Zweig „Feld geleert" suche
+noch über die reine Kennung. Im Code steht `findEffortDefinition(...)`, also Kennung ODER Name —
+die Korrektur ist drin und steht zwei Absätze weiter oben unter „Aufgeräumt" auch so beschrieben.
+Der Punkt ist als erledigt markiert, statt die nächste Sitzung dieselbe Arbeit noch einmal machen
+zu lassen.
 
 ---
 

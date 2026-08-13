@@ -44,6 +44,7 @@ import org.h2.jdbcx.JdbcDataSource
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -200,6 +201,44 @@ class ImportApplyTest {
 
     assertEquals(null, second.actualEffortHours(properties),
       "the same hours were recorded again on the other task")
+  }
+
+  /**
+   * [Fork-Aenderung] Derselbe Eintrag auf zwei Vorgängen — die Aufteilung, die es noch nicht gibt.
+   *
+   * Ohne Vorbedingung bekäme JEDER der beiden Vorgänge die vollen Stunden: `hoursDelta()` liefert
+   * für einen neuen Eintrag `entry.hours`, und `ledgerAfterImport` schreibt ebenfalls die vollen
+   * Stunden in die Buchführung beider Vorgänge. Aus 4 Stunden würden 8 — in den Vorgängen und in
+   * der Buchführung, ohne jede Meldung.
+   *
+   * Bis Schritt 6 die Aufteilung mit Anteilen baut, muss das laut scheitern.
+   */
+  @Test
+  fun `the same entry on two tasks is refused instead of counted twice`() {
+    val first = newTask("A")
+    val second = newTask("B")
+    val shared = entry(1L, 4.0)
+
+    val failure = assertThrows(IllegalArgumentException::class.java) {
+      planTaskImport(listOf(shared to first, shared to second), emptyMap(), properties)
+    }
+    assertTrue(failure.message!!.contains("1"),
+      "the message must name the entry, otherwise nobody can find it: ${failure.message}")
+
+    // Und nichts darf dabei geschrieben worden sein.
+    assertEquals(null, first.actualEffortHours(properties))
+    assertEquals(null, second.actualEffortHours(properties))
+  }
+
+  /** Zweimal derselbe Eintrag auf DEMSELBEN Vorgang zählt genauso doppelt. */
+  @Test
+  fun `the same entry twice on one task is refused`() {
+    val task = newTask("A")
+    val shared = entry(7L, 3.0)
+
+    assertThrows(IllegalArgumentException::class.java) {
+      planTaskImport(listOf(shared to task, shared to task), emptyMap(), properties)
+    }
   }
 
   /**

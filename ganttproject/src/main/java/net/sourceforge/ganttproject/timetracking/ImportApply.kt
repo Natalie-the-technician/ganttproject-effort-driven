@@ -70,12 +70,37 @@ data class TaskImportChange(
  * and is deliberately not made here. [alreadyImported] is the project-wide view from
  * [projectImportLedger] — project-wide, not per task, so that an entry which landed on a
  * different task last time is still recognised.
+ *
+ * [Fork-Aenderung] EINE BUCHUNG, EIN VORGANG — und warum das hier abgewiesen statt gerechnet wird:
+ *
+ * Diese Funktion kennt je Zuordnung nur den Eintrag und den Vorgang, also **keine Anteile**. Würde
+ * derselbe Eintrag zweimal auftauchen, bekäme jeder betroffene Vorgang seine **vollen** Stunden:
+ * `hoursDelta()` liefert für einen neuen Eintrag `entry.hours`, und `ledgerAfterImport` schreibt
+ * ebenfalls die vollen Stunden in die Buchführung jedes Vorgangs. Aus vier Stunden würden acht —
+ * in den Vorgängen und in der Buchführung. Genau das, was dieses Feature verhindern soll, und
+ * still.
+ *
+ * Eine Aufteilung liesse sich hier nicht raten: gleichmässig? nach Aufwand? Das ist eine
+ * Entscheidung der Bedienung, keine Rechenregel. Deshalb **laut abweisen** statt falsch rechnen.
+ *
+ * **Für Schritt 6:** `validateSplit(...)` liefert bereits `SplitPart(taskId, hours)`. Wenn die
+ * Aufteilung gebaut wird, braucht diese Funktion je Zuordnung **einen eigenen Stundenwert** (etwa
+ * `EntryAssignment(entry, task, hours)` statt eines Paars). Dann bekommt jeder Vorgang seinen
+ * Anteil, und `mergeLedgers` zählt die Teile wieder zusammen — dafür ist das Zusammenzählen dort
+ * gedacht (`ImportLedgerTest.testMergeAddsUpAnEntrySplitOverTwoTasks`). Bis dahin gilt diese
+ * Vorbedingung.
  */
 fun planTaskImport(
   assignments: List<Pair<TogglTimeEntry, Task>>,
   alreadyImported: Map<Long, Double>,
   taskProperties: CustomPropertyManager
 ): List<TaskImportChange> {
+  val assignedTwice = assignments.groupingBy { it.first.id }.eachCount().filterValues { it > 1 }.keys
+  require(assignedTwice.isEmpty()) {
+    "A Toggl entry may be assigned once per import; splitting is not supported yet. " +
+      "Assigned more than once: $assignedTwice"
+  }
+
   val decisionByEntry = planImport(assignments.map { it.first }, alreadyImported)
     .associateBy { it.entry.id }
 
