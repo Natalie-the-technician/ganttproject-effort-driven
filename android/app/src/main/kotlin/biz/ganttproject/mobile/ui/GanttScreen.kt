@@ -6,12 +6,15 @@
 package biz.ganttproject.mobile.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
@@ -22,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,6 +53,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -61,6 +66,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import biz.ganttproject.mobile.R
 import biz.ganttproject.mobile.core.TaskNode
@@ -71,7 +77,11 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 
-private val NAME_COLUMN_WIDTH = 150.dp
+private const val DEFAULT_NAME_COLUMN_DP = 150f
+private const val MIN_NAME_COLUMN_DP = 72f
+/** Beyond this the chart stops being a chart, so the drag simply stops. */
+private const val MAX_NAME_COLUMN_DP = 320f
+private val DIVIDER_TOUCH_WIDTH = 16.dp
 private val CHEVRON_SIZE = 24.dp
 private val ROW_HEIGHT = 44.dp
 private val HEADER_HEIGHT = 38.dp
@@ -107,8 +117,12 @@ fun GanttScreen(project: ProjectUi, viewModel: ProjectViewModel) {
   val density = LocalDensity.current
 
   var dayWidthDp by rememberSaveable { mutableFloatStateOf(12f) }
+  // Task names are routinely longer than any fixed column: "MEILENSTEIN:
+  // Gewerbeanmeldung abgeschlossen" is not an unusual name. So the divider
+  // is draggable, exactly like the one in the desktop app.
+  var nameColumnDp by rememberSaveable { mutableFloatStateOf(DEFAULT_NAME_COLUMN_DP) }
   var offsetPx by rememberSaveable { mutableFloatStateOf(0f) }
-  var viewportPx by remember { mutableFloatStateOf(0f) }
+  var totalWidthPx by remember { mutableFloatStateOf(0f) }
   var selectedTaskId by rememberSaveable { mutableStateOf<String?>(null) }
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -127,7 +141,13 @@ fun GanttScreen(project: ProjectUi, viewModel: ProjectViewModel) {
     (ChronoUnit.DAYS.between(chartStart, model.projectEnd()).toInt() + 8).coerceAtLeast(14)
   }
 
+  val nameColumnWidth = nameColumnDp.dp
+  val nameColumnPx = with(density) { nameColumnWidth.toPx() }
   val dayWidthPx = with(density) { dayWidthDp.dp.toPx() }
+  // The chart viewport shrinks as the name column grows, so it is derived
+  // rather than measured — otherwise dragging the divider would leave the
+  // scroll bounds a frame behind.
+  val viewportPx = (totalWidthPx - nameColumnPx).coerceAtLeast(1f)
   val contentPx = totalDays * dayWidthPx
   val maxOffsetPx = (contentPx - viewportPx).coerceAtLeast(0f)
   offsetPx = offsetPx.coerceIn(0f, maxOffsetPx)
@@ -186,47 +206,79 @@ fun GanttScreen(project: ProjectUi, viewModel: ProjectViewModel) {
       }
     }
 
-    TimelineHeader(chartStart, dayWidthPx, offsetPx)
+    Box(modifier = Modifier.fillMaxSize()) {
+      Column(modifier = Modifier.fillMaxSize()) {
+        TimelineHeader(chartStart, dayWidthPx, offsetPx, nameColumnWidth)
 
-    LazyColumn(
-      modifier = Modifier
-        .fillMaxSize()
-        .onSizeChanged { viewportPx = (it.width - with(density) { NAME_COLUMN_WIDTH.toPx() }) }
-        .scrollable(panState, Orientation.Horizontal, reverseDirection = true)
-        .pointerInput(Unit) {
-          // Pinch to zoom. Deliberately hand-rolled instead of
-          // detectTransformGestures: that claims single-finger drags too,
-          // which would take the vertical scroll away again. This only
-          // consumes once a second finger is actually down.
-          awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false)
-            do {
-              val event = awaitPointerEvent()
-              if (event.changes.size >= 2) {
-                val zoom = event.calculateZoom()
-                if (zoom != 1f && zoom.isFinite()) {
-                  val centroid = event.calculateCentroid(useCurrent = true)
-                  val focus =
-                    (centroid.x - with(density) { NAME_COLUMN_WIDTH.toPx() }).coerceAtLeast(0f)
-                  zoomAround(zoom, focus)
-                  event.changes.forEach { it.consume() }
+        LazyColumn(
+          modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { totalWidthPx = it.width.toFloat() }
+            // No reverseDirection: the lambda below already turns a drag to the
+            // left into a larger offset, i.e. later dates. Setting it as well
+            // inverted the axis, which is how it shipped and got reported.
+            .scrollable(panState, Orientation.Horizontal)
+            .pointerInput(Unit) {
+            // Pinch to zoom. Deliberately hand-rolled instead of
+            // detectTransformGestures: that claims single-finger drags too,
+            // which would take the vertical scroll away again. This only
+            // consumes once a second finger is actually down.
+            awaitEachGesture {
+              awaitFirstDown(requireUnconsumed = false)
+              do {
+                val event = awaitPointerEvent()
+                if (event.changes.size >= 2) {
+                  val zoom = event.calculateZoom()
+                  if (zoom != 1f && zoom.isFinite()) {
+                    val centroid = event.calculateCentroid(useCurrent = true)
+                    val focus = (centroid.x - nameColumnPx).coerceAtLeast(0f)
+                    zoomAround(zoom, focus)
+                    event.changes.forEach { it.consume() }
+                  }
                 }
-              }
-            } while (event.changes.any { it.pressed })
+              } while (event.changes.any { it.pressed })
+            }
+          }
+        ) {
+          // visibleTasks, not flatTasks: children of a folded group are left out.
+          items(model.visibleTasks, key = { it.id }) { task ->
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(ROW_HEIGHT)
+                .clickable { selectedTaskId = task.id }
+            ) {
+              TaskNameCell(task, nameColumnWidth) { viewModel.toggleExpanded(task.id) }
+              TaskBar(task, model.calendar, chartStart, dayWidthPx, offsetPx)
+            }
           }
         }
-    ) {
-      // visibleTasks, not flatTasks: children of a folded group are left out.
-      items(model.visibleTasks, key = { it.id }) { task ->
-        Row(
+      }
+
+      // The divider, laid over the seam rather than placed in every row: a
+      // handle repeated per row could not be dragged across rows, and a
+      // handle only in the header would be a thin target at the top edge.
+      Box(
+        modifier = Modifier
+          .offset(x = nameColumnWidth - DIVIDER_TOUCH_WIDTH / 2)
+          .width(DIVIDER_TOUCH_WIDTH)
+          .fillMaxHeight()
+          .draggable(
+            orientation = Orientation.Horizontal,
+            state = rememberDraggableState { delta ->
+              nameColumnDp = (nameColumnDp + with(density) { delta.toDp().value })
+                .coerceIn(MIN_NAME_COLUMN_DP, MAX_NAME_COLUMN_DP)
+            }
+          ),
+        contentAlignment = Alignment.Center
+      ) {
+        // A visible seam, so the handle is discoverable at all.
+        Box(
           modifier = Modifier
-            .fillMaxWidth()
-            .height(ROW_HEIGHT)
-            .clickable { selectedTaskId = task.id }
-        ) {
-          TaskNameCell(task, onToggleExpand = { viewModel.toggleExpanded(task.id) })
-          TaskBar(task, model.calendar, chartStart, dayWidthPx, offsetPx)
-        }
+            .width(2.dp)
+            .fillMaxHeight()
+            .background(MaterialTheme.colorScheme.outlineVariant)
+        )
       }
     }
   }
@@ -245,10 +297,10 @@ fun GanttScreen(project: ProjectUi, viewModel: ProjectViewModel) {
 }
 
 @Composable
-private fun TaskNameCell(task: TaskNode, onToggleExpand: () -> Unit) {
+private fun TaskNameCell(task: TaskNode, width: Dp, onToggleExpand: () -> Unit) {
   Row(
     modifier = Modifier
-      .width(NAME_COLUMN_WIDTH)
+      .width(width)
       .fillMaxHeight()
       .padding(start = (4 + task.depth * 10).dp, end = 4.dp),
     verticalAlignment = Alignment.CenterVertically
@@ -293,7 +345,12 @@ private fun TaskNameCell(task: TaskNode, onToggleExpand: () -> Unit) {
 
 /** Month scale, weekend shading and the today marker, drawn at the same offset. */
 @Composable
-private fun TimelineHeader(chartStart: LocalDate, dayWidthPx: Float, offsetPx: Float) {
+private fun TimelineHeader(
+  chartStart: LocalDate,
+  dayWidthPx: Float,
+  offsetPx: Float,
+  nameColumnWidth: Dp
+) {
   val monthFormat = remember { DateTimeFormatter.ofPattern("MMM yyyy") }
   val outline = MaterialTheme.colorScheme.outlineVariant
   val onSurface = MaterialTheme.colorScheme.onSurfaceVariant
@@ -301,8 +358,8 @@ private fun TimelineHeader(chartStart: LocalDate, dayWidthPx: Float, offsetPx: F
   val labelStyle = MaterialTheme.typography.labelSmall
 
   Row(modifier = Modifier.fillMaxWidth().height(HEADER_HEIGHT)) {
-    Box(modifier = Modifier.width(NAME_COLUMN_WIDTH))
-    Canvas(modifier = Modifier.fillMaxWidth().height(HEADER_HEIGHT)) {
+    Box(modifier = Modifier.width(nameColumnWidth))
+    Canvas(modifier = Modifier.fillMaxWidth().height(HEADER_HEIGHT).clipToBounds()) {
       forEachVisibleDay(chartStart, dayWidthPx, offsetPx, size.width) { date, x ->
         if (date.dayOfWeek.value >= 6) {
           drawRect(ChartColors.weekend, Offset(x, 0f), Size(dayWidthPx, size.height))
@@ -343,7 +400,12 @@ private fun TaskBar(
     else -> ChartColors.bar
   }
 
-  Canvas(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
+  // clipToBounds is load-bearing, not decoration. Compose's drawBehind (which
+  // Canvas is built on) does NOT clip to the node's bounds: a bar whose x has
+  // gone negative because the chart is scrolled to a later date would paint
+  // straight over the task names to its left. Reported from a real device as
+  // "the side panel has to come to the front".
+  Canvas(modifier = Modifier.fillMaxWidth().fillMaxHeight().clipToBounds()) {
     forEachVisibleDay(chartStart, dayWidthPx, offsetPx, size.width) { date, x ->
       if (date.dayOfWeek.value >= 6) {
         drawRect(ChartColors.weekend, Offset(x, 0f), Size(dayWidthPx, size.height))
