@@ -388,3 +388,111 @@ Diese Datei ist das Gegenmittel — sie aktuell zu halten ist Teil der Arbeit, n
 - `ENTWURF-Ist-Stunden-Import.md` — Umsetzungsentwurf zu beiden Vormerkungen, aufbauend
   auf dem Stand nach Sitzung 3. Enthaelt die Zuordnung der bekannten Fallen zu den
   einzelnen Schritten. **Nicht beauftragt.**
+
+---
+
+## 10. Sitzung 4 — Android-App (Branch `claude/gantt-android-app-wxxu9o`)
+
+Beauftragt: App zum Anzeigen von Gantt-Dateien, Ressourcenstunden und Auslastung
+aendern, Toggl-Import bzw. Stunden von Hand eintragen, Fortschritt setzen,
+Ressourcen zuweisen. Zusatzauftrag waehrend der Sitzung: Code kommentieren und
+so bauen, dass er spaeter als **oeffentliches Repo fuer die Gantt-Community**
+veroeffentlicht werden kann.
+
+### Entscheidungen, die Natalie getroffen hat
+
+| Frage | Entscheidung |
+|---|---|
+| Dateizugriff | Android-Dateiauswahl (SAF) — deckt lokal, Drive, Nextcloud, OneDrive ab |
+| Bauen | Quellcode + GitHub-Actions-Strecke, die die APK baut |
+| Fork-Felder | ja, `effort_hours`, `effort_actual_hours`, `hours_per_day` werden unterstuetzt |
+
+### Entscheidungen, die ich getroffen und begruendet habe
+
+- **Code und Kommentare auf Englisch**, Arbeitsnotizen (diese Datei) auf Deutsch,
+  App-Oberflaeche zweisprachig de/en. Grund: Veroeffentlichungsauftrag; die
+  Community-Sprache im Upstream ist Englisch.
+- **Keine deutschen Texte im Kern.** Fehler kommen als *Typen* zurueck
+  (`TogglError`, `SplitValidation`, `GanttFormatException.Reason`), die
+  Oberflaeche uebersetzt sie ueber `strings.xml`. Eine Uebersetzung braucht
+  deshalb nie eine Codeaenderung.
+
+### Aufbau
+
+```
+android/                 eigenes Gradle-Projekt, eigener Wrapper, eigene LICENSE
+├── gantt-core/          reines Kotlin, KEIN Android, 133 Tests
+└── app/                 Jetpack Compose
+```
+
+`settings.gradle.kts` bindet `:app` **nur ein, wenn ein Android-SDK vorhanden
+ist**. Das ist kein Komfort, sondern Notwendigkeit: in diesem Container ist
+`dl.google.com` durch die Netzregel gesperrt, ein Android-SDK also nicht
+beschaffbar. Ohne die Bedingung waere schon das Konfigurieren gescheitert und
+haette jede Pruefung des Kerns mit blockiert.
+
+**Folge fuer kuenftige Sitzungen:** Die APK entsteht ausschliesslich in der
+GitHub-Actions-Strecke (`.github/workflows/android-app.yml`). Lokal geht
+`./gradlew :gantt-core:test` — mehr nicht. Nicht versuchen, das SDK zu laden.
+
+### Der wichtigste technische Befund dieser Sitzung
+
+**Der Standard-DOM-Parser zerstoert die Attributreihenfolge.** Gemessen, nicht
+vermutet: `DocumentBuilderFactory` legt Attribute bereits beim Einlesen
+alphabetisch ab, der `Transformer` schreibt sie so heraus. Aus
+
+```
+<project name="" company="" webLink="" view-date="..." ...>
+```
+
+wird
+
+```
+<project company="" gantt-divider-location="693" locale="en" name="" ...>
+```
+
+Kein Datenverlust — aber jede Speicherung schreibt jede Zeile der Datei neu,
+und der Desktop sortiert beim naechsten Speichern wieder zurueck. Fuer Dateien
+im Vault oder unter Git waere der Diff unbrauchbar.
+
+**Loesung:** eigener kleiner XML-Baum (`XmlTree.kt`) auf SAX-Basis. SAX liefert
+Attribute in Dokumentreihenfolge, und SAX gibt es auf Android — StAX nicht.
+Der Diff einer Aenderung enthaelt jetzt nur die tatsaechlich geaenderten Zeilen.
+
+### Weitere gepruefte Punkte
+
+- Dauer in `<task duration>` zaehlt **Arbeitstage**. Belegt an der Beispieldatei:
+  Vorgang 9 startet Mo 27.05., dauert 10, Nachfolger startet Mo 10.06. — bei
+  Kalendertagen waere es der 05.06.
+- `<date month>` in `<calendars>` ist **1-basiert** (`CalendarSaver` schreibt
+  `getMonth() + 1`). Fehlt `year`, wiederholt sich der Feiertag jaehrlich.
+- Custom-Property-IDs heissen bei Vorgaengen **und** Ressourcen `tpc<N>`,
+  aber in getrennten Namensraeumen. Neue ID ueber das **Maximum** der belegten
+  Nummern, nicht ueber die Anzahl — sonst kollidiert es nach einem Loeschen.
+- Ressourcen-Definitionen stehen **vor** den `<resource>`-Elementen,
+  Vorgangs-Custom-Properties **vor** den Untervorgaengen. So schreibt es der
+  Desktop, so schreibt es die App.
+
+### Gegentests
+
+Zehn absichtliche Sabotagen an den kritischen Regeln, jeweils Tests laufen
+lassen und zurueckgenommen. Ergebnis siehe Abschnitt in `HANDOVER-Android.md`.
+
+### Bewusst NICHT gebaut
+
+- Termine und Dauern aendern (der Scheduler laeuft nicht auf dem Telefon —
+  eine Aenderung wuerde abhaengige Vorgaenge stehen lassen)
+- Vorgaenge anlegen oder loeschen
+- Rueckschreiben nach Toggl, Hintergrund-Sync
+- Fortschritt aus Zeitdaten ableiten
+
+### Offene Punkte
+
+- [ ] Handpruefung durch Natalie auf einem echten Geraet mit einer echten
+      Projektdatei — die Oberflaeche ist hier nicht startbar
+- [ ] Import-Ledger liegt auf dem Geraet, nicht in der Datei. Import derselben
+      Periode von einem zweiten Geraet koennte doppelt buchen. Die Vorschau
+      zeigt es vorher an. Loesung braucht einen projektweiten Ablageort, den
+      der Desktop nicht verwirft — bisher keiner gefunden.
+- [ ] Aufteilen eines Zeiteintrags auf mehrere Vorgaenge ist im Kern gebaut und
+      getestet (`validateSplit`), in der Oberflaeche aber noch nicht bedienbar.
