@@ -101,6 +101,12 @@ sie nicht mit einem **exclusive write**-Eintrag, geht der Desktop von
 irgendwo etwas rot wird. Es sieht aus, als liefe alles, und der Schutz fehlt.
 Das ist die wichtigste einzelne Abnahmeprüfung (siehe A5).
 
+Für Apache gilt: Das Sperren für einen Dateisystem-DAV kommt aus
+**`mod_dav_fs`** über die Direktive `DavLockDB`. `mod_dav_lock` ist für
+generische DAV-Anbieter gedacht (etwa `mod_dav_svn`) und wird hier **nicht**
+gebraucht. Ob das stimmt, beantwortet A6 in zwei Aufrufen — darauf verlassen
+sollte sich niemand, auch nicht auf diesen Absatz.
+
 Bekannte Fallstricke bei der Serverwahl:
 
 * **nginx**, eingebautes `ngx_http_dav_module`: kann nach meinem Kenntnisstand
@@ -212,9 +218,15 @@ Groupware.
 * Kein automatisches Aufräumen, kein Umbenennen, kein Verschieben durch
   Skripte. Alles, was Dateien anfasst, ohne dass der Client es weiß, erzeugt
   genau die Konflikte, die wir abschaffen wollen.
-* **Backup**: mindestens täglich, versioniert, außerhalb des Servers. Der
-  Server ist jetzt die einzige Quelle der Wahrheit — vorher lag noch eine
-  Kopie in OneDrive und eine auf dem PC.
+* **Backup**: mindestens täglich, versioniert, **außerhalb des Servers**, und
+  mit mindestens einmal geprüfter Rücksicherung. Der Server ist jetzt die
+  einzige Quelle der Wahrheit — vorher lagen noch eine Kopie in OneDrive und
+  eine auf dem PC. Ohne getestetes Backup tauscht der Umzug *zwei Kopien*
+  gegen *null*. **Das ist eine Abbruchbedingung, keine Empfehlung:** Solange
+  es kein geprüftes Backup gibt, wird nicht umgezogen.
+* Ein stündlicher Git-Commit auf derselben Platte ist **kein Backup**. Er
+  liefert Versionsstände, nicht Ausfallsicherheit — beides wird gebraucht,
+  eines ersetzt das andere nicht.
 * **Aufbewahrung alter Fassungen**: sehr empfehlenswert. Eine simple Variante
   ist ein Cronjob, der den Ordner stündlich in ein Git-Repository **außerhalb**
   des WebDAV-Ordners committet. Damit ist jeder Konflikt, der doch einmal falsch
@@ -273,12 +285,21 @@ scheint und der Schutz komplett fehlt. Danach prüfen, dass die Datei
 **unverändert** ist.
 
 **A4 — bytegenaue Ablage**
+
+Absichtlich ohne Datei aus dem Repo, damit die Prüfung ohne Klon läuft. Die
+Testdatei enthält genau das, woran ein „aufräumender" Server scheitert:
+Umlaute in UTF-8, ein CDATA-Abschnitt, gemischte Zeilenenden, führende
+Leerzeichen und **kein** abschließender Zeilenumbruch.
+
 ```sh
-curl -sS -u "$U:$P" -T HouseBuildingSample.gan "$B/projekte/rt.gan"
-curl -sS -u "$U:$P" "$B/projekte/rt.gan" -o zurueck.gan
-cmp HouseBuildingSample.gan zurueck.gan && echo "byteidentisch" || echo "FEHLER"
+printf '<?xml version="1.0" encoding="UTF-8"?>\r\n<project name="Pr\xc3\xbcfung">\n    <notes><![CDATA[Zeile1\r\nZeile2 & <spitz>]]></notes>\n\t<task name="Gr\xc3\xb6\xc3\x9fe" expand="true"/>\n</project>' > rt-in.gan
+
+curl -sS -u "$U:$P" -T rt-in.gan "$B/projekte/rt.gan"
+curl -sS -u "$U:$P" "$B/projekte/rt.gan" -o rt-out.gan
+cmp rt-in.gan rt-out.gan && echo "byteidentisch" || echo "FEHLER: Server verändert den Inhalt"
 ```
-Die Datei liegt im Repo unter `android/gantt-core/src/test/resources/`.
+*Gegentest:* `printf 'x' >> rt-out.gan; cmp rt-in.gan rt-out.gan` muss
+fehlschlagen — sonst prüft `cmp` nicht, was du denkst.
 
 **A5 — supportedlock wird gemeldet** *(der stille Killer)*
 ```sh
