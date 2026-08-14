@@ -65,7 +65,7 @@ Jeder Ordner bekommt einen Apache-Block:
 Und die Gruppendatei bestimmt, wer drin ist:
 
 ```
-intern: anna anna
+intern: anna bernd
 kunde-mueller: anna
 privat: anna
 ```
@@ -259,6 +259,18 @@ Ordner anlegen, dann `apachectl configtest`, dann die anderen Ordner prüfen.
 Konfiguration wirkt sonst erst Stunden später, wie bei eurem Caddyfile.
 
 ---
+
+## 5a. Was nicht in dieses Repo gehört
+
+Weder Hostnamen noch Benutzernamen noch Pfade der echten Anlage. Nicht weil
+sie geheim wären, sondern weil ein Repo veröffentlicht werden kann und dann
+alles mitnimmt, was je darin stand — auch aus der Vorgeschichte.
+
+Hostname plus Benutzername ist bei einem Basic-Auth-Endpunkt die halbe
+Anmeldung, und solche Endpunkte werden gescannt, sobald sie im Netz stehen.
+
+Der Ort dafür ist `/root/SERVER-UMBAU-LOG.md` auf dem Server. Hier stehen
+Platzhalter.
 
 ## 6. Was ausdrücklich nicht gebaut werden soll
 

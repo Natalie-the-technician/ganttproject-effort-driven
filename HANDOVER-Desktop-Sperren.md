@@ -17,7 +17,7 @@ nur Zugangsdaten, er verwaltet keine.
 ## 0. Worum es geht, in drei Sätzen
 
 Die Projektdateien liegen jetzt auf einem WebDAV-Server
-(`<serveradresse>`, Apache mit `mod_dav_fs`), der Versionen prüft und
+(Apache mit `mod_dav_fs`; die Adresse steht im Serverlog, nicht hier), der Versionen prüft und
 sperren kann. Die Android-App nutzt beides: Sie schickt bei jedem Speichern
 `If-Match` mit der Version, auf der ihre Änderungen beruhen, und der Server
 weist ein veraltetes Schreiben mit `412` ab.
@@ -181,8 +181,8 @@ Automatik im Hintergrund, hier drückt ein Mensch auf Speichern), aber
 Ohne diese Prüfungen ist nicht belegt, dass etwas besser geworden ist —
 insbesondere D1 sieht vorher und nachher identisch aus.
 
-`$BASIS` ist die WebDAV-Sammlung, also `https://<serveradresse>` oder
-ein Unterpfad davon — **welches von beiden, ist hier nicht belegt.** Die
+`$BASIS` ist die WebDAV-Sammlung — Adresse aus dem Serverlog, sie gehört
+nicht in dieses Repo. Ob sie auf der Wurzel liegt oder auf einem Unterpfad — **welches von beiden, ist hier nicht belegt.** Die
 Server-Sitzung nennt die Wurzel als Zugang und meldet dort `401`; der
 Ablageort `/srv/webdav/projects` sagt nichts über den URL-Pfad. Vor T1 einmal
 mit `curl -sSI -u "$U:$P" -X OPTIONS "$BASIS/"` klären: `DAV: 1,2` heißt
