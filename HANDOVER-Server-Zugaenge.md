@@ -1,8 +1,7 @@
-# Zugänge: anlegen, ausliefern, zurücksetzen
+# Zugänge und Ordnerfreigaben
 
-**Für die Server-Sitzung.** Nicht für die Desktop-Sitzung — Konten, Passwörter
-und Mailversand haben mit GanttProject nichts zu tun. Der Desktop und die App
-verbrauchen nur Zugangsdaten; woher sie kommen, entscheidet sich hier.
+**Für die Server-Sitzung**, mit einem Abschnitt für die Desktop-Sitzung (§3).
+Nicht für die App-Sitzung — die Android-App verbraucht nur Zugangsdaten.
 
 Stand: 14. August 2026. **Nichts davon ist gebaut.** Vorhanden ist
 `gantt-benutzer.sh`, das Konten anlegt und entzieht und das erzeugte Passwort
@@ -10,185 +9,246 @@ nach `/root/gantt-zugang-<name>.txt` schreibt.
 
 ---
 
-## 0. Der Wunsch, und was davon technisch geht
+## 0. Der Entwurf
 
-Gewünscht ist: neue Benutzer anlegen können, die Betroffenen bekommen ihr
-Passwort **angezeigt** und können es **per Mail zurücksetzen**.
+Natalies Vorgabe, und sie ist in einem wichtigen Punkt besser als das, was
+ich zuerst vorgeschlagen hatte:
 
-**Das mittlere Stück geht so nicht.** `htpasswd` speichert einen Hash. Ein
-gesetztes Passwort ist danach niemandem mehr zugänglich — auch nicht dem
-Server, auch nicht root. Möglich sind nur zwei Dinge:
+* Passwörter werden **gesetzt**, nicht selbst zurückgesetzt — kein Mailversand
+* Freigegeben wird **pro Ordner**, nicht pro Datei
+* Bedient wird das aus dem **Desktop-GanttProject** heraus, über ein
+  **bestehendes Admin-Konto**
 
-* das Passwort **einmalig im Moment der Erzeugung** ausliefern, oder
-* ein **neues** setzen und dieses ausliefern.
+**Warum das sicherer ist:** Es gibt keinen Endpunkt ohne Anmeldung. Die
+Selbstbedienung per Mail hätte einen öffentlich erreichbaren Dienst gebraucht,
+der Konten anlegen darf — auf einem Server, auf dem `ufw` inaktiv ist, kein
+fail2ban läuft und SSH über `sslh` auf 443 mithört. Diese Fläche entfällt
+vollständig. Die Verwaltung liegt hinter derselben Basic-Auth wie alles andere,
+beschränkt auf ein Konto.
 
-Das ist keine Einschränkung des Skripts, sondern der Grund, warum das
-Verfahren sicher ist. Eine Ablage, aus der sich Passwörter wieder auslesen
-lassen, wäre genau das, was man nicht will — und die heutige Datei
-`/root/gantt-zugang-<name>.txt` ist bereits ein Kompromiss, der nur deshalb
-vertretbar ist, weil sie root gehört und nach der Übergabe gelöscht werden
-kann.
+**Was dadurch offen bleibt:** Wie das gesetzte Passwort zum Menschen kommt.
+Dazu §4 — es ist kleiner als es klingt, aber es löst sich nicht von selbst.
 
-Alles Weitere hier ist deshalb: **wie kommt ein frisch erzeugtes Passwort zum
-richtigen Menschen**, und **wie stößt dieser Mensch selbst eine Neuvergabe an**.
+### Was weiterhin nicht geht
+
+`htpasswd` speichert einen Hash. Ein gesetztes Passwort ist danach niemandem
+mehr zugänglich, auch nicht root. Möglich sind nur: einmalig beim Setzen
+anzeigen, oder ein neues setzen. Das ist der Grund, warum das Verfahren sicher
+ist, kein Mangel.
 
 ---
 
-## 1. Drei Ausbaustufen
+## 1. Ordner sind Pfade — darauf baut alles auf
 
-Bewusst gestaffelt. Stufe 2 ist die Empfehlung; Stufe 3 ist das, was wörtlich
-gewünscht war, und kostet deutlich mehr.
-
-### Stufe 1 — was heute schon geht
-
-`gantt-benutzer.sh <name>` legt an, schreibt das Passwort in eine
-root-Datei. Die Weitergabe passiert von Hand über einen Kanal, den man
-ohnehin hat (Signal, Telefon, persönlich). Zurücksetzen heißt: Skript erneut
-laufen lassen.
-
-**Reicht für eine Handvoll Leute vollständig aus.** Kein zusätzlicher Dienst,
-keine offene Fläche, nichts, was ausfallen kann.
-
-### Stufe 2 — Einmal-Link statt Passwort per Hand *(Empfehlung)*
-
-Das Skript erzeugt zusätzlich einen Link:
+Genau so ist es, und deshalb ist die Freigabe pro Ordner leicht und die pro
+Datei wäre es nicht.
 
 ```
-https://<serveradresse>/zugang/<token>
+/srv/webdav/projects/
+  intern/          → Require group intern
+  kunde-mueller/   → Require group kunde-mueller
+  privat/          → Require group privat
 ```
 
-Der zeigt das Passwort **genau einmal** an und macht das Token danach
-ungültig. Verfällt außerdem nach 24 Stunden.
+Jeder Ordner bekommt einen Apache-Block:
 
-Warum das besser ist als das Passwort per Mail:
+```apache
+<Directory /srv/webdav/projects/kunde-mueller>
+    AuthType Basic
+    AuthName "GanttProject"
+    AuthUserFile /srv/gantt/htpasswd
+    AuthGroupFile /srv/gantt/gruppen
+    Require group kunde-mueller
+</Directory>
+```
 
-* Ein Passwort in einer Mail bleibt dort — im Postausgang, im Postfach, in
-  jedem Backup beider Seiten, unverschlüsselt auf jedem Zwischenserver.
-* Ein verbrauchter Einmal-Link ist wertlos. Wird er abgefangen und **vor**
-  dem Empfänger eingelöst, merkt der Empfänger es sofort, weil sein Link
-  nicht mehr funktioniert. Ein abgefangenes Passwort merkt niemand.
-* Du kannst den Link über denselben Kanal schicken wie bisher, oder ihn
-  vorlesen.
+Und die Gruppendatei bestimmt, wer drin ist:
 
-Zu bauen ist wenig: ein Verzeichnis mit Token-Dateien
-(`/srv/gantt/zugang/<token>` mit Passwort und Verfallszeit), ein winziger
-Endpunkt, der die Datei ausliest, anzeigt und **vor** der Anzeige löscht.
-Kein Mailversand, kein Formular, keine Eingabe von außen.
+```
+intern: anna anna
+kunde-mueller: anna
+privat: anna
+```
 
-**Der Endpunkt darf nicht hinter der Basic-Auth liegen** — wer das Passwort
-noch nicht hat, kommt sonst nicht heran. Er braucht also einen eigenen
-Caddy-Block ohne Auth. Genau deshalb ist er so klein zu halten wie möglich.
+### Der Punkt, auf den es ankommt: zwei verschiedene Häufigkeiten
 
-### Stufe 3 — Selbstbedienung per Mail *(das wörtlich Gewünschte)*
+| Vorgang | Was nötig ist | Wie oft |
+|---|---|---|
+| **Person zu Ordner hinzufügen** | eine Zeile in `gruppen` ändern | ständig |
+| **Neuen Ordner anlegen** | Verzeichnis + Apache-Block + Reload | selten |
 
-Zwei Endpunkte, beide ohne Anmeldung erreichbar:
+Das ist die ganze Kunst an diesem Entwurf. Der häufige Fall darf **keinen
+Reload** brauchen: `mod_authz_groupfile` liest die Gruppendatei nach meinem
+Kenntnisstand bei jeder Anfrage neu, eine Mitgliedschaft wirkt also sofort.
+**Nachprüfen, nicht glauben** — das ist Prüfung Z3 unten, und wenn sie
+fehlschlägt, kippt der Entwurf auf „Reload bei jeder Freigabe", was ihn
+deutlich unangenehmer macht.
 
-1. `POST /zugang/vergessen` — Mailadresse rein, Token raus, Mail geht an die
-   **hinterlegte** Adresse dieses Kontos
-2. `GET /zugang/<token>` — neues Passwort setzen und einmalig anzeigen
+Der seltene Fall — neuer Ordner — erzeugt eine Konfigurationsänderung. Da
+lauert genau die Falle, in die ihr beim Caddyfile schon getreten seid:
+**erst validieren, dann laden, und der Reload muss einen Fehler auch
+zurückmelden.** Apache: `apachectl configtest` vor `apachectl graceful`.
+`graceful` unterbricht laufende Verbindungen nicht.
 
-Was das zusätzlich braucht, und zwar alles davon:
+### Ordnername ≠ Anzeigename
 
-* **Eine Zuordnung Konto → Mailadresse.** `htpasswd` hat dafür kein Feld;
-  es braucht eine eigene Datei. Damit speicherst du **personenbezogene Daten
-  Dritter** — ab dem ersten fremden Nutzer ist das DSGVO-relevant.
-* **Mailversand, der ankommt.** Ohne SPF, DKIM und DMARC für
-  `noctuvo-group.de` landen Rücksetzmails im Spam oder werden abgelehnt.
-  Entweder ein Relay eines Anbieters oder die drei DNS-Einträge selbst
-  einrichten. Das ist der zeitaufwendigste Teil, nicht der Code.
-* **Ratenbegrenzung.** Ein offenes Formular, das Mails auslöst, ist sonst ein
-  Werkzeug, um jemanden zuzumüllen — und um herauszufinden, welche Adressen
-  Konten haben.
-* **Keine Auskunft darüber, ob es das Konto gibt.** Die Antwort muss immer
-  gleich lauten („falls ein Konto existiert, ist eine Mail unterwegs"),
-  sonst ist der Endpunkt ein Verzeichnis eurer Nutzer.
-* **Ein Dienst, der `htpasswd` schreiben darf.** Damit kann dieser Dienst
-  Zugang zum WebDAV vergeben. Er ist ab dann die privilegierteste Komponente
-  im ganzen Aufbau und gehört entsprechend behandelt: eigener Nutzer, nur
-  Schreibrecht auf genau diese Datei, kein Shell-Zugang.
-
-**Die Abwägung, die ihr selbst schon getroffen habt:** Die Server-Sitzung hat
-bewusst keine Weboberfläche gebaut, weil das „für eine Handvoll Leute mehr
-Angriffsfläche als Nutzen" wäre. Stufe 3 ist genau diese Weboberfläche,
-zusätzlich mit Mailversand und einem Dienst, der Zugänge vergeben kann — auf
-einem Server, auf dem `ufw` inaktiv ist, kein fail2ban läuft und SSH über
-`sslh` auf 443 mithört. Das Urteil von damals wird dadurch nicht falsch.
+Der Ordner steht in der URL. Er sollte deshalb kurz, klein und ohne Umlaute
+sein (`kunde-mueller`, nicht `Kunde Müller GmbH & Co`). Wer einen schönen
+Namen will, hinterlegt ihn separat — nicht im Pfad.
 
 ---
 
-## 2. Empfehlung
+## 2. Was der Server dafür braucht
 
-**Stufe 2 bauen, Stufe 3 aufheben, bis es mehr als eine Handvoll Leute sind.**
+Eine kleine Verwaltungs-Schnittstelle, erreichbar **nur** mit dem Admin-Konto.
+Kein öffentlicher Zugang, keine Selbstregistrierung.
 
-Sie löst das eigentliche Problem — ein Passwort sicher zum richtigen Menschen
-bringen — ohne einen Dienst, der Konten vergeben kann, und ohne Mailversand.
-Zurücksetzen bleibt ein Anruf und ein Skriptaufruf, was bei fünf Leuten
-seltener vorkommt als der Aufwand, es zu automatisieren.
+```
+GET    /admin/benutzer                       Liste
+POST   /admin/benutzer                       anlegen, erzeugtes Passwort zurück
+POST   /admin/benutzer/<name>/passwort       neu setzen, Passwort zurück
+DELETE /admin/benutzer/<name>                entziehen
 
-Der Umstieg auf Stufe 3 ist danach klein: Der Einmal-Link aus Stufe 2 ist
-bereits die Hälfte davon; es kommen nur die Anforderung per Mail und die
-Adressverwaltung dazu.
+GET    /admin/ordner                          Liste, mit Mitgliedern
+POST   /admin/ordner                          anlegen (Config + graceful reload)
+PUT    /admin/ordner/<ordner>/mitglied/<name> freischalten
+DELETE /admin/ordner/<ordner>/mitglied/<name> entziehen
+```
 
-Wenn ihr Stufe 3 trotzdem sofort wollt, ist das in Ordnung — dann aber bitte
-**zuerst fail2ban und eine Ratenbegrenzung**, nicht danach.
+Vorgaben, die nicht verhandelbar sind:
 
----
+* **Nur das Admin-Konto.** `Require user <admin>` auf `/admin`, nicht
+  `Require valid-user`. Ein normaler Nutzer, der sich selbst in fremde Ordner
+  einträgt, wäre der Totalschaden.
+* **Kein Admin-Konto in der Gruppendatei für Projektordner**, oder umgekehrt:
+  Das Admin-Konto braucht keinen Projektzugriff, um Rechte zu verwalten. Zwei
+  Aufgaben, zwei Konten — auch wenn dieselbe Person dahintersteht.
+* **Name prüfen, bevor er in eine Datei geht.** Nur `[a-z0-9_-]`. Ein Name mit
+  Leerzeichen, Doppelpunkt oder Zeilenumbruch zerlegt `htpasswd` und die
+  Gruppendatei still. Ein `..` im Ordnernamen ist ein Pfadwechsel.
+* **Schreiben über eine temporäre Datei und `rename`.** Ein abgebrochener
+  Schreibvorgang mitten in `htpasswd` sperrt sonst alle aus.
+* **Gleichzeitige Änderungen serialisieren.** Zwei parallele Aufrufe, die
+  beide die Gruppendatei lesen, ändern und schreiben, verlieren eine der
+  beiden Änderungen. Eine Sperrdatei genügt.
+* **Passwörter tauchen im Log nicht auf** — weder im Zugriffs- noch im
+  Anwendungslog.
 
-## 3. Abnahme
-
-Für Stufe 2:
-
-**Z1 — Der Link zeigt das Passwort genau einmal.**
-Konto anlegen, Link zweimal aufrufen. Erster Aufruf: Passwort. Zweiter:
-Fehlermeldung, kein Passwort. *Gegentest: Löschung vor der Anzeige entfernen —
-der zweite Aufruf zeigt dann erneut das Passwort, und die Prüfung muss rot
-werden.*
-
-**Z2 — Abgelaufene Token sind wertlos.**
-Verfallszeit in der Token-Datei in die Vergangenheit setzen, aufrufen.
-Erwartung: Fehlermeldung, und die Datei ist danach weg.
-
-**Z3 — Geratene Token führen nirgendwohin.**
-`/zugang/aaaa`, `/zugang/../../etc/passwd`, `/zugang/` ohne Token. Erwartung:
-jeweils dieselbe nichtssagende Fehlermeldung, kein Pfad verlässt das
-Token-Verzeichnis.
-
-**Z4 — Der Endpunkt öffnet nichts anderes.**
-`https://<serveradresse>/` muss weiterhin `401` liefern. *Der
-Zugangs-Endpunkt ist die einzige Stelle ohne Anmeldung; wenn dabei die
-Basic-Auth für die Projekte fällt, ist das der Totalschaden.*
-
-**Z5 — Das erzeugte Passwort steht nirgends im Log.**
-Nach dem Anlegen und dem Abruf: `docker logs`, `journalctl`, Caddy-Log
-durchsuchen. Erwartung: kein Treffer. *Ein Passwort in einer Zugriffszeile
-überlebt jede Rotation und jedes Backup.*
-
-**Z6 — Der Zugang funktioniert wirklich.**
-Mit dem ausgelieferten Passwort ein `OPTIONS` gegen die Sammlung. Erwartung
-`DAV: 1,2`. Erst damit ist belegt, dass Anlegen und Ausliefern
-zusammenpassen — ein Passwort, das schön angezeigt wird und nicht
-funktioniert, ist schlimmer als keins.
-
-Für Stufe 3 zusätzlich:
-
-**Z7 — Die Antwort verrät nicht, ob es das Konto gibt.**
-Anfrage mit vorhandener und mit erfundener Adresse. Die Antworten müssen
-zeichengleich sein, auch in der Antwortzeit — sonst ist der Unterschied
-messbar.
-
-**Z8 — Ratenbegrenzung greift.**
-Zwanzig Anfragen hintereinander. Erwartung: Abweisung, und **keine** zwanzig
-Mails.
+Die Schnittstelle darf ruhig winzig sein: ein Shell-Skript hinter CGI tut es,
+solange die Punkte oben eingehalten sind. `gantt-benutzer.sh` ist bereits die
+halbe Miete und ist getestet — es aufzurufen ist besser, als seine Logik
+nachzubauen.
 
 ---
 
-## 4. Was ausdrücklich nicht gebaut werden soll
+## 3. Was der Desktop-Fork dafür braucht
 
-* **Keine Ablage, aus der sich Passwörter wieder auslesen lassen.** Auch nicht
-  „nur für den Notfall", auch nicht verschlüsselt mit einem Schlüssel, der auf
-  demselben Server liegt.
-* **Kein Passwort im Mailtext.** Nur Links.
-* **Keine Selbstregistrierung.** Konten legt genau eine Person an.
-* **Kein Weiterverwenden der Datei `/root/gantt-zugang-<name>.txt` als
-  Dauerablage.** Nach der Übergabe löschen. Sie ist ein Übergabepunkt, kein
-  Speicher.
+Ein Dialog, der die Endpunkte aus §2 aufruft. In Java, im Fork, neben der
+vorhandenen WebDAV-Unterstützung.
+
+* Zugangsdaten für das Admin-Konto: **nicht** neben denen für die Projekte
+  ablegen und **nicht** im Klartext in eine Einstellungsdatei. GanttProject
+  hat für WebDAV bereits eine Ablage — dieselbe benutzen, nicht eine zweite
+  erfinden.
+* Nur `https`, Zertifikatsprüfung nicht abschaltbar. Gleiche Regel wie in der
+  App: Bei Basic Auth gehen die Zugangsdaten in jedem Request mit.
+* Das erzeugte Passwort wird **einmal** angezeigt, mit einem Knopf zum
+  Kopieren und dem klaren Hinweis, dass es danach nicht mehr abrufbar ist.
+* `403` vom Admin-Endpunkt heißt „dieses Konto darf das nicht" und muss auch
+  so dastehen — nicht als allgemeiner Netzwerkfehler.
+
+**Eine Abwägung, die du kennen solltest:** Kontoverwaltung hat mit
+Projektplanung nichts zu tun, und jede solche Ergänzung entfernt deinen Fork
+weiter vom Original. Für die Sache mit dem aufwandsgetriebenen Terminplan,
+die du upstream bringen willst, ist ein schlanker Fork leichter. Ein
+eigenständiges kleines Verwaltungswerkzeug hätte diesen Nachteil nicht.
+
+Dass du es trotzdem im Desktop willst, ist ein guter Grund — es ist das
+Programm, das ohnehin offen ist. Ich sage es nur, damit die Entscheidung
+bewusst fällt und nicht nebenbei.
+
+---
+
+## 4. Wie das Passwort zum Menschen kommt
+
+Das löst dein Entwurf noch nicht: Du setzt es, siehst es einmal — und musst es
+weitergeben.
+
+**Für eine Handvoll Leute genügt der Weg, den du ohnehin hast**: vorlesen,
+über Signal schicken, persönlich übergeben. Kein Aufwand, keine neue Fläche.
+
+**Nicht per E-Mail.** Ein Passwort in einer Mail bleibt dort: im Postausgang,
+im Postfach, in den Backups beider Seiten, unverschlüsselt auf jedem
+Zwischenserver. Wenn es unbedingt schriftlich sein muss, dann ein
+**Einmal-Link**, der es genau einmal zeigt und danach verfällt — dann steht in
+der Mail kein Passwort, und ein abgefangener, bereits eingelöster Link fällt
+dem Empfänger sofort auf, weil seiner nicht mehr funktioniert.
+
+Der Einmal-Link braucht allerdings wieder einen Endpunkt ohne Anmeldung. Er
+ist deutlich kleiner als die Selbstbedienung aus dem verworfenen Entwurf
+(kein Formular, keine Eingabe, kein Mailversand), aber er ist nicht nichts.
+**Aufheben, bis der Bedarf real ist.**
+
+---
+
+## 5. Abnahme
+
+**Z1 — Ohne Mitgliedschaft kein Zugriff.**
+```sh
+curl -sS -o /dev/null -w '%{http_code}\n' -u "neu:$P" "$BASIS/kunde-mueller/"
+```
+Erwartung `403`. *Gegentest: Kommt hier `200`, greift `Require group` nicht —
+dann sind alle Ordner für alle offen, und das sieht man nirgends.*
+
+**Z2 — Mit Mitgliedschaft Zugriff.**
+Nach dem Freischalten derselbe Aufruf. Erwartung `207`/`200`.
+
+**Z3 — Mitgliedschaft wirkt ohne Reload.** *(die Prüfung, an der der Entwurf hängt)*
+Benutzer freischalten, **ohne** Apache anzufassen sofort Z2 wiederholen.
+Erwartung: geht. *Schlägt es fehl, muss jede Freigabe einen Reload auslösen —
+dann bitte melden, bevor gebaut wird.*
+
+**Z4 — Entzug wirkt sofort.**
+Mitgliedschaft entfernen, Z1 wiederholen. Erwartung `403`, ohne Reload.
+
+**Z5 — Andere Ordner bleiben unberührt.**
+Nach jeder Änderung: Zugriff auf einen Ordner, in dem der Benutzer **nicht**
+ist. Erwartung `403`. *Eine Gruppendatei, die beim Schreiben durcheinander
+gerät, öffnet sonst still fremde Ordner.*
+
+**Z6 — Nur das Admin-Konto darf verwalten.**
+`/admin/benutzer` mit einem normalen Projektkonto. Erwartung `403`.
+*Gegentest: Mit `Require valid-user` statt `Require user <admin>` käme hier
+`200` — und jeder Nutzer könnte sich selbst überall eintragen.*
+
+**Z7 — Böse Namen werden abgewiesen.**
+Anlegen mit `../root`, `a:b`, `a b`, einem Zeilenumbruch, einem leeren Namen.
+Erwartung: jeweils Ablehnung, und `htpasswd` sowie `gruppen` danach
+unverändert.
+
+**Z8 — Ein abgebrochener Schreibvorgang sperrt niemanden aus.**
+Verwaltungsdienst mitten im Anlegen beenden (`kill -9`). Danach muss ein
+vorhandener Nutzer sich weiterhin anmelden können.
+
+**Z9 — Passwörter stehen in keinem Log.**
+Nach Anlegen und Zurücksetzen: `docker logs`, `journalctl`, Apache- und
+Caddy-Log durchsuchen. Erwartung: kein Treffer.
+
+**Z10 — Neuer Ordner bringt nichts zum Absturz.**
+Ordner anlegen, dann `apachectl configtest`, dann die anderen Ordner prüfen.
+*Und danach einmal den Container neu starten* — eine fehlerhafte generierte
+Konfiguration wirkt sonst erst Stunden später, wie bei eurem Caddyfile.
+
+---
+
+## 6. Was ausdrücklich nicht gebaut werden soll
+
+* **Keine Ablage, aus der Passwörter wieder auslesbar sind.** Auch nicht
+  verschlüsselt mit einem Schlüssel, der auf demselben Server liegt.
+* **Kein Passwort im Mailtext.**
+* **Keine Selbstregistrierung**, kein öffentlicher Endpunkt, solange §4 nicht
+  zwingend danach verlangt.
+* **Keine Rechte pro Datei.** Ordner genügen, und Dateirechte wären in Apache
+  ein Vielfaches an Konfiguration für denselben Zweck.
+* **`/root/gantt-zugang-<name>.txt` nicht als Dauerablage weiterführen.** Nach
+  der Übergabe löschen — Übergabepunkt, kein Speicher.
