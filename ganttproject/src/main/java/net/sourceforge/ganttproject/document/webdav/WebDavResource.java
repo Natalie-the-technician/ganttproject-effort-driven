@@ -38,6 +38,22 @@ public interface WebDavResource {
       super(message, cause);
     }
   }
+  /**
+   * [Fork-Aenderung] Jemand anderes hat die Datei seit dem Lesen geaendert.
+   *
+   * Eigene Klasse und kein allgemeiner Fehler, weil der Aufrufer hier etwas anderes tun muss als
+   * bei einem Netzproblem: Es ist nichts kaputt, es gibt eine zweite Fassung. Der Mensch braucht
+   * die Wahl zwischen "unter anderem Namen speichern" und "trotzdem ueberschreiben" -- und die
+   * kann er nur bekommen, wenn dieser Fall unterscheidbar oben ankommt.
+   */
+  class WebDavConflictException extends WebDavException {
+    public WebDavConflictException(String message) {
+      super(message);
+    }
+    public WebDavConflictException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
   class WebDavRuntimeException extends RuntimeException {
     public WebDavRuntimeException(String message) {
       super(message);
