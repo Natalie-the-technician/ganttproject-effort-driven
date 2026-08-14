@@ -21,6 +21,9 @@ import biz.ganttproject.mobile.ui.AppScaffold
 import biz.ganttproject.mobile.ui.ProjectViewModel
 import biz.ganttproject.mobile.ui.theme.GanttMobileTheme
 
+/** Extra the widget puts on its launch intent; see AgendaWidget. */
+private const val WIDGET_TASK_EXTRA = "taskId"
+
 class MainActivity : ComponentActivity() {
 
   private val viewModel: ProjectViewModel by viewModels()
@@ -30,7 +33,15 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
 
     // Opening straight from a file manager or a cloud app.
-    intentUri(intent)?.let(viewModel::openUri)
+    val uri = intentUri(intent)
+    if (uri != null) {
+      viewModel.openUri(uri)
+    } else if (intent.hasExtra(WIDGET_TASK_EXTRA)) {
+      // Arrived from the home-screen widget: open the project the widget is
+      // pointed at, so the user lands where they tapped rather than on an
+      // empty start screen.
+      viewModel.openWidgetProject()
+    }
 
     // Auto-save whenever the app leaves the foreground.
     //
@@ -55,7 +66,9 @@ class MainActivity : ComponentActivity() {
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
-    intentUri(intent)?.let(viewModel::openUri)
+    val uri = intentUri(intent)
+    if (uri != null) viewModel.openUri(uri)
+    else if (intent.hasExtra(WIDGET_TASK_EXTRA)) viewModel.openWidgetProject()
   }
 
   /**

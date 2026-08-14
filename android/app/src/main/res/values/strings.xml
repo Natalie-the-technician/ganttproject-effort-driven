@@ -157,4 +157,17 @@
     <string name="action_overwrite">Overwrite anyway</string>
     <string name="action_save_copy">Save a copy</string>
     <string name="conflict_title">The file changed elsewhere</string>
+    <string name="widget_description">Tasks that are running or start soon — tick them off and record time.</string>
+    <string name="widget_no_project">Tap to open the app and choose a project for this widget.</string>
+    <string name="widget_unreadable">The project could not be read. Tap to open the app.</string>
+    <string name="widget_nothing_due">Nothing due in this period.</string>
+    <string name="widget_window_label">next %1$d d</string>
+    <string name="widget_overdue">Overdue</string>
+    <string name="widget_add_half_hour">+½ h</string>
+    <string name="widget_project">Project for the widget</string>
+    <string name="widget_window">Show tasks starting within</string>
+    <string name="widget_window_days">%1$d days</string>
+    <string name="widget_window_started">Only what has already started</string>
+    <string name="widget_settings">Home-screen widget</string>
+    <string name="widget_use_current">Use the open project</string>
 </resources>

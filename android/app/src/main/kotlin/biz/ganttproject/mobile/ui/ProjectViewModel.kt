@@ -53,8 +53,12 @@ data class ProjectUi(
   val revision: Int
 )
 
+/** What the widget is configured to show. */
+data class WidgetSettings(val projectName: String?, val windowDays: Int)
+
 data class AppState(
   val busy: Boolean = false,
+  val widget: WidgetSettings = WidgetSettings(null, 14),
   val project: ProjectUi? = null,
   val recentFiles: List<RecentFile> = emptyList(),
   val fileError: FileError? = null,
@@ -105,7 +109,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
   private var open: OpenProject? = null
   private var revision = 0
 
-  private val _state = MutableStateFlow(AppState(recentFiles = prefs.recentFiles()))
+  private val _state = MutableStateFlow(
+    AppState(
+      recentFiles = prefs.recentFiles(),
+      widget = WidgetSettings(prefs.widgetProjectName(), prefs.widgetWindowDays())
+    )
+  )
   val state: StateFlow<AppState> = _state.asStateFlow()
 
   private val _importState = MutableStateFlow(
@@ -223,6 +232,34 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     open = null
     _state.update { it.copy(project = null, fileError = null) }
     _importState.update { it.copy(rows = emptyList(), loaded = false) }
+  }
+
+  // ------------------------------------------------------- Widget settings
+
+  /**
+   * Points the home-screen widget at the project that is open right now.
+   *
+   * Only the currently open project can be chosen, because that is the one
+   * whose URI permission the app has already persisted — a widget cannot run
+   * a file picker of its own.
+   */
+  fun useOpenProjectForWidget() {
+    val project = open ?: return
+    prefs.setWidgetProject(project.uri.toString(), project.displayName)
+    _state.update { it.copy(widget = readWidgetSettings()) }
+  }
+
+  fun setWidgetWindowDays(days: Int) {
+    prefs.setWidgetWindowDays(days)
+    _state.update { it.copy(widget = readWidgetSettings()) }
+  }
+
+  private fun readWidgetSettings() =
+    WidgetSettings(prefs.widgetProjectName(), prefs.widgetWindowDays())
+
+  /** Opens whatever project the widget is pointed at. */
+  fun openWidgetProject() {
+    prefs.widgetProjectUri()?.let { openUri(Uri.parse(it)) }
   }
 
   fun clearRecentFiles() {

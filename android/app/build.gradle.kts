@@ -78,6 +78,10 @@ dependencies {
   implementation(libs.androidx.ui.tooling.preview)
   implementation(libs.androidx.material3)
   implementation(libs.androidx.material.icons.extended)
+  // Home-screen widget. Glance is Compose for widgets; the alternative,
+  // RemoteViews, would mean a second UI toolkit in the same app.
+  implementation(libs.androidx.glance.appwidget)
+  implementation(libs.androidx.glance.material3)
 
   debugImplementation(libs.androidx.ui.tooling)
 }

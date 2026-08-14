@@ -154,8 +154,37 @@ class AppPreferences(context: Context) {
 
   fun clearRecentFiles() = prefs.edit().remove(KEY_RECENT).apply()
 
+  // ------------------------------------------------------- Widget settings
+
+  /**
+   * Which project the home-screen widget shows.
+   *
+   * Stored as the document URI, whose read/write grant the app persisted when
+   * the file was first opened — that grant is what lets a widget touch the
+   * file at all, without any storage permission.
+   */
+  fun widgetProjectUri(): String? = prefs.getString(KEY_WIDGET_URI, null)
+
+  fun widgetProjectName(): String? = prefs.getString(KEY_WIDGET_NAME, null)
+
+  fun setWidgetProject(uri: String?, displayName: String?) {
+    prefs.edit()
+      .putString(KEY_WIDGET_URI, uri)
+      .putString(KEY_WIDGET_NAME, displayName)
+      .apply()
+  }
+
+  /** How many days ahead the widget looks. */
+  fun widgetWindowDays(): Int =
+    prefs.getInt(KEY_WIDGET_DAYS, biz.ganttproject.mobile.core.AgendaWindow.DEFAULT_DAYS)
+
+  fun setWidgetWindowDays(days: Int) = prefs.edit().putInt(KEY_WIDGET_DAYS, days).apply()
+
   companion object {
     private const val KEY_RECENT = "recent_files"
+    private const val KEY_WIDGET_URI = "widget_project_uri"
+    private const val KEY_WIDGET_NAME = "widget_project_name"
+    private const val KEY_WIDGET_DAYS = "widget_window_days"
     private const val MAX_RECENT = 10
   }
 }

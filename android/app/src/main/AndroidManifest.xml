@@ -87,5 +87,20 @@
                 <data android:mimeType="application/xml" />
             </intent-filter>
         </activity>
+
+        <!--
+          The home-screen widget. exported must be true: the launcher is a
+          different process and has to be able to instantiate the receiver.
+        -->
+        <receiver
+            android:name=".widget.AgendaWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/agenda_widget_info" />
+        </receiver>
     </application>
 </manifest>

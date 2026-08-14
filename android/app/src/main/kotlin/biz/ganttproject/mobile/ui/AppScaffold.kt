@@ -28,7 +28,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -69,7 +72,7 @@ private val TabSaver = androidx.compose.runtime.saveable.Saver<Tab, Int>(
   restore = { Tab.entries[it] }
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun AppScaffold(
   state: AppState,
@@ -79,6 +82,7 @@ fun AppScaffold(
   var tab by rememberSaveable(stateSaver = TabSaver) { mutableStateOf(Tab.GANTT) }
   var menuOpen by remember { mutableStateOf(false) }
   var aboutOpen by remember { mutableStateOf(false) }
+  var widgetSettingsOpen by remember { mutableStateOf(false) }
   var confirmCloseOpen by remember { mutableStateOf(false) }
   val snackbarHost = remember { SnackbarHostState() }
 
@@ -165,6 +169,10 @@ fun AppScaffold(
                 )
               }
             }
+            DropdownMenuItem(
+              text = { Text(stringResource(R.string.widget_settings)) },
+              onClick = { menuOpen = false; widgetSettingsOpen = true }
+            )
             DropdownMenuItem(
               text = { Text(stringResource(R.string.action_about)) },
               onClick = { menuOpen = false; aboutOpen = true }
@@ -273,6 +281,53 @@ fun AppScaffold(
       dismissButton = {
         TextButton(onClick = { confirmCloseOpen = false }) {
           Text(stringResource(R.string.action_cancel))
+        }
+      }
+    )
+  }
+
+  if (widgetSettingsOpen) {
+    AlertDialog(
+      onDismissRequest = { widgetSettingsOpen = false },
+      title = { Text(stringResource(R.string.widget_settings)) },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          Text(stringResource(R.string.widget_project), style = MaterialTheme.typography.labelMedium)
+          Text(
+            state.widget.projectName ?: stringResource(R.string.widget_no_project),
+            style = MaterialTheme.typography.bodyMedium
+          )
+          // Only the open project can be picked: its URI permission is the
+          // one the app persisted, and a widget cannot run a file picker.
+          TextButton(
+            onClick = { viewModel.useOpenProjectForWidget() },
+            enabled = state.project != null
+          ) {
+            Text(stringResource(R.string.widget_use_current))
+          }
+
+          HorizontalDivider()
+
+          Text(stringResource(R.string.widget_window), style = MaterialTheme.typography.labelMedium)
+          FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            biz.ganttproject.mobile.core.AgendaWindow.CHOICES.forEach { days ->
+              FilterChip(
+                selected = state.widget.windowDays == days,
+                onClick = { viewModel.setWidgetWindowDays(days) },
+                label = {
+                  Text(
+                    if (days == 0) stringResource(R.string.widget_window_started)
+                    else stringResource(R.string.widget_window_days, days)
+                  )
+                }
+              )
+            }
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { widgetSettingsOpen = false }) {
+          Text(stringResource(R.string.action_ok))
         }
       }
     )

@@ -152,4 +152,17 @@
     <string name="action_overwrite">Trotzdem überschreiben</string>
     <string name="action_save_copy">Kopie speichern</string>
     <string name="conflict_title">Die Datei wurde anderswo geändert</string>
+    <string name="widget_description">Vorgänge, die laufen oder bald beginnen — abhaken und Zeit erfassen.</string>
+    <string name="widget_no_project">Antippen, um in der App ein Projekt für dieses Widget zu wählen.</string>
+    <string name="widget_unreadable">Das Projekt ließ sich nicht lesen. Zum Öffnen antippen.</string>
+    <string name="widget_nothing_due">In diesem Zeitraum steht nichts an.</string>
+    <string name="widget_window_label">nächste %1$d T</string>
+    <string name="widget_overdue">Überfällig</string>
+    <string name="widget_add_half_hour">+½ h</string>
+    <string name="widget_project">Projekt für das Widget</string>
+    <string name="widget_window">Vorgänge zeigen mit Start binnen</string>
+    <string name="widget_window_days">%1$d Tagen</string>
+    <string name="widget_window_started">Nur was schon begonnen hat</string>
+    <string name="widget_settings">Startbildschirm-Widget</string>
+    <string name="widget_use_current">Offenes Projekt verwenden</string>
 </resources>
