@@ -543,3 +543,74 @@ Ein blosser Tausch der beiden waere riskant gewesen: faellt die Wahl doch auf
 tragen jetzt **beide denselben Inhalt**.
 
 **Beim Aendern also immer beide anfassen:** `cp README.md README`.
+
+### Sitzung 6 — Bearbeitungsschutz, und was GanttProject Cloud wirklich loest
+
+**Ausgangsfrage von Natalie:** Zwei Staende, wenn das Handy in eine Datei im
+OneDrive-Ordner schreibt und der PC speichert, bevor synchronisiert wurde.
+
+**Eingrenzung durch Natalie (wichtig, veraendert die Kosten-Nutzen-Rechnung):**
+Verlustkritisch sind nur **Fortschritt, Erledigt-Haekchen und von Hand
+eingetippte Stunden**. Toggl-Zeiten heilen sich selbst, weil der Import-Merker
+`toggl_imported` in der Projektdatei liegt: Geht die Handy-Fassung verloren,
+verschwindet der Merker mit ihr und der Eintrag wird erneut zum Import
+angeboten — nie doppelt gebucht. Das ist keine Vermutung, das ist genau die
+Eigenschaft, fuer die der Merker in der Datei liegt (siehe Sitzung 4).
+
+**GanttProject Cloud — im Code des Forks nachgelesen, nicht geraten:**
+
+- `GPCloudDocument.kt:439` schickt beim Schreiben `oldVersion` mit; der Server
+  antwortet **409/412**, wenn diese Version veraltet ist (Zeile 463/465).
+  Die Wahrheit ist eine serverseitige Versionsnummer, kein Dateizeitstempel.
+- Sperre mit Ablaufzeit und Sperrinhaber (`http/Lock.kt`), WebSocket-Meldung
+  bei Fremdaenderung (Zeile 505–539), Offline-Spiegel.
+- **Kein Merge.** `ProjectUIFacadeImpl.kt:411–417` bietet bei Versionskonflikt
+  exakt `MAKE_COPY` oder `OVERWRITE` — dieselben zwei Optionen wie unser
+  Konfliktdialog in der App. Der Gewinn liegt im *Zeitpunkt* der Erkennung und
+  in der **Sperre**, die den Konflikt verhindert statt ihn zu melden.
+- `/p/write` speichert die Datei als Base64-Blob, serialisiert also nicht neu:
+  unsere Custom Properties ueberstehen die Cloud unveraendert.
+- **Colloboque** (Live-Sync mit Transaktionslog — im Grunde das
+  Aenderungsjournal, serverseitig) ist per Feature-Flag aus,
+  Default `false` (`ColloboqueClient.kt:220`).
+- Preis: Natalie hat auf ganttproject.cloud nachgesehen — **Teams bis zwei
+  Mitglieder sind gratis**. Die Domain ist aus dem Container gesperrt, ich
+  konnte es nicht selbst pruefen.
+- **Weiter offen:** ob ein selbstgebauter Drittclient gegen deren Server
+  erlaubt ist (Nutzungsbedingungen des Dienstes, nicht der GPL-Code).
+
+**Gebaut: `EditPolicy.kt` im Core, Bearbeitungsschutz je Geraet.**
+
+Natalies Formulierung war zuerst missverstanden — sie meinte keinen
+Berechtigungsmechanismus, sondern einen **Schalter**: Bearbeitung von Zeiten
+und Fortschritt abschaltbar, vor allem im Widget, mit Warnung beim Einschalten.
+
+- Drei geordnete Stufen (`READ_ONLY`, `APP_ONLY`, `APP_AND_WIDGET`).
+  Geordnet, damit "Widget ja, App nein" gar nicht ausdrueckbar ist.
+- Default `APP_ONLY`: das Widget ist die blinde Flaeche — ein Daumentipp
+  schreibt die Datei ohne Sicht auf den Plan.
+- `rank` explizit statt `ordinal`, damit Umsortieren der Konstanten die
+  Warnlogik nicht still veraendert (Test faengt es).
+- `needsUnmanagedStorageWarning(from, to, sync)` nimmt die Speichergarantie als
+  Parameter. Kommt je ein versionierender Server, **verstummt die Warnung von
+  selbst** statt umformuliert werden zu muessen. Genau hier haengt die Cloud
+  spaeter ein.
+- Durchsetzung an den zwei Engstellen `ProjectViewModel.edit` und
+  `WidgetProject.edit` — nicht in der UI. Ein vergessenes `enabled =` kann
+  damit nicht schreiben.
+- Das Widget liest die Einstellung **bei jedem Tipp neu von der Platte**: es
+  laeuft in einem anderen Prozess als die App, ein Cache wuerde weiterschreiben.
+- `applyImport` musste **separat** abgesichert werden, weil es `OpenProject.edit`
+  direkt aufruft (Stunden, Merker und gelernte Schluessel muessen in *einen*
+  Edit).
+- `toggleExpanded` bleibt bewusst erlaubt: schreibt nie, und ein Projekt, das
+  man nicht aendern darf, will man erst recht zuklappen koennen.
+
+**Gegentests: 8 von 8 gefangen.** Zwei Faelle meldeten zuerst faelschlich
+"nicht gefangen" — mein Patch-Anker im Skript passte wegen Zeilenumbruch nicht,
+die Sabotage war also nie angewandt worden. Mit korrigiertem Anker: gefangen.
+**Lehre:** Ein Gegentest, der nicht greift, muss vom Skript als *Fehler*
+gemeldet werden, nicht als Ergebnis — sonst liest man eine Testluecke, wo
+keine ist. Das Skript hat den Anker inzwischen als Assertion.
+
+Testlage danach: 198 Tests im Core, 0 Fehler.
