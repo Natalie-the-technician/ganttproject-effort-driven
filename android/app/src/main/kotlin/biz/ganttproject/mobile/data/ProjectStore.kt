@@ -12,7 +12,10 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import biz.ganttproject.mobile.core.GanttDocument
 import biz.ganttproject.mobile.core.GanttFormatException
+import biz.ganttproject.mobile.core.FileChangeState
 import biz.ganttproject.mobile.core.ProjectModel
+import biz.ganttproject.mobile.core.compareFingerprint
+import biz.ganttproject.mobile.core.contentFingerprint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -23,6 +26,13 @@ sealed interface FileError {
   data object PermissionLost : FileError
   data class OpenFailed(val detail: String) : FileError
   data class SaveFailed(val detail: String) : FileError
+
+  /**
+   * The file changed since it was opened — the desktop saved it, or the sync
+   * client brought down a newer copy. Saving now would erase that work, so
+   * the user gets asked instead.
+   */
+  data object ChangedElsewhere : FileError
 }
 
 sealed interface FileResult<out T> {
@@ -56,6 +66,12 @@ class OpenProject(
     private set
 
   /**
+   * Fingerprint of the bytes we last read from or wrote to this file.
+   * Compared against the file just before every save; see [ProjectStore.save].
+   */
+  internal var lastKnownFingerprint: String? = null
+
+  /**
    * Applies an edit and refreshes the snapshot.
    *
    * @param edit returns false when the document refused the change (unknown
@@ -87,8 +103,9 @@ class OpenProject(
     return changed
   }
 
-  internal fun markSaved() {
+  internal fun markSaved(fingerprint: String?) {
     isDirty = false
+    lastKnownFingerprint = fingerprint
   }
 }
 
@@ -140,29 +157,69 @@ class ProjectStore(private val context: Context) {
         }
       )
     }
-    FileResult.Ok(OpenProject(uri, displayName(uri), document, isReadOnly = !canWrite(uri)))
+    FileResult.Ok(
+      OpenProject(uri, displayName(uri), document, isReadOnly = !canWrite(uri)).apply {
+        lastKnownFingerprint = contentFingerprint(bytes)
+      }
+    )
   }
 
   /**
    * Writes the project back to the file it came from.
    *
+   * **Refuses to overwrite a file that changed underneath us.** A project in
+   * a synced folder has several writers — this phone, the desktop, and the
+   * sync client — and without the check, saving means writing over whatever
+   * arrived in the meantime, silently. The user is asked instead
+   * ([FileError.ChangedElsewhere]) and can still insist via [force].
+   *
    * Mode "wt" truncates first. Without it a file that shrinks — say after
    * removing an assignment — would keep the tail of the previous version and
    * become unparseable.
+   *
+   * @param force skip the change check and overwrite regardless. Only ever
+   *   set from an explicit user decision.
    */
-  suspend fun save(project: OpenProject): FileResult<Unit> = withContext(Dispatchers.IO) {
-    val bytes = project.document.toXmlBytes()
-    try {
-      resolver.openOutputStream(project.uri, "wt")?.use { it.write(bytes) }
-        ?: return@withContext FileResult.Err(FileError.SaveFailed("no stream"))
-    } catch (e: SecurityException) {
-      return@withContext FileResult.Err(FileError.PermissionLost)
-    } catch (e: Exception) {
-      return@withContext FileResult.Err(FileError.SaveFailed(e.message ?: "unknown"))
+  suspend fun save(project: OpenProject, force: Boolean = false): FileResult<Unit> =
+    withContext(Dispatchers.IO) {
+      if (!force && readFingerprint(project.uri).let { current ->
+          compareFingerprint(project.lastKnownFingerprint, current) ==
+            FileChangeState.CHANGED_ELSEWHERE
+        }
+      ) {
+        return@withContext FileResult.Err(FileError.ChangedElsewhere)
+      }
+
+      val bytes = project.document.toXmlBytes()
+      try {
+        resolver.openOutputStream(project.uri, "wt")?.use { it.write(bytes) }
+          ?: return@withContext FileResult.Err(FileError.SaveFailed("no stream"))
+      } catch (e: SecurityException) {
+        return@withContext FileResult.Err(FileError.PermissionLost)
+      } catch (e: Exception) {
+        return@withContext FileResult.Err(FileError.SaveFailed(e.message ?: "unknown"))
+      }
+      project.markSaved(contentFingerprint(bytes))
+      FileResult.Ok(Unit)
     }
-    project.markSaved()
-    FileResult.Ok(Unit)
-  }
+
+  /** Writes the project to a different file, leaving the original alone. */
+  suspend fun saveCopy(project: OpenProject, target: Uri): FileResult<Unit> =
+    withContext(Dispatchers.IO) {
+      val bytes = project.document.toXmlBytes()
+      try {
+        resolver.openOutputStream(target, "wt")?.use { it.write(bytes) }
+          ?: return@withContext FileResult.Err(FileError.SaveFailed("no stream"))
+      } catch (e: Exception) {
+        return@withContext FileResult.Err(FileError.SaveFailed(e.message ?: "unknown"))
+      }
+      FileResult.Ok(Unit)
+    }
+
+  /** Fingerprint of the file as it is right now, or null if unreadable. */
+  private fun readFingerprint(uri: Uri): String? = runCatching {
+    resolver.openInputStream(uri)?.use { contentFingerprint(it.readBytes()) }
+  }.getOrNull()
 
   /**
    * Whether this URI may be written back.

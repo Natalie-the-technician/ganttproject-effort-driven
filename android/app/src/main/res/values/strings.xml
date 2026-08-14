@@ -153,4 +153,8 @@
     <string name="collapse_group">Collapse group</string>
     <string name="expand_group">Expand group</string>
     <string name="read_only">Read-only — reopen it with “Open project” to be able to save</string>
+    <string name="error_changed_elsewhere">This file has changed since you opened it — the desktop saved it, or your cloud folder brought down a newer copy. Saving now would erase that work.</string>
+    <string name="action_overwrite">Overwrite anyway</string>
+    <string name="action_save_copy">Save a copy</string>
+    <string name="conflict_title">The file changed elsewhere</string>
 </resources>

@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import biz.ganttproject.mobile.R
+import biz.ganttproject.mobile.data.FileError
 
 private enum class Tab { GANTT, RESOURCES, IMPORT }
 
@@ -85,6 +87,12 @@ fun AppScaffold(
   val openFile = rememberLauncherForActivityResult(
     ActivityResultContracts.OpenDocument()
   ) { uri -> uri?.let(viewModel::openUri) }
+
+  // Used to rescue work when the file changed elsewhere: the user picks a new
+  // name and keeps both versions instead of one of them being lost.
+  val saveCopy = rememberLauncherForActivityResult(
+    ActivityResultContracts.CreateDocument("application/xml")
+  ) { uri -> uri?.let(viewModel::saveCopyTo) }
 
   val savedText = stringResource(R.string.action_saved)
   // Resolved here rather than inside the effect: stringResource is a
@@ -212,14 +220,44 @@ fun AppScaffold(
   }
 
   state.fileError?.let { error ->
-    AlertDialog(
-      onDismissRequest = viewModel::dismissError,
-      title = { Text(stringResource(R.string.error_title)) },
-      text = { Text(error.text()) },
-      confirmButton = {
-        TextButton(onClick = viewModel::dismissError) { Text(stringResource(R.string.action_ok)) }
-      }
-    )
+    if (error == FileError.ChangedElsewhere) {
+      // A conflict is not just bad news, it is a decision. The dialog offers
+      // the two ways out rather than only acknowledging the problem: keep
+      // both versions, or knowingly replace the other one.
+      AlertDialog(
+        onDismissRequest = viewModel::dismissError,
+        title = { Text(stringResource(R.string.conflict_title)) },
+        text = { Text(error.text()) },
+        confirmButton = {
+          TextButton(onClick = {
+            val name = state.project?.displayName?.removeSuffix(".gan") ?: "project"
+            viewModel.dismissError()
+            saveCopy.launch("$name-phone.gan")
+          }) {
+            Text(stringResource(R.string.action_save_copy))
+          }
+        },
+        dismissButton = {
+          Row {
+            TextButton(onClick = viewModel::dismissError) {
+              Text(stringResource(R.string.action_cancel))
+            }
+            TextButton(onClick = viewModel::overwriteAnyway) {
+              Text(stringResource(R.string.action_overwrite))
+            }
+          }
+        }
+      )
+    } else {
+      AlertDialog(
+        onDismissRequest = viewModel::dismissError,
+        title = { Text(stringResource(R.string.error_title)) },
+        text = { Text(error.text()) },
+        confirmButton = {
+          TextButton(onClick = viewModel::dismissError) { Text(stringResource(R.string.action_ok)) }
+        }
+      )
+    }
   }
 
   if (confirmCloseOpen) {

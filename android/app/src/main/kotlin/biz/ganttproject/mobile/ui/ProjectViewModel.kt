@@ -142,12 +142,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
-  fun save() {
+  fun save(force: Boolean = false) {
     val project = open ?: return
     if (project.isReadOnly) return
     viewModelScope.launch {
       _state.update { it.copy(busy = true, fileError = null) }
-      when (val result = store.save(project)) {
+      when (val result = store.save(project, force)) {
         is FileResult.Ok ->
           _state.update { it.copy(busy = false, project = snapshot(project), notice = Notice.Saved) }
         is FileResult.Err ->
@@ -175,6 +175,9 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
       return
     }
     viewModelScope.launch {
+      // Auto-save never forces: if the file changed elsewhere, the user is
+      // asked rather than having the other version overwritten behind their
+      // back — which is the whole point of the check.
       when (val result = store.save(project)) {
         is FileResult.Ok ->
           _state.update { it.copy(project = snapshot(project), notice = Notice.Saved) }
@@ -189,6 +192,27 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
   /** Saves first, then closes. The normal way to leave a project. */
   fun saveAndCloseProject() = saveIfDirty { closeProject() }
+
+  /**
+   * Overwrites the file even though it changed elsewhere. Only ever reached
+   * through the conflict dialog, never automatically.
+   */
+  fun overwriteAnyway() {
+    _state.update { it.copy(fileError = null) }
+    save(force = true)
+  }
+
+  /** Writes the current state to a second file, leaving the original alone. */
+  fun saveCopyTo(target: android.net.Uri) {
+    val project = open ?: return
+    viewModelScope.launch {
+      _state.update { it.copy(busy = true, fileError = null) }
+      when (val result = store.saveCopy(project, target)) {
+        is FileResult.Ok -> _state.update { it.copy(busy = false, notice = Notice.Saved) }
+        is FileResult.Err -> _state.update { it.copy(busy = false, fileError = result.error) }
+      }
+    }
+  }
 
   /**
    * Drops the project without writing. The escape hatch that makes

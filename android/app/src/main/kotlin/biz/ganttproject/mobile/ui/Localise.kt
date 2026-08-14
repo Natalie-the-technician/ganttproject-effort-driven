@@ -32,6 +32,7 @@ fun FileError.text(): String = when (this) {
   FileError.PermissionLost -> stringResource(R.string.error_permission_lost)
   is FileError.OpenFailed -> stringResource(R.string.error_open_failed)
   is FileError.SaveFailed -> stringResource(R.string.error_save_failed)
+  FileError.ChangedElsewhere -> stringResource(R.string.error_changed_elsewhere)
 }
 
 @Composable

@@ -148,4 +148,8 @@
     <string name="collapse_group">Gruppe zuklappen</string>
     <string name="expand_group">Gruppe aufklappen</string>
     <string name="read_only">Nur lesbar — über „Projekt öffnen“ erneut öffnen, um speichern zu können</string>
+    <string name="error_changed_elsewhere">Diese Datei hat sich geändert, seit du sie geöffnet hast — der Desktop hat gespeichert, oder dein Cloud-Ordner hat eine neuere Fassung geholt. Jetzt zu speichern würde diese Arbeit löschen.</string>
+    <string name="action_overwrite">Trotzdem überschreiben</string>
+    <string name="action_save_copy">Kopie speichern</string>
+    <string name="conflict_title">Die Datei wurde anderswo geändert</string>
 </resources>
