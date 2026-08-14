@@ -206,4 +206,7 @@
     <string name="error_sync_failed">Der Server ist nicht erreichbar (%1$s).</string>
     <string name="sync_open_remote">Vom Server öffnen</string>
     <string name="sync_no_projects">Auf dem Server wurden keine Projekte gefunden.</string>
+
+    <string name="error_no_folder_access">Du bist angemeldet, aber dieser Ordner ist für dein Konto nicht freigegeben. Öffne ein Projekt aus einem Ordner, auf den du Zugriff hast — oder lass ihn dir freischalten.</string>
+    <string name="error_gone_from_server">Dieses Projekt liegt nicht mehr auf dem Server. Vielleicht wurde es umbenannt oder gelöscht.</string>
 </resources>

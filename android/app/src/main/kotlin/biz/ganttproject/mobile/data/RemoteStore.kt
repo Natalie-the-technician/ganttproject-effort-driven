@@ -122,9 +122,12 @@ class RemoteStore(private val client: WebDavClient) {
   private fun translate(error: DavError): FileError = when (error) {
     DavError.ChangedElsewhere -> FileError.ChangedElsewhere
     DavError.LockedElsewhere -> FileError.LockedElsewhere
-    DavError.NotFound -> FileError.PermissionLost
+    // Not PermissionLost: that one is about a device permission having
+    // expired and tells the user to reopen the file, which would be wrong
+    // advice for a project the server no longer has.
+    DavError.NotFound -> FileError.GoneFromServer
     DavError.Unauthorized -> FileError.SyncFailed("401")
-    DavError.Forbidden -> FileError.SyncFailed("403")
+    DavError.Forbidden -> FileError.NoAccessToFolder
     DavError.Insecure -> FileError.SyncFailed("https")
     is DavError.Server -> FileError.SyncFailed(error.code.toString())
     is DavError.Network -> FileError.SyncFailed(error.detail)

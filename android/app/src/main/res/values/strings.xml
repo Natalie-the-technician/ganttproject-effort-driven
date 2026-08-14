@@ -214,4 +214,7 @@
     <string name="error_sync_failed">The server could not be reached (%1$s).</string>
     <string name="sync_open_remote">Open from server</string>
     <string name="sync_no_projects">No projects found on the server.</string>
+
+    <string name="error_no_folder_access">You are signed in, but this folder is not shared with your account. Open a project from a folder you have access to, or ask for it to be shared.</string>
+    <string name="error_gone_from_server">This project is no longer on the server. It may have been renamed or deleted.</string>
 </resources>

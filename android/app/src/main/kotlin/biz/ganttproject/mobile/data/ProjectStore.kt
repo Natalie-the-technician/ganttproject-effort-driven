@@ -50,6 +50,19 @@ sealed interface FileError {
   data class SyncFailed(val detail: String) : FileError
 
   /**
+   * Signed in, but this folder is not shared with this account.
+   *
+   * A normal outcome, not a fault: the server grants per folder, and the
+   * collection root deliberately allows browsing while refusing writes.
+   * Reporting it as "server unreachable" would send the user looking for a
+   * network problem that does not exist.
+   */
+  data object NoAccessToFolder : FileError
+
+  /** The project is no longer on the server — deleted or renamed. */
+  data object GoneFromServer : FileError
+
+  /**
    * The version of the open project is unknown, so a safe save is not
    * possible.
    *

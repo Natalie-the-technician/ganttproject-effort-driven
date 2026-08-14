@@ -38,6 +38,8 @@ fun FileError.text(): String = when (this) {
   FileError.LockedElsewhere -> stringResource(R.string.error_locked_elsewhere)
   FileError.UnknownVersion -> stringResource(R.string.error_unknown_version)
   is FileError.SyncFailed -> stringResource(R.string.error_sync_failed, detail)
+  FileError.NoAccessToFolder -> stringResource(R.string.error_no_folder_access)
+  FileError.GoneFromServer -> stringResource(R.string.error_gone_from_server)
 }
 
 @Composable
