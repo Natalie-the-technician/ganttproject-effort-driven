@@ -5,7 +5,10 @@
  */
 package biz.ganttproject.mobile.net
 
+import biz.ganttproject.mobile.core.BinaryHttpResponse
 import biz.ganttproject.mobile.core.HttpBackend
+import biz.ganttproject.mobile.core.HttpExchange
+import biz.ganttproject.mobile.core.HttpRequest
 import biz.ganttproject.mobile.core.HttpResponse
 import biz.ganttproject.mobile.core.TogglApi
 import java.net.HttpURLConnection
@@ -26,7 +29,7 @@ import java.net.URL
 class AndroidHttpBackend(
   private val connectTimeoutMs: Int = 15_000,
   private val readTimeoutMs: Int = 30_000
-) : HttpBackend {
+) : HttpBackend, HttpExchange {
 
   /**
    * Toggl allows roughly one request per second and answers 429 beyond that.
@@ -43,6 +46,62 @@ class AndroidHttpBackend(
       runCatching { Thread.sleep(waitFor) }
     }
     lastRequestAt = System.currentTimeMillis()
+  }
+
+  /**
+   * Performs an arbitrary exchange for the WebDAV client.
+   *
+   * Not throttled: unlike Toggl, this server is the user's own and every
+   * request here is the direct result of something they just did — opening a
+   * project, saving one. Spacing those out would only make the app feel slow.
+   *
+   * `HttpURLConnection` refuses to send PROPFIND, LOCK and UNLOCK because it
+   * validates the method against a fixed list. The field holding that method
+   * is set directly when the normal setter rejects it; without this the app
+   * could read and write but never list a collection, and the failure would
+   * look like a server misconfiguration rather than a client limitation.
+   */
+  override fun exchange(request: HttpRequest): BinaryHttpResponse {
+    val connection = (URL(request.url).openConnection() as HttpURLConnection).apply {
+      connectTimeout = connectTimeoutMs
+      readTimeout = readTimeoutMs
+      instanceFollowRedirects = false
+      runCatching { requestMethod = request.method }.onFailure { forceMethod(this, request.method) }
+      request.headers.forEach { (name, value) -> setRequestProperty(name, value) }
+      if (request.body != null) {
+        doOutput = true
+        setFixedLengthStreamingMode(request.body.size)
+      }
+    }
+    return try {
+      request.body?.let { connection.outputStream.use { out -> out.write(it) } }
+      val status = connection.responseCode
+      val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+      val body = stream?.use { it.readBytes() } ?: ByteArray(0)
+      val headers = connection.headerFields
+        .filterKeys { it != null }
+        .map { (name, values) -> name.lowercase() to values.joinToString(", ") }
+        .toMap()
+      BinaryHttpResponse(status, headers, body)
+    } finally {
+      connection.disconnect()
+    }
+  }
+
+  /**
+   * Sets the request method past `HttpURLConnection`'s allow-list.
+   *
+   * Reflection on a JDK internal, which is exactly as fragile as it looks —
+   * hence the failure being swallowed rather than thrown. If it stops working
+   * the affected call fails with the platform's own error instead of taking
+   * the app down, and reading and writing keep working either way.
+   */
+  private fun forceMethod(connection: HttpURLConnection, method: String) {
+    runCatching {
+      val field = HttpURLConnection::class.java.getDeclaredField("method")
+      field.isAccessible = true
+      field.set(connection, method)
+    }
   }
 
   override fun get(url: String, headers: Map<String, String>): HttpResponse {

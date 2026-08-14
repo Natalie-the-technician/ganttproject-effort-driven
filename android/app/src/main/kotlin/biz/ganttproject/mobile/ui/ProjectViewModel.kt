@@ -20,6 +20,10 @@ import biz.ganttproject.mobile.core.TogglClient
 import biz.ganttproject.mobile.core.TogglError
 import biz.ganttproject.mobile.core.TogglResult
 import biz.ganttproject.mobile.core.TogglTimeEntry
+import biz.ganttproject.mobile.core.DavError
+import biz.ganttproject.mobile.core.DavResult
+import biz.ganttproject.mobile.core.WebDavClient
+import biz.ganttproject.mobile.core.WebDavConfig
 import biz.ganttproject.mobile.core.MatchOutcome
 import biz.ganttproject.mobile.core.SyncGuarantee
 import biz.ganttproject.mobile.core.needsUnmanagedStorageWarning
@@ -65,6 +69,29 @@ data class ProjectUi(
    */
   val revision: Int
 )
+
+/** Outcome of the last connection check against the sync server. */
+sealed interface DavCheck {
+  /**
+   * The server answered. [supportsLocking] decides whether conflicts can be
+   * prevented or merely reported, so it is shown to the user rather than
+   * kept as an internal detail.
+   */
+  data class Reachable(val supportsLocking: Boolean) : DavCheck
+  data class Failed(val error: DavError) : DavCheck
+}
+
+/** The sync-server settings as edited in the dialog. */
+data class DavSettingsState(
+  val baseUrl: String = "",
+  val username: String = "",
+  val password: String = "",
+  val supportsLocking: Boolean = false,
+  val checking: Boolean = false,
+  val checked: DavCheck? = null
+) {
+  val configured: Boolean get() = baseUrl.isNotBlank()
+}
 
 /** What the widget is configured to show. */
 data class WidgetSettings(val projectName: String?, val windowDays: Int)
@@ -137,6 +164,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     ImportState(token = secure.getSecret(SecureStore.KEY_TOGGL_TOKEN).orEmpty())
   )
   val importState: StateFlow<ImportState> = _importState.asStateFlow()
+
+  /** Server settings as shown in the dialog, plus the last check's outcome. */
+  private val _dav = MutableStateFlow(loadDavSettings())
+  val dav: StateFlow<DavSettingsState> = _dav.asStateFlow()
 
   // ------------------------------------------------------------ File level
 
@@ -299,6 +330,73 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
       // the method is generic in its return type, and a bare call leaves
       // nothing to infer it from when the parameter is a plain Context.
       runCatching { AgendaWidget().updateAll(getApplication<Application>()) }
+    }
+  }
+
+  private fun loadDavSettings() = DavSettingsState(
+    baseUrl = prefs.davBaseUrl().orEmpty(),
+    username = prefs.davUsername().orEmpty(),
+    password = secure.getSecret(SecureStore.KEY_DAV_PASSWORD).orEmpty(),
+    supportsLocking = prefs.davSupportsLocking()
+  )
+
+  fun setDavBaseUrl(value: String) = _dav.update { it.copy(baseUrl = value, checked = null) }
+
+  fun setDavUsername(value: String) = _dav.update { it.copy(username = value, checked = null) }
+
+  fun setDavPassword(value: String) = _dav.update { it.copy(password = value, checked = null) }
+
+  /**
+   * Stores the server settings.
+   *
+   * The observed locking capability is cleared on every change: it describes
+   * one particular server, and keeping it across an address change would let
+   * the app call a completely different server managed on the strength of an
+   * answer the old one gave.
+   */
+  fun saveDavSettings() {
+    val current = _dav.value
+    prefs.setDavServer(current.baseUrl, current.username)
+    secure.putSecret(SecureStore.KEY_DAV_PASSWORD, current.password.ifEmpty { null })
+    if (current.checked == null) prefs.setDavSupportsLocking(false)
+  }
+
+  /**
+   * Asks the server what it can do, and says so plainly.
+   *
+   * This is the only place the user learns whether they are protected or
+   * merely warned: a server without locking cannot stop the desktop from
+   * overwriting a phone edit, it can only reject the phone afterwards.
+   */
+  fun checkDavConnection() {
+    val current = _dav.value
+    if (current.baseUrl.isBlank()) return
+    _dav.update { it.copy(checking = true, checked = null) }
+    viewModelScope.launch {
+      val outcome = withContext(Dispatchers.IO) {
+        val client = WebDavClient(
+          http,
+          WebDavConfig(current.baseUrl, current.username, current.password)
+        )
+        client.capabilities()
+      }
+      when (outcome) {
+        is DavResult.Ok -> {
+          prefs.setDavServer(current.baseUrl, current.username)
+          secure.putSecret(SecureStore.KEY_DAV_PASSWORD, current.password.ifEmpty { null })
+          prefs.setDavSupportsLocking(outcome.value.supportsLocking)
+          _dav.update {
+            it.copy(
+              checking = false,
+              checked = DavCheck.Reachable(outcome.value.supportsLocking),
+              supportsLocking = outcome.value.supportsLocking
+            )
+          }
+        }
+        is DavResult.Failed -> _dav.update {
+          it.copy(checking = false, checked = DavCheck.Failed(outcome.error), supportsLocking = false)
+        }
+      }
     }
   }
 

@@ -190,4 +190,22 @@
 
     <string name="action_undo">Undo</string>
     <string name="action_redo">Redo</string>
+
+    <!-- Sync server -->
+    <string name="sync_settings">Sync server</string>
+    <string name="sync_hint">Projects on a WebDAV server are version-checked on save. Without a server the app keeps using files from your device.</string>
+    <string name="sync_url">Server address</string>
+    <string name="sync_url_hint">https://dav.example.org/projekte</string>
+    <string name="sync_user">User name</string>
+    <string name="sync_password">Password</string>
+    <string name="sync_check">Test connection</string>
+    <string name="sync_checking">Testing…</string>
+    <string name="sync_ok_locking">Connected. The server supports locking, so a project open on the PC cannot be overwritten from here.</string>
+    <string name="sync_ok_no_locking">Connected, but the server does not support locking. Conflicts will be detected on save, not prevented.</string>
+    <string name="sync_err_insecure">The address must start with https://. The password is sent with every request.</string>
+    <string name="sync_err_auth">User name or password rejected.</string>
+    <string name="sync_err_forbidden">Signed in, but not allowed to use this folder.</string>
+    <string name="sync_err_notfound">No such folder on the server.</string>
+    <string name="sync_err_network">Server not reachable: %1$s</string>
+    <string name="sync_err_server">Server reported an error (%1$d).</string>
 </resources>

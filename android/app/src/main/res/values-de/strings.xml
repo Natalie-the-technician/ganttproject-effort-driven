@@ -182,4 +182,22 @@
 
     <string name="action_undo">Rückgängig</string>
     <string name="action_redo">Wiederherstellen</string>
+
+    <!-- Sync-Server -->
+    <string name="sync_settings">Sync-Server</string>
+    <string name="sync_hint">Projekte auf einem WebDAV-Server werden beim Speichern auf ihre Version geprüft. Ohne Server arbeitet die App weiter mit Dateien vom Gerät.</string>
+    <string name="sync_url">Serveradresse</string>
+    <string name="sync_url_hint">https://dav.example.org/projekte</string>
+    <string name="sync_user">Benutzername</string>
+    <string name="sync_password">Passwort</string>
+    <string name="sync_check">Verbindung prüfen</string>
+    <string name="sync_checking">Wird geprüft…</string>
+    <string name="sync_ok_locking">Verbunden. Der Server kann sperren — ein am PC geöffnetes Projekt kann von hier nicht überschrieben werden.</string>
+    <string name="sync_ok_no_locking">Verbunden, aber der Server kann nicht sperren. Konflikte werden beim Speichern erkannt, nicht verhindert.</string>
+    <string name="sync_err_insecure">Die Adresse muss mit https:// beginnen. Das Passwort geht bei jeder Anfrage mit.</string>
+    <string name="sync_err_auth">Benutzername oder Passwort abgelehnt.</string>
+    <string name="sync_err_forbidden">Angemeldet, aber für diesen Ordner nicht berechtigt.</string>
+    <string name="sync_err_notfound">Diesen Ordner gibt es auf dem Server nicht.</string>
+    <string name="sync_err_network">Server nicht erreichbar: %1$s</string>
+    <string name="sync_err_server">Der Server meldet einen Fehler (%1$d).</string>
 </resources>

@@ -59,7 +59,13 @@ class MainActivity : ComponentActivity() {
       GanttMobileTheme {
         val state by viewModel.state.collectAsStateWithLifecycle()
         val importState by viewModel.importState.collectAsStateWithLifecycle()
-        AppScaffold(state = state, importState = importState, viewModel = viewModel)
+        val davState by viewModel.dav.collectAsStateWithLifecycle()
+        AppScaffold(
+          state = state,
+          importState = importState,
+          davState = davState,
+          viewModel = viewModel
+        )
       }
     }
   }

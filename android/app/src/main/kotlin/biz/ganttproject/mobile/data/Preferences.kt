@@ -104,6 +104,13 @@ class SecureStore(context: Context) {
     private const val GCM_TAG_BITS = 128
 
     const val KEY_TOGGL_TOKEN = "toggl_token"
+
+    /**
+     * The WebDAV password. Here rather than in app_prefs because Basic auth
+     * sends it on every single request — it is a live credential, not a
+     * setting.
+     */
+    const val KEY_DAV_PASSWORD = "dav_password"
   }
 }
 
@@ -181,6 +188,40 @@ class AppPreferences(context: Context) {
 
   fun setWidgetWindowDays(days: Int) = prefs.edit().putInt(KEY_WIDGET_DAYS, days).apply()
 
+  // --------------------------------------------------------------- Sync server
+
+  /**
+   * Address of the WebDAV collection holding the projects.
+   *
+   * Only the address and the user name live here; the password belongs to
+   * [SecureStore]. Splitting them is not tidiness — app_prefs is plain XML in
+   * the app's data directory and is included in device backups, and a
+   * password there would travel to wherever a backup goes.
+   */
+  fun davBaseUrl(): String? = prefs.getString(KEY_DAV_URL, null)?.ifBlank { null }
+
+  fun davUsername(): String? = prefs.getString(KEY_DAV_USER, null)?.ifBlank { null }
+
+  fun setDavServer(baseUrl: String?, username: String?) {
+    prefs.edit()
+      .putString(KEY_DAV_URL, baseUrl?.trim())
+      .putString(KEY_DAV_USER, username?.trim())
+      .apply()
+  }
+
+  /**
+   * Whether the server was observed to support locking, from the last
+   * connection check.
+   *
+   * Recorded rather than assumed. It decides whether the app may treat the
+   * storage as managed and drop the edit-protection warning, and a server
+   * that cannot lock is — for conflicts — no better than a synced folder.
+   */
+  fun davSupportsLocking(): Boolean = prefs.getBoolean(KEY_DAV_LOCKING, false)
+
+  fun setDavSupportsLocking(value: Boolean) =
+    prefs.edit().putBoolean(KEY_DAV_LOCKING, value).apply()
+
   // ---------------------------------------------------------- Edit protection
 
   /**
@@ -201,6 +242,9 @@ class AppPreferences(context: Context) {
     private const val KEY_WIDGET_NAME = "widget_project_name"
     private const val KEY_WIDGET_DAYS = "widget_window_days"
     private const val KEY_EDIT_SCOPE = "edit_scope"
+    private const val KEY_DAV_URL = "dav_base_url"
+    private const val KEY_DAV_USER = "dav_username"
+    private const val KEY_DAV_LOCKING = "dav_supports_locking"
     private const val MAX_RECENT = 10
   }
 }

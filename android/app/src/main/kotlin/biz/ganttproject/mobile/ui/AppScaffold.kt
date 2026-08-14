@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -62,6 +63,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.RadioButton
 import biz.ganttproject.mobile.R
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import biz.ganttproject.mobile.core.DavError
 import biz.ganttproject.mobile.core.EditScope
 import biz.ganttproject.mobile.data.FileError
 
@@ -83,6 +86,7 @@ private val TabSaver = androidx.compose.runtime.saveable.Saver<Tab, Int>(
 fun AppScaffold(
   state: AppState,
   importState: ImportState,
+  davState: DavSettingsState,
   viewModel: ProjectViewModel
 ) {
   var tab by rememberSaveable(stateSaver = TabSaver) { mutableStateOf(Tab.GANTT) }
@@ -354,6 +358,10 @@ fun AppScaffold(
 
           HorizontalDivider()
 
+          SyncServerSection(davState, viewModel)
+
+          HorizontalDivider()
+
           Text(stringResource(R.string.widget_settings), style = MaterialTheme.typography.labelMedium)
           Text(stringResource(R.string.widget_project), style = MaterialTheme.typography.labelMedium)
           Text(
@@ -521,6 +529,88 @@ private fun HomeScreen(
  * them, because the choice being made here is about what can be lost, and
  * that is not obvious from three labels alone.
  */
+/**
+ * Server address, credentials and the connection check.
+ *
+ * The check is not decoration. It is the only place the user finds out
+ * whether this server can lock — and therefore whether a conflict gets
+ * prevented or merely reported afterwards. Both outcomes are stated in plain
+ * words rather than as a green tick, because they mean genuinely different
+ * things for the safety of their data.
+ */
+@Composable
+private fun SyncServerSection(dav: DavSettingsState, viewModel: ProjectViewModel) {
+  Text(stringResource(R.string.sync_settings), style = MaterialTheme.typography.labelMedium)
+  Text(stringResource(R.string.sync_hint), style = MaterialTheme.typography.bodySmall)
+
+  OutlinedTextField(
+    value = dav.baseUrl,
+    onValueChange = viewModel::setDavBaseUrl,
+    label = { Text(stringResource(R.string.sync_url)) },
+    placeholder = { Text(stringResource(R.string.sync_url_hint)) },
+    singleLine = true,
+    modifier = Modifier.fillMaxWidth()
+  )
+  OutlinedTextField(
+    value = dav.username,
+    onValueChange = viewModel::setDavUsername,
+    label = { Text(stringResource(R.string.sync_user)) },
+    singleLine = true,
+    modifier = Modifier.fillMaxWidth()
+  )
+  OutlinedTextField(
+    value = dav.password,
+    onValueChange = viewModel::setDavPassword,
+    label = { Text(stringResource(R.string.sync_password)) },
+    singleLine = true,
+    visualTransformation = PasswordVisualTransformation(),
+    modifier = Modifier.fillMaxWidth()
+  )
+
+  TextButton(
+    onClick = { viewModel.checkDavConnection() },
+    enabled = dav.configured && !dav.checking
+  ) {
+    Text(stringResource(if (dav.checking) R.string.sync_checking else R.string.sync_check))
+  }
+
+  when (val checked = dav.checked) {
+    null -> Unit
+    is DavCheck.Reachable -> Text(
+      stringResource(
+        if (checked.supportsLocking) R.string.sync_ok_locking else R.string.sync_ok_no_locking
+      ),
+      style = MaterialTheme.typography.bodySmall
+    )
+    is DavCheck.Failed -> Text(
+      davErrorText(checked.error),
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.error
+    )
+  }
+}
+
+/**
+ * Turns a [DavError] into something the user can act on.
+ *
+ * Each case names what to do next rather than what went wrong technically:
+ * a wrong password and an unreachable server both read as "it did not work"
+ * otherwise, and they call for completely different responses.
+ */
+@Composable
+private fun davErrorText(error: DavError): String = when (error) {
+  DavError.Insecure -> stringResource(R.string.sync_err_insecure)
+  DavError.Unauthorized -> stringResource(R.string.sync_err_auth)
+  DavError.Forbidden -> stringResource(R.string.sync_err_forbidden)
+  DavError.NotFound -> stringResource(R.string.sync_err_notfound)
+  is DavError.Network -> stringResource(R.string.sync_err_network, error.detail)
+  is DavError.Server -> stringResource(R.string.sync_err_server, error.code)
+  // Reached only if a check ever performs a conditional write, which it does
+  // not. Shown as a server error rather than silently as nothing.
+  DavError.ChangedElsewhere -> stringResource(R.string.sync_err_server, 412)
+  DavError.LockedElsewhere -> stringResource(R.string.sync_err_server, 423)
+}
+
 @Composable
 private fun EditScopeRow(scope: EditScope, selected: Boolean, onSelect: () -> Unit) {
   val label = when (scope) {

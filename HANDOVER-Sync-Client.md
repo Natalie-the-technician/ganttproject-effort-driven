@@ -5,8 +5,8 @@
 die App damit tut. Bei Widersprüchen gilt das Server-Dokument; die Anforderungen
 werden hier als S1…S9 referenziert.
 
-Stand: 14. August 2026. **Noch nicht gebaut.** Dieses Dokument ist der Plan,
-nicht der Bericht.
+Stand: 14. August 2026. **Teilweise gebaut** — siehe §11 für den genauen
+Stand. Der Rest dieses Dokuments bleibt der Plan.
 
 ---
 
@@ -224,3 +224,99 @@ Schritt 1 kann sofort beginnen und hängt an keiner Antwort der Server-Sitzung.
 Ab Schritt 2 brauche ich die Antworten aus `HANDOVER-Sync-Server.md` §7 —
 vor allem, ob es Nextcloud wird oder ein schlankes `mod_dav`, weil das den
 Basispfad und die Art des Geräte-Passworts bestimmt.
+
+
+---
+
+## 11. Stand der Umsetzung
+
+**Fertig und geprüft (ohne Server testbar):**
+
+* `gantt-core/…/WebDavClient.kt` — `OPTIONS`, `GET`, `PUT` mit `If-Match`,
+  `PUT` mit `If-None-Match: *`, `PROPFIND`. Erfüllt S1–S4, S7, S9.
+* `WebDavClientTest` — 27 Tests gegen ein gefälschtes `HttpExchange`.
+  **Gegentest: 9 von 9 Sabotagen gefangen** (If-Match weggelassen, 412/423
+  vertauscht, ETag-Anführungszeichen abgeschnitten, https-Prüfung entfernt,
+  DAV-Klasse per Teilstring erkannt, alten ETag statt `null` behalten,
+  HEAD-Nachfrage übersprungen, Bytes durch einen String gedreht).
+* `AndroidHttpBackend` setzt jetzt zusätzlich `HttpExchange` um, mit binärem
+  Rumpf, Antwort-Kopfzeilen und einem Umweg um die Methodenliste von
+  `HttpURLConnection` — ohne den ginge `PROPFIND` nicht.
+* Einstellungen: Adresse, Benutzername, Passwort und **Verbindung prüfen**.
+  Adresse und Benutzername in `app_prefs`, das Passwort im `SecureStore`.
+* Die geprüfte Sperrfähigkeit wird gespeichert und bei jeder Änderung der
+  Einstellungen wieder verworfen.
+
+**Noch nicht gebaut:** `RemoteStore`, das Öffnen und Speichern vom Server, die
+`SyncGuarantee`-Umstellung (§7). Bewusst so: Diese Teile lassen sich erst
+gegen einen echten Server prüfen, und ungeprüfter Code an genau der Stelle,
+die Datenverlust verhindern soll, wäre das Gegenteil des Ziels.
+
+---
+
+## 12. Was am Desktop-Fork zu ändern ist
+
+Meine frühere Aussage „null Änderungen am Desktop" galt dem **Protokoll** und
+stimmt dort. Beim Nachsehen im Quellcode sind aber drei Dinge aufgetaucht, die
+den Schutz in der Praxis aushebeln.
+
+### D1 — Die Sperre ist standardmäßig aus (Konfiguration, kritisch)
+
+```java
+// WebDavStorageImpl.java:61
+new DefaultIntegerOption("webdav.lockTimeout", -1)
+```
+```java
+// HttpDocument.java:131
+if (locked || myTimeout < 0) {
+  return true;   // ← meldet Erfolg, ohne gesperrt zu haben
+}
+```
+
+Voreinstellung `-1` heißt: **`acquireLock()` sperrt nicht und meldet trotzdem
+Erfolg.** Der Desktop läuft also gegen einen sperrfähigen Server und nutzt die
+Sperre nie — ohne Hinweis, ohne Fehlermeldung.
+
+*Sofort:* In den Einstellungen unter WebDAV die Sperrdauer auf einen
+positiven Wert setzen (Minuten; 120 ist ein vernünftiger Anfang).
+*Im Fork:* Die Voreinstellung auf einen positiven Wert ändern. Eine
+Sicherheitsfunktion, die standardmäßig aus ist und das verschweigt, ist
+schlimmer als keine — sie erzeugt Vertrauen, das nicht gedeckt ist.
+
+### D2 — „Ohne Sperre öffnen" ist ein eigener Knopf
+
+`WebDavStorageImpl.createNoLockAction` übergibt fest `HttpDocument.NO_LOCK`.
+Das ist eine legitime Wahl und soll bleiben — aber wer sie benutzt, hat für
+diese Sitzung keinen Schutz. Falls der Fork ohnehin angefasst wird: Der Knopf
+sollte benennen, was er abschaltet.
+
+### D3 — Der Desktop schreibt ohne `If-Match` (Code, die eigentliche Lücke)
+
+```java
+// MiltonResourceImpl.java:282
+if (myImpl != null && myImpl.getLockToken() != null) {
+  parentFolder.upload(…, new IfMatchCheck(myImpl.getLockToken(), false, true), null);
+} else {
+  parentFolder.upload(…, null);   // ← bedingungslos
+}
+```
+
+Der Desktop sendet **nur** das Sperr-Token, und nur wenn er eines hält. Ohne
+Sperre — also mit D1 im Auslieferungszustand, oder an einem Server ohne
+Sperrunterstützung — überschreibt er **bedingungslos**. Genau das lautlose
+Überschreiben, das dieses ganze Vorhaben abschaffen soll, nur eine Ebene
+tiefer.
+
+Die App macht es ab sofort anders: Sie merkt sich den ETag und schickt
+`If-Match` bei jedem Speichern. Solange der Desktop das nicht tut, ist der
+Schutz einseitig — das Telefon kann nichts vom PC überschreiben, der PC vom
+Telefon schon.
+
+*Zu tun im Fork:* ETag aus der `GET`-Antwort merken, beim Schreiben als
+`If-Match` mitschicken, `412` als Konflikt anzeigen statt als allgemeinen
+Fehler. Der Aufhänger ist `MiltonResourceImpl.write` samt `HttpDocument`.
+
+**Reihenfolge:** D1 zuerst — eine Einstellung, sofort wirksam, und mit
+gesetzter Sperrdauer deckt die Sperre den Alltagsfall bereits ab. D3 schließt
+die verbleibende Lücke (Server ohne Sperren, abgelaufene Sperre, bewusst ohne
+Sperre geöffnet) und ist echte Arbeit im Fork. D2 ist Beschriftung.
