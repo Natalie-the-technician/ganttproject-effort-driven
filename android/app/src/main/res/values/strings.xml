@@ -187,4 +187,7 @@
     <string name="editing_warning_title">Turn editing on?</string>
     <string name="editing_warning_body">This project is a file in a synced folder. Nothing decides which of two competing changes is the real one: if you edit here and the desktop saves before the sync has caught up, your change is gone without a trace.\n\nThe app refuses to overwrite a file that changed since you opened it — but it cannot bring back a change that was overwritten somewhere else.\n\nAt risk are progress, the completed mark and hours you typed in by hand. Hours from the time tracker are safe: what was imported is recorded in the project file, so a lost change simply means those entries are offered again next time.</string>
     <string name="editing_warning_confirm">Turn on anyway</string>
+
+    <string name="action_undo">Undo</string>
+    <string name="action_redo">Redo</string>
 </resources>

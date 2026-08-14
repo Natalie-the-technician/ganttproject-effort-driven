@@ -128,7 +128,14 @@ fun ImportScreen(
       items(state.rows, key = { it.entry.id }) { row ->
         EntryCard(row = row, model = model, viewModel = viewModel)
       }
-      item { PreviewCard(plan = plan, state = state, viewModel = viewModel) }
+      item {
+        PreviewCard(
+          plan = plan,
+          state = state,
+          viewModel = viewModel,
+          canEdit = project.canEdit
+        )
+      }
     }
   }
 }
@@ -354,7 +361,8 @@ private fun EntryCard(row: ImportRow, model: ProjectModel, viewModel: ProjectVie
 private fun PreviewCard(
   plan: biz.ganttproject.mobile.core.ImportPlan,
   state: ImportState,
-  viewModel: ProjectViewModel
+  viewModel: ProjectViewModel,
+  canEdit: Boolean
 ) {
   Card(modifier = Modifier.fillMaxWidth()) {
     Column(
@@ -389,7 +397,7 @@ private fun PreviewCard(
 
       Button(
         onClick = viewModel::applyImport,
-        enabled = !plan.isEmpty && !state.busy && project.canEdit,
+        enabled = !plan.isEmpty && !state.busy && canEdit,
         modifier = Modifier.fillMaxWidth()
       ) {
         Text(stringResource(R.string.import_apply))

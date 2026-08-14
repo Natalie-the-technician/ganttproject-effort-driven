@@ -14,8 +14,11 @@ import biz.ganttproject.mobile.core.GanttDocument
 import biz.ganttproject.mobile.core.GanttFormatException
 import biz.ganttproject.mobile.core.FileChangeState
 import biz.ganttproject.mobile.core.ProjectModel
+import biz.ganttproject.mobile.core.UndoHistory
 import biz.ganttproject.mobile.core.compareFingerprint
 import biz.ganttproject.mobile.core.contentFingerprint
+import biz.ganttproject.mobile.core.expandedStates
+import biz.ganttproject.mobile.core.restoreWithViewState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -44,7 +47,7 @@ sealed interface FileResult<out T> {
 class OpenProject(
   val uri: Uri,
   val displayName: String,
-  val document: GanttDocument,
+  document: GanttDocument,
   /**
    * True when the app holds read access but not write access.
    *
@@ -55,6 +58,19 @@ class OpenProject(
    */
   val isReadOnly: Boolean = false
 ) {
+  /**
+   * The document itself. Replaced wholesale by [undo] and [redo], which is
+   * why it is not a `val`: stepping back means loading the bytes that were
+   * there, not trying to reverse each edit.
+   */
+  var document: GanttDocument = document
+    private set
+
+  private val history = UndoHistory()
+
+  val canUndo: Boolean get() = history.canUndo
+  val canRedo: Boolean get() = history.canRedo
+
   /**
    * Snapshot for the UI. Rebuilt after every edit rather than mutated,
    * so Compose can compare states and nothing can hold a stale sub-object.
@@ -79,12 +95,40 @@ class OpenProject(
    *   so the save button does not light up for a change that did not happen.
    */
   fun edit(edit: (GanttDocument) -> Boolean): Boolean {
+    // Taken before the edit, kept only if the edit actually happened. A
+    // refused change must not leave an undo step that does nothing.
+    val before = document.toXmlBytes()
     val changed = edit(document)
     if (changed) {
+      history.record(before)
       model = document.read()
       isDirty = true
     }
     return changed
+  }
+
+  /** Steps back one edit. @return false if there is nothing to undo. */
+  fun undo(): Boolean = step { history.undo(document.toXmlBytes()) }
+
+  /** Steps forward again. @return false if there is nothing to redo. */
+  fun redo(): Boolean = step { history.redo(document.toXmlBytes()) }
+
+  /**
+   * Replaces the document with a remembered state.
+   *
+   * The fold state of the moment is carried across rather than restored from
+   * the snapshot: folding is not an edit, so undoing a progress change must
+   * not also reopen a group the user just closed.
+   */
+  private fun step(take: () -> ByteArray?): Boolean {
+    val snapshot = take() ?: return false
+    document = restoreWithViewState(snapshot, model.expandedStates())
+    model = document.read()
+    // Undoing back to what is on disk leaves nothing to save. Compared by
+    // content rather than by counting steps, which would be wrong the moment
+    // a save happened somewhere in the middle of the history.
+    isDirty = contentFingerprint(document.toXmlBytes()) != lastKnownFingerprint
+    return true
   }
 
   /**

@@ -32,6 +32,7 @@ import biz.ganttproject.mobile.data.ProjectStore
 import biz.ganttproject.mobile.data.RecentFile
 import biz.ganttproject.mobile.data.SecureStore
 import biz.ganttproject.mobile.net.AndroidHttpBackend
+import biz.ganttproject.mobile.widget.AgendaWidget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,6 +55,8 @@ data class ProjectUi(
    * controls on this; [ProjectViewModel.edit] enforces it regardless.
    */
   val canEdit: Boolean,
+  val canUndo: Boolean,
+  val canRedo: Boolean,
   /**
    * Bumped on every edit. [ProjectModel] is a value snapshot, but the
    * enclosing [OpenProject] is mutable, so an explicit revision keeps
@@ -169,8 +172,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     viewModelScope.launch {
       _state.update { it.copy(busy = true, fileError = null) }
       when (val result = store.save(project, force)) {
-        is FileResult.Ok ->
+        is FileResult.Ok -> {
           _state.update { it.copy(busy = false, project = snapshot(project), notice = Notice.Saved) }
+          // The widget reads the file, so it is stale until it redraws.
+          refreshWidget()
+        }
         is FileResult.Err ->
           _state.update { it.copy(busy = false, fileError = result.error) }
       }
@@ -200,8 +206,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
       // asked rather than having the other version overwritten behind their
       // back — which is the whole point of the check.
       when (val result = store.save(project)) {
-        is FileResult.Ok ->
+        is FileResult.Ok -> {
           _state.update { it.copy(project = snapshot(project), notice = Notice.Saved) }
+          refreshWidget()
+        }
         is FileResult.Err ->
           // A failure must be visible: the user is about to walk away
           // believing their changes are safe.
@@ -259,11 +267,31 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     val project = open ?: return
     prefs.setWidgetProject(project.uri.toString(), project.displayName)
     _state.update { it.copy(widget = readWidgetSettings()) }
+    refreshWidget()
   }
 
   fun setWidgetWindowDays(days: Int) {
     prefs.setWidgetWindowDays(days)
     _state.update { it.copy(widget = readWidgetSettings()) }
+    refreshWidget()
+  }
+
+  /**
+   * Redraws the home-screen widget.
+   *
+   * Needed because the widget is not observing anything: it reads its
+   * settings and the project file when Android asks it to draw, and Android
+   * only asks on its own schedule. Without this, changing the window from 90
+   * to 30 days leaves the old list on the home screen until something else
+   * happens to trigger a redraw.
+   *
+   * Failures are swallowed on purpose — there may be no widget placed at
+   * all, and that is not a problem worth a message.
+   */
+  private fun refreshWidget() {
+    viewModelScope.launch {
+      runCatching { AgendaWidget().updateAll(getApplication()) }
+    }
   }
 
   private fun readWidgetSettings() =
@@ -290,6 +318,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     // this setting exists to prevent.
     prefs.setEditScope(scope)
     _state.update { it.copy(editScope = scope) }
+    // The widget shows or hides its buttons according to this setting.
+    refreshWidget()
     // canEdit is part of the project snapshot, so the screens only notice the
     // new setting once the snapshot is rebuilt.
     open?.let { project -> _state.update { it.copy(project = snapshot(project)) } }
@@ -334,6 +364,27 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
       _state.update { it.copy(project = snapshot(project)) }
     }
     return changed
+  }
+
+  /** Steps back one edit. */
+  fun undo() = stepHistory { it.undo() }
+
+  /** Steps forward again after an undo. */
+  fun redo() = stepHistory { it.redo() }
+
+  /**
+   * Shared body of [undo] and [redo].
+   *
+   * Gated by the edit scope like any other change: stepping through history
+   * rewrites the document, and with protection on nothing may.
+   */
+  private fun stepHistory(step: (OpenProject) -> Boolean): Boolean {
+    val project = open ?: return false
+    if (!_state.value.editScope.allowsAppEdits) return false
+    if (!step(project)) return false
+    revision++
+    _state.update { it.copy(project = snapshot(project)) }
+    return true
   }
 
   /**
@@ -382,6 +433,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
       isDirty = project.isDirty,
       isReadOnly = project.isReadOnly,
       canEdit = !project.isReadOnly && _state.value.editScope.allowsAppEdits,
+      canUndo = project.canUndo,
+      canRedo = project.canRedo,
       revision = revision
     )
 

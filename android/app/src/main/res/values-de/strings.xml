@@ -179,4 +179,7 @@
     <string name="editing_warning_title">Bearbeiten einschalten?</string>
     <string name="editing_warning_body">Dieses Projekt ist eine Datei in einem synchronisierten Ordner. Nichts entscheidet, welche von zwei konkurrierenden Änderungen die richtige ist: Wenn du hier etwas änderst und der Desktop speichert, bevor die Synchronisierung durch war, ist deine Änderung spurlos weg.\n\nDie App weigert sich, eine Datei zu überschreiben, die sich seit dem Öffnen geändert hat — aber sie kann eine Änderung nicht zurückholen, die anderswo überschrieben wurde.\n\nAuf dem Spiel stehen Fortschritt, das Erledigt-Häkchen und von Hand eingetippte Stunden. Zeiten aus der Zeiterfassung sind sicher: Was importiert wurde, steht in der Projektdatei selbst — eine verlorene Änderung führt nur dazu, dass diese Einträge beim nächsten Mal erneut angeboten werden.</string>
     <string name="editing_warning_confirm">Trotzdem einschalten</string>
+
+    <string name="action_undo">Rückgängig</string>
+    <string name="action_redo">Wiederherstellen</string>
 </resources>

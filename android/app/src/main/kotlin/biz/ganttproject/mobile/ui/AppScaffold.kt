@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MoreVert
@@ -155,6 +157,27 @@ fun AppScaffold(
         },
         actions = {
           if (state.project != null) {
+            // Undo and redo sit left of save, in reading order: step back,
+            // step forward, commit. Both stay visible but disabled when there
+            // is nothing to step to, so their position never shifts.
+            IconButton(
+              onClick = { viewModel.undo() },
+              enabled = state.project.canUndo && state.project.canEdit && !state.busy
+            ) {
+              Icon(
+                Icons.AutoMirrored.Filled.Undo,
+                contentDescription = stringResource(R.string.action_undo)
+              )
+            }
+            IconButton(
+              onClick = { viewModel.redo() },
+              enabled = state.project.canRedo && state.project.canEdit && !state.busy
+            ) {
+              Icon(
+                Icons.AutoMirrored.Filled.Redo,
+                contentDescription = stringResource(R.string.action_redo)
+              )
+            }
             IconButton(
               onClick = viewModel::save,
               enabled = state.project.isDirty && !state.project.isReadOnly && !state.busy
