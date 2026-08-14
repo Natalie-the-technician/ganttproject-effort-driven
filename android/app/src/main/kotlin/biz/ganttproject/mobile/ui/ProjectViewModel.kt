@@ -31,6 +31,7 @@ import biz.ganttproject.mobile.data.OpenProject
 import biz.ganttproject.mobile.data.ProjectStore
 import biz.ganttproject.mobile.data.RecentFile
 import biz.ganttproject.mobile.data.SecureStore
+import androidx.glance.appwidget.updateAll
 import biz.ganttproject.mobile.net.AndroidHttpBackend
 import biz.ganttproject.mobile.widget.AgendaWidget
 import kotlinx.coroutines.Dispatchers
@@ -290,9 +291,13 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    */
   private fun refreshWidget() {
     viewModelScope.launch {
-      // getApplication<Application>(), not getApplication(): the method is
-      // generic in its return type, and a bare call gives Kotlin nothing to
-      // infer that type from when the target parameter is a plain Context.
+      // updateAll is a top-level extension function in androidx.glance.appwidget,
+      // not a member of GlanceAppWidget — it needs its own import, and without
+      // one the failure reads as three type-inference errors on this line.
+      //
+      // The explicit <Application> on getApplication is not decoration either:
+      // the method is generic in its return type, and a bare call leaves
+      // nothing to infer it from when the parameter is a plain Context.
       runCatching { AgendaWidget().updateAll(getApplication<Application>()) }
     }
   }
