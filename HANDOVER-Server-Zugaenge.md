@@ -157,17 +157,36 @@ vorhandenen WebDAV-Unterstützung.
 * `403` vom Admin-Endpunkt heißt „dieses Konto darf das nicht" und muss auch
   so dastehen — nicht als allgemeiner Netzwerkfehler.
 
-**Eine Abwägung, die du kennen solltest:** Kontoverwaltung hat mit
-Projektplanung nichts zu tun, und jede solche Ergänzung entfernt deinen Fork
-weiter vom Original. Für die Sache mit dem aufwandsgetriebenen Terminplan,
-die du upstream bringen willst, ist ein schlanker Fork leichter. Ein
-eigenständiges kleines Verwaltungswerkzeug hätte diesen Nachteil nicht.
+**Als eigenes Modul bauen**, nicht in `ganttproject` hinein. Das Projekt hat
+diese Trennung bereits — `biz.ganttproject.impex.ical`,
+`biz.ganttproject.impex.msproject2`, `org.ganttproject.chart.pert` sind alle
+eigenständig in `settings.gradle`. Ein `biz.ganttproject.zugaenge` daneben
+hält die Kontoverwaltung aus dem Kern heraus, und die aufwandsgetriebene
+Terminplanung bleibt für sich übernehmbar.
 
-Dass du es trotzdem im Desktop willst, ist ein guter Grund — es ist das
-Programm, das ohnehin offen ist. Ich sage es nur, damit die Entscheidung
-bewusst fällt und nicht nebenbei.
+Das ist kein Schönheitsargument: Wer den Terminplan übernehmen will, soll
+nicht nebenbei Kontoverwaltung für einen fremden Server mitgeliefert bekommen.
 
 ---
+
+### Wenn der Umzug auf GanttProject Cloud kommt
+
+Dann entfällt dieser Abschnitt — und nur dieser. Es lohnt deshalb, **die
+Serverseite zuerst zu bauen und das Desktop-Modul aufzuheben**: Die
+Ordnerfreigaben über Gruppendatei sind ein knapper Tag Arbeit und über
+`gantt-benutzer.sh` sofort benutzbar, das Modul ist der teure Teil und genau
+der, der bei einem Umzug wertlos wird.
+
+Was ein Umzug sonst kostet, damit die Entscheidung nicht nebenbei fällt:
+`WebDavClient` und `RemoteStore` müssten gegen ein **undokumentiertes**
+Protokoll neu geschrieben werden, und die Abrechnung ist dort 1 Kredit je
+aktivem Teammitglied und Abrechnungszeitraum — der Eigentümer ausgenommen.
+Solange du allein arbeitest, ist das gegenstandslos; ab dem zweiten Menschen
+nicht mehr.
+
+Unberührt bleibt in beiden Fällen alles, was in `gantt-core` steckt:
+Dokumentmodell, Rückgängig, Toggl-Import, Bearbeitungsschutz. Das hängt an
+keinem Speicherort.
 
 ## 4. Wie das Passwort zum Menschen kommt
 
