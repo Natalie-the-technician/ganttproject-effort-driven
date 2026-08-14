@@ -177,12 +177,19 @@ Automatik im Hintergrund, hier drückt ein Mensch auf Speichern), aber
 Ohne diese Prüfungen ist nicht belegt, dass etwas besser geworden ist —
 insbesondere D1 sieht vorher und nachher identisch aus.
 
+`$BASIS` ist die WebDAV-Sammlung, also `https://<serveradresse>` oder
+ein Unterpfad davon — **welches von beiden, ist hier nicht belegt.** Die
+Server-Sitzung nennt die Wurzel als Zugang und meldet dort `401`; der
+Ablageort `/srv/webdav/projects` sagt nichts über den URL-Pfad. Vor T1 einmal
+mit `curl -sSI -u "$U:$P" -X OPTIONS "$BASIS/"` klären: `DAV: 1,2` heißt
+richtig, `404` heißt falscher Pfad.
+
 **T1 — Die Sperre wird tatsächlich genommen.**
 Projekt am PC über WebDAV öffnen und offen lassen. Dann von einer zweiten
 Stelle schreiben wollen:
 ```sh
 curl -sS -o /dev/null -w '%{http_code}\n' -u "$U:$P" \
-  -T beliebig.gan "https://<serveradresse>/projects/haus.gan"
+  -T beliebig.gan "$BASIS/haus.gan"
 ```
 Erwartung `423`. *Vor D1 kommt hier `204` — das ist der Beweis, dass die
 Voreinstellung den Schutz aushebelt.*
