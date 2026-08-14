@@ -33,6 +33,7 @@ import biz.ganttproject.mobile.data.FileError
 import biz.ganttproject.mobile.data.FileResult
 import biz.ganttproject.mobile.data.OpenProject
 import biz.ganttproject.mobile.data.ProjectStore
+import biz.ganttproject.mobile.data.RemoteStore
 import biz.ganttproject.mobile.data.RecentFile
 import biz.ganttproject.mobile.data.SecureStore
 import androidx.glance.appwidget.updateAll
@@ -103,6 +104,8 @@ data class AppState(
   val editScope: EditScope = EditScope.DEFAULT,
   val project: ProjectUi? = null,
   val recentFiles: List<RecentFile> = emptyList(),
+  /** Project names found on the sync server, empty until asked for. */
+  val remoteProjects: List<String> = emptyList(),
   val fileError: FileError? = null,
   /** One-shot confirmation, e.g. after a successful save. */
   val notice: Notice? = null
@@ -203,11 +206,17 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     if (project.isReadOnly) return
     viewModelScope.launch {
       _state.update { it.copy(busy = true, fileError = null) }
-      when (val result = store.save(project, force)) {
+      val result = if (project.isRemote) {
+        remoteStore()?.save(project, force)
+          ?: FileResult.Err(FileError.SyncFailed("not configured"))
+      } else {
+        store.save(project, force)
+      }
+      when (result) {
         is FileResult.Ok -> {
           _state.update { it.copy(busy = false, project = snapshot(project), notice = Notice.Saved) }
-          // The widget reads the file, so it is stale until it redraws.
-          refreshWidget()
+          // The widget reads local files, so only those go stale on save.
+          if (!project.isRemote) refreshWidget()
         }
         is FileResult.Err ->
           _state.update { it.copy(busy = false, fileError = result.error) }
@@ -333,6 +342,53 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  /**
+   * A store for the configured server, or null when none is configured.
+   *
+   * Built per call from the current settings rather than kept as a field: the
+   * address, the user and the password can all change in the dialog, and a
+   * cached client would go on talking to the previous server.
+   */
+  private fun remoteStore(): RemoteStore? {
+    val settings = _dav.value
+    if (settings.baseUrl.isBlank()) return null
+    return RemoteStore(
+      WebDavClient(http, WebDavConfig(settings.baseUrl, settings.username, settings.password))
+    )
+  }
+
+  /** Loads the list of projects on the server for the picker. */
+  fun listRemoteProjects() {
+    val remote = remoteStore() ?: return
+    viewModelScope.launch {
+      _state.update { it.copy(busy = true, fileError = null) }
+      when (val result = remote.list()) {
+        is FileResult.Ok -> _state.update { it.copy(busy = false, remoteProjects = result.value) }
+        is FileResult.Err -> _state.update { it.copy(busy = false, fileError = result.error) }
+      }
+    }
+  }
+
+  /** Opens a project from the server by name. */
+  fun openRemote(name: String) {
+    val remote = remoteStore() ?: return
+    viewModelScope.launch {
+      _state.update { it.copy(busy = true, fileError = null) }
+      when (val result = remote.open(name)) {
+        is FileResult.Ok -> {
+          open = result.value
+          revision = 0
+          _state.update { it.copy(busy = false, project = snapshot(result.value)) }
+          // A different project means a different ledger and different
+          // candidates for the import.
+          _importState.update { it.copy(rows = emptyList(), loaded = false) }
+        }
+        is FileResult.Err ->
+          _state.update { it.copy(busy = false, fileError = result.error) }
+      }
+    }
+  }
+
   private fun loadDavSettings() = DavSettingsState(
     baseUrl = prefs.davBaseUrl().orEmpty(),
     username = prefs.davUsername().orEmpty(),
@@ -434,13 +490,26 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
   /**
    * Whether raising the protection level to [target] should be confirmed.
    *
-   * The backend is hard-coded to [SyncGuarantee.UNMANAGED_FILE] because that
+   * The guarantee comes from [currentSyncGuarantee] rather than a constant, because that
    * is what the app has: a file in a folder, with nothing arbitrating two
    * writers. If a versioned backend is ever added, this is the one line that
    * changes and the warning stops appearing by itself.
    */
   fun warnBeforeWidening(target: EditScope): Boolean =
-    needsUnmanagedStorageWarning(_state.value.editScope, target, SyncGuarantee.UNMANAGED_FILE)
+    needsUnmanagedStorageWarning(_state.value.editScope, target, currentSyncGuarantee())
+
+  /**
+   * How much the storage behind the open project actually guarantees.
+   *
+   * [SyncGuarantee.MANAGED_SERVER] requires both that the project came from
+   * the server **and** that the server was observed to support locking. A
+   * server that cannot lock is, for conflicts, no better than a file in a
+   * synced folder — claiming otherwise would silence a warning the user still
+   * needs.
+   */
+  private fun currentSyncGuarantee(): SyncGuarantee =
+    if (open?.isRemote == true && prefs.davSupportsLocking()) SyncGuarantee.MANAGED_SERVER
+    else SyncGuarantee.UNMANAGED_FILE
 
   fun clearRecentFiles() {
     prefs.clearRecentFiles()

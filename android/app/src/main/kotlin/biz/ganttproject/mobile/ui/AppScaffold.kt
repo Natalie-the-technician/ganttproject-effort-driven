@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
@@ -256,9 +257,12 @@ fun AppScaffold(
         state.busy && project == null -> LoadingBox()
         project == null -> HomeScreen(
           state = state,
+          davConfigured = davState.configured,
           onOpenClick = { openFile.launch(arrayOf("*/*")) },
           onRecentClick = viewModel::openUri,
-          onClearRecent = viewModel::clearRecentFiles
+          onClearRecent = viewModel::clearRecentFiles,
+          onListRemote = viewModel::listRemoteProjects,
+          onOpenRemote = viewModel::openRemote
         )
         else -> when (tab) {
           Tab.GANTT -> GanttScreen(project, viewModel)
@@ -464,9 +468,12 @@ private fun LoadingBox() {
 @Composable
 private fun HomeScreen(
   state: AppState,
+  davConfigured: Boolean,
   onOpenClick: () -> Unit,
   onRecentClick: (android.net.Uri) -> Unit,
-  onClearRecent: () -> Unit
+  onClearRecent: () -> Unit,
+  onListRemote: () -> Unit,
+  onOpenRemote: (String) -> Unit
 ) {
   LazyColumn(
     modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -489,7 +496,25 @@ private fun HomeScreen(
           TextButton(onClick = onOpenClick) {
             Text(stringResource(R.string.action_open_file))
           }
+          // Only offered once a server is configured. An always-visible
+          // button that answers "not configured" teaches the user to ignore
+          // it.
+          if (davConfigured) {
+            TextButton(onClick = onListRemote) {
+              Text(stringResource(R.string.sync_open_remote))
+            }
+          }
         }
+      }
+    }
+
+    if (state.remoteProjects.isNotEmpty()) {
+      items(state.remoteProjects, key = { "remote:$it" }) { name ->
+        ListItem(
+          headlineContent = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+          leadingContent = { Icon(Icons.Filled.CloudDownload, contentDescription = null) },
+          modifier = Modifier.fillMaxWidth().clickable { onOpenRemote(name) }
+        )
       }
     }
 

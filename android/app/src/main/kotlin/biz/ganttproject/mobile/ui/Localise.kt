@@ -33,6 +33,11 @@ fun FileError.text(): String = when (this) {
   is FileError.OpenFailed -> stringResource(R.string.error_open_failed)
   is FileError.SaveFailed -> stringResource(R.string.error_save_failed)
   FileError.ChangedElsewhere -> stringResource(R.string.error_changed_elsewhere)
+  // Not a conflict: nothing is lost, the project is simply open on the
+  // desktop. Saying so is the whole point of keeping it a separate case.
+  FileError.LockedElsewhere -> stringResource(R.string.error_locked_elsewhere)
+  FileError.UnknownVersion -> stringResource(R.string.error_unknown_version)
+  is FileError.SyncFailed -> stringResource(R.string.error_sync_failed, detail)
 }
 
 @Composable

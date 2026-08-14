@@ -36,6 +36,28 @@ sealed interface FileError {
    * the user gets asked instead.
    */
   data object ChangedElsewhere : FileError
+
+  /**
+   * Someone holds the WebDAV lock — the project is open on the desktop.
+   *
+   * Deliberately not [ChangedElsewhere]: nothing has been lost and nothing
+   * has to be merged, the user simply has to wait. Folding the two together
+   * would offer a conflict dialog for a situation that has no conflict.
+   */
+  data object LockedElsewhere : FileError
+
+  /** The server said no, or could not be reached. */
+  data class SyncFailed(val detail: String) : FileError
+
+  /**
+   * The version of the open project is unknown, so a safe save is not
+   * possible.
+   *
+   * Reached when the server returned no ETag and could not be asked for one.
+   * Writing anyway would be an unconditional overwrite — exactly what the
+   * server exists to prevent — so the user is asked instead.
+   */
+  data object UnknownVersion : FileError
 }
 
 sealed interface FileResult<out T> {
@@ -56,8 +78,19 @@ class OpenProject(
    * alternative is a save that fails at the moment the user walks away,
    * which is the one failure mode this app must not have.
    */
-  val isReadOnly: Boolean = false
+  val isReadOnly: Boolean = false,
+  /**
+   * File name on the sync server, or null for a project opened from the
+   * device.
+   *
+   * The origin decides which store handles the save, and the two are not
+   * interchangeable: a local save compares a fingerprint it took itself, a
+   * remote save hands the decision to the server. Mixing them up would mean
+   * writing with no version check at all.
+   */
+  val remoteName: String? = null
 ) {
+  val isRemote: Boolean get() = remoteName != null
   /**
    * The document itself. Replaced wholesale by [undo] and [redo], which is
    * why it is not a `val`: stepping back means loading the bytes that were
@@ -86,6 +119,15 @@ class OpenProject(
    * Compared against the file just before every save; see [ProjectStore.save].
    */
   internal var lastKnownFingerprint: String? = null
+
+  /**
+   * ETag of the bytes last read from or written to the server, for remote
+   * projects only.
+   *
+   * Null means "unknown", not "any" — see [RemoteStore.save], which then
+   * refuses to write silently rather than writing unconditionally.
+   */
+  internal var lastKnownETag: String? = null
 
   /**
    * Applies an edit and refreshes the snapshot.
@@ -150,6 +192,12 @@ class OpenProject(
   internal fun markSaved(fingerprint: String?) {
     isDirty = false
     lastKnownFingerprint = fingerprint
+  }
+
+  internal fun markSavedRemote(fingerprint: String?, etag: String?) {
+    isDirty = false
+    lastKnownFingerprint = fingerprint
+    lastKnownETag = etag
   }
 }
 

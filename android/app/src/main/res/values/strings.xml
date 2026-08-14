@@ -208,4 +208,10 @@
     <string name="sync_err_notfound">No such folder on the server.</string>
     <string name="sync_err_network">Server not reachable: %1$s</string>
     <string name="sync_err_server">Server reported an error (%1$d).</string>
+
+    <string name="error_locked_elsewhere">This project is open on another device. Your changes are safe — try again once it is closed there.</string>
+    <string name="error_unknown_version">The server did not report a version for this project, so it cannot be saved safely. Reopen it and try again.</string>
+    <string name="error_sync_failed">The server could not be reached (%1$s).</string>
+    <string name="sync_open_remote">Open from server</string>
+    <string name="sync_no_projects">No projects found on the server.</string>
 </resources>

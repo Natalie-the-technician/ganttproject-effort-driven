@@ -200,4 +200,10 @@
     <string name="sync_err_notfound">Diesen Ordner gibt es auf dem Server nicht.</string>
     <string name="sync_err_network">Server nicht erreichbar: %1$s</string>
     <string name="sync_err_server">Der Server meldet einen Fehler (%1$d).</string>
+
+    <string name="error_locked_elsewhere">Dieses Projekt ist auf einem anderen Gerät geöffnet. Deine Änderungen sind sicher — versuche es erneut, sobald es dort geschlossen ist.</string>
+    <string name="error_unknown_version">Der Server hat keine Version zu diesem Projekt gemeldet, deshalb lässt es sich nicht sicher speichern. Öffne es erneut und versuche es noch einmal.</string>
+    <string name="error_sync_failed">Der Server ist nicht erreichbar (%1$s).</string>
+    <string name="sync_open_remote">Vom Server öffnen</string>
+    <string name="sync_no_projects">Auf dem Server wurden keine Projekte gefunden.</string>
 </resources>
