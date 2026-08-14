@@ -399,7 +399,17 @@ class ProjectSaveFlow(
     } catch (e: VersionMismatchException) {
       done(success = false)
       val onlineDoc = document.asOnlineDocument()
-      if (onlineDoc != null) {
+      // [Fork-Aenderung] Der Dialog erscheint auch OHNE Cloud-Dokument.
+      //
+      // FEHLER IM ORIGINAL: Hier stand `if (onlineDoc != null) { … }` ohne else. Ein
+      // Versionskonflikt bei einem Dokument, das keine GanttProject-Cloud-Datei ist — etwa auf
+      // einem WebDAV-Server — wurde damit stillschweigend verschluckt: kein Dialog, keine
+      // Meldung, und das Speichern galt als erledigt, obwohl nichts geschrieben wurde.
+      //
+      // "Überschreiben" bleibt an das Cloud-Dokument gebunden, weil nur dieses write(force=true)
+      // kennt. Für WebDAV wird der Knopf deshalb gar nicht erst angeboten — ein Knopf, der nichts
+      // tut, wäre schlimmer als keiner.
+      run {
         OptionPaneBuilder<VersionMismatchChoice>().also {
           it.i18n = RootLocalizer.createWithRootKey(rootKey = "cloud.versionMismatch", baseLocalizer = RootLocalizer)
           it.styleClass = "dlg-lock"
@@ -411,7 +421,7 @@ class ProjectSaveFlow(
           it.elements = Lists.newArrayList(
             OptionElementData("document.option.makeCopy", VersionMismatchChoice.MAKE_COPY, true)
           ).also { list ->
-            if (e.canOverwrite) {
+            if (e.canOverwrite && onlineDoc != null) {
               list.add(OptionElementData("option.overwrite", VersionMismatchChoice.OVERWRITE, false))
             }
           }
@@ -419,7 +429,10 @@ class ProjectSaveFlow(
             SwingUtilities.invokeLater {
               when (choice) {
                 VersionMismatchChoice.OVERWRITE -> {
-                  onlineDoc.write(force = true)
+                  // Nur erreichbar, wenn der Knopf angeboten wurde -- und das setzt onlineDoc
+                  // voraus. Der sichere Zugriff haelt die Bedingung im Code fest, statt sie nur
+                  // in der Knopfliste zu haben.
+                  onlineDoc?.write(force = true)
                 }
                 VersionMismatchChoice.MAKE_COPY -> {
                   saveProjectAs(project)

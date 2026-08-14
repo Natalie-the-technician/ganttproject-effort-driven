@@ -37,6 +37,11 @@ import com.google.common.base.Objects;
 import net.sourceforge.ganttproject.GPLogger;
 import net.sourceforge.ganttproject.IGanttProject;
 import net.sourceforge.ganttproject.ProjectEventListener;
+// [Fork-Aenderung] fuer D1: Sperre beim Oeffnen nehmen und bei Fehlschlag warnen.
+import biz.ganttproject.app.BarrierEntrance;
+import biz.ganttproject.app.Barrier;
+import net.sourceforge.ganttproject.gui.NotificationChannel;
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.action.CancelAction;
 import net.sourceforge.ganttproject.action.OkAction;
 import net.sourceforge.ganttproject.document.Document;
@@ -58,7 +63,17 @@ public class WebDavStorageImpl implements DocumentStorageUi {
   private final GPCloudStorageOptions myServers = new GPCloudStorageOptions();
   private final StringOption myLegacyLastWebDAVDocument = new DefaultStringOption("last-webdav-document", "");
   private final StringOption myLastWebDavDocumentOption = new DefaultStringOption("lastDocument", null);
-  private final IntegerOption myWebDavLockTimeoutOption = new DefaultIntegerOption("webdav.lockTimeout", -1);
+  /**
+   * [Fork-Aenderung] Voreinstellung von -1 auf 120 Minuten.
+   *
+   * -1 bedeutet "nie sperren", und {@link HttpDocument#acquireLock()} meldete dabei trotzdem
+   * Erfolg. Eine Schutzfunktion, die im Auslieferungszustand aus ist UND das verschweigt, ist
+   * schlimmer als gar keine: sie erzeugt Vertrauen, das nicht gedeckt ist.
+   *
+   * 120 Minuten: lang genug fuer eine Arbeitssitzung, kurz genug, dass eine nach einem Absturz
+   * vergessene Sperre von selbst verfaellt und niemanden dauerhaft aussperrt.
+   */
+  private final IntegerOption myWebDavLockTimeoutOption = new DefaultIntegerOption("webdav.lockTimeout", 120);
   private final BooleanOption myReleaseLockOption = new DefaultBooleanOption("lockRelease", true);
   private final StringOption myUsername = new DefaultStringOption("username", "");
   private final StringOption myPassword = new DefaultStringOption("password", "");
@@ -71,6 +86,31 @@ public class WebDavStorageImpl implements DocumentStorageUi {
     myProject = project;
     myUiFacade = uiFacade;
     project.addProjectEventListener(new ProjectEventListener.Stub() {
+      /**
+       * [Fork-Aenderung] Die Sperre wird jetzt tatsaechlich genommen.
+       *
+       * FEHLER IM ORIGINAL: {@code acquireLock()} rief im ganzen Programm NIEMAND auf — nur
+       * {@code releaseLock()} unten wurde benutzt. Freigegeben wurde also, was nie genommen war.
+       * Zusammen mit der Sperrdauer, die das Dokument nie erreichte, hiess das: GanttProject lief
+       * gegen einen sperrfaehigen Server und sperrte nie, ohne Meldung und ohne Logzeile.
+       *
+       * Schlaegt die Sperre fehl, wird gewarnt und trotzdem geoeffnet. Lesen bleibt damit moeglich,
+       * und das versehentliche Ueberschreiben faengt seit D3 ohnehin If-Match ab. Oeffnen zu
+       * verweigern wuerde eine nach einem Absturz vergessene Sperre zur Aussperrung machen.
+       */
+      @Override
+      public void projectOpened(BarrierEntrance barrierRegistry, Barrier<IGanttProject> barrier) {
+        barrier.await(result -> {
+          Document document = project.getDocument();
+          if (document != null && !document.acquireLock()) {
+            GPLogger.log("Could not acquire a WebDAV lock for " + document.getFileName());
+            myUiFacade.showNotificationDialog(NotificationChannel.WARNING,
+                ForkI18nKt.forkText("fork.webdav.lockFailed", document.getFileName()));
+          }
+          return kotlin.Unit.INSTANCE;
+        });
+      }
+
       @Override
       public void projectClosed() {
         if (myReleaseLockOption.isChecked() && project.getDocument() != null) {

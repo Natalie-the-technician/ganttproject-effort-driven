@@ -57,7 +57,21 @@ public class HttpDocument extends AbstractURLDocument {
   private final int myTimeout;
 
   public HttpDocument(String url, String username, String password, StringOption proxyOption) throws IOException, WebDavException {
-    this(new MiltonResourceFactory(username, password, proxyOption).createResource(new WebDavUri(url)), username, password, -1);
+    this(url, username, password, proxyOption, NO_LOCK);
+  }
+
+  /**
+   * [Fork-Aenderung] Wie oben, aber mit Sperrdauer.
+   *
+   * FEHLER IM ORIGINAL: Die Ueberladung darueber setzte fest {@code -1}, und sie ist der Weg, ueber
+   * den GanttProject WebDAV-Dokumente ueberhaupt oeffnet. Die Einstellung {@code webdav.lockTimeout}
+   * erreichte das Dokument damit nie — sie ging nur an den Oeffnen-Dialog. Wer sie auf 120 stellte,
+   * aenderte nichts, ohne dass es irgendwo aufgefallen waere.
+   */
+  public HttpDocument(String url, String username, String password, StringOption proxyOption, int lockTimeout)
+      throws IOException, WebDavException {
+    this(new MiltonResourceFactory(username, password, proxyOption).createResource(new WebDavUri(url)),
+        username, password, lockTimeout);
   }
 
   public HttpDocument(WebDavResource webdavResource, String username, String password, int lockTimeout) throws IOException {
