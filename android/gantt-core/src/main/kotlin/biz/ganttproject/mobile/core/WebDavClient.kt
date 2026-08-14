@@ -139,8 +139,11 @@ class WebDavClient(
    * Only the name is escaped, and only the characters that would otherwise
    * change the request's meaning. A full URL encoder would also escape the
    * slashes in the base and turn one path into one long segment.
+   *
+   * Public because callers need the address of a project for display and for
+   * the recent list, not only for sending requests.
    */
-  internal fun urlFor(name: String): String {
+  fun urlFor(name: String): String {
     val base = config.baseUrl.trimEnd('/')
     val escaped = name.flatMap { ch ->
       when (ch) {

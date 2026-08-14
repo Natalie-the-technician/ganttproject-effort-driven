@@ -374,9 +374,11 @@ fun AppScaffold(
           )
           // Only the open project can be picked: its URI permission is the
           // one the app persisted, and a widget cannot run a file picker.
+          // Server projects are not offered: the widget reads through the
+          // content resolver and cannot fetch an https address.
           TextButton(
             onClick = { viewModel.useOpenProjectForWidget() },
-            enabled = state.project != null
+            enabled = state.project != null && state.project.isRemote == false
           ) {
             Text(stringResource(R.string.widget_use_current))
           }

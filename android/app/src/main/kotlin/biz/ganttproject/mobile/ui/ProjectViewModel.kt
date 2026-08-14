@@ -63,6 +63,8 @@ data class ProjectUi(
   val canEdit: Boolean,
   val canUndo: Boolean,
   val canRedo: Boolean,
+  /** Came from the sync server rather than from device storage. */
+  val isRemote: Boolean,
   /**
    * Bumped on every edit. [ProjectModel] is a value snapshot, but the
    * enclosing [OpenProject] is mutable, so an explicit revision keeps
@@ -306,6 +308,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    */
   fun useOpenProjectForWidget() {
     val project = open ?: return
+    // A server project has an https address, and the widget reads through the
+    // content resolver — it would store happily and then draw nothing, with
+    // no error anywhere. Refused here rather than half-working.
+    if (project.isRemote) return
     prefs.setWidgetProject(project.uri.toString(), project.displayName)
     _state.update { it.copy(widget = readWidgetSettings()) }
     refreshWidget()
@@ -610,6 +616,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
       canEdit = !project.isReadOnly && _state.value.editScope.allowsAppEdits,
       canUndo = project.canUndo,
       canRedo = project.canRedo,
+      isRemote = project.isRemote,
       revision = revision
     )
 
