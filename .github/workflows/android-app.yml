@@ -93,8 +93,21 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # No --stacktrace. A Kotlin compile error is a single "e: file://…"
+      # line, and 200 lines of Gradle internals push it clean out of any
+      # reasonable log tail — which cost two debugging rounds to learn.
       - name: Assemble debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleDebug --console=plain 2>&1 | tee assemble.log
+
+      # Repeats the compiler diagnostics at the very end of the log, where
+      # they can be read without scrolling past the stack trace.
+      - name: Compiler diagnostics
+        if: failure()
+        run: |
+          echo "--- compiler diagnostics ---"
+          grep -E '^(e|w): ' assemble.log | head -50 || echo "none found"
 
       - name: Lint
         run: ./gradlew :app:lintDebug

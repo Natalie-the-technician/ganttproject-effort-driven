@@ -290,7 +290,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    */
   private fun refreshWidget() {
     viewModelScope.launch {
-      runCatching { AgendaWidget().updateAll(getApplication()) }
+      // getApplication<Application>(), not getApplication(): the method is
+      // generic in its return type, and a bare call gives Kotlin nothing to
+      // infer that type from when the target parameter is a plain Context.
+      runCatching { AgendaWidget().updateAll(getApplication<Application>()) }
     }
   }
 
