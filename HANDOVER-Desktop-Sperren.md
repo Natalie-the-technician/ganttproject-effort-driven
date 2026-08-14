@@ -50,24 +50,46 @@ public boolean acquireLock() {
   getWebdavResource().lock(myTimeout * 60);
 ```
 
-Voreinstellung `-1` bedeutet: `acquireLock()` sperrt **nicht** und gibt
-**trotzdem `true` zurück**. Der Aufrufer hat keine Möglichkeit, das zu
-bemerken. GanttProject läuft also gegen einen sperrfähigen Server und nutzt
-die Sperre nie — ohne Meldung, ohne Logzeile, ohne irgendein Anzeichen.
+**Korrektur vom 14. August 2026.** Eine frühere Fassung dieses Dokuments
+nannte D1 „eine Einstellung, sofort ohne Codeänderung erledigt". **Das war
+falsch**, und die Desktop-Sitzung hat es im Quelltext belegt. Es sind
+**zwei unabhängige Defekte**, und keiner davon lässt sich konfigurieren:
 
-**Sofort, ohne Codeänderung:** In den Einstellungen unter WebDAV die
-Sperrdauer auf einen positiven Wert in Minuten setzen. 120 ist ein
-vernünftiger Anfang: lang genug für eine Arbeitssitzung, kurz genug, dass eine
-vergessene Sperre nach einem Absturz von selbst verfällt.
+**D1a — Die Sperrdauer erreicht das Dokument nie.**
 
-**Im Fork:** Voreinstellung auf einen positiven Wert ändern. Eine
-Schutzfunktion, die standardmäßig aus ist **und das verschweigt**, ist
-schlimmer als gar keine — sie erzeugt Vertrauen, das nicht gedeckt ist.
+```java
+// HttpDocument.java:59-61 — der Konstruktor, den DocumentCreator benutzt
+public HttpDocument(String url, String username, String password, StringOption proxyOption) {
+  this(new MiltonResourceFactory(...).createResource(...), username, password, -1);
+}                                                                              // ↑ fest verdrahtet
+```
 
-Beim Ändern mit prüfen, ob `acquireLock()` bei `myTimeout < 0` weiterhin
-`true` liefern soll. Ehrlicher wäre, „nicht gesperrt" von „Sperre
-fehlgeschlagen" zu unterscheiden; das ist aber eine größere Änderung, weil
-die Aufrufer den Rückgabewert heute kaum auswerten.
+Beide Aufrufstellen verdrahten den Wert fest: `DocumentCreator.java:116`
+implizit über den Konstruktor oben, `WebDavStorageImpl.java:178` als
+`HttpDocument.NO_LOCK`. Die Option `webdav.lockTimeout` wird angezeigt,
+gespeichert — und von **keiner** Stelle gelesen, die ein Dokument erzeugt.
+
+**D1b — `acquireLock()` wird nirgends aufgerufen.**
+
+Im ganzen Repo gibt es keine Aufrufstelle. Die einzige Fundstelle außerhalb
+von Deklarationen ist `ProxyDocument.java:106`, eine Weiterreichung, die
+selbst niemand aufruft. Toter Code.
+
+**Folge:** Die WebDAV-Sperre wird **nie** genommen, unabhängig von jeder
+Einstellung. Wer 120 einträgt, ist genauso ungeschützt wie vorher — und
+glaubt, geschützt zu sein. Das ist schlimmer als offensichtlich kaputt.
+
+**Zu tun, beides im Code:**
+1. Die Option bis zu `HttpDocument` durchreichen — `DocumentCreator` hat sie
+   bereits zur Hand (`DocumentCreator.java:66`), sie kommt nur nicht am
+   Konstruktor an.
+2. `acquireLock()` beim Öffnen aufrufen und `releaseLock()` beim Schließen,
+   und den Rückgabewert **auswerten**: Scheitert die Sperre, muss das dem
+   Menschen gesagt werden, nicht verschwiegen.
+3. Erst danach die Voreinstellung von `-1` auf einen positiven Wert ändern.
+
+Die Einstellung darf trotzdem gesetzt werden — sie schadet nicht und wird
+gebraucht, sobald 1 und 2 stehen. Sie ist bis dahin nur **kein Schutz**.
 
 ### D2 — „Ohne Sperre öffnen" ist ein eigener Knopf (Beschriftung)
 
@@ -235,13 +257,17 @@ keine Konfliktmeldung. Das ist die Probe auf den schwachen ETag aus §2.4.
 
 ## 5. Reihenfolge
 
-1. **D1 als Einstellung** — sofort, kostet nichts, deckt den Alltagsfall ab.
-   Danach T1 und T2 durchführen; erst damit ist belegt, dass gesperrt wird.
-2. **D1 im Fork** — Voreinstellung ändern, damit es nicht an einer manuellen
-   Einstellung hängt, die beim nächsten Rechner wieder fehlt.
-3. **D3** — die eigentliche Arbeit, schließt die verbleibende Lücke.
-4. **D2** — Beschriftung, wenn ohnehin jemand in der Datei ist.
+1. **D1a + D1b** — Option durchreichen, `acquireLock()` aufrufen und
+   auswerten. Danach T1 und T2; erst damit ist belegt, dass überhaupt gesperrt
+   wird. **Es gibt keine Abkürzung über die Einstellungen.**
+2. **D3** — `If-Match`, schließt die Lücke, die auch bei gesetzter Sperre
+   bleibt (abgelaufene Sperre, ohne Sperre geöffnet, Server ohne Sperren).
+3. **D2** — Beschriftung, wenn ohnehin jemand in der Datei ist.
 
-Bis D3 steht, gilt: Der Schutz ist einseitig. Das ist kein Grund zu warten —
-mit gesetzter Sperrdauer deckt die Sperre den Alltag bereits ab —, aber es
-sollte niemand glauben, es sei fertig.
+**Bis D1 und D3 stehen, ist der Schutz einseitig**, und zwar vollständig: Das
+Telefon kann nichts vom PC überschreiben, der PC überschreibt vom Telefon
+alles, jederzeit, ohne Sperre und ohne Bedingung. Die Android-App hält
+deshalb ihre Warnung zum Bearbeitungsschutz aufrecht und stuft den Speicher
+**nicht** als verwaltet ein, obwohl der Server sperren kann — siehe
+`ProjectViewModel.DESKTOP_HONOURS_LOCKS`. Diese Konstante ist in derselben
+Änderung auf `true` zu setzen, die D1 und D3 abschließt.

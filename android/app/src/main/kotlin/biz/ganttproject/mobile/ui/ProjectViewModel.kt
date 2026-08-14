@@ -148,6 +148,17 @@ data class ImportState(
 
 class ProjectViewModel(application: Application) : AndroidViewModel(application) {
 
+  private companion object {
+    /**
+     * Whether the desktop client takes WebDAV locks and writes conditionally.
+     *
+     * A constant rather than a setting: the app cannot observe what the
+     * desktop does, and a user-facing switch would be a promise the user has
+     * no way to check. Set to true in the same change that lands D1 and D3.
+     */
+    const val DESKTOP_HONOURS_LOCKS = false
+  }
+
   private val store = ProjectStore(application)
   private val prefs = AppPreferences(application)
   private val secure = SecureStore(application)
@@ -514,8 +525,23 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    * needs.
    */
   private fun currentSyncGuarantee(): SyncGuarantee =
-    if (open?.isRemote == true && prefs.davSupportsLocking()) SyncGuarantee.MANAGED_SERVER
-    else SyncGuarantee.UNMANAGED_FILE
+    // Deliberately still UNMANAGED_FILE even against a locking server.
+    //
+    // The guarantee is a property of every client that touches the file, not
+    // of the server alone. The desktop currently takes no lock at all — the
+    // configured timeout never reaches HttpDocument (both call sites hard-wire
+    // -1) and acquireLock() is called from nowhere — and it sends no If-Match.
+    // So a phone edit can still be silently overwritten from the PC, which is
+    // exactly what this warning is about.
+    //
+    // Flip to MANAGED_SERVER once D1 and D3 in HANDOVER-Desktop-Sperren.md are
+    // built and T1/T3 pass. Until then, silencing the warning would tell the
+    // user they are safe when they are not.
+    if (open?.isRemote == true && prefs.davSupportsLocking() && DESKTOP_HONOURS_LOCKS) {
+      SyncGuarantee.MANAGED_SERVER
+    } else {
+      SyncGuarantee.UNMANAGED_FILE
+    }
 
   fun clearRecentFiles() {
     prefs.clearRecentFiles()
