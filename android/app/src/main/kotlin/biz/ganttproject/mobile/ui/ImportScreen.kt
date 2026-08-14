@@ -77,6 +77,7 @@ fun ImportScreen(
     modifier = Modifier.fillMaxSize().padding(16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)
   ) {
+    if (!project.canEdit) item { EditingOffBanner() }
     item { TokenCard(state, viewModel) }
     item { RangeCard(state, viewModel) }
 
@@ -388,7 +389,7 @@ private fun PreviewCard(
 
       Button(
         onClick = viewModel::applyImport,
-        enabled = !plan.isEmpty && !state.busy,
+        enabled = !plan.isEmpty && !state.busy && project.canEdit,
         modifier = Modifier.fillMaxWidth()
       ) {
         Text(stringResource(R.string.import_apply))

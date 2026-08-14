@@ -55,7 +55,12 @@ import biz.ganttproject.mobile.core.parseEffortInput
  * note in the UI says so rather than leaving the user to wonder.
  */
 @Composable
-fun TaskSheet(task: TaskNode, model: ProjectModel, viewModel: ProjectViewModel) {
+fun TaskSheet(
+  task: TaskNode,
+  model: ProjectModel,
+  viewModel: ProjectViewModel,
+  canEdit: Boolean
+) {
   Column(
     modifier = Modifier
       .fillMaxWidth()
@@ -64,6 +69,8 @@ fun TaskSheet(task: TaskNode, model: ProjectModel, viewModel: ProjectViewModel) 
       .padding(bottom = 32.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp)
   ) {
+    if (!canEdit) EditingOffBanner()
+
     Column {
       Text(task.name, style = MaterialTheme.typography.titleLarge)
       Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -97,17 +104,17 @@ fun TaskSheet(task: TaskNode, model: ProjectModel, viewModel: ProjectViewModel) 
     HorizontalDivider()
 
     // --------------------------------------------------------- Progress
-    ProgressSection(task, viewModel)
+    ProgressSection(task, viewModel, canEdit)
 
     HorizontalDivider()
 
     // ----------------------------------------------------------- Hours
-    HoursSection(task, model, viewModel)
+    HoursSection(task, model, viewModel, canEdit)
 
     HorizontalDivider()
 
     // ----------------------------------------------------- Assignments
-    AssignmentsSection(task, model, viewModel)
+    AssignmentsSection(task, model, viewModel, canEdit)
 
     task.notes?.let { notes ->
       HorizontalDivider()
@@ -120,7 +127,7 @@ fun TaskSheet(task: TaskNode, model: ProjectModel, viewModel: ProjectViewModel) 
 }
 
 @Composable
-private fun ProgressSection(task: TaskNode, viewModel: ProjectViewModel) {
+private fun ProgressSection(task: TaskNode, viewModel: ProjectViewModel, canEdit: Boolean) {
   Column {
     Row(
       modifier = Modifier.fillMaxWidth(),
@@ -143,6 +150,7 @@ private fun ProgressSection(task: TaskNode, viewModel: ProjectViewModel) {
         value = pending,
         onValueChange = { pending = it },
         onValueChangeFinished = { viewModel.setCompletion(task.id, pending.toInt()) },
+        enabled = canEdit,
         valueRange = 0f..100f,
         steps = 19 // 5% increments, which is how people actually report progress
       )
@@ -150,6 +158,7 @@ private fun ProgressSection(task: TaskNode, viewModel: ProjectViewModel) {
         listOf(0, 25, 50, 75, 100).forEach { value ->
           AssistChip(
             onClick = { pending = value.toFloat(); viewModel.setCompletion(task.id, value) },
+            enabled = canEdit,
             label = { Text("$value%") }
           )
         }
@@ -168,18 +177,25 @@ private fun ProgressSection(task: TaskNode, viewModel: ProjectViewModel) {
 }
 
 @Composable
-private fun HoursSection(task: TaskNode, model: ProjectModel, viewModel: ProjectViewModel) {
+private fun HoursSection(
+  task: TaskNode,
+  model: ProjectModel,
+  viewModel: ProjectViewModel,
+  canEdit: Boolean
+) {
   Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
     HoursField(
       label = stringResource(R.string.task_effort_hours),
       value = task.effortHours,
       key = "${task.id}-effort",
+      enabled = canEdit,
       onCommit = { viewModel.setEffortHours(task.id, it) }
     )
     HoursField(
       label = stringResource(R.string.task_actual_hours),
       value = task.actualEffortHours,
       key = "${task.id}-actual",
+      enabled = canEdit,
       onCommit = { viewModel.setActualHours(task.id, it) }
     )
 
@@ -252,6 +268,7 @@ private fun HoursField(
   label: String,
   value: Double?,
   key: String,
+  enabled: Boolean,
   onCommit: (Double?) -> Unit
 ) {
   var text by remember(key, value) { mutableStateOf(value?.let { hours(it) } ?: "") }
@@ -264,6 +281,7 @@ private fun HoursField(
       label = { Text(label) },
       singleLine = true,
       isError = invalid,
+      enabled = enabled,
       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
       modifier = Modifier.fillMaxWidth()
     )
@@ -279,7 +297,7 @@ private fun HoursField(
         color = if (invalid) MaterialTheme.colorScheme.error
         else MaterialTheme.colorScheme.onSurfaceVariant
       )
-      TextButton(onClick = {
+      TextButton(enabled = enabled, onClick = {
         if (text.isBlank()) {
           onCommit(null)
           invalid = false
@@ -295,7 +313,12 @@ private fun HoursField(
 }
 
 @Composable
-private fun AssignmentsSection(task: TaskNode, model: ProjectModel, viewModel: ProjectViewModel) {
+private fun AssignmentsSection(
+  task: TaskNode,
+  model: ProjectModel,
+  viewModel: ProjectViewModel,
+  canEdit: Boolean
+) {
   val allocations = model.allocationsOfTask(task.id)
   var addMenuOpen by remember { mutableStateOf(false) }
   val unassigned = model.resources.filter { resource ->
@@ -335,7 +358,10 @@ private fun AssignmentsSection(task: TaskNode, model: ProjectModel, viewModel: P
             )
           }
           Text(stringResource(R.string.assignment_load_percent, hours(pendingLoad.toDouble())))
-          IconButton(onClick = { viewModel.unassignResource(task.id, resource.id) }) {
+          IconButton(
+            onClick = { viewModel.unassignResource(task.id, resource.id) },
+            enabled = canEdit
+          ) {
             Icon(Icons.Default.Close, contentDescription = stringResource(R.string.assignment_remove))
           }
         }
@@ -345,6 +371,7 @@ private fun AssignmentsSection(task: TaskNode, model: ProjectModel, viewModel: P
           onValueChangeFinished = {
             viewModel.setAllocationLoad(task.id, resource.id, pendingLoad.toDouble())
           },
+          enabled = canEdit,
           // From 5%, never 0: a zero-load assignment is refused by the
           // document layer because it means nothing.
           valueRange = 5f..200f,
@@ -355,7 +382,8 @@ private fun AssignmentsSection(task: TaskNode, model: ProjectModel, viewModel: P
             checked = allocation.responsible,
             onCheckedChange = {
               viewModel.setAllocationResponsible(task.id, resource.id, it)
-            }
+            },
+            enabled = canEdit
           )
           Text(
             stringResource(R.string.assignment_responsible),
@@ -366,7 +394,10 @@ private fun AssignmentsSection(task: TaskNode, model: ProjectModel, viewModel: P
     }
 
     Row {
-      TextButton(onClick = { addMenuOpen = true }, enabled = unassigned.isNotEmpty()) {
+      TextButton(
+        onClick = { addMenuOpen = true },
+        enabled = canEdit && unassigned.isNotEmpty()
+      ) {
         Icon(Icons.Default.Add, contentDescription = null)
         Text(stringResource(R.string.assignment_add), modifier = Modifier.padding(start = 4.dp))
       }

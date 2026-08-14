@@ -170,4 +170,21 @@
     <string name="widget_window_started">Only what has already started</string>
     <string name="widget_settings">Home-screen widget</string>
     <string name="widget_use_current">Use the open project</string>
+
+    <!--
+      Edit protection. The wording deliberately names what is at risk and what
+      is not: a warning that only says "be careful" gets clicked away.
+    -->
+    <string name="editing_section">Editing on this device</string>
+    <string name="editing_read_only">Off — read only</string>
+    <string name="editing_read_only_hint">Nothing on this phone writes to the project file.</string>
+    <string name="editing_app_only">In the app</string>
+    <string name="editing_app_only_hint">Edit here, where you can see the project and are asked before anything gets overwritten.</string>
+    <string name="editing_app_and_widget">In the app and the widget</string>
+    <string name="editing_app_and_widget_hint">Also allows ticking tasks off and recording time straight from the home screen.</string>
+    <string name="editing_off_badge">Editing off</string>
+    <string name="editing_off_banner">Editing is switched off for this device. You can turn it back on under Settings.</string>
+    <string name="editing_warning_title">Turn editing on?</string>
+    <string name="editing_warning_body">This project is a file in a synced folder. Nothing decides which of two competing changes is the real one: if you edit here and the desktop saves before the sync has caught up, your change is gone without a trace.\n\nThe app refuses to overwrite a file that changed since you opened it — but it cannot bring back a change that was overwritten somewhere else.\n\nAt risk are progress, the completed mark and hours you typed in by hand. Hours from the time tracker are safe: what was imported is recorded in the project file, so a lost change simply means those entries are offered again next time.</string>
+    <string name="editing_warning_confirm">Turn on anyway</string>
 </resources>

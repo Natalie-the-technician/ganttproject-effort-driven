@@ -102,7 +102,8 @@ fun ResourcesScreen(project: ProjectUi, viewModel: ProjectViewModel) {
           resource = resource,
           report = reports[id],
           model = model,
-          viewModel = viewModel
+          viewModel = viewModel,
+          canEdit = project.canEdit
         )
       }
     }
@@ -188,7 +189,8 @@ private fun ResourceSheet(
   resource: ResourceNode,
   report: ResourceLoadReport?,
   model: ProjectModel,
-  viewModel: ProjectViewModel
+  viewModel: ProjectViewModel,
+  canEdit: Boolean
 ) {
   var text by remember(resource.id, resource.hoursPerDay) {
     mutableStateOf(resource.hoursPerDay?.let { hours(it) } ?: "")
@@ -205,6 +207,8 @@ private fun ResourceSheet(
   ) {
     Text(resource.name, style = MaterialTheme.typography.titleLarge)
 
+    if (!canEdit) EditingOffBanner()
+
     Column {
       OutlinedTextField(
         value = text,
@@ -212,6 +216,7 @@ private fun ResourceSheet(
         label = { Text(stringResource(R.string.resource_hours_per_day)) },
         singleLine = true,
         isError = invalid,
+        enabled = canEdit,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = Modifier.fillMaxWidth()
       )
@@ -228,7 +233,7 @@ private fun ResourceSheet(
           else MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.weight(1f)
         )
-        TextButton(onClick = {
+        TextButton(enabled = canEdit, onClick = {
           if (text.isBlank()) {
             viewModel.setResourceHoursPerDay(resource.id, null)
             invalid = false

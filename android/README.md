@@ -23,6 +23,51 @@ adjust who works how much, and pull time entries in from Toggl Track.
 | **Resources** | Hours per day per person, assignment load in percent, assign and unassign |
 | **Utilisation** | Day-by-day load per resource, with overload flagged |
 | **Time import** | Pull entries from Toggl Track, match them to tasks, add the hours |
+| **Widget** | Home-screen list of what is running or starts soon; tick off, record time |
+| **Edit protection** | Choose per device whether the app, the app and the widget, or neither may write |
+
+## Editing is a choice, not a default
+
+A `.gan` file in a synced folder has no arbiter. Two devices can write it and
+the last writer wins, silently. The app detects this after the fact — it
+refuses to overwrite a file whose contents changed since it was opened, and
+offers to keep both versions instead — but detection is not prevention: if the
+desktop saves over a phone edit that had not finished syncing, the phone's work
+is gone and nothing on the phone can bring it back.
+
+So how much this device may write is a setting, under **Settings → Editing on
+this device**:
+
+| Level | The app | The widget |
+|---|---|---|
+| Off — read only | no | no |
+| In the app *(default)* | yes | no |
+| In the app and the widget | yes | yes |
+
+The levels are ordered on purpose: "widget but not app" would be nonsense and
+cannot be expressed. The default excludes the widget because the widget is the
+blind surface — one thumb tap writes the file from the home screen, with no
+view of the plan and no room to explain a conflict. Turning it on asks first,
+and the confirmation names what is actually at risk:
+
+- **At risk:** progress, the completed mark, and hours typed in by hand.
+- **Not at risk:** hours from the time tracker. What was imported is recorded
+  in the project file itself, so a lost change means those entries are simply
+  offered for import again — never booked twice.
+
+The warning fires only when protection is turned *up*, and only while the
+project lives in a plain file. `EditPolicy.kt` models the second condition
+explicitly (`SyncGuarantee`), so if a versioned backend is ever added — one
+that rejects a write made against a stale version — the warning stops
+appearing on its own rather than needing rewording.
+
+Enforcement is at the choke point, not in the UI: `ProjectViewModel.edit` and
+`WidgetProject.edit` both refuse, so a control someone forgets to disable
+cannot write anyway. The widget re-reads the setting from disk on every tap,
+because it runs in a different process from the app and a cached copy would go
+on writing after the user switched editing off.
+
+---
 
 ## What it deliberately does not do
 

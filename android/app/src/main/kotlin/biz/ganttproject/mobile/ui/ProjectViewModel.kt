@@ -9,6 +9,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import biz.ganttproject.mobile.core.EditScope
 import biz.ganttproject.mobile.core.GanttDocument
 import biz.ganttproject.mobile.core.ImportAssignment
 import biz.ganttproject.mobile.core.ImportPlan
@@ -20,6 +21,8 @@ import biz.ganttproject.mobile.core.TogglError
 import biz.ganttproject.mobile.core.TogglResult
 import biz.ganttproject.mobile.core.TogglTimeEntry
 import biz.ganttproject.mobile.core.MatchOutcome
+import biz.ganttproject.mobile.core.SyncGuarantee
+import biz.ganttproject.mobile.core.needsUnmanagedStorageWarning
 import biz.ganttproject.mobile.core.planImport
 import biz.ganttproject.mobile.data.AppPreferences
 import biz.ganttproject.mobile.data.FileError
@@ -46,6 +49,12 @@ data class ProjectUi(
   /** Opened without write access — usually via a share sheet. */
   val isReadOnly: Boolean,
   /**
+   * Whether this project may be changed at all: write access to the file
+   * *and* the user's own edit-protection setting. The screens disable their
+   * controls on this; [ProjectViewModel.edit] enforces it regardless.
+   */
+  val canEdit: Boolean,
+  /**
    * Bumped on every edit. [ProjectModel] is a value snapshot, but the
    * enclosing [OpenProject] is mutable, so an explicit revision keeps
    * recomposition honest rather than relying on reference identity.
@@ -59,6 +68,8 @@ data class WidgetSettings(val projectName: String?, val windowDays: Int)
 data class AppState(
   val busy: Boolean = false,
   val widget: WidgetSettings = WidgetSettings(null, 14),
+  /** How much this device is allowed to change; see [EditScope]. */
+  val editScope: EditScope = EditScope.DEFAULT,
   val project: ProjectUi? = null,
   val recentFiles: List<RecentFile> = emptyList(),
   val fileError: FileError? = null,
@@ -112,7 +123,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
   private val _state = MutableStateFlow(
     AppState(
       recentFiles = prefs.recentFiles(),
-      widget = WidgetSettings(prefs.widgetProjectName(), prefs.widgetWindowDays())
+      widget = WidgetSettings(prefs.widgetProjectName(), prefs.widgetWindowDays()),
+      editScope = prefs.editScope()
     )
   )
   val state: StateFlow<AppState> = _state.asStateFlow()
@@ -262,6 +274,38 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     prefs.widgetProjectUri()?.let { openUri(Uri.parse(it)) }
   }
 
+  // ------------------------------------------------------- Edit protection
+
+  /**
+   * Changes how much this device may edit.
+   *
+   * The caller is expected to have shown the warning from
+   * [warnBeforeWidening] first when it applies; this method does not ask,
+   * because it is also the way *back down*, which must never be obstructed.
+   */
+  fun setEditScope(scope: EditScope) {
+    // Edits already made stay saveable. Switching protection on stops the
+    // next change, it does not retroactively discard the last one — silently
+    // dropping work the user was allowed to do would be the very failure
+    // this setting exists to prevent.
+    prefs.setEditScope(scope)
+    _state.update { it.copy(editScope = scope) }
+    // canEdit is part of the project snapshot, so the screens only notice the
+    // new setting once the snapshot is rebuilt.
+    open?.let { project -> _state.update { it.copy(project = snapshot(project)) } }
+  }
+
+  /**
+   * Whether raising the protection level to [target] should be confirmed.
+   *
+   * The backend is hard-coded to [SyncGuarantee.UNMANAGED_FILE] because that
+   * is what the app has: a file in a folder, with nothing arbitrating two
+   * writers. If a versioned backend is ever added, this is the one line that
+   * changes and the warning stops appearing by itself.
+   */
+  fun warnBeforeWidening(target: EditScope): Boolean =
+    needsUnmanagedStorageWarning(_state.value.editScope, target, SyncGuarantee.UNMANAGED_FILE)
+
   fun clearRecentFiles() {
     prefs.clearRecentFiles()
     _state.update { it.copy(recentFiles = emptyList()) }
@@ -280,6 +324,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    */
   private fun edit(block: (GanttDocument) -> Boolean): Boolean {
     val project = open ?: return false
+    // The single choke point for edit protection. The screens also disable
+    // their controls, but that is cosmetics — this is the guarantee, and it
+    // holds for any caller added later that forgets to ask.
+    if (!_state.value.editScope.allowsAppEdits) return false
     val changed = project.edit(block)
     if (changed) {
       revision++
@@ -291,6 +339,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
   /**
    * Folds or unfolds a task group. Not an edit: see
    * [OpenProject.editViewState] for why this must not dirty the file.
+   *
+   * Deliberately not gated by the edit scope. It never dirties the document,
+   * so it can never cause a write — and a project you are not allowed to
+   * change is exactly the one you most want to be able to fold up and read.
    */
   fun toggleExpanded(taskId: String) {
     val project = open ?: return
@@ -324,7 +376,14 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     edit { it.unassignResource(taskId, resourceId) }
 
   private fun snapshot(project: OpenProject) =
-    ProjectUi(project.displayName, project.model, project.isDirty, project.isReadOnly, revision)
+    ProjectUi(
+      displayName = project.displayName,
+      model = project.model,
+      isDirty = project.isDirty,
+      isReadOnly = project.isReadOnly,
+      canEdit = !project.isReadOnly && _state.value.editScope.allowsAppEdits,
+      revision = revision
+    )
 
   // ---------------------------------------------------------------- Import
 
@@ -438,6 +497,10 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    */
   fun applyImport() {
     val project = open ?: return
+    // Checked here as well as in [edit]: the import writes through
+    // OpenProject.edit directly, because the hours, the ledger and the
+    // learned keys have to land in one single edit.
+    if (!_state.value.editScope.allowsAppEdits) return
     val plan = currentPlan()
     if (plan.isEmpty) return
     val learn = _importState.value.learnKeys

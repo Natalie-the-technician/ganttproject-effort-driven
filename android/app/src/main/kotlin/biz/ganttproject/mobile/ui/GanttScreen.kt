@@ -290,7 +290,7 @@ fun GanttScreen(project: ProjectUi, viewModel: ProjectViewModel) {
         onDismissRequest = { selectedTaskId = null },
         sheetState = sheetState
       ) {
-        TaskSheet(task = task, model = model, viewModel = viewModel)
+        TaskSheet(task = task, model = model, viewModel = viewModel, canEdit = project.canEdit)
       }
     }
   }

@@ -9,6 +9,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import biz.ganttproject.mobile.core.EditScope
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -180,11 +181,26 @@ class AppPreferences(context: Context) {
 
   fun setWidgetWindowDays(days: Int) = prefs.edit().putInt(KEY_WIDGET_DAYS, days).apply()
 
+  // ---------------------------------------------------------- Edit protection
+
+  /**
+   * How much this device is allowed to change; see [EditScope].
+   *
+   * Read from disk on every call rather than cached, because the widget runs
+   * in a different process from the app: a cached copy in the widget would go
+   * on permitting edits after the user switched them off in the app.
+   */
+  fun editScope(): EditScope = EditScope.fromKey(prefs.getString(KEY_EDIT_SCOPE, null))
+
+  fun setEditScope(scope: EditScope) =
+    prefs.edit().putString(KEY_EDIT_SCOPE, scope.key).apply()
+
   companion object {
     private const val KEY_RECENT = "recent_files"
     private const val KEY_WIDGET_URI = "widget_project_uri"
     private const val KEY_WIDGET_NAME = "widget_project_name"
     private const val KEY_WIDGET_DAYS = "widget_window_days"
+    private const val KEY_EDIT_SCOPE = "edit_scope"
     private const val MAX_RECENT = 10
   }
 }

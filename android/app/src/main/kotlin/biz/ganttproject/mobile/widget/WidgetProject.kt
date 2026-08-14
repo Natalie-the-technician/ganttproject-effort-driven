@@ -28,7 +28,13 @@ sealed interface WidgetState {
   data class Loaded(
     val projectName: String,
     val items: List<AgendaItem>,
-    val windowDays: Int
+    val windowDays: Int,
+    /**
+     * Whether the tick and the +½ h button are offered at all. When editing
+     * from the widget is switched off, the list stays — a plan is worth
+     * looking at even when you must not change it from here.
+     */
+    val canEdit: Boolean
   ) : WidgetState
 }
 
@@ -45,7 +51,16 @@ enum class WidgetEditResult {
   CONFLICT,
 
   /** The file could not be read or written at all. */
-  FAILED
+  FAILED,
+
+  /**
+   * Refused because editing from the widget is switched off.
+   *
+   * Reachable even though the buttons are hidden: a widget on the home screen
+   * can be a redraw behind the setting, and the tap that is already in flight
+   * has to land somewhere.
+   */
+  DISABLED
 }
 
 /**
@@ -74,7 +89,8 @@ class WidgetProject(private val context: Context) {
     return WidgetState.Loaded(
       projectName = model.name.ifBlank { prefs.widgetProjectName().orEmpty() },
       items = agenda(model, LocalDate.now(), days),
-      windowDays = days
+      windowDays = days,
+      canEdit = prefs.editScope().allowsWidgetEdits
     )
   }
 
@@ -95,6 +111,10 @@ class WidgetProject(private val context: Context) {
    * underneath us in between.
    */
   private fun edit(change: (GanttDocument) -> Boolean): WidgetEditResult {
+    // Read fresh from disk on every tap, never cached: the widget lives in a
+    // different process from the app, so a value cached here would keep
+    // writing after the user switched editing off.
+    if (!prefs.editScope().allowsWidgetEdits) return WidgetEditResult.DISABLED
     val uri = prefs.widgetProjectUri()?.let(Uri::parse) ?: return WidgetEditResult.FAILED
     val before = readBytes(uri) ?: return WidgetEditResult.FAILED
     val document = runCatching { GanttDocument.load(before) }.getOrNull()

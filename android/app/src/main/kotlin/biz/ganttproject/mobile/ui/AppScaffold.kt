@@ -8,6 +8,8 @@ package biz.ganttproject.mobile.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
@@ -56,7 +58,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.RadioButton
 import biz.ganttproject.mobile.R
+import biz.ganttproject.mobile.core.EditScope
 import biz.ganttproject.mobile.data.FileError
 
 private enum class Tab { GANTT, RESOURCES, IMPORT }
@@ -82,8 +86,11 @@ fun AppScaffold(
   var tab by rememberSaveable(stateSaver = TabSaver) { mutableStateOf(Tab.GANTT) }
   var menuOpen by remember { mutableStateOf(false) }
   var aboutOpen by remember { mutableStateOf(false) }
-  var widgetSettingsOpen by remember { mutableStateOf(false) }
+  var settingsOpen by remember { mutableStateOf(false) }
   var confirmCloseOpen by remember { mutableStateOf(false) }
+  // The level the user just picked but has not confirmed yet. Non-null only
+  // while the "are you sure" dialog is up.
+  var pendingScope by remember { mutableStateOf<EditScope?>(null) }
   val snackbarHost = remember { SnackbarHostState() }
 
   // The picker asks for any type: GanttProject files have no registered MIME
@@ -129,6 +136,14 @@ fun AppScaffold(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error
               )
+            } else if (!state.editScope.allowsAppEdits) {
+              // Not an error colour: this is the user's own choice, not
+              // something that went wrong.
+              Text(
+                text = stringResource(R.string.editing_off_badge),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
             } else if (state.project?.isDirty == true) {
               Text(
                 text = stringResource(R.string.unsaved_changes),
@@ -170,8 +185,8 @@ fun AppScaffold(
               }
             }
             DropdownMenuItem(
-              text = { Text(stringResource(R.string.widget_settings)) },
-              onClick = { menuOpen = false; widgetSettingsOpen = true }
+              text = { Text(stringResource(R.string.action_settings)) },
+              onClick = { menuOpen = false; settingsOpen = true }
             )
             DropdownMenuItem(
               text = { Text(stringResource(R.string.action_about)) },
@@ -286,12 +301,37 @@ fun AppScaffold(
     )
   }
 
-  if (widgetSettingsOpen) {
+  if (settingsOpen) {
     AlertDialog(
-      onDismissRequest = { widgetSettingsOpen = false },
-      title = { Text(stringResource(R.string.widget_settings)) },
+      onDismissRequest = { settingsOpen = false },
+      title = { Text(stringResource(R.string.action_settings)) },
       text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+          modifier = Modifier.verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          // ---------------------------------------------- Edit protection
+          Text(
+            stringResource(R.string.editing_section),
+            style = MaterialTheme.typography.labelMedium
+          )
+          EditScope.entries.forEach { scope ->
+            EditScopeRow(
+              scope = scope,
+              selected = state.editScope == scope,
+              onSelect = {
+                // Turning protection up asks first; turning it down never
+                // does. Confirming a cautious choice trains people to click
+                // through the dialog that matters.
+                if (viewModel.warnBeforeWidening(scope)) pendingScope = scope
+                else viewModel.setEditScope(scope)
+              }
+            )
+          }
+
+          HorizontalDivider()
+
+          Text(stringResource(R.string.widget_settings), style = MaterialTheme.typography.labelMedium)
           Text(stringResource(R.string.widget_project), style = MaterialTheme.typography.labelMedium)
           Text(
             state.widget.projectName ?: stringResource(R.string.widget_no_project),
@@ -326,8 +366,34 @@ fun AppScaffold(
         }
       },
       confirmButton = {
-        TextButton(onClick = { widgetSettingsOpen = false }) {
+        TextButton(onClick = { settingsOpen = false }) {
           Text(stringResource(R.string.action_ok))
+        }
+      }
+    )
+  }
+
+  // The one thing standing between a tap in the settings and a phone that can
+  // silently lose work. Deliberately spells out what is at risk and what is
+  // not, because "are you sure?" gets answered yes by reflex.
+  pendingScope?.let { target ->
+    AlertDialog(
+      onDismissRequest = { pendingScope = null },
+      title = { Text(stringResource(R.string.editing_warning_title)) },
+      text = {
+        Text(
+          stringResource(R.string.editing_warning_body),
+          modifier = Modifier.verticalScroll(rememberScrollState())
+        )
+      },
+      confirmButton = {
+        TextButton(onClick = { viewModel.setEditScope(target); pendingScope = null }) {
+          Text(stringResource(R.string.editing_warning_confirm))
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { pendingScope = null }) {
+          Text(stringResource(R.string.action_cancel))
         }
       }
     )
@@ -421,5 +487,60 @@ private fun HomeScreen(
         TextButton(onClick = onClearRecent) { Text(stringResource(R.string.recent_clear)) }
       }
     }
+  }
+}
+
+/**
+ * One line of the edit-protection setting: a radio button, the level, and a
+ * plain-language sentence about what it means.
+ *
+ * The explanation sits next to each option rather than in one paragraph above
+ * them, because the choice being made here is about what can be lost, and
+ * that is not obvious from three labels alone.
+ */
+@Composable
+private fun EditScopeRow(scope: EditScope, selected: Boolean, onSelect: () -> Unit) {
+  val label = when (scope) {
+    EditScope.READ_ONLY -> R.string.editing_read_only
+    EditScope.APP_ONLY -> R.string.editing_app_only
+    EditScope.APP_AND_WIDGET -> R.string.editing_app_and_widget
+  }
+  val hint = when (scope) {
+    EditScope.READ_ONLY -> R.string.editing_read_only_hint
+    EditScope.APP_ONLY -> R.string.editing_app_only_hint
+    EditScope.APP_AND_WIDGET -> R.string.editing_app_and_widget_hint
+  }
+  Row(
+    modifier = Modifier.fillMaxWidth().clickable(onClick = onSelect),
+    verticalAlignment = Alignment.Top
+  ) {
+    RadioButton(selected = selected, onClick = onSelect)
+    Column(modifier = Modifier.padding(top = 12.dp)) {
+      Text(stringResource(label), style = MaterialTheme.typography.bodyMedium)
+      Text(
+        stringResource(hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    }
+  }
+}
+
+/**
+ * Shown at the top of every editing screen while edit protection is on.
+ *
+ * A banner rather than hidden controls: the greyed-out slider next to it says
+ * "not now", and this says why and where to change it. Hiding the controls
+ * entirely would leave the user hunting for a feature they know exists.
+ */
+@Composable
+internal fun EditingOffBanner() {
+  Card(modifier = Modifier.fillMaxWidth()) {
+    Text(
+      text = stringResource(R.string.editing_off_banner),
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+      modifier = Modifier.padding(12.dp)
+    )
   }
 }

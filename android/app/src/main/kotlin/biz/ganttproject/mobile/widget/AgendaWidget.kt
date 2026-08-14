@@ -118,7 +118,7 @@ private fun WidgetBody(context: Context, state: WidgetState) {
         } else {
           LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
             items(state.items, itemId = { it.task.id.hashCode().toLong() }) { item ->
-              AgendaRow(context, item)
+              AgendaRow(context, item, canEdit = state.canEdit)
             }
           }
         }
@@ -138,7 +138,7 @@ private fun WidgetHint(text: String, openApp: Boolean) {
 }
 
 @Composable
-private fun AgendaRow(context: Context, item: AgendaItem) {
+private fun AgendaRow(context: Context, item: AgendaItem, canEdit: Boolean) {
   val dateFormat = DateTimeFormatter.ofPattern("d. MMM")
   Row(
     modifier = GlanceModifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -147,16 +147,26 @@ private fun AgendaRow(context: Context, item: AgendaItem) {
     // The tick. A plain text glyph rather than a CheckBox: Glance's checkbox
     // reports a boolean and expects to be told the new state back, which for
     // a one-way "this is finished now" is more machinery than meaning.
+    //
+    // With editing switched off it stays as a bullet with no click target,
+    // rather than a greyed-out control: a button that cannot do anything is
+    // an invitation to keep tapping it.
     Text(
-      text = "○",
-      style = TextStyle(color = GlanceTheme.colors.primary),
-      modifier = GlanceModifier
-        .size(32.dp)
-        .clickable(
-          actionRunCallback<CompleteTaskAction>(
-            actionParametersOf(TaskIdKey to item.task.id)
+      text = if (canEdit) "○" else "·",
+      style = TextStyle(
+        color = if (canEdit) GlanceTheme.colors.primary else GlanceTheme.colors.onSurfaceVariant
+      ),
+      modifier = if (canEdit) {
+        GlanceModifier
+          .size(32.dp)
+          .clickable(
+            actionRunCallback<CompleteTaskAction>(
+              actionParametersOf(TaskIdKey to item.task.id)
+            )
           )
-        )
+      } else {
+        GlanceModifier.size(32.dp)
+      }
     )
 
     Column(modifier = GlanceModifier.defaultWeight().padding(horizontal = 4.dp)) {
@@ -189,17 +199,19 @@ private fun AgendaRow(context: Context, item: AgendaItem) {
 
     // Half an hour is the smallest unit worth recording by thumb; anything
     // finer belongs in the app or comes from the time tracker.
-    Text(
-      text = context.getString(R.string.widget_add_half_hour),
-      style = TextStyle(color = GlanceTheme.colors.primary, fontWeight = FontWeight.Medium),
-      modifier = GlanceModifier
-        .width(48.dp)
-        .clickable(
-          actionRunCallback<AddHoursAction>(
-            actionParametersOf(TaskIdKey to item.task.id)
+    if (canEdit) {
+      Text(
+        text = context.getString(R.string.widget_add_half_hour),
+        style = TextStyle(color = GlanceTheme.colors.primary, fontWeight = FontWeight.Medium),
+        modifier = GlanceModifier
+          .width(48.dp)
+          .clickable(
+            actionRunCallback<AddHoursAction>(
+              actionParametersOf(TaskIdKey to item.task.id)
+            )
           )
-        )
-    )
+      )
+    }
   }
 }
 
@@ -238,6 +250,9 @@ class AddHoursAction : ActionCallback {
  * file picker. So the widget hands over rather than guessing.
  */
 private suspend fun handleResult(context: Context, glanceId: GlanceId, result: WidgetEditResult) {
+  // DISABLED needs no reaction beyond the redraw below, which removes the
+  // buttons that should not have been there. Sending the user to the app
+  // would punish them for a tap the widget itself offered.
   if (result == WidgetEditResult.CONFLICT) {
     context.startActivity(
       Intent(context, MainActivity::class.java)
