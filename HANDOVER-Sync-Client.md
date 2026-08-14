@@ -256,67 +256,14 @@ die Datenverlust verhindern soll, wäre das Gegenteil des Ziels.
 
 ## 12. Was am Desktop-Fork zu ändern ist
 
-Meine frühere Aussage „null Änderungen am Desktop" galt dem **Protokoll** und
-stimmt dort. Beim Nachsehen im Quellcode sind aber drei Dinge aufgetaucht, die
-den Schutz in der Praxis aushebeln.
+Ausgelagert nach **`HANDOVER-Desktop-Sperren.md`** — eigene Aufgabe, eigenes
+Modul, eigene Abnahme. Kurz, damit hier keine Lücke bleibt:
 
-### D1 — Die Sperre ist standardmäßig aus (Konfiguration, kritisch)
-
-```java
-// WebDavStorageImpl.java:61
-new DefaultIntegerOption("webdav.lockTimeout", -1)
-```
-```java
-// HttpDocument.java:131
-if (locked || myTimeout < 0) {
-  return true;   // ← meldet Erfolg, ohne gesperrt zu haben
-}
-```
-
-Voreinstellung `-1` heißt: **`acquireLock()` sperrt nicht und meldet trotzdem
-Erfolg.** Der Desktop läuft also gegen einen sperrfähigen Server und nutzt die
-Sperre nie — ohne Hinweis, ohne Fehlermeldung.
-
-*Sofort:* In den Einstellungen unter WebDAV die Sperrdauer auf einen
-positiven Wert setzen (Minuten; 120 ist ein vernünftiger Anfang).
-*Im Fork:* Die Voreinstellung auf einen positiven Wert ändern. Eine
-Sicherheitsfunktion, die standardmäßig aus ist und das verschweigt, ist
-schlimmer als keine — sie erzeugt Vertrauen, das nicht gedeckt ist.
-
-### D2 — „Ohne Sperre öffnen" ist ein eigener Knopf
-
-`WebDavStorageImpl.createNoLockAction` übergibt fest `HttpDocument.NO_LOCK`.
-Das ist eine legitime Wahl und soll bleiben — aber wer sie benutzt, hat für
-diese Sitzung keinen Schutz. Falls der Fork ohnehin angefasst wird: Der Knopf
-sollte benennen, was er abschaltet.
-
-### D3 — Der Desktop schreibt ohne `If-Match` (Code, die eigentliche Lücke)
-
-```java
-// MiltonResourceImpl.java:282
-if (myImpl != null && myImpl.getLockToken() != null) {
-  parentFolder.upload(…, new IfMatchCheck(myImpl.getLockToken(), false, true), null);
-} else {
-  parentFolder.upload(…, null);   // ← bedingungslos
-}
-```
-
-Der Desktop sendet **nur** das Sperr-Token, und nur wenn er eines hält. Ohne
-Sperre — also mit D1 im Auslieferungszustand, oder an einem Server ohne
-Sperrunterstützung — überschreibt er **bedingungslos**. Genau das lautlose
-Überschreiben, das dieses ganze Vorhaben abschaffen soll, nur eine Ebene
-tiefer.
-
-Die App macht es ab sofort anders: Sie merkt sich den ETag und schickt
-`If-Match` bei jedem Speichern. Solange der Desktop das nicht tut, ist der
-Schutz einseitig — das Telefon kann nichts vom PC überschreiben, der PC vom
-Telefon schon.
-
-*Zu tun im Fork:* ETag aus der `GET`-Antwort merken, beim Schreiben als
-`If-Match` mitschicken, `412` als Konflikt anzeigen statt als allgemeinen
-Fehler. Der Aufhänger ist `MiltonResourceImpl.write` samt `HttpDocument`.
-
-**Reihenfolge:** D1 zuerst — eine Einstellung, sofort wirksam, und mit
-gesetzter Sperrdauer deckt die Sperre den Alltagsfall bereits ab. D3 schließt
-die verbleibende Lücke (Server ohne Sperren, abgelaufene Sperre, bewusst ohne
-Sperre geöffnet) und ist echte Arbeit im Fork. D2 ist Beschriftung.
+* **D1** Die Sperre ist standardmäßig aus (`webdav.lockTimeout` = `-1`), und
+  `acquireLock()` meldet trotzdem Erfolg. Der Desktop sperrt also nie, ohne
+  dass es irgendwo auffällt. Eine Einstellung behebt es sofort.
+* **D2** „Ohne Sperre öffnen" ist ein eigener Knopf, der nicht sagt, was er
+  abschaltet.
+* **D3** Der Desktop sendet kein `If-Match` und überschreibt ohne Sperre
+  bedingungslos. Bis das behoben ist, ist der Schutz einseitig: Das Telefon
+  kann nichts vom PC überschreiben, der PC vom Telefon schon.
