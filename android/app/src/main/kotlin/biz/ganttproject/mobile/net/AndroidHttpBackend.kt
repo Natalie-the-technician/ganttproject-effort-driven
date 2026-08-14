@@ -62,19 +62,23 @@ class AndroidHttpBackend(
    * look like a server misconfiguration rather than a client limitation.
    */
   override fun exchange(request: HttpRequest): BinaryHttpResponse {
+    // Held locally because HttpRequest lives in gantt-core, and Kotlin will
+    // not smart-cast a property across a module boundary — the value could in
+    // principle change between the null check and the use.
+    val payload = request.body
     val connection = (URL(request.url).openConnection() as HttpURLConnection).apply {
       connectTimeout = connectTimeoutMs
       readTimeout = readTimeoutMs
       instanceFollowRedirects = false
       runCatching { requestMethod = request.method }.onFailure { forceMethod(this, request.method) }
       request.headers.forEach { (name, value) -> setRequestProperty(name, value) }
-      if (request.body != null) {
+      if (payload != null) {
         doOutput = true
-        setFixedLengthStreamingMode(request.body.size)
+        setFixedLengthStreamingMode(payload.size)
       }
     }
     return try {
-      request.body?.let { connection.outputStream.use { out -> out.write(it) } }
+      payload?.let { connection.outputStream.use { out -> out.write(it) } }
       val status = connection.responseCode
       val stream = if (status in 200..299) connection.inputStream else connection.errorStream
       val body = stream?.use { it.readBytes() } ?: ByteArray(0)
