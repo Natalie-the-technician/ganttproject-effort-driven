@@ -50,17 +50,32 @@ Datei wäre es nicht.
   privat/          → Require group privat
 ```
 
-Jeder Ordner bekommt einen Apache-Block:
+**Ein einziger Block für alle Ordner**, kein Block je Ordner. Der
+Ordnername ist zugleich der Gruppenname und wird pro Anfrage aufgelöst:
 
 ```apache
-<Directory /srv/webdav/projects/kunde-mueller>
+<DirectoryMatch "^/var/www/webdav/(?<PROJEKT>[^/]+)(/|$)">
     AuthType Basic
     AuthName "GanttProject"
     AuthUserFile /srv/gantt/htpasswd
     AuthGroupFile /srv/gantt/gruppen
-    Require group kunde-mueller
-</Directory>
+    Require group %{env:MATCH_PROJEKT}
+    # Ohne dies antwortet Apache bei fehlender Gruppenzugehörigkeit mit 401
+    # statt 403 — siehe Z1.
+    AuthzSendForbiddenOnFailure On
+</DirectoryMatch>
 ```
+
+**Der Pfad ist der Pfad im Container**, nicht der auf dem Host. Ein Block mit
+Hostpfad besteht `httpd -t` mit „Syntax OK" und greift trotzdem **nie** —
+also genau die Sorte Fehler, die aussieht wie Erfolg. (Fand die Server-Sitzung
+in einer früheren Fassung dieses Dokuments, wo `/srv/webdav/projects/…`
+stand.)
+
+**Die Gruppendatei muss über ein Verzeichnis eingebunden werden, nicht als
+Einzeldatei.** Eine einzeln gebundene Datei hängt an ihrer Inode; ein
+Austausch per `tmp`+`mv` erzeugt eine neue, und der Container sieht die
+Änderung nie. Das ist dieselbe Falle wie beim Caddyfile.
 
 Und die Gruppendatei bestimmt, wer drin ist:
 
@@ -72,23 +87,25 @@ privat: anna
 
 ### Der Punkt, auf den es ankommt: zwei verschiedene Häufigkeiten
 
-| Vorgang | Was nötig ist | Wie oft |
+| Vorgang | Was nötig ist | Reload? |
 |---|---|---|
-| **Person zu Ordner hinzufügen** | eine Zeile in `gruppen` ändern | ständig |
-| **Neuen Ordner anlegen** | Verzeichnis + Apache-Block + Reload | selten |
+| **Person zu Ordner hinzufügen** | eine Zeile in `gruppen` | nein |
+| **Person entziehen** | eine Zeile in `gruppen` | nein |
+| **Neuen Ordner anlegen** | `mkdir` + eine Zeile in `gruppen` | nein |
 
-Das ist die ganze Kunst an diesem Entwurf. Der häufige Fall darf **keinen
-Reload** brauchen: `mod_authz_groupfile` liest die Gruppendatei nach meinem
-Kenntnisstand bei jeder Anfrage neu, eine Mitgliedschaft wirkt also sofort.
-**Nachprüfen, nicht glauben** — das ist Prüfung Z3 unten, und wenn sie
-fehlschlägt, kippt der Entwurf auf „Reload bei jeder Freigabe", was ihn
-deutlich unangenehmer macht.
+**Gemessen, nicht angenommen** (Server-Sitzung, 14. August 2026, gegen den
+Produktivbuild Apache 2.4.68 in einem Wegwerf-Container):
+`mod_authz_groupfile` hält **keinen** Cache — auch keinen prozess- oder
+verbindungslokalen. Der harte Nachweis war eine einzige offene
+Keep-alive-Verbindung mit drei Anfragen desselben Benutzers und einer
+Änderung der Gruppendatei dazwischen: `401 → 200 → 401`, bedient von
+demselben Prozess und Thread. Kaputte, leere und fehlende Gruppendatei werden
+sämtlich abgewiesen — *fail closed*.
 
-Der seltene Fall — neuer Ordner — erzeugt eine Konfigurationsänderung. Da
-lauert genau die Falle, in die ihr beim Caddyfile schon getreten seid:
-**erst validieren, dann laden, und der Reload muss einen Fehler auch
-zurückmelden.** Apache: `apachectl configtest` vor `apachectl graceful`.
-`graceful` unterbricht laufende Verbindungen nicht.
+Mit `DirectoryMatch` braucht **auch ein neuer Ordner keinen Reload**. Damit
+entfällt die generierte Konfiguration vollständig — und mit ihr die
+Wiederholung der Caddyfile-Falle, die diesen Abschnitt in der ersten Fassung
+noch beschäftigt hat.
 
 ### Ordnername ≠ Anzeigename
 
@@ -212,6 +229,13 @@ ist deutlich kleiner als die Selbstbedienung aus dem verworfenen Entwurf
 
 ## 5. Abnahme
 
+Alle Erwartungen unten setzen `AuthzSendForbiddenOnFailure On` voraus (§1).
+**Ohne diese Direktive antwortet Apache bei fehlender Gruppenzugehörigkeit mit
+`401` statt `403`**, und Z1/Z4/Z5/Z6 schlagen fehl, obwohl die Trennung
+greift. Das ist nicht nur eine Zahl: Mit `401` bekommt ein nicht
+freigeschalteter Mensch endlos die Passwortabfrage und hält sein Passwort für
+falsch. Fehlende Anmeldung und falsches Passwort bleiben korrekt bei `401`.
+
 **Z1 — Ohne Mitgliedschaft kein Zugriff.**
 ```sh
 curl -sS -o /dev/null -w '%{http_code}\n' -u "neu:$P" "$BASIS/kunde-mueller/"
@@ -222,10 +246,11 @@ dann sind alle Ordner für alle offen, und das sieht man nirgends.*
 **Z2 — Mit Mitgliedschaft Zugriff.**
 Nach dem Freischalten derselbe Aufruf. Erwartung `207`/`200`.
 
-**Z3 — Mitgliedschaft wirkt ohne Reload.** *(die Prüfung, an der der Entwurf hängt)*
+**Z3 — Mitgliedschaft wirkt ohne Reload.** ✅ *bestanden, 14. August 2026*
 Benutzer freischalten, **ohne** Apache anzufassen sofort Z2 wiederholen.
-Erwartung: geht. *Schlägt es fehl, muss jede Freigabe einen Reload auslösen —
-dann bitte melden, bevor gebaut wird.*
+Erwartung: geht. Bei einer Wiederholung den Keep-alive-Fall mitprüfen — eine
+offene Verbindung, drei Anfragen, Änderung dazwischen — sonst bliebe ein
+verbindungslokaler Cache unentdeckt.
 
 **Z4 — Entzug wirkt sofort.**
 Mitgliedschaft entfernen, Z1 wiederholen. Erwartung `403`, ohne Reload.
@@ -253,10 +278,36 @@ vorhandener Nutzer sich weiterhin anmelden können.
 Nach Anlegen und Zurücksetzen: `docker logs`, `journalctl`, Apache- und
 Caddy-Log durchsuchen. Erwartung: kein Treffer.
 
-**Z10 — Neuer Ordner bringt nichts zum Absturz.**
-Ordner anlegen, dann `apachectl configtest`, dann die anderen Ordner prüfen.
-*Und danach einmal den Container neu starten* — eine fehlerhafte generierte
-Konfiguration wirkt sonst erst Stunden später, wie bei eurem Caddyfile.
+**Z10 — Neuer Ordner greift sofort.**
+Ordner anlegen (`mkdir` + Zeile in `gruppen`), ohne Apache anzufassen darauf
+zugreifen. Erwartung: geht. *Mit `DirectoryMatch` gibt es keine generierte
+Konfiguration mehr — der frühere Reload-Test ist damit gegenstandslos.*
+
+**Z11 — `MOVE` und `COPY` prüfen auch das Ziel.** ⚠️ *ungeprüft in der ersten
+Fassung dieses Dokuments; von der Server-Sitzung gefunden*
+
+Ein Benutzer, der **nur** in `projekt-c` freigeschaltet ist:
+```sh
+# Datei aus dem eigenen Ordner in einen fremden verschieben
+curl -sS -o /dev/null -w '%{http_code}\n' -u "bob:$P" -X MOVE \
+  -H "Destination: $BASIS/projekt-b/geklaut.gan" "$BASIS/projekt-c/meins.gan"
+# und auf eine vorhandene fremde Datei
+curl -sS -o /dev/null -w '%{http_code}\n' -u "bob:$P" -X MOVE \
+  -H "Destination: $BASIS/projekt-b/fremd.gan" "$BASIS/projekt-c/meins.gan"
+```
+Erwartung beides `403`. Dasselbe mit `COPY`.
+
+**Ohne Absicherung liefert Apache `201` und `204`** — die Autorisierung prüft
+nur die **Quelle**, nie das **Ziel**. Gemessen. Wer irgendwo schreiben darf,
+darf damit überall schreiben, und die Ordnernamen sieht jeder per `PROPFIND`
+auf der Wurzel. Eine Sperre fängt es ab, aber nur bei geöffnetem Plan.
+
+Abhilfe über `mod_rewrite` ist von der Server-Sitzung gemessen: fremdes Ziel
+`403`, innerhalb des eigenen Ordners weiterhin `201`, Z3 unberührt.
+
+*Warum das hier steht:* **Keine** der Prüfungen Z1–Z10 hätte es gefunden — Z5
+prüft nur Lesezugriff. Genau die Sorte Lücke, gegen die diese Liste gedacht
+ist, und sie war trotzdem nicht drin.
 
 ---
 
