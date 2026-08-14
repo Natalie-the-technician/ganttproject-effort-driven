@@ -10,6 +10,10 @@ D2 eine Beschriftung, D3 die eigentliche Arbeit.
 
 ---
 
+**Zugänge gehören nicht hierher.** Konten anlegen, Passwörter ausliefern und
+zurücksetzen steht in `HANDOVER-Server-Zugaenge.md` — der Desktop verbraucht
+nur Zugangsdaten, er verwaltet keine.
+
 ## 0. Worum es geht, in drei Sätzen
 
 Die Projektdateien liegen jetzt auf einem WebDAV-Server
