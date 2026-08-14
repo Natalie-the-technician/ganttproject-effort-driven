@@ -290,6 +290,83 @@ class WebDavClientTest {
     assertEquals(without.urlFor("a.gan"), withSlash.urlFor("a.gan"))
   }
 
+  // --- weak ETags -----------------------------------------------------------
+  //
+  // Measured against the real Apache: a PUT carries no ETag at all, and for
+  // about a second afterwards HEAD reports the tag as weak. If-Match compares
+  // strongly, so a weak tag matches nothing — not even itself — and sending
+  // one back earns a 412 on a file nobody else touched.
+
+  @Test
+  fun `a weak stored etag is never sent in If-Match`() {
+    val (client, backend) = clientWith { request ->
+      when (request.method) {
+        "HEAD" -> response(200, mapOf("ETag" to "\"1-abc\""))
+        else -> response(204, mapOf("ETag" to "\"1-def\""))
+      }
+    }
+    client.write("haus.gan", "x".toByteArray(), "W/\"1-abc\"")
+    val put = backend.requests.single { it.method == "PUT" }
+    assertEquals("\"1-abc\"", put.headers["If-Match"], "the strong form must be sent")
+  }
+
+  @Test
+  fun `a weak etag that is still weak on re-read writes unconditionally`() {
+    val (client, backend) = clientWith { request ->
+      when (request.method) {
+        "HEAD" -> response(200, mapOf("ETag" to "W/\"1-abc\""))
+        else -> response(204, mapOf("ETag" to "\"1-def\""))
+      }
+    }
+    client.write("haus.gan", "x".toByteArray(), "W/\"1-abc\"")
+    val put = backend.requests.single { it.method == "PUT" }
+    // The HEAD just confirmed the content is ours. Refusing to save at all
+    // here would turn a remote risk into a certain annoyance.
+    assertFalse(put.headers.containsKey("If-Match"))
+  }
+
+  @Test
+  fun `a weak etag whose value changed is a conflict, and nothing is written`() {
+    val (client, backend) = clientWith { request ->
+      when (request.method) {
+        "HEAD" -> response(200, mapOf("ETag" to "\"1-SOMEONE-ELSE\""))
+        else -> response(204)
+      }
+    }
+    val result = client.write("haus.gan", "x".toByteArray(), "W/\"1-abc\"") as DavResult.Failed
+    assertEquals(DavError.ChangedElsewhere, result.error)
+    assertTrue(backend.requests.none { it.method == "PUT" }, "nothing may be written on a conflict")
+  }
+
+  @Test
+  fun `a strong stored etag is sent as is, with no extra HEAD`() {
+    val (client, backend) = clientWith { response(204, mapOf("ETag" to "\"1-def\"")) }
+    client.write("haus.gan", "x".toByteArray(), "\"1-abc\"")
+    assertEquals(listOf("PUT"), backend.requests.map { it.method })
+    assertEquals("\"1-abc\"", backend.requests.single().headers["If-Match"])
+  }
+
+  @Test
+  fun `an unaskable server gets the weak tag and is left to refuse`() {
+    val (client, backend) = clientWith { request ->
+      if (request.method == "HEAD") response(500) else response(412)
+    }
+    val result = client.write("haus.gan", "x".toByteArray(), "W/\"1-abc\"") as DavResult.Failed
+    // Refusing is the safe direction. Writing blind because a HEAD failed
+    // would discard whatever is actually on the server.
+    assertEquals(DavError.ChangedElsewhere, result.error)
+    assertEquals("W/\"1-abc\"", backend.requests.single { it.method == "PUT" }.headers["If-Match"])
+  }
+
+  @Test
+  fun `lower-case weak marker is recognised too`() {
+    val (client, backend) = clientWith { request ->
+      if (request.method == "HEAD") response(200, mapOf("ETag" to "\"1-abc\"")) else response(204)
+    }
+    client.write("haus.gan", "x".toByteArray(), "w/\"1-abc\"")
+    assertEquals("\"1-abc\"", backend.requests.single { it.method == "PUT" }.headers["If-Match"])
+  }
+
   @Test
   fun `spaces and hashes in a name are escaped`() {
     val (client, _) = clientWith { response(200) }

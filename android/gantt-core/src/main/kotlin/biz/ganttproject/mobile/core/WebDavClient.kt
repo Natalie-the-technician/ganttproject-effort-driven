@@ -225,7 +225,69 @@ class WebDavClient(
    * asked for one. Null means "unknown", and the caller must treat it as such:
    * the next write then has nothing to be conditional on.
    */
+  /** True for `W/"..."` — an ETag that can never satisfy `If-Match`. */
+  private fun isWeak(etag: String) = etag.startsWith("W/", ignoreCase = true)
+
+  /** The value without its weakness marker, for comparing two tags by identity. */
+  private fun opaque(etag: String) = etag.removePrefix("W/").removePrefix("w/")
+
+  /**
+   * Turns a stored ETag into one that can actually be used in `If-Match`.
+   *
+   * RFC 7232 compares `If-Match` with the **strong** function, and a weak tag
+   * fails that comparison against everything — including against itself. A
+   * server may legitimately answer a fresh write with a weak tag (Apache does,
+   * for about a second, because a file written twice within its timestamp
+   * resolution could differ without the tag differing). Sending that tag back
+   * would earn a 412 on a file nobody else has touched, and the app would put
+   * a conflict dialog in front of the user over a conflict that never existed.
+   *
+   * So a weak tag is re-fetched rather than sent:
+   * - the resource now reports a different value → someone really did write,
+   *   and the caller is told so without anything being overwritten
+   * - it reports the same value, now strong → use it, which is the ordinary
+   *   case once a second has passed
+   * - it reports the same value, still weak → see [Resolved.Unconditional]
+   */
+  private sealed interface Resolved {
+    data class Strong(val etag: String) : Resolved
+    /**
+     * The server still will not issue a usable tag, but a HEAD taken
+     * milliseconds ago showed the content is exactly what we last wrote.
+     *
+     * The write then goes out unconditionally. That is a deliberate, narrow
+     * concession: it reopens — for those milliseconds — the check-then-write
+     * gap the server exists to close. The alternative is refusing to save at
+     * all whenever the user saves twice inside one second, which trades a
+     * remote risk for a certain annoyance. Only reachable in that window.
+     */
+    data object Unconditional : Resolved
+    data class Conflict(val error: DavError) : Resolved
+  }
+
+  private fun resolveIfMatch(name: String, ifMatch: String?): Resolved {
+    if (ifMatch == null) return Resolved.Unconditional
+    if (!isWeak(ifMatch)) return Resolved.Strong(ifMatch)
+
+    val head = (send(HttpRequest("HEAD", urlFor(name), authHeaders())) as? DavResult.Ok)?.value
+    // Cannot ask: send the weak tag and let the server refuse. Refusing is
+    // the safe direction; writing blind is not.
+    val current = head?.header("etag") ?: return Resolved.Strong(ifMatch)
+    if (head.status !in 200..299) return Resolved.Strong(ifMatch)
+    if (opaque(current) != opaque(ifMatch)) return Resolved.Conflict(DavError.ChangedElsewhere)
+    return if (isWeak(current)) Resolved.Unconditional else Resolved.Strong(current)
+  }
+
   fun write(name: String, bytes: ByteArray, ifMatch: String?): DavResult<String?> {
+    val effective = when (val resolved = resolveIfMatch(name, ifMatch)) {
+      is Resolved.Conflict -> return DavResult.Failed(resolved.error)
+      is Resolved.Strong -> resolved.etag
+      Resolved.Unconditional -> null
+    }
+    return writeWith(name, bytes, effective)
+  }
+
+  private fun writeWith(name: String, bytes: ByteArray, ifMatch: String?): DavResult<String?> {
     val headers = buildMap {
       putAll(authHeaders())
       put("Content-Type", "application/xml")

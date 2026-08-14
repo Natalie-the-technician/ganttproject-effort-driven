@@ -87,6 +87,23 @@ Fehlt er, muss der Client ein zusätzliches `HEAD` hinterherschicken — das
 kostet einen Umlauf und ein Zeitfenster, in dem ein fremdes Schreiben
 unbemerkt dazwischenrutschen kann.
 
+**Am gebauten Apache gemessen (14. August 2026):** `PUT` liefert **keinen**
+ETag, nur `HEAD`/`GET`/`PROPFIND` tun das. Der Client fasst deshalb immer
+nach.
+
+**Und innerhalb einer Sekunde nach dem Schreiben meldet Apache den ETag als
+schwach** (`W/"…"`), danach denselben Wert stark. Das ist kein Fehler: Ein
+`If-Match` wird nach RFC 7232 **stark** verglichen, und ein schwacher ETag
+scheitert daran gegen alles — auch gegen sich selbst. Ein Client, der den
+frisch geholten Wert unverändert zurückschickt, bekommt bei **jedem**
+Speichern `412` und meldet dem Nutzer einen Konflikt, den es nicht gibt.
+
+Der Client löst das beim Senden, nicht beim Speichern: Ist der gemerkte ETag
+schwach, wird per `HEAD` nachgesehen. Anderer Wert → echter Konflikt, es wird
+nichts geschrieben. Gleicher Wert, inzwischen stark → dieser wird benutzt.
+Gleicher Wert, weiter schwach → bedingungslos schreiben, weil das `HEAD` von
+eben belegt hat, dass der Inhalt unserer ist. Siehe `WebDavClient.resolveIfMatch`.
+
 ### S5 — Sperren (SOLL, aber der eigentliche Gewinn)
 
 `LOCK` mit exklusivem Schreib-Sperrbereich nach RFC 4918, `UNLOCK` mit
