@@ -323,6 +323,33 @@ Anmeldung, und solche Endpunkte werden gescannt, sobald sie im Netz stehen.
 Der Ort dafür ist `/root/SERVER-UMBAU-LOG.md` auf dem Server. Hier stehen
 Platzhalter.
 
+## 5b. Wie diese Prüfungen zu schreiben sind
+
+Eine Lehre aus dem Bau, formuliert von der Server-Sitzung und hier
+festgehalten, weil sie für **jede** künftige Prüfliste gilt — auch für die
+A-Liste im Protokolldokument und die Gerätetests der App.
+
+Z1 bis Z10 fragen zwei Sorten Dinge:
+
+* Darf der Berechtigte, was er darf?
+* Wird der Unberechtigte abgewiesen?
+
+**Beide Sorten übersehen dasselbe: was der Berechtigte darf, ohne dass es
+jemand vorgesehen hat.** Falle 7 war genau das — ein Mitglied von `intern`
+durfte `DELETE` auf `/intern` und damit den ganzen Ordner löschen. Der
+Zugriff war erlaubt, das Konto war berechtigt, keine Prüfung war verletzt.
+Auf keiner Liste stand die Frage, weil niemand sie sich gestellt hatte.
+
+Gefunden wurde sie nicht durchs Messen allein, sondern dadurch, dass **nach**
+dem Bauen noch einmal das Gegenteil geprüft wurde, statt zu bestätigen, dass
+das Erlaubte funktioniert.
+
+Für neue Prüfungen deshalb zusätzlich fragen: *Was kann ein völlig regulärer,
+berechtigter Zugriff hier anrichten, das niemand gewollt hat?* Bei WebDAV
+sind die üblichen Verdächtigen `DELETE` auf eine Sammlung statt eine Datei,
+`MOVE`/`COPY` mit einem Ziel außerhalb, `MKCOL` an unerwarteter Stelle und
+`PROPPATCH`.
+
 ## 6. Was ausdrücklich nicht gebaut werden soll
 
 * **Keine Ablage, aus der Passwörter wieder auslesbar sind.** Auch nicht

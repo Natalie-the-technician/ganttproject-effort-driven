@@ -193,7 +193,7 @@
 
     <!-- Sync server -->
     <string name="sync_settings">Sync server</string>
-    <string name="sync_hint">Projects on a WebDAV server are version-checked on save. Without a server the app keeps using files from your device.</string>
+    <string name="sync_hint">Enter a project <b>folder</b>, not the collection root — the root often allows browsing but refuses saving. Projects on a WebDAV server are version-checked on save. Without a server the app keeps using files from your device.</string>
     <string name="sync_url">Server address</string>
     <string name="sync_url_hint">https://dav.example.org/projekte</string>
     <string name="sync_user">User name</string>
