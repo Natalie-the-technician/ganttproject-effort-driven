@@ -12,8 +12,27 @@ Stand: 15. August 2026. **D1 und D3 sind gebaut**, auf Branch `zeiterfassung`:
 | **D3 Teil 1** — `If-Match` beim Schreiben | `0aa1d9c` | `IfMatchResolution.kt` (neu), `IfMatchResolutionTest.kt` (neu), `MiltonResourceImpl.java`, `WebDavResource.java` |
 | **D1 + D3 Teil 2** — Sperre wird genommen, Konfliktdialog | `ca82016` | `DocumentCreator.java`, `HttpDocument.java`, `HttpDocumentOutputStream.java`, `WebDavStorageImpl.java`, `ProjectUIFacadeImpl.kt`, `i18n*.properties` |
 
-**Noch offen:** D2 (reine Beschriftung) und **T1–T5 gegen einen echten Server** —
-ohne die ist nicht belegt, dass die Sperre tatsächlich greift.
+**Noch offen:** D2 (reine Beschriftung) und **T4** (braucht das Telefon).
+T1, T2, T3 und T5 sind gegen den echten Server gelaufen und bestanden.
+
+### D1c — was D1 dabei freigelegt hat
+
+Beim ersten Lauf mit gesetzter Sperre **konnte der PC nicht mehr speichern**.
+Nicht `423`, nicht `412` — es kam nie zu einem `PUT`.
+
+Ursache, aus Miltons Bytecode belegt: Beim `PROPFIND` setzt Milton `lockToken`
+und `lockOwner` gemeinsam; nach einem **eigenen** `lock()` aber nur das Token.
+Der Besitzer bleibt `null`, `getLockOwners()` liefert `"Unknown user"`, das
+passt nie zum eigenen Benutzernamen — und `isWritable()` meldet „nicht
+schreibbar". **Der PC sperrte sich selbst aus.**
+
+Im Original war das **unerreichbar**, weil `acquireLock()` dort keinen Aufrufer
+hatte. D1 hat den Fehler geweckt, nicht verursacht. Behoben: Wer das Token
+selbst hält, ist schreibfähig.
+
+Das ist der Grund, warum die Android-App **keine** Sperre nimmt und das per
+Test festgehalten wird (`WebDavClientTest`, „the client never locks"). Ein
+Client, der nie sperrt, kann diese Fehlerklasse nicht haben.
 
 Beide Commits führen **keine** `HANDOVER-*`, `NOTIZ-*` oder `ENTWURF-*` mit;
 sie sind damit einzeln übernehmbar.

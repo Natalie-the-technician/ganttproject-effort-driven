@@ -474,6 +474,33 @@ class WebDavClientTest {
   }
 
   @Test
+  fun `the client never locks, whatever it is asked to do`() {
+    val (client, backend) = clientWith { request ->
+      when (request.method) {
+        "GET" -> response(200, mapOf("ETag" to "\"a1\""), "<project/>".toByteArray())
+        "PROPFIND" -> response(207, emptyMap(), lockXml("<D:lockdiscovery/>"))
+        else -> response(204, mapOf("ETag" to "\"a2\""))
+      }
+    }
+    client.capabilities(); client.list(); client.read("h.gan")
+    client.lockState("h.gan"); client.write("h.gan", "x".toByteArray(), "\"a1\"")
+    client.createNew("n.gan", "x".toByteArray())
+
+    val methods = backend.requests.map { it.method }.toSet()
+    // Deliberate, and now pinned rather than merely intended. A phone that
+    // loses signal mid-edit would leave a lock nobody releases, and the PC
+    // would sit in front of it until the timeout. If-Match protects us
+    // without that side effect.
+    //
+    // The desktop session found the cost of the other choice the hard way:
+    // after taking its own lock, Milton left the lock owner unset, so its own
+    // writability check said "not writable" and the PC locked itself out. A
+    // client that never locks cannot have that class of bug at all.
+    assertFalse(methods.contains("LOCK"), "the app must never take a lock")
+    assertFalse(methods.contains("UNLOCK"), "the app must never release one either")
+  }
+
+  @Test
   fun `spaces and hashes in a name are escaped`() {
     val (client, _) = clientWith { response(200) }
     assertEquals("https://dav.example.org/projekte/kunde%20xy%232.gan", client.urlFor("kunde xy#2.gan"))
