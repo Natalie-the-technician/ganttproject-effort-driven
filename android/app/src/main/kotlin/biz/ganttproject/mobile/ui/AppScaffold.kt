@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -304,7 +305,18 @@ fun AppScaffold(
             TextButton(onClick = viewModel::dismissError) {
               Text(stringResource(R.string.action_cancel))
             }
-            TextButton(onClick = viewModel::overwriteAnyway) {
+            // Marked as destructive rather than left to look like the others.
+            // The three buttons do not fit on one line, so Material wraps and
+            // this one lands bottom right — where a confirm button normally
+            // sits and where a thumb goes without reading. It is the only
+            // choice here that can destroy someone else's work, and it should
+            // not be the one that looks like the way forward.
+            TextButton(
+              onClick = viewModel::overwriteAnyway,
+              colors = ButtonDefaults.textButtonColors(
+                contentColor = MaterialTheme.colorScheme.error
+              )
+            ) {
               Text(stringResource(R.string.action_overwrite))
             }
           }

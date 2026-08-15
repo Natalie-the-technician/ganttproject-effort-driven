@@ -112,6 +112,21 @@ sealed interface DavError {
    * different places: one to the settings, one to look for a missing file.
    */
   data object BadAddress : DavError
+
+  /**
+   * The server's ETags stay weak, so `If-Match` cannot work here.
+   *
+   * `If-Match` compares strongly (RFC 7232): a weak tag never matches, not
+   * even itself — measured against the real server, `W/"x"` against `"x"`
+   * answers 412. A server that weakens its ETags permanently, which any of
+   * them does while compressing (RFC 9110 requires it), therefore cannot
+   * answer a conditional write at all.
+   *
+   * Its own error because the alternative is worse than a refusal: writing
+   * unconditionally would leave the app with no conflict protection **and**
+   * no sign that it is missing.
+   */
+  data object WeakEtagUnusable : DavError
 }
 
 sealed interface DavResult<out T> {
@@ -131,7 +146,12 @@ sealed interface DavResult<out T> {
  */
 class WebDavClient(
   private val http: HttpExchange,
-  private val config: WebDavConfig
+  private val config: WebDavConfig,
+  /**
+   * How the client waits out a sub-second ETag. Injected so the tests do not
+   * spend real seconds proving that it waits.
+   */
+  private val pause: (Long) -> Unit = { Thread.sleep(it) }
 ) {
 
   /**
@@ -329,21 +349,28 @@ class WebDavClient(
    *   and the caller is told so without anything being overwritten
    * - it reports the same value, now strong → use it, which is the ordinary
    *   case once a second has passed
-   * - it reports the same value, still weak → see [Resolved.Unconditional]
+   * - it reports the same value, still weak → wait out the window and ask
+   *   once more; if it is *still* weak, this server cannot do conditional
+   *   writes at all and the caller is told so
    */
   private sealed interface Resolved {
     data class Strong(val etag: String) : Resolved
+
     /**
-     * The server still will not issue a usable tag, but a HEAD taken
-     * milliseconds ago showed the content is exactly what we last wrote.
+     * No condition at all — reached only when the caller passed no ETag,
+     * which is the user's own "overwrite anyway".
      *
-     * The write then goes out unconditionally. That is a deliberate, narrow
-     * concession: it reopens — for those milliseconds — the check-then-write
-     * gap the server exists to close. The alternative is refusing to save at
-     * all whenever the user saves twice inside one second, which trades a
-     * remote risk for a certain annoyance. Only reachable in that window.
+     * Never chosen by the client on its own. An earlier version did, in the
+     * sub-second window where the tag stayed weak, on the reasoning that a
+     * HEAD taken milliseconds ago had shown the content unchanged. That was
+     * wrong twice over: it reopened the check-then-write gap the server
+     * exists to close, and against a server that weakens its tags permanently
+     * — anything compressing, which RFC 9110 requires — the window is not a
+     * window at all. Every save would have gone out unconditionally, with the
+     * conflict protection absent and nothing to show it.
      */
     data object Unconditional : Resolved
+
     data class Conflict(val error: DavError) : Resolved
   }
 
@@ -357,7 +384,26 @@ class WebDavClient(
     val current = head?.header("etag") ?: return Resolved.Strong(ifMatch)
     if (head.status !in 200..299) return Resolved.Strong(ifMatch)
     if (opaque(current) != opaque(ifMatch)) return Resolved.Conflict(DavError.ChangedElsewhere)
-    return if (isWeak(current)) Resolved.Unconditional else Resolved.Strong(current)
+    if (!isWeak(current)) return Resolved.Strong(current)
+
+    // Still weak, so wait out the sub-second window and ask once more. On
+    // Apache the weakness is only the age of the mtime and a moment settles
+    // it; where it is not, no amount of asking will help, because the cause is
+    // a transformation on the way (gzip, a compressing proxy) and RFC 9110
+    // requires the tag to stay weak for as long as it lasts.
+    pause(WEAK_ETAG_SETTLE_MS)
+    val second = (send(HttpRequest("HEAD", urlFor(name), authHeaders())) as? DavResult.Ok)?.value
+    val settled = second?.header("etag")
+    if (settled == null || second.status !in 200..299) return Resolved.Strong(ifMatch)
+    if (opaque(settled) != opaque(ifMatch)) return Resolved.Conflict(DavError.ChangedElsewhere)
+    if (!isWeak(settled)) return Resolved.Strong(settled)
+
+    // This used to write with no condition at all, which is what S3 forbids:
+    // an unconditional PUT is the user's decision to overwrite, never
+    // something the app does on its own. Worse, against a server that always
+    // weakens its tags it would have been *every* save — the protection
+    // silently absent rather than occasionally bypassed.
+    return Resolved.Conflict(DavError.WeakEtagUnusable)
   }
 
   fun write(name: String, bytes: ByteArray, ifMatch: String?): DavResult<String?> {
@@ -496,6 +542,9 @@ class WebDavClient(
      * nobody.
      */
     const val MAX_URL_LENGTH = 2048
+
+    /** Just over Apache's one-second window, with room for a slow clock. */
+    const val WEAK_ETAG_SETTLE_MS = 1_100L
 
     val HREF = Regex("<[^>]*href[^>]*>([^<]*)</[^>]*href[^>]*>", RegexOption.IGNORE_CASE)
 

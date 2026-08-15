@@ -311,18 +311,26 @@ class WebDavClientTest {
   }
 
   @Test
-  fun `a weak etag that is still weak on re-read writes unconditionally`() {
+  fun `a weak etag that stays weak is refused rather than written unconditionally`() {
+    // This test used to assert the opposite: that the write went out with no
+    // condition, on the reasoning that a HEAD taken milliseconds earlier had
+    // shown the content unchanged, and that refusing would trade a remote
+    // risk for a certain annoyance.
+    //
+    // Two things were wrong with that. It reopened the check-then-write gap
+    // the server exists to close. And it assumed weakness is always a
+    // sub-second window — but a server that compresses must weaken its tags
+    // for as long as it does so (RFC 9110), and there this branch is not an
+    // edge case: it is *every* save, unprotected, with nothing to show it.
     val (client, backend) = clientWith { request ->
       when (request.method) {
         "HEAD" -> response(200, mapOf("ETag" to "W/\"1-abc\""))
         else -> response(204, mapOf("ETag" to "\"1-def\""))
       }
     }
-    client.write("haus.gan", "x".toByteArray(), "W/\"1-abc\"")
-    val put = backend.requests.single { it.method == "PUT" }
-    // The HEAD just confirmed the content is ours. Refusing to save at all
-    // here would turn a remote risk into a certain annoyance.
-    assertFalse(put.headers.containsKey("If-Match"))
+    val result = client.write("haus.gan", "x".toByteArray(), "W/\"1-abc\"") as DavResult.Failed
+    assertEquals(DavError.WeakEtagUnusable, result.error)
+    assertTrue(backend.requests.none { it.method == "PUT" })
   }
 
   @Test
@@ -510,6 +518,68 @@ class WebDavClientTest {
     val result = client.write("haus.gan", "geheim".toByteArray(), "\"a1\"") as DavResult.Failed
     assertEquals(DavError.BadAddress, result.error)
     assertTrue(backend.requests.isEmpty(), "a bad address must not put project bytes on the wire")
+  }
+
+  // --- a server whose etags never go strong -------------------------------
+  //
+  // If-Match compares strongly, so a weak tag never matches — measured
+  // against the real server on 15 August 2026: W/"x" against "x" answers 412.
+  // Apache weakens a tag only while the mtime is under a second old, but any
+  // server that compresses must weaken it for good (RFC 9110). There the
+  // client used to fall back to writing with no condition at all, which meant
+  // every save on such a server went out unprotected, silently.
+
+  private fun weakThen(vararg etags: String): Pair<WebDavClient, FakeExchange> {
+    var head = 0
+    val backend = FakeExchange { request ->
+      when (request.method) {
+        "HEAD" -> response(200, mapOf("ETag" to etags[minOf(head++, etags.size - 1)]))
+        else -> response(204, mapOf("ETag" to "\"after\""))
+      }
+    }
+    return WebDavClient(backend, WebDavConfig("https://dav.example.org/p", "n", "g"), pause = {}) to backend
+  }
+
+  @Test
+  fun `a tag that goes strong on the second look is used`() {
+    val (client, backend) = weakThen("W/\"a1\"", "\"a1\"")
+    val result = client.write("haus.gan", "x".toByteArray(), "W/\"a1\"")
+    assertTrue(result is DavResult.Ok)
+    val put = backend.requests.single { it.method == "PUT" }
+    assertEquals("\"a1\"", put.headers["If-Match"], "the settled strong value must be sent")
+  }
+
+  @Test
+  fun `a tag that stays weak is refused, not written blind`() {
+    val (client, backend) = weakThen("W/\"a1\"", "W/\"a1\"")
+    val result = client.write("haus.gan", "x".toByteArray(), "W/\"a1\"") as DavResult.Failed
+    assertEquals(DavError.WeakEtagUnusable, result.error)
+    assertTrue(backend.requests.none { it.method == "PUT" }, "nothing may be written")
+  }
+
+  @Test
+  fun `the client never writes unconditionally on its own`() {
+    // The guarantee behind S3, pinned: an unconditional PUT is the user's
+    // decision to overwrite and nothing else. Whatever the server answers
+    // about its etags, an unforced save either carries an If-Match or does
+    // not happen.
+    listOf("W/\"a1\"", "\"a1\"").forEach { settled ->
+      val (client, backend) = weakThen("W/\"a1\"", settled)
+      client.write("haus.gan", "x".toByteArray(), "W/\"a1\"")
+      backend.requests.filter { it.method == "PUT" }.forEach {
+        assertTrue(it.headers.containsKey("If-Match"), "unconditional PUT for settled=$settled")
+      }
+    }
+  }
+
+  @Test
+  fun `overwrite anyway still goes out unconditionally`() {
+    // The other half of the same rule: when the user does decide, nothing
+    // stands in the way.
+    val (client, backend) = weakThen("\"a1\"")
+    client.write("haus.gan", "x".toByteArray(), null)
+    val put = backend.requests.single { it.method == "PUT" }
+    assertFalse(put.headers.containsKey("If-Match"))
   }
 
   // --- lock and conflict together ---------------------------------------------

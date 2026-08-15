@@ -148,7 +148,7 @@
     <string name="collapse_group">Gruppe zuklappen</string>
     <string name="expand_group">Gruppe aufklappen</string>
     <string name="read_only">Nur lesbar — über „Projekt öffnen“ erneut öffnen, um speichern zu können</string>
-    <string name="error_changed_elsewhere">Diese Datei hat sich geändert, seit du sie geöffnet hast — der Desktop hat gespeichert, oder dein Cloud-Ordner hat eine neuere Fassung geholt. Jetzt zu speichern würde diese Arbeit löschen.</string>
+    <string name="error_changed_elsewhere">Diese Datei hat sich geändert, seit du sie geöffnet hast — jemand anders hat inzwischen gespeichert. Deine eigene Arbeit ist sicher und bleibt auf dem Telefon. Wenn du jetzt überschreibst, geht die fremde Änderung verloren.</string>
     <string name="action_overwrite">Trotzdem überschreiben</string>
     <string name="action_save_copy">Kopie speichern</string>
     <string name="conflict_title">Die Datei wurde anderswo geändert</string>
@@ -212,6 +212,7 @@
     <string name="error_no_folder_access">Du bist angemeldet, aber dieser Ordner ist für dein Konto nicht freigegeben. Öffne ein Projekt aus einem Ordner, auf den du Zugriff hast — oder lass ihn dir freischalten.</string>
     <string name="error_gone_from_server">Dieses Projekt liegt nicht mehr auf dem Server. Vielleicht wurde es umbenannt oder gelöscht.</string>
     <string name="error_bad_server_address">Die Serveradresse in den Einstellungen ist keine gültige Adresse. Prüfe, ob dort nur die Adresse steht, zum Beispiel https://beispiel.de/projekte/.</string>
+    <string name="error_no_conditional_writes">Dieser Server kann beim Speichern die Fassung nicht prüfen — er kann dein Speichern also nicht davon unterscheiden, dass du die Arbeit eines anderen überschreibst. Es wurde nichts gespeichert. Meist liegt es daran, dass am Server oder an einem Proxy davor die Komprimierung eingeschaltet ist.</string>
 
     <string name="locked_title">Gerade am PC in Bearbeitung</string>
     <string name="notice_opened_while_locked">Dieses Projekt ist gerade am PC geöffnet. Lesen und Bearbeiten geht hier trotzdem — nur Speichern wird abgelehnt, bis es dort geschlossen ist, spätestens nach zwei Stunden.</string>

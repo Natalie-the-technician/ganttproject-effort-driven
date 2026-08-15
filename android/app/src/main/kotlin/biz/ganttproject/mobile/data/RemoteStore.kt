@@ -141,6 +141,7 @@ class RemoteStore(private val client: WebDavClient) {
     DavError.Forbidden -> FileError.NoAccessToFolder
     DavError.Insecure -> FileError.SyncFailed("https")
     DavError.BadAddress -> FileError.BadServerAddress
+    DavError.WeakEtagUnusable -> FileError.NoConditionalWrites
     is DavError.Server -> FileError.SyncFailed(error.code.toString())
     is DavError.Network -> FileError.SyncFailed(error.detail)
   }

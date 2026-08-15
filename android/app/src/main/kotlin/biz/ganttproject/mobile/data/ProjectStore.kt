@@ -68,6 +68,15 @@ sealed interface FileError {
    */
   data object BadServerAddress : FileError
 
+  /**
+   * This server cannot answer a conditional write, so it cannot tell a save
+   * apart from an overwrite.
+   *
+   * Reported rather than worked around. The alternative — writing anyway —
+   * would leave the user with no protection and no way to know it.
+   */
+  data object NoConditionalWrites : FileError
+
   /** The project is no longer on the server — deleted or renamed. */
   data object GoneFromServer : FileError
 
