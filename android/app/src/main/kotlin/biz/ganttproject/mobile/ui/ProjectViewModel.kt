@@ -224,18 +224,30 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  /**
+   * Writes the project through whichever store owns it.
+   *
+   * Every save path must come through here. Reaching for [store] directly
+   * happens to work for a local file and quietly misroutes a server project:
+   * its URI is an `https` address, which the `ContentResolver` cannot open for
+   * writing, so the save fails — and fails citing the file rather than the
+   * one thing that actually went wrong, which is that the app asked the wrong
+   * store.
+   */
+  private suspend fun saveThrough(project: OpenProject, force: Boolean): FileResult<Unit> =
+    if (project.isRemote) {
+      remoteStore()?.save(project, force)
+        ?: FileResult.Err(FileError.SyncFailed("not configured"))
+    } else {
+      store.save(project, force)
+    }
+
   fun save(force: Boolean = false) {
     val project = open ?: return
     if (project.isReadOnly) return
     viewModelScope.launch {
       _state.update { it.copy(busy = true, fileError = null) }
-      val result = if (project.isRemote) {
-        remoteStore()?.save(project, force)
-          ?: FileResult.Err(FileError.SyncFailed("not configured"))
-      } else {
-        store.save(project, force)
-      }
-      when (result) {
+      when (val result = saveThrough(project, force)) {
         is FileResult.Ok -> {
           _state.update { it.copy(busy = false, project = snapshot(project), notice = Notice.Saved) }
           // The widget reads local files, so only those go stale on save.
@@ -269,10 +281,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
       // Auto-save never forces: if the file changed elsewhere, the user is
       // asked rather than having the other version overwritten behind their
       // back — which is the whole point of the check.
-      when (val result = store.save(project)) {
+      when (val result = saveThrough(project, force = false)) {
         is FileResult.Ok -> {
           _state.update { it.copy(project = snapshot(project), notice = Notice.Saved) }
-          refreshWidget()
+          // Only local files are behind the widget; a server project is
+          // refused for it, so there is nothing to refresh.
+          if (!project.isRemote) refreshWidget()
         }
         is FileResult.Err ->
           // A failure must be visible: the user is about to walk away
