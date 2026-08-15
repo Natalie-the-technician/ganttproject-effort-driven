@@ -71,6 +71,16 @@ class AndroidHttpBackend(
       readTimeout = readTimeoutMs
       instanceFollowRedirects = false
       runCatching { requestMethod = request.method }.onFailure { forceMethod(this, request.method) }
+      // Checked, not assumed. The setter throws for PROPFIND and the
+      // reflection that follows can fail without saying so, and the failure
+      // mode is a silent downgrade to GET — a request that succeeds, returns
+      // something plausible, and answers a different question than the one
+      // asked. Better to fail here, loudly, than to act on that.
+      if (!requestMethod.equals(request.method, ignoreCase = true)) {
+        throw java.net.ProtocolException(
+          "${request.method} konnte nicht gesendet werden (wurde ${requestMethod})"
+        )
+      }
       request.headers.forEach { (name, value) -> setRequestProperty(name, value) }
       if (payload != null) {
         doOutput = true
@@ -95,16 +105,55 @@ class AndroidHttpBackend(
   /**
    * Sets the request method past `HttpURLConnection`'s allow-list.
    *
-   * Reflection on a JDK internal, which is exactly as fragile as it looks —
-   * hence the failure being swallowed rather than thrown. If it stops working
-   * the affected call fails with the platform's own error instead of taking
-   * the app down, and reading and writing keep working either way.
+   * Reflection on a platform internal, which is exactly as fragile as it
+   * looks. The caller verifies the result rather than trusting this to have
+   * worked.
+   *
+   * Two things have to be right, and the first version got both wrong in a way
+   * that could not be seen from the outside:
+   *
+   * Over `https` — the only scheme this app allows — Android does not hand
+   * back the object that performs the request. It hands back a wrapper holding
+   * the real connection in a `delegate` field and forwarding to it. Writing
+   * the method onto the wrapper changes a field nobody reads; the delegate
+   * keeps its own, still `GET`, and that is what goes on the wire. So the
+   * delegate chain is walked to the end first.
+   *
+   * And the field is declared on `java.net.HttpURLConnection`, not on the
+   * concrete class, so `getDeclaredField` has to climb the hierarchy rather
+   * than ask the runtime class once.
    */
   private fun forceMethod(connection: HttpURLConnection, method: String) {
-    runCatching {
-      val field = HttpURLConnection::class.java.getDeclaredField("method")
-      field.isAccessible = true
-      field.set(connection, method)
+    // Every object in the chain, not just the last: which one performs the
+    // request and which one answers getRequestMethod() are both platform
+    // details, and they need not be the same object. Setting all of them costs
+    // nothing and removes the guess.
+    var target: Any? = connection
+    var hops = 0
+    while (target != null && hops++ < 8) {
+      setMethodField(target, method)
+      val next = runCatching {
+        target!!.javaClass.getDeclaredField("delegate")
+          .apply { isAccessible = true }
+          .get(target)
+      }.getOrNull()
+      target = if (next === target) null else next
+    }
+  }
+
+  /** Writes the `method` field declared anywhere in [target]'s hierarchy. */
+  private fun setMethodField(target: Any, method: String) {
+    var type: Class<*>? = target.javaClass
+    while (type != null) {
+      val field = runCatching { type.getDeclaredField("method") }.getOrNull()
+      if (field != null && field.type == String::class.java) {
+        runCatching {
+          field.isAccessible = true
+          field.set(target, method)
+        }
+        return
+      }
+      type = type.superclass
     }
   }
 
