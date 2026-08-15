@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
@@ -592,12 +593,33 @@ private fun SyncServerSection(dav: DavSettingsState, viewModel: ProjectViewModel
   Text(stringResource(R.string.sync_settings), style = MaterialTheme.typography.labelMedium)
   Text(stringResource(R.string.sync_hint), style = MaterialTheme.typography.bodySmall)
 
+  // Not single-line, and with a way to empty it in one tap.
+  //
+  // On 15 August 2026 a paragraph of prose ended up appended to a correct
+  // address. The field showed "https://gantt.example.de/intern" — which is
+  // exactly what a correct address looks like, because a single-line field
+  // shows the beginning and the wrong part was all at the end. The address
+  // was checked by eye twice, judged correct twice, and was wrong both times.
+  //
+  // A field whose contents cannot be seen in full cannot be checked, and an
+  // address is precisely the kind of value people check by looking at it.
   OutlinedTextField(
     value = dav.baseUrl,
     onValueChange = viewModel::setDavBaseUrl,
     label = { Text(stringResource(R.string.sync_url)) },
     placeholder = { Text(stringResource(R.string.sync_url_hint)) },
-    singleLine = true,
+    singleLine = false,
+    maxLines = 4,
+    trailingIcon = {
+      if (dav.baseUrl.isNotEmpty()) {
+        IconButton(onClick = { viewModel.setDavBaseUrl("") }) {
+          Icon(
+            Icons.Filled.Clear,
+            contentDescription = stringResource(R.string.sync_url_clear)
+          )
+        }
+      }
+    },
     modifier = Modifier.fillMaxWidth()
   )
   OutlinedTextField(

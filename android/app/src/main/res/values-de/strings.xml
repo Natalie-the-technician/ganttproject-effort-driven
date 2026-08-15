@@ -188,6 +188,7 @@
     <string name="sync_hint">Trag einen Projekt<b>ordner</b> ein, nicht die Wurzel der Sammlung — die Wurzel erlaubt oft das Blättern, verweigert aber das Speichern. Projekte auf einem WebDAV-Server werden beim Speichern auf ihre Version geprüft. Ohne Server arbeitet die App weiter mit Dateien vom Gerät.</string>
     <string name="sync_url">Serveradresse</string>
     <string name="sync_url_hint">https://dav.example.org/projekte</string>
+    <string name="sync_url_clear">Adresse leeren</string>
     <string name="sync_user">Benutzername</string>
     <string name="sync_password">Passwort</string>
     <string name="sync_check">Verbindung prüfen</string>
