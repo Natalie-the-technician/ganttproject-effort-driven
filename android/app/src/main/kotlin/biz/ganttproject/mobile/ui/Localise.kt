@@ -40,6 +40,7 @@ fun FileError.text(): String = when (this) {
   is FileError.SyncFailed -> stringResource(R.string.error_sync_failed, detail)
   FileError.NoAccessToFolder -> stringResource(R.string.error_no_folder_access)
   FileError.GoneFromServer -> stringResource(R.string.error_gone_from_server)
+  FileError.BadServerAddress -> stringResource(R.string.error_bad_server_address)
 }
 
 @Composable

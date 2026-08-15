@@ -432,6 +432,86 @@ class WebDavClientTest {
     assertEquals(DavError.Server(500), result.error)
   }
 
+  // --- an address that is not an address -----------------------------------
+  //
+  // A settings field takes whatever is pasted into it. On 15 August 2026 a
+  // paragraph of prose was pasted into the server address, the client
+  // percent-encoded it into a valid-looking path, and the server answered 404
+  // — which the app reported as "this project is no longer on the server".
+  // Every step was correct and the result sent the reader hunting for a file
+  // that had never gone missing.
+
+  @Test
+  fun `an address with spaces in it never reaches the network`() {
+    val prose = "https://dav.example.org/intern/alle drei Fixes von heute. Warum es"
+    val (client, backend) = clientWith(baseUrl = prose) { response(200) }
+    val result = client.list() as DavResult.Failed
+    assertEquals(DavError.BadAddress, result.error)
+    assertTrue(backend.requests.isEmpty(), "nothing may be sent for a bad address")
+  }
+
+  @Test
+  fun `a line break in the address is refused too`() {
+    val (client, backend) = clientWith(baseUrl = "https://dav.example.org/a\nb/") { response(200) }
+    val result = client.list() as DavResult.Failed
+    assertEquals(DavError.BadAddress, result.error)
+    assertTrue(backend.requests.isEmpty())
+  }
+
+  @Test
+  fun `a trailing space in the address is trimmed, not sent`() {
+    // What actually happened on the phone: the field held a trailing space
+    // from a paste, the stored copy was trimmed on the way into preferences,
+    // and the value in use was not. The server saw /intern/%20 and said 404,
+    // so the app told her the project was gone.
+    val (client, backend) = clientWith(baseUrl = "https://dav.example.org/intern/ ") {
+      response(207, emptyMap(), "<D:multistatus xmlns:D=\"DAV:\"/>".toByteArray())
+    }
+    client.list()
+    assertEquals("https://dav.example.org/intern/", backend.requests.single().url)
+  }
+
+  @Test
+  fun `a trailing space does not stop a project from being addressed`() {
+    val (client, backend) = clientWith(baseUrl = " https://dav.example.org/intern/ ") {
+      response(200, mapOf("ETag" to "\"a1\""))
+    }
+    client.read("t4-probe.gan")
+    assertEquals("https://dav.example.org/intern/t4-probe.gan", backend.requests.single().url)
+  }
+
+  @Test
+  fun `a bad address is not reported as a missing project`() {
+    // The distinction the whole check exists for: one sends the reader to the
+    // settings, the other to look for a deleted file.
+    val (bad, _) = clientWith(baseUrl = "https://dav.example.org/x y/") { response(404) }
+    val (missing, _) = clientWith(baseUrl = "https://dav.example.org/x/") { response(404) }
+    assertEquals(DavError.BadAddress, (bad.list() as DavResult.Failed).error)
+    assertEquals(DavError.NotFound, (missing.list() as DavResult.Failed).error)
+  }
+
+  @Test
+  fun `the check does not refuse an ordinary address`() {
+    // A guard that is too eager costs more than the bug it prevents.
+    val xml = """
+      <D:multistatus xmlns:D="DAV:">
+        <D:response><D:href>/intern/t4-probe.gan</D:href></D:response>
+      </D:multistatus>
+    """.trimIndent().toByteArray()
+    val (client, _) = clientWith(baseUrl = "https://dav.example.org/intern/") {
+      response(207, emptyMap(), xml)
+    }
+    assertEquals(listOf("t4-probe.gan"), (client.list() as DavResult.Ok).value)
+  }
+
+  @Test
+  fun `a bad address also stops a save before the bytes leave`() {
+    val (client, backend) = clientWith(baseUrl = "https://dav.example.org/x y/") { response(204) }
+    val result = client.write("haus.gan", "geheim".toByteArray(), "\"a1\"") as DavResult.Failed
+    assertEquals(DavError.BadAddress, result.error)
+    assertTrue(backend.requests.isEmpty(), "a bad address must not put project bytes on the wire")
+  }
+
   // --- lock and conflict together ---------------------------------------------
   //
   // Since the desktop takes a lock on open, a save can now fail for two

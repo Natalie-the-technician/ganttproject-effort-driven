@@ -59,6 +59,15 @@ sealed interface FileError {
    */
   data object NoAccessToFolder : FileError
 
+  /**
+   * The server address in the settings is not an address at all.
+   *
+   * Separate from [GoneFromServer] on purpose: a 404 caused by a nonsense
+   * address is true and misleading at once, and sends the reader looking for
+   * a file that was never missing.
+   */
+  data object BadServerAddress : FileError
+
   /** The project is no longer on the server — deleted or renamed. */
   data object GoneFromServer : FileError
 

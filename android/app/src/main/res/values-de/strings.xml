@@ -209,6 +209,7 @@
 
     <string name="error_no_folder_access">Du bist angemeldet, aber dieser Ordner ist für dein Konto nicht freigegeben. Öffne ein Projekt aus einem Ordner, auf den du Zugriff hast — oder lass ihn dir freischalten.</string>
     <string name="error_gone_from_server">Dieses Projekt liegt nicht mehr auf dem Server. Vielleicht wurde es umbenannt oder gelöscht.</string>
+    <string name="error_bad_server_address">Die Serveradresse in den Einstellungen ist keine gültige Adresse. Prüfe, ob dort nur die Adresse steht, zum Beispiel https://beispiel.de/projekte/.</string>
 
     <string name="locked_title">Gerade am PC in Bearbeitung</string>
     <string name="notice_opened_while_locked">Dieses Projekt ist gerade am PC geöffnet. Lesen und Bearbeiten geht hier trotzdem — nur Speichern wird abgelehnt, bis es dort geschlossen ist, spätestens nach zwei Stunden.</string>

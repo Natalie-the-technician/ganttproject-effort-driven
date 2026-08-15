@@ -217,6 +217,7 @@
 
     <string name="error_no_folder_access">You are signed in, but this folder is not shared with your account. Open a project from a folder you have access to, or ask for it to be shared.</string>
     <string name="error_gone_from_server">This project is no longer on the server. It may have been renamed or deleted.</string>
+    <string name="error_bad_server_address">The server address in the settings is not a valid address. Check that it holds only the address, for example https://example.com/projects/.</string>
 
     <string name="locked_title">Open on the PC right now</string>
     <string name="notice_opened_while_locked">This project is open on the PC right now. You can read and edit it here — saving will be refused until it is closed there, at the latest after two hours.</string>

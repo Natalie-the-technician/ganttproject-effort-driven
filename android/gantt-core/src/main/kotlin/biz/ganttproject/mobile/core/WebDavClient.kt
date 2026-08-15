@@ -105,6 +105,13 @@ sealed interface DavError {
 
   /** The address is not https://. Refused before anything leaves the device. */
   data object Insecure : DavError
+
+  /**
+   * The address is not an address — whitespace, control characters, or absurd
+   * length. Kept apart from [NotFound] because the two send the reader to
+   * different places: one to the settings, one to look for a missing file.
+   */
+  data object BadAddress : DavError
 }
 
 sealed interface DavResult<out T> {
@@ -128,15 +135,45 @@ class WebDavClient(
 ) {
 
   /**
-   * Rejects anything that is not https (S7).
+   * The configured address with surrounding whitespace removed.
    *
-   * Checked before every request rather than once at configuration time: a
-   * URL can also arrive from a restored preference or a future settings
-   * import, and Basic auth puts the credentials in *every* request, so there
-   * is no such thing as one harmless plaintext call.
+   * A field on a phone collects a trailing space from a paste or an
+   * autocorrect, and nobody can see it. Untrimmed it became part of the
+   * request path — the server was asked for `/intern/%20`, answered 404, and
+   * the app said the project was gone. The stored copy was trimmed on its way
+   * into preferences, so it looked right everywhere a person could look, while
+   * the value actually used still carried the space.
+   *
+   * Trimmed here rather than at the field, so it holds for every caller
+   * instead of for the ones that remembered.
    */
-  private fun requireHttps(url: String): DavError? =
-    if (url.startsWith("https://", ignoreCase = true)) null else DavError.Insecure
+  private val collection: String get() = config.baseUrl.trim()
+
+  /**
+   * Rejects an address that must not be used, before anything leaves the
+   * device.
+   *
+   * Not https (S7) is checked on every request rather than once at
+   * configuration time: a URL can also arrive from a restored preference or a
+   * future settings import, and Basic auth puts the credentials in *every*
+   * request, so there is no such thing as one harmless plaintext call.
+   *
+   * The whitespace check is not pedantry. A settings field accepts whatever is
+   * pasted into it, and what gets pasted is not always an address: a paragraph
+   * of prose lands there, is percent-encoded into a valid-looking path, and
+   * the server answers 404 — which the app then reports as "this project is no
+   * longer on the server". Every step correct, and the reader is sent hunting
+   * for a file that was never missing. Refusing here makes the address itself
+   * the subject of the complaint.
+   *
+   * Interior whitespace only: the edges are already gone, see [collection].
+   */
+  private fun requireHttps(url: String): DavError? = when {
+    !url.startsWith("https://", ignoreCase = true) -> DavError.Insecure
+    url.any { it.isWhitespace() || it.isISOControl() } -> DavError.BadAddress
+    url.length > MAX_URL_LENGTH -> DavError.BadAddress
+    else -> null
+  }
 
   private fun authHeaders(): Map<String, String> {
     val credentials = Base64.getEncoder()
@@ -155,7 +192,7 @@ class WebDavClient(
    * the recent list, not only for sending requests.
    */
   fun urlFor(name: String): String {
-    val base = config.baseUrl.trimEnd('/')
+    val base = collection.trimEnd('/')
     val escaped = name.flatMap { ch ->
       when (ch) {
         ' ' -> "%20".toList()
@@ -198,7 +235,7 @@ class WebDavClient(
    * better than a file in a synced folder.
    */
   fun capabilities(): DavResult<DavCapabilities> {
-    val result = send(HttpRequest("OPTIONS", config.baseUrl.trimEnd('/') + "/", authHeaders()))
+    val result = send(HttpRequest("OPTIONS", collection.trimEnd('/') + "/", authHeaders()))
     val response = when (result) {
       is DavResult.Failed -> return result
       is DavResult.Ok -> result.value
@@ -354,7 +391,7 @@ class WebDavClient(
       put("Depth", "1")
       put("Content-Type", "application/xml")
     }
-    val result = send(HttpRequest("PROPFIND", config.baseUrl.trimEnd('/') + "/", headers))
+    val result = send(HttpRequest("PROPFIND", collection.trimEnd('/') + "/", headers))
     val response = when (result) {
       is DavResult.Failed -> return result
       is DavResult.Ok -> result.value
@@ -418,6 +455,14 @@ class WebDavClient(
   }
 
   private companion object {
+    /**
+     * Well past any real project URL and well short of a pasted paragraph.
+     * A limit is needed at all because the check below reports the address,
+     * and an error message quoting several hundred characters of prose helps
+     * nobody.
+     */
+    const val MAX_URL_LENGTH = 2048
+
     val HREF = Regex("<[^>]*href[^>]*>([^<]*)</[^>]*href[^>]*>", RegexOption.IGNORE_CASE)
 
     /**
