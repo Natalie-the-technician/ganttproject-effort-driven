@@ -12,6 +12,8 @@ import net.sourceforge.ganttproject.gui.EditableList;
 import net.sourceforge.ganttproject.gui.options.OptionPageProviderBase;
 import net.sourceforge.ganttproject.gui.options.OptionsPageBuilder;
 import net.sourceforge.ganttproject.language.GanttLanguage;
+// [Fork-Aenderung] Hinweistext zur Sperrdauer.
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
 
 import javax.swing.*;
 import java.awt.*;
@@ -148,7 +150,20 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     GPOptionGroup lockingGroup = new GPOptionGroup("webdav.lock", webdavStorage.getWebDavLockTimeoutOption(), webdavStorage.getWebDavReleaseLockOption());
     lockingGroup.setI18Nkey(builder.getI18N().getCanonicalOptionLabelKey(webdavStorage.getWebDavLockTimeoutOption()), "webdav.lockTimeout.label");
     lockingGroup.setI18Nkey(builder.getI18N().getCanonicalOptionLabelKey(webdavStorage.getWebDavReleaseLockOption()), "option.webdav.lock.releaseOnProjectClose.label");
-    serversPanel.add(builder.buildPlanePage(new GPOptionGroup[] {lockingGroup}), BorderLayout.SOUTH);
+    // [Fork-Aenderung] D2: benennen, was eine negative Sperrdauer abschaltet.
+    //
+    // "Timeout (Minuten)" sagt nicht, dass ein Wert unter 0 "nie sperren" bedeutet -- und
+    // HttpDocument.acquireLock() meldet dabei Erfolg, ohne etwas zu tun. Wer den Wert einmal
+    // negativ gesetzt hat, arbeitet seither ohne Sperre, und nichts auf dieser Seite sagt es ihm.
+    //
+    // Der Hinweis nennt auch, was dann NOCH schuetzt. Ohne diesen Halbsatz liest sich die Zeile
+    // wie "du bist ungeschuetzt", und das waere seit D3 schlicht falsch.
+    JPanel lockingPanel = new JPanel(new BorderLayout());
+    lockingPanel.add(builder.buildPlanePage(new GPOptionGroup[] {lockingGroup}), BorderLayout.CENTER);
+    JLabel lockingHint = new JLabel(ForkI18nKt.forkText("fork.webdav.lockTimeout.hint"));
+    lockingHint.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+    lockingPanel.add(lockingHint, BorderLayout.SOUTH);
+    serversPanel.add(lockingPanel, BorderLayout.SOUTH);
 
     builder = new OptionsPageBuilder(null, OptionsPageBuilder.ONE_COLUMN_LAYOUT);
     JPanel result = new JPanel(new BorderLayout());

@@ -444,6 +444,20 @@ public class MiltonResourceImpl implements WebDavResource {
     if (!myImpl.getSupportedLock().exclusive) {
       return CanLockStatus.LOCK_UNSUPPORTED;
     }
+    // [Fork-Aenderung] Eine Sperre, die WIR halten, macht die Datei nicht unschreibbar.
+    //
+    // FEHLER, DEN D1 FREIGELEGT HAT: Milton setzt beim PROPFIND lockToken UND lockOwner gemeinsam,
+    // nach einem eigenen lock() aber NUR das Token -- der Besitzer bleibt null. getLockOwners()
+    // liefert dann den Platzhalter "Unknown user", der nie zum eigenen Benutzernamen passt, und
+    // doCanLock meldet LOCK_UNAVAILABLE. isWritable() ist damit false, und der Desktop verweigert
+    // das Speichern der Datei, die er selbst gerade gesperrt hat.
+    //
+    // Im Original konnte das nicht auffallen: acquireLock() hatte dort keinen Aufrufer, also hielt
+    // der Desktop nie eine Sperre. Am Server gesehen, sobald die Sperrdauer wirklich griff --
+    // "Dokument kann nicht geschrieben werden", ohne dass es je bis zum PUT kam.
+    if (myImpl.getLockToken() != null) {
+      return CanLockStatus.LOCK_AVAILABLE;
+    }
     List<String> lockOwners = getLockOwners();
     if (lockOwners.isEmpty() || lockOwners.equals(ImmutableList.of(getUsername()))) {
       return CanLockStatus.LOCK_AVAILABLE;

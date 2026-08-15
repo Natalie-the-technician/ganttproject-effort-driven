@@ -2168,6 +2168,46 @@ Pruefung: `ls` auf den Zielordner, es darf **genau eines** liegen.
 richtigen Jar 0 Treffer. Eine Gegenprobe, die bei "vorhanden" und "fehlt" dasselbe sagt, ist keine.
 Ersetzt durch eine Suche in den Rohbytes der Klassendatei, mit altem Stand als Vergleich.
 
+### D1 hatte einen zweiten, schwereren Fehler: der Desktop sperrte sich selbst aus
+
+Sichtbar erst, als zum ersten Mal MIT gehaltener Sperre gespeichert wurde (T3 und T5 liefen beide
+mit Sperrdauer -1). Der Dialog: "Dokument kann nicht geschrieben werden". Im Protokoll **keine**
+Zeile `WebDAV: schreibe` -- es kam nie bis zum PUT.
+
+Ursache, aus Miltons Bytecode belegt: beim PROPFIND werden `lockToken` UND `lockOwner` gemeinsam
+gesetzt, nach einem eigenen `lock()` aber **nur das Token**. `getLockOwners()` liefert dann den
+Platzhalter `"Unknown user"`, der nie zum eigenen Benutzernamen passt, `doCanLock()` meldet
+`LOCK_UNAVAILABLE`, `isWritable()` ist `false`.
+
+Im Original unerreichbar, weil `acquireLock()` dort keinen Aufrufer hatte. **D1 hat einen latenten
+Fehler des Originals zu einem echten gemacht:** mit der Voreinstellung 120 Minuten war Speichern
+ueber WebDAV kaputt. Behebung in `doCanLock()`: wer das Token selbst haelt, ist schreibfaehig.
+
+Belegt mit `tools/lockprobe` gegen den echten Server, samt Gegenprobe (Behebung per `git stash`
+entfernt): mit Behebung `true`, ohne `false`.
+
+**Das Muster wiederholt sich.** Eine Funktion, die nie aufgerufen wurde, hat unter sich Code
+angesammelt, der ihre Nachbedingungen nicht kennt. Wer so etwas anschaltet, schaltet nicht eine
+Funktion an, sondern einen ganzen ungetesteten Pfad.
+
+### Gemessen: dieser Apache prueft If-Match VOR der Sperre
+
+Die Android-Sitzung wollte vor dem Umstellen von `DESKTOP_HONOURS_LOCKS` wissen, welchen Fehler ihr
+Client kuenftig sieht. Hergeleitet hatte ich `423`. **Falsch.** Gemessen, mit Kontrolle:
+
+| Lage | Antwort |
+|---|---|
+| gesperrt, kein `If-Match` | `423` |
+| gesperrt, `If-Match` aktuell | `423` |
+| gesperrt, `If-Match` veraltet | **`412`** |
+
+Die Sperre kommt also nur zum Zug, wenn die Vorbedingung passt. Fuer die App heisst das: bei
+veraltetem ETag sieht sie weiterhin `412` und meldet einen Konflikt -- in dieser Zeile aendert sich
+nichts. `423` erscheint nur, wenn das Telefon aktuell ist und der PC die Datei offen hat.
+
+Gemessen ohne Oberflaeche: die Sperre laesst sich per `curl -X LOCK` selbst setzen, die Frage ist
+eine Eigenschaft des Servers und nicht von GanttProject.
+
 ### Offen aus dieser Sitzung
 
 - **Startmeldung "Failed to parse document".** Beim Start oeffnet GanttProject das zuletzt
@@ -2180,7 +2220,17 @@ Ersetzt durch eine Suche in den Rohbytes der Klassendatei, mit altem Stand als V
   WebDAV-Adresse als oertlichen Pfad ein, mit roter Fehlermeldung. Der Weg funktioniert (links den
   Server waehlen), die Vorauswahl ist falsch. Eine Ecke des Originals, die erst sichtbar wurde,
   seit der Dialog fuer WebDAV ueberhaupt erscheint.
-- **D2** (Beschriftung "ohne Sperre oeffnen") noch nicht angefasst.
+- **Die Einstellungsseiten zeigen fast nichts.** Die WebDAV-Seite bringt nur "Hinzufuegen", keine
+  Serverliste und keine Sperrdauer; die FTP-Seite ein Feld statt vier. Keine Ausnahme im Protokoll.
+  Nicht von D2 verursacht -- die FTP-Seite ist unangetastet und gleich kaputt. **Korrektur an einer
+  frueheren Aussage von mir:** ich hatte gesagt, die Einstellungsseite sei erreichbar, weil
+  `plugin.xml:55` sie registriert. Registriert ist sie, benutzbar nicht. Die Sperrdauer laesst sich
+  ueber die Oberflaeche gar nicht einstellen, nur in `~/.ganttproject`.
+- **D2 ist halb erledigt.** Protokollzeile bei negativer Sperrdauer steht und ist im Jar belegt.
+  Der Hinweistext unter den Sperr-Einstellungen ist gebaut und im Buendel, aber **nicht als
+  sichtbar bestaetigt** -- auf dieser Seite ist nichts sichtbar. Nicht abhaken.
+- **T4** braucht das Telefon. Die Protokollhaelfte ist gemessen (siehe oben), die App-Haelfte nicht.
+  Die Android-Sitzung laesst `DESKTOP_HONOURS_LOCKS` bis dahin auf `false`.
 
 ---
 
