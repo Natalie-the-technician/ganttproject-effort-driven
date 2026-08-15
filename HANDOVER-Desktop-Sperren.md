@@ -5,8 +5,18 @@
 (Android-App). Dieses Dokument steht für sich — man muss die anderen beiden
 nicht gelesen haben.
 
-Stand: 14. August 2026. **Nichts davon ist gebaut.** D1 ist eine Einstellung,
-D2 eine Beschriftung, D3 die eigentliche Arbeit.
+Stand: 15. August 2026. **D1 und D3 sind gebaut**, auf Branch `zeiterfassung`:
+
+| | Commit | Dateien |
+|---|---|---|
+| **D3 Teil 1** — `If-Match` beim Schreiben | `0aa1d9c` | `IfMatchResolution.kt` (neu), `IfMatchResolutionTest.kt` (neu), `MiltonResourceImpl.java`, `WebDavResource.java` |
+| **D1 + D3 Teil 2** — Sperre wird genommen, Konfliktdialog | `ca82016` | `DocumentCreator.java`, `HttpDocument.java`, `HttpDocumentOutputStream.java`, `WebDavStorageImpl.java`, `ProjectUIFacadeImpl.kt`, `i18n*.properties` |
+
+**Noch offen:** D2 (reine Beschriftung) und **T1–T5 gegen einen echten Server** —
+ohne die ist nicht belegt, dass die Sperre tatsächlich greift.
+
+Beide Commits führen **keine** `HANDOVER-*`, `NOTIZ-*` oder `ENTWURF-*` mit;
+sie sind damit einzeln übernehmbar.
 
 ---
 

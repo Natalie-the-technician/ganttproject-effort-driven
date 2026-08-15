@@ -3,9 +3,19 @@
 **Für die Server-Sitzung**, mit einem Abschnitt für die Desktop-Sitzung (§3).
 Nicht für die App-Sitzung — die Android-App verbraucht nur Zugangsdaten.
 
-Stand: 14. August 2026. **Nichts davon ist gebaut.** Vorhanden ist
-`gantt-benutzer.sh`, das Konten anlegt und entzieht und das erzeugte Passwort
-nach `/root/gantt-zugang-<name>.txt` schreibt.
+Stand: 15. August 2026. **Die Ordnerfreigaben sind gebaut und abgenommen.**
+Verwaltet über `gantt-projekt.sh --anlegen | --freigeben | --entziehen |
+--loeschen | --liste`, dazu `gantt-wurzel.sh --status | --schliessen |
+--oeffnen` für die Sichtbarkeit der Ordnernamen. Kein Reload für irgendetwas
+davon. Abgenommen von außen: A1–A7, Z1–Z5, Z7–Z9, Z11.
+
+`AuthzSendForbiddenOnFailure On` und die MOVE/COPY-Sperre waren im ersten Wurf
+dabei, nicht nachgereicht.
+
+**Noch nicht gebaut:** die Admin-Schnittstelle aus §2 und das Desktop-Modul aus
+§3 — bewusst aufgehoben, siehe den Abschnitt zum Cloud-Umzug. Z6 gehört zur
+Admin-Schnittstelle und ist deshalb offen; Z10 ist mit `DirectoryMatch`
+gegenstandslos geworden.
 
 ---
 
