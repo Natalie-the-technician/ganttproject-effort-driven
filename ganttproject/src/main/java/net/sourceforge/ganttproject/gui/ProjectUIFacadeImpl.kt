@@ -47,6 +47,8 @@ import net.sourceforge.ganttproject.document.ProxyDocument
 import net.sourceforge.ganttproject.document.webdav.WebDavStorageImpl
 import net.sourceforge.ganttproject.gui.projectopen.OpenOnlineDocumentChoice
 import net.sourceforge.ganttproject.gui.projectopen.showForkDialog
+// [Fork-Aenderung] eigener Konflikttext ausserhalb der Cloud.
+import net.sourceforge.ganttproject.fork.ForkLocalizer
 import net.sourceforge.ganttproject.gui.projectopen.showOfflineIsAheadDialog
 import net.sourceforge.ganttproject.gui.projectopen.signinDialog
 import net.sourceforge.ganttproject.gui.projectwizard.createNewProject
@@ -411,7 +413,18 @@ class ProjectSaveFlow(
       // tut, wäre schlimmer als keiner.
       run {
         OptionPaneBuilder<VersionMismatchChoice>().also {
-          it.i18n = RootLocalizer.createWithRootKey(rootKey = "cloud.versionMismatch", baseLocalizer = RootLocalizer)
+          // [Fork-Aenderung] Ohne Cloud-Dokument ein eigener Text.
+          //
+          // "cloud.versionMismatch" ist fuer die GanttProject-Cloud geschrieben und erklaert den
+          // Konflikt mit "Version aus dem Projektverlauf". Auf einem WebDAV-Server stimmt das
+          // nicht: dort hat schlicht jemand anders die Datei geaendert. Am Bildschirm gesehen --
+          // der Dialog nannte Natalie einen Grund, den es in ihrem Fall gar nicht gab, und ein
+          // falscher Grund fuehrt zur falschen Entscheidung.
+          it.i18n = if (onlineDoc != null) {
+            RootLocalizer.createWithRootKey(rootKey = "cloud.versionMismatch", baseLocalizer = RootLocalizer)
+          } else {
+            foreignChangeLocalizer
+          }
           it.styleClass = "dlg-lock"
           it.styleSheets.add("/biz/ganttproject/storage/cloud/GPCloudStorage.css")
           it.styleSheets.add("/biz/ganttproject/storage/StorageDialog.css")
@@ -467,3 +480,17 @@ class ProjectSaveFlow(
 }
 
 private val DOCUMENT_LOGGER = GPLogger.create("Document.Info")
+
+/**
+ * [Fork-Aenderung] Texte fuer einen Schreibkonflikt ausserhalb der GanttProject-Cloud.
+ *
+ * Stellt `fork.webdav.versionMismatch.` vor den Schluessel und faellt sonst auf den globalen
+ * Schluessel zurueck. Der Rueckfall ist noetig, weil die Knopfbeschriftungen
+ * (`document.option.makeCopy`) global liegen und hier nicht doppelt gepflegt werden sollen.
+ */
+private val foreignChangeLocalizer = object : Localizer {
+  override fun create(key: String): LocalizedString = LocalizedString(key, this)
+  override fun formatTextOrNull(key: String, vararg args: Any): String? =
+    ForkLocalizer.formatTextOrNull("fork.webdav.versionMismatch.$key", *args)
+      ?: RootLocalizer.formatTextOrNull(key, *args)
+}

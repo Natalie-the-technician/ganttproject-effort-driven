@@ -2088,6 +2088,102 @@ zu lassen.
 
 ---
 
+## 17. Sitzung 8 (lokal) — Sperren am echten Server geprueft: T1, T2, T3, T5 bestanden
+
+Alle Laeufe gegen Natalies Server, in einem eigenen Testordner, mit dem gebauten `dist-app`. Die
+Zugangsdaten liegen ausserhalb des Repos und wurden nie ausgegeben.
+
+| Test | Frage | Ergebnis | Beleg |
+|---|---|---|---|
+| T1 | Wird ueberhaupt gesperrt? | bestanden | `activelock` im PROPFIND, PUT von aussen `423` |
+| T2 | Wird wieder freigegeben? | bestanden | nach dem Schliessen `activelock: 0`, PUT `204` |
+| T3 | Konflikt ohne Sperre | bestanden | Dialog kam, Server unveraendert, Kopie getrennt |
+| T5 | Kein Fehlalarm | bestanden | schwach/schwach -> `Unconditional`, sonst `Send` |
+
+T4 braucht das Telefon und ist von hier aus nicht beurteilbar.
+
+### Der eigentliche Fund: D3 hat nie ein If-Match gesendet
+
+T3 lief im ersten Anlauf **lautlos durch** — die fremde Aenderung war weg. Ursache, am Server
+gemessen und nicht geraten:
+
+**Milton fragt beim PROPFIND `getetag` gar nicht ab.** Die Bibliothek schickt eine feste
+Eigenschaftsliste (`creationdate`, `getlastmodified`, `getcontentlength`, `displayname`,
+`resourcetype`, `iscollection`, `lockdiscovery`). `File.getEtag()` lieferte deshalb **immer**
+`null`, egal was der Server sendet, und `resolveIfMatch` entschied folgerichtig
+`Unconditional`. Der Schutz war eingebaut, angeschaltet, getestet — und wirkungslos.
+
+Nachgewiesen mit `tools/etagprobe` gegen den echten Server:
+
+```
+MIT angeforderter Eigenschaft : ETag="3d72-6590f549387ee"
+OHNE angeforderte Eigenschaft : ETag=null
+```
+
+Behebung: `MiltonResourceImpl.ETAG_PROPERTY` und `Host.propFind(path, 0, [getetag])`.
+
+**Was daraus zu lernen ist.** Die Einheitstests zu `resolveIfMatch` waren richtig und halfen nicht:
+sie pruefen die *Entscheidung*, nie ihre *Eingabe*. Dieselbe Luecke wie bei Gegentest 22
+(Verpackung). Wo eine Schutzfunktion bei fehlender Angabe still auf "ungeschuetzt" zurueckfaellt,
+gehoert eine Protokollzeile dazu — sonst ist der Ausfall unsichtbar. Deshalb bleibt
+
+```
+WebDAV: gelesen /haus.gan, ETag=...
+WebDAV: schreibe /haus.gan, gemerkter ETag=..., Entscheidung=...
+```
+
+dauerhaft im Code, nicht nur zur Fehlersuche.
+
+### ETag wird VOR dem Herunterladen geholt
+
+Nicht danach, und das ist kein Zufall: aendert sich die Datei dazwischen, ist der gemerkte Wert
+aelter als der gelesene Inhalt und es gibt eine ueberfluessige Nachfrage. Andersherum wuerde
+stillschweigend eine fremde Aenderung ueberschrieben. Von beiden Fehlern ist die Nachfrage der
+harmlose.
+
+### Dritte Erzeugungsstelle fuer HttpDocument
+
+`WebdavBrowserPane.kt:226` setzte fest `NO_LOCK` — und das ist der Weg, den ein Mensch tatsaechlich
+benutzt, die Ablage-Auswahl. Solange nur `DocumentCreator` und `WebDavStorageImpl` angepasst waren,
+blieb T1 bei `204`. Die Sperrdauer wird jetzt ueber `Storage.kt` -> `WebdavStorage` ->
+`WebdavBrowserPane` durchgereicht.
+
+### Konflikttext ausserhalb der Cloud
+
+Der Dialog benutzte `cloud.versionMismatch` und erklaerte Natalie den Konflikt mit einer "Version
+aus dem Projektverlauf" — ein Grund, den es in ihrem Fall nicht gab. Ohne Cloud-Dokument werden
+jetzt `fork.webdav.versionMismatch.title` / `.titleHelp` genommen, mit Rueckfall auf die globalen
+Schluessel fuer die Knopfbeschriftungen. In `tools/packcheck` mit aufgenommen; die Gegenprobe
+erwartet dort jetzt `ERGEBNIS=FEHLER(6)`.
+
+### Zwei Fallen, die wieder zugeschlagen haben
+
+**Datumsversionierte Jars.** Nach jedem Bau liegt ein weiteres `ganttproject-JJ.MM.TT-SNAPSHOT.jar`
+in `ganttproject/build/libs`, und der Verpackungsschritt kopiert **alle** mit. Zweimal in dieser
+Sitzung habe ich das falsche geprueft und beinahe einen falschen Befund gemeldet. Vor jeder
+Pruefung: `ls` auf den Zielordner, es darf **genau eines** liegen.
+
+**Eine Gegenprobe, die nichts unterscheiden konnte.** `javap -c` zeigt die Konstanten von
+`makeConcatWithConstants` nicht an; die Suche nach dem Protokolltext lieferte deshalb auch im
+richtigen Jar 0 Treffer. Eine Gegenprobe, die bei "vorhanden" und "fehlt" dasselbe sagt, ist keine.
+Ersetzt durch eine Suche in den Rohbytes der Klassendatei, mit altem Stand als Vergleich.
+
+### Offen aus dieser Sitzung
+
+- **Startmeldung "Failed to parse document".** Beim Start oeffnet GanttProject das zuletzt
+  benutzte Projekt selbst wieder. Ist das ein WebDAV-Dokument ohne gespeichertes Passwort,
+  antwortet der Server 401 und die Meldung nennt einen falschen Grund (`User null is not
+  authorized` steht nur im Protokoll). Der Haken "Passwort speichern" wuerde es beheben, legt es
+  aber im Klartext in `~/.ganttproject` ab — **Natalie hat das ausdruecklich abgelehnt.** Richtig
+  waere, beim Start nach dem Passwort zu fragen, statt zu scheitern. Nicht beauftragt.
+- **"Speichern unter" nach einem Konflikt** waehlt "Dieser Computer" vor und traegt die
+  WebDAV-Adresse als oertlichen Pfad ein, mit roter Fehlermeldung. Der Weg funktioniert (links den
+  Server waehlen), die Vorauswahl ist falsch. Eine Ecke des Originals, die erst sichtbar wurde,
+  seit der Dialog fuer WebDAV ueberhaupt erscheint.
+- **D2** (Beschriftung "ohne Sperre oeffnen") noch nicht angefasst.
+
+---
+
 ## Offene Vormerkungen
 
 - `NOTIZ-Ist-Stunden.md` — Vorschlag, ein drittes Custom Property `effort_actual_hours` zu

@@ -31,4 +31,19 @@ Erwartet: `ERGEBNIS=OK`, Rückgabewert 0.
 
 Denselben Aufruf mit der Wurzel **eine Ebene höher** — also
 `ganttproject-builder/dist-bin/plugins/base/ganttproject` statt `.../resources`. Erwartet:
-`ERGEBNIS=FEHLER(4)`. Kommt dort OK, prüft das Programm nicht mehr, was es soll.
+`ERGEBNIS=FEHLER(6)`. Kommt dort OK, prüft das Programm nicht mehr, was es soll.
+
+## Unter Git Bash auf Windows
+
+Der Aufruf oben schlägt dort mit `ClassNotFoundException` fehl: MSYS wandelt einen Pfad hinter
+`-d` in einen Windows-Pfad um, in der zusammengesetzten Klassenpfad-Zeichenkette mit `;` aber
+nicht. Pfade deshalb ausschreiben:
+
+```bash
+OUT=$(cygpath -w /tmp/packcheck)
+RES=$(cygpath -w "$PWD/ganttproject-builder/dist-bin/plugins/base/ganttproject/resources")
+java -Dfile.encoding=UTF-8 -cp "$OUT;$RES" PackCheck
+```
+
+Umlaute in der Ausgabe können dabei zerhackt aussehen — das ist die Zeichentabelle der Konsole,
+nicht der Inhalt der Datei.

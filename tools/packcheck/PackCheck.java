@@ -22,6 +22,14 @@ public class PackCheck {
     failures += check("/language/fork/i18n.properties", "fork.toggl.checkConnection",
         "Check Toggl connection");
 
+    // Konflikttext ausserhalb der Cloud. Der Dialog stellt "fork.webdav.versionMismatch." vor den
+    // Schluessel; fehlt der Eintrag, faellt die Anzeige auf den Cloud-Text zurueck und nennt dem
+    // Benutzer einen Grund, den es in seinem Fall nicht gibt.
+    failures += check("/language/fork/i18n_de.properties", "fork.webdav.versionMismatch.title",
+        "Datei wurde von jemand anderem geändert");
+    failures += check("/language/fork/i18n.properties", "fork.webdav.versionMismatch.title",
+        "File changed by somebody else");
+
     // Gegenprobe im selben Lauf: unter der Produktionswurzel darf es KEIN resources/resources
     // geben. Faende sich dort etwas, waere der Klassenpfad nicht der, den das Plugin benutzt.
     InputStream wrong = PackCheck.class.getResourceAsStream("/resources/language/fork/i18n.properties");

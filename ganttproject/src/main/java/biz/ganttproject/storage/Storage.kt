@@ -45,6 +45,9 @@ import javafx.stage.FileChooser
 import net.sourceforge.ganttproject.document.Document
 import net.sourceforge.ganttproject.document.DocumentManager
 import net.sourceforge.ganttproject.document.ReadOnlyProxyDocument
+// [Fork-Aenderung] fuer die Sperrdauer der WebDAV-Ablage.
+import net.sourceforge.ganttproject.document.webdav.HttpDocument
+import net.sourceforge.ganttproject.document.webdav.WebDavStorageImpl
 import net.sourceforge.ganttproject.document.webdav.WebDavServerDescriptor
 import net.sourceforge.ganttproject.gui.AuthenticationFlow
 import java.io.File
@@ -209,8 +212,17 @@ class StoragePane internal constructor(
         openDocument)
     val cloudStorage = GPCloudStorage(dialogUi, mode, currentDocument, openDocument, documentManager)
     storageUiList.addAll(listOf(localStorage, recentProjects, cloudStorage))
+    // [Fork-Aenderung] Die eingestellte Sperrdauer bis zur Ablage-Auswahl durchreichen.
+    //
+    // Vorher setzte WebdavBrowserPane fest NO_LOCK. Da dies der Weg ist, den ein Mensch
+    // tatsaechlich benutzt, wurde ueber WebDAV geoeffnete Projekte NIE gesperrt -- unabhaengig
+    // davon, was in den Einstellungen stand. Am Server nachgewiesen: Schreiben von aussen lieferte
+    // 204 statt 423, obwohl das Projekt offen war.
+    val webdavLockTimeout =
+      (documentManager.webDavStorageUi as? WebDavStorageImpl)?.webDavLockTimeoutOption?.value
+        ?: HttpDocument.NO_LOCK
     cloudStorageOptions.webdavServers.mapTo(storageUiList) {
-      WebdavStorage(it, mode, openDocument, dialogUi, cloudStorageOptions)
+      WebdavStorage(it, mode, openDocument, dialogUi, cloudStorageOptions, webdavLockTimeout)
     }
 
     val initialStorageId = selectedId ?: if (mode == StorageDialogBuilder.Mode.OPEN) recentProjects.id else localStorage.id

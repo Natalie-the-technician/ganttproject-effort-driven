@@ -42,7 +42,9 @@ import java.util.function.Consumer
 class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
                         private val myMode: StorageDialogBuilder.Mode,
                         private val myOpenDocument: (Document) -> Unit,
-                        private val myDialogUi: StorageDialogBuilder.DialogUi) {
+                        private val myDialogUi: StorageDialogBuilder.DialogUi,
+                        /** [Fork-Aenderung] Sperrdauer in Minuten; negativ heisst "nicht sperren". */
+                        private val myLockTimeout: Int) {
   private lateinit var path: Path
   private val myLoadService: WebdavLoadService = WebdavLoadService(myServer)
   private val myState = State(server = myServer, resource = null, filename = null, folder = null)
@@ -65,7 +67,7 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
       if (myMode == StorageDialogBuilder.Mode.SAVE) {
         myState.filename = myState.filename!!.withGanExtension()
       }
-      myOpenDocument(createDocument(myState.server, createResource(myState)))
+      myOpenDocument(createDocument(myState.server, createResource(myState), myLockTimeout))
     }
     builder.apply {
       withI18N(RootLocalizer.createWithRootKey("storageService.webdav", BROWSE_PANE_LOCALIZER))
@@ -81,7 +83,7 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
             }
           },
           onLaunch = {
-            myOpenDocument(createDocument(myState.server, createResource(myState)))
+            myOpenDocument(createDocument(myState.server, createResource(myState), myLockTimeout))
           },
           onNameTyped = { filename, _, withEnter, withControl ->
             myState.filename = filename
@@ -222,6 +224,11 @@ private data class State(
         var folder: WebDavResource?
 )
 
-private fun createDocument(server: WebDavServerDescriptor, resource: WebDavResource): Document {
-  return HttpDocument(resource, server.username, server.password, HttpDocument.NO_LOCK)
+private fun createDocument(server: WebDavServerDescriptor, resource: WebDavResource,
+                           lockTimeout: Int): Document {
+  // [Fork-Aenderung] Hier stand fest HttpDocument.NO_LOCK. Das ist der Weg, den ein Mensch
+  // tatsaechlich benutzt -- die Ablage-Auswahl -- und darueber geoeffnete Projekte wurden deshalb
+  // NIE gesperrt, egal was in den Einstellungen stand. Am Server nachgewiesen: ein Schreibversuch
+  // von aussen lieferte 204 statt 423, obwohl das Projekt offen war.
+  return HttpDocument(resource, server.username, server.password, lockTimeout)
 }
