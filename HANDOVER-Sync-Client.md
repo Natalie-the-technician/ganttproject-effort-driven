@@ -318,6 +318,22 @@ Nach T4a stand „Nicht gespeicherte Änderungen" in der Titelzeile — die
 Bearbeitung war erhalten, nicht verworfen. Das ist der Teil, der im Ernstfall
 zählt.
 
+### Vier `PUT` desselben Geräts in zehn Minuten
+
+| Zeit (UTC) | Antwort | Lage | |
+|---|---|---|---|
+| 13:45:47 | `204` | ohne Sperre | Vorlauf, ungeplant |
+| 13:50:17 | `423` | gesperrt | T4a |
+| 13:50:23 | `423` | gesperrt | T4a, zweiter Versuch |
+| 13:55:25 | `204` | entsperrt | T4c |
+
+Derselbe Client, derselbe Pfad, dieselbe unveränderte Bearbeitung. Die Datei
+wuchs beim letzten `PUT` um genau ein Byte — den geänderten Prozentwert.
+
+**Der `423` hat abgewiesen, nicht halb ausgeführt:** `last-modified` stand
+während beider Versuche unverändert auf `13:45:47`. Ein Schutz, der die Datei
+anfasst und dann abbricht, wäre schlimmer als keiner.
+
 ### Was dabei nebenbei belegt wurde
 
 * **Die App schickt beim Speichern wirklich ein `PUT`.** Bis dahin eine
@@ -332,6 +348,13 @@ zählt.
   zeigte korrekt nichts an.
 
 ### Was nicht belegt ist
+
+**T4b.** Der Konfliktweg auf dem Gerät — veralteter ETag, Konfliktdialog — ist
+nie an echter Hardware gelaufen. Er war im ersten Anlauf als „nicht mehr
+kritisch" eingestuft; das war zu großzügig. Es ist der einzige Weg, auf dem der
+Benutzer selbst über seine Daten entscheidet, und er ist bisher nur durch
+Tests gegen einen erfundenen Server gedeckt. Die Wegwerfkopie bleibt dafür
+liegen.
 
 Der `If-Match`-Wert selbst. Das Access-Log führt keine Anfrage-Header. Ein
 **veralteter** Wert ist ausgeschlossen (der hätte `412` ergeben, nicht `423`),
