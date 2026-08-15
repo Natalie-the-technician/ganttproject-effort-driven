@@ -420,7 +420,12 @@ fun AppScaffold(
         }
       },
       confirmButton = {
-        TextButton(onClick = { settingsOpen = false }) {
+        // Closing the dialog has to write the server settings down. Until this
+        // call was here they lived only in the view model, so they worked
+        // until the process was recreated and were then silently back to the
+        // previous value — with the field showing the old one and no hint that
+        // anything had been discarded.
+        TextButton(onClick = { viewModel.saveDavSettings(); settingsOpen = false }) {
           Text(stringResource(R.string.action_ok))
         }
       }
