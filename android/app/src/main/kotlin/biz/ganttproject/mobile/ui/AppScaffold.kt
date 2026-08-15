@@ -631,6 +631,11 @@ private fun SyncServerSection(dav: DavSettingsState, viewModel: ProjectViewModel
       ),
       style = MaterialTheme.typography.bodySmall
     )
+    DavCheck.NoSuchFolder -> Text(
+      stringResource(R.string.sync_no_such_folder),
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.error
+    )
     is DavCheck.Failed -> Text(
       davErrorText(checked.error),
       style = MaterialTheme.typography.bodySmall,

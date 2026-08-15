@@ -201,6 +201,7 @@
     <string name="sync_check">Test connection</string>
     <string name="sync_checking">Testing…</string>
     <string name="sync_ok_locking">Connected. The server supports locking, so a project open on the PC cannot be overwritten from here.</string>
+    <string name="sync_no_such_folder">The server answered, but there is no folder at this address. Check the path — the address was not saved.</string>
     <string name="sync_ok_no_locking">Connected, but the server does not support locking. Conflicts will be detected on save, not prevented.</string>
     <string name="sync_err_insecure">The address must start with https://. The password is sent with every request.</string>
     <string name="sync_err_auth">User name or password rejected.</string>

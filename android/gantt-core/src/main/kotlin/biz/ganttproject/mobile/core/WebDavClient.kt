@@ -248,6 +248,40 @@ class WebDavClient(
     return DavResult.Ok(DavCapabilities(supportsLocking = classes.contains("2"), rawDavHeader = dav))
   }
 
+  /**
+   * Whether the configured address is actually a collection on this server.
+   *
+   * A separate question from [capabilities], and the settings check needs
+   * both. Measured on the built Apache on 15 August 2026: `OPTIONS` against a
+   * path that does not exist answers **200** and still advertises `DAV: 1,2`.
+   * `OPTIONS` describes the server, not the resource — so a check built on it
+   * alone reports "connected, the server can lock" for an address that is a
+   * pasted paragraph of prose, which is exactly what happened twice.
+   *
+   * `PROPFIND` with `Depth: 0` asks about the resource itself, which is the
+   * question a person typing an address is actually asking.
+   */
+  fun collectionExists(): DavResult<Boolean> {
+    val headers = buildMap {
+      putAll(authHeaders())
+      put("Depth", "0")
+      put("Content-Type", "application/xml")
+    }
+    val result = send(HttpRequest("PROPFIND", collection.trimEnd('/') + "/", headers))
+    val response = when (result) {
+      is DavResult.Failed -> return result
+      is DavResult.Ok -> result.value
+    }
+    return when {
+      response.status in 200..299 -> DavResult.Ok(true)
+      response.status == 404 -> DavResult.Ok(false)
+      // 401 and 403 are not "no such folder": the folder may well be there and
+      // simply not ours. Saying it does not exist would send the user editing
+      // a correct address.
+      else -> DavResult.Failed(errorFor(response.status))
+    }
+  }
+
   /** Reads a project and the ETag that identifies this exact content (S2). */
   fun read(name: String): DavResult<RemoteProject> {
     val result = send(HttpRequest("GET", urlFor(name), authHeaders()))

@@ -193,6 +193,7 @@
     <string name="sync_check">Verbindung prüfen</string>
     <string name="sync_checking">Wird geprüft…</string>
     <string name="sync_ok_locking">Verbunden. Der Server kann sperren — ein am PC geöffnetes Projekt kann von hier nicht überschrieben werden.</string>
+    <string name="sync_no_such_folder">Der Server antwortet, aber unter dieser Adresse gibt es keinen Ordner. Prüfe den Pfad — die Adresse wurde nicht gespeichert.</string>
     <string name="sync_ok_no_locking">Verbunden, aber der Server kann nicht sperren. Konflikte werden beim Speichern erkannt, nicht verhindert.</string>
     <string name="sync_err_insecure">Die Adresse muss mit https:// beginnen. Das Passwort geht bei jeder Anfrage mit.</string>
     <string name="sync_err_auth">Benutzername oder Passwort abgelehnt.</string>

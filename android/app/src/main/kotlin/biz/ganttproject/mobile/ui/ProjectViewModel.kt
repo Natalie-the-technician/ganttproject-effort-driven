@@ -81,6 +81,16 @@ sealed interface DavCheck {
    * kept as an internal detail.
    */
   data class Reachable(val supportsLocking: Boolean) : DavCheck
+
+  /**
+   * The server answered, but the address does not name a folder on it.
+   *
+   * Its own outcome rather than a [Failed]: nothing is wrong with the server
+   * or the credentials, and telling the user to check those would send them
+   * to the wrong place. The address is what needs fixing.
+   */
+  data object NoSuchFolder : DavCheck
+
   data class Failed(val error: DavError) : DavCheck
 }
 
@@ -477,29 +487,47 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     if (current.baseUrl.isBlank()) return
     _dav.update { it.copy(checking = true, checked = null) }
     viewModelScope.launch {
-      val outcome = withContext(Dispatchers.IO) {
-        val client = WebDavClient(
-          http,
-          WebDavConfig(current.baseUrl, current.username, current.password)
-        )
-        client.capabilities()
-      }
-      when (outcome) {
-        is DavResult.Ok -> {
-          prefs.setDavServer(current.baseUrl, current.username)
-          secure.putSecret(SecureStore.KEY_DAV_PASSWORD, current.password.ifEmpty { null })
-          prefs.setDavSupportsLocking(outcome.value.supportsLocking)
-          _dav.update {
-            it.copy(
-              checking = false,
-              checked = DavCheck.Reachable(outcome.value.supportsLocking),
-              supportsLocking = outcome.value.supportsLocking
-            )
-          }
-        }
-        is DavResult.Failed -> _dav.update {
+      val client = WebDavClient(
+        http,
+        WebDavConfig(current.baseUrl, current.username, current.password)
+      )
+      val outcome = withContext(Dispatchers.IO) { client.capabilities() }
+      if (outcome is DavResult.Failed) {
+        _dav.update {
           it.copy(checking = false, checked = DavCheck.Failed(outcome.error), supportsLocking = false)
         }
+        return@launch
+      }
+      // OPTIONS answers for the server, not for the address. On the built
+      // Apache it returns 200 and DAV: 1,2 for a path that does not exist, so
+      // on its own it reported "connected, the server can lock" for a pasted
+      // paragraph of prose — and then persisted it, because a successful check
+      // is what writes the settings down. Asking about the collection itself
+      // is the question the person typing an address is really asking.
+      val exists = withContext(Dispatchers.IO) { client.collectionExists() }
+      if (exists is DavResult.Failed) {
+        _dav.update {
+          it.copy(checking = false, checked = DavCheck.Failed(exists.error), supportsLocking = false)
+        }
+        return@launch
+      }
+      if (!(exists as DavResult.Ok).value) {
+        // Deliberately not persisted. Storing an address that has just been
+        // shown not to exist is how the wrong one survived two attempts to
+        // correct it.
+        _dav.update { it.copy(checking = false, checked = DavCheck.NoSuchFolder, supportsLocking = false) }
+        return@launch
+      }
+      val capabilities = (outcome as DavResult.Ok).value
+      prefs.setDavServer(current.baseUrl, current.username)
+      secure.putSecret(SecureStore.KEY_DAV_PASSWORD, current.password.ifEmpty { null })
+      prefs.setDavSupportsLocking(capabilities.supportsLocking)
+      _dav.update {
+        it.copy(
+          checking = false,
+          checked = DavCheck.Reachable(capabilities.supportsLocking),
+          supportsLocking = capabilities.supportsLocking
+        )
       }
     }
   }
