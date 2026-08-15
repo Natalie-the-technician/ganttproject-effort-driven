@@ -45,6 +45,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -116,11 +117,17 @@ fun AppScaffold(
   // Resolved here rather than inside the effect: stringResource is a
   // composable and cannot be called from a coroutine.
   val importedTemplate = stringResource(R.string.import_done, "%s")
+  val lockedText = stringResource(R.string.notice_opened_while_locked)
   LaunchedEffect(state.notice) {
     when (val notice = state.notice) {
       Notice.Saved -> snackbarHost.showSnackbar(savedText)
       is Notice.HoursImported ->
         snackbarHost.showSnackbar(importedTemplate.format(hours(notice.hours)))
+      // Long: this one has to say three things — nothing is lost, you may
+      // still work, and it ends by itself. A glance-length message would
+      // read as a failure.
+      Notice.OpenedWhileLocked ->
+        snackbarHost.showSnackbar(lockedText, duration = SnackbarDuration.Long)
       null -> Unit
     }
     if (state.notice != null) viewModel.dismissNotice()
@@ -305,7 +312,17 @@ fun AppScaffold(
     } else {
       AlertDialog(
         onDismissRequest = viewModel::dismissError,
-        title = { Text(stringResource(R.string.error_title)) },
+        title = {
+          // A held lock is not a failure — the desktop takes one whenever it
+          // opens a project. Titling it "something went wrong" would invite
+          // exactly the reaction it must not: retry, restart, retype.
+          Text(
+            stringResource(
+              if (error == FileError.LockedElsewhere) R.string.locked_title
+              else R.string.error_title
+            )
+          )
+        },
         text = { Text(error.text()) },
         confirmButton = {
           TextButton(onClick = viewModel::dismissError) { Text(stringResource(R.string.action_ok)) }

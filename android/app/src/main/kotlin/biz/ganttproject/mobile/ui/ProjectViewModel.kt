@@ -116,6 +116,16 @@ data class AppState(
 sealed interface Notice {
   data object Saved : Notice
   data class HoursImported(val hours: Double) : Notice
+
+  /**
+   * The project was opened while someone has it open on the desktop.
+   *
+   * Said at opening rather than at saving. The desktop takes a 120-minute
+   * lock whenever it opens a project, so this is the ordinary state during a
+   * working day at the PC — and finding out after half an hour of editing
+   * would be the avoidable version of the same news.
+   */
+  data object OpenedWhileLocked : Notice
 }
 
 /** One time entry plus the decision the user has (or has not) made about it. */
@@ -395,7 +405,14 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         is FileResult.Ok -> {
           open = result.value
           revision = 0
-          _state.update { it.copy(busy = false, project = snapshot(result.value)) }
+          val locked = remote.isLockedElsewhere(name)
+          _state.update {
+            it.copy(
+              busy = false,
+              project = snapshot(result.value),
+              notice = if (locked) Notice.OpenedWhileLocked else null
+            )
+          }
           // A different project means a different ledger and different
           // candidates for the import.
           _importState.update { it.copy(rows = emptyList(), loaded = false) }

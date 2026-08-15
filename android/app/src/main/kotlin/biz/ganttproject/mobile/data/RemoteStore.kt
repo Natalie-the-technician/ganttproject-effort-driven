@@ -26,6 +26,17 @@ import kotlinx.coroutines.withContext
  */
 class RemoteStore(private val client: WebDavClient) {
 
+  /**
+   * Whether someone else holds the project open, asked before editing.
+   *
+   * Returns false when the question could not be asked. A warning that fails
+   * to appear is a smaller harm than a save that is refused after half an
+   * hour of typing — and the save itself still checks.
+   */
+  suspend fun isLockedElsewhere(name: String): Boolean = withContext(Dispatchers.IO) {
+    (client.lockState(name) as? DavResult.Ok)?.value?.lockedElsewhere ?: false
+  }
+
   /** Lists the projects on the server. */
   suspend fun list(): FileResult<List<String>> = withContext(Dispatchers.IO) {
     when (val result = client.list()) {

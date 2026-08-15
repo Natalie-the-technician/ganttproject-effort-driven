@@ -367,6 +367,71 @@ class WebDavClientTest {
     assertEquals("\"1-abc\"", backend.requests.single { it.method == "PUT" }.headers["If-Match"])
   }
 
+  // --- lock discovery --------------------------------------------------------
+  //
+  // The desktop locks a project for 120 minutes whenever it opens one, so a
+  // held lock is the ordinary case during a working day at the PC. Asking
+  // before editing beats refusing the save half an hour later.
+
+  private fun lockXml(inner: String) = """
+    <?xml version="1.0"?>
+    <D:multistatus xmlns:D="DAV:"><D:response><D:propstat><D:prop>
+      $inner
+    </D:prop></D:propstat></D:response></D:multistatus>
+  """.trimIndent().toByteArray()
+
+  @Test
+  fun `an active lock is reported`() {
+    val xml = lockXml("<D:lockdiscovery><D:activelock><D:locktype><D:write/></D:locktype></D:activelock></D:lockdiscovery>")
+    val (client, _) = clientWith { response(207, emptyMap(), xml) }
+    val result = client.lockState("haus.gan") as DavResult.Ok
+    assertTrue(result.value.lockedElsewhere)
+  }
+
+  @Test
+  fun `an empty lockdiscovery is not a lock`() {
+    val (client, _) = clientWith { response(207, emptyMap(), lockXml("<D:lockdiscovery/>")) }
+    val result = client.lockState("haus.gan") as DavResult.Ok
+    // The container is always present; only an entry inside it means someone
+    // holds the file. Matching on lockdiscovery would report every project as
+    // locked and make the warning worthless.
+    assertFalse(result.value.lockedElsewhere)
+  }
+
+  @Test
+  fun `lock discovery works whatever the namespace prefix`() {
+    listOf("<d:activelock/>", "<activelock/>", "<D:activelock>x</D:activelock>").forEach { inner ->
+      val (client, _) = clientWith { response(207, emptyMap(), lockXml("<D:lockdiscovery>$inner</D:lockdiscovery>")) }
+      val result = client.lockState("haus.gan") as DavResult.Ok
+      assertTrue(result.value.lockedElsewhere, "prefix variant: $inner")
+    }
+  }
+
+  @Test
+  fun `a word merely containing activelock is not a lock`() {
+    val (client, _) = clientWith { response(207, emptyMap(), lockXml("<D:inactivelocking/>")) }
+    val result = client.lockState("haus.gan") as DavResult.Ok
+    assertFalse(result.value.lockedElsewhere)
+  }
+
+  @Test
+  fun `lock discovery sends PROPFIND with depth zero`() {
+    val (client, backend) = clientWith { response(207, emptyMap(), lockXml("<D:lockdiscovery/>")) }
+    client.lockState("haus.gan")
+    val request = backend.requests.single()
+    assertEquals("PROPFIND", request.method)
+    assertEquals("0", request.headers["Depth"])
+  }
+
+  @Test
+  fun `a failed lock check is an error, not a quiet no`() {
+    val (client, _) = clientWith { response(500) }
+    val result = client.lockState("haus.gan") as DavResult.Failed
+    // Reporting "not locked" when the question could not be asked would be a
+    // reassurance nobody checked.
+    assertEquals(DavError.Server(500), result.error)
+  }
+
   @Test
   fun `spaces and hashes in a name are escaped`() {
     val (client, _) = clientWith { response(200) }

@@ -201,7 +201,7 @@
     <string name="sync_err_network">Server nicht erreichbar: %1$s</string>
     <string name="sync_err_server">Der Server meldet einen Fehler (%1$d).</string>
 
-    <string name="error_locked_elsewhere">Dieses Projekt ist auf einem anderen Gerät geöffnet. Deine Änderungen sind sicher — versuche es erneut, sobald es dort geschlossen ist.</string>
+    <string name="error_locked_elsewhere">Jemand hat dieses Projekt gerade am PC geöffnet. Deine Änderungen sind sicher und bleiben auf dem Telefon. Speichern geht wieder, sobald es dort geschlossen ist — spätestens nach zwei Stunden.</string>
     <string name="error_unknown_version">Der Server hat keine Version zu diesem Projekt gemeldet, deshalb lässt es sich nicht sicher speichern. Öffne es erneut und versuche es noch einmal.</string>
     <string name="error_sync_failed">Der Server ist nicht erreichbar (%1$s).</string>
     <string name="sync_open_remote">Vom Server öffnen</string>
@@ -209,4 +209,7 @@
 
     <string name="error_no_folder_access">Du bist angemeldet, aber dieser Ordner ist für dein Konto nicht freigegeben. Öffne ein Projekt aus einem Ordner, auf den du Zugriff hast — oder lass ihn dir freischalten.</string>
     <string name="error_gone_from_server">Dieses Projekt liegt nicht mehr auf dem Server. Vielleicht wurde es umbenannt oder gelöscht.</string>
+
+    <string name="locked_title">Gerade am PC in Bearbeitung</string>
+    <string name="notice_opened_while_locked">Dieses Projekt ist gerade am PC geöffnet. Lesen und Bearbeiten geht hier trotzdem — nur Speichern wird abgelehnt, bis es dort geschlossen ist, spätestens nach zwei Stunden.</string>
 </resources>

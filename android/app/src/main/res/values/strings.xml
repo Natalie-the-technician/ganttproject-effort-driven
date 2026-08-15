@@ -209,7 +209,7 @@
     <string name="sync_err_network">Server not reachable: %1$s</string>
     <string name="sync_err_server">Server reported an error (%1$d).</string>
 
-    <string name="error_locked_elsewhere">This project is open on another device. Your changes are safe — try again once it is closed there.</string>
+    <string name="error_locked_elsewhere">Someone has this project open on the PC. Your changes are safe and stay on the phone. Saving works again once it is closed there, at the latest after two hours.</string>
     <string name="error_unknown_version">The server did not report a version for this project, so it cannot be saved safely. Reopen it and try again.</string>
     <string name="error_sync_failed">The server could not be reached (%1$s).</string>
     <string name="sync_open_remote">Open from server</string>
@@ -217,4 +217,7 @@
 
     <string name="error_no_folder_access">You are signed in, but this folder is not shared with your account. Open a project from a folder you have access to, or ask for it to be shared.</string>
     <string name="error_gone_from_server">This project is no longer on the server. It may have been renamed or deleted.</string>
+
+    <string name="locked_title">Open on the PC right now</string>
+    <string name="notice_opened_while_locked">This project is open on the PC right now. You can read and edit it here — saving will be refused until it is closed there, at the latest after two hours.</string>
 </resources>

@@ -60,6 +60,17 @@ data class WebDavConfig(
   val password: String
 )
 
+/**
+ * Whether someone else currently holds a WebDAV lock on a project.
+ *
+ * Worth asking *before* editing rather than discovering at save time. The
+ * desktop takes a lock for 120 minutes whenever it opens a project, so a
+ * locked file is the ordinary case during a working day at the PC — not an
+ * exception. Letting someone type for half an hour and only then refusing the
+ * save is the avoidable version of the same information.
+ */
+data class LockState(val lockedElsewhere: Boolean)
+
 /** A project as it exists on the server, with the version that produced it. */
 class RemoteProject(val bytes: ByteArray, val etag: String?)
 
@@ -359,6 +370,34 @@ class WebDavClient(
     return DavResult.Ok(names)
   }
 
+  /**
+   * Asks whether a lock is held on a project (RFC 4918 `lockdiscovery`).
+   *
+   * Scanned for `<activelock>` rather than parsed as a namespaced document:
+   * the prefix varies between servers (`D:activelock`, `d:activelock`,
+   * `activelock`), and the only question is whether one is present. An empty
+   * `<lockdiscovery/>` means no lock, which is why the marker searched for is
+   * the entry, not the container.
+   */
+  fun lockState(name: String): DavResult<LockState> {
+    val headers = buildMap {
+      putAll(authHeaders())
+      put("Depth", "0")
+      put("Content-Type", "application/xml")
+    }
+    val body = """<?xml version="1.0" encoding="utf-8"?>
+<D:propfind xmlns:D="DAV:"><D:prop><D:lockdiscovery/></D:prop></D:propfind>"""
+      .toByteArray(Charsets.UTF_8)
+    val result = send(HttpRequest("PROPFIND", urlFor(name), headers, body))
+    val response = when (result) {
+      is DavResult.Failed -> return result
+      is DavResult.Ok -> result.value
+    }
+    if (response.status !in 200..299) return DavResult.Failed(errorFor(response.status))
+    val xml = String(response.body, Charsets.UTF_8)
+    return DavResult.Ok(LockState(lockedElsewhere = ACTIVE_LOCK.containsMatchIn(xml)))
+  }
+
   private fun decodePercent(value: String): String {
     if (!value.contains('%')) return value
     val out = StringBuilder()
@@ -380,5 +419,14 @@ class WebDavClient(
 
   private companion object {
     val HREF = Regex("<[^>]*href[^>]*>([^<]*)</[^>]*href[^>]*>", RegexOption.IGNORE_CASE)
+
+    /**
+     * Matches `<activelock>` with or without a namespace prefix.
+     *
+     * The trailing class must include `/`, or the self-closing `<activelock/>`
+     * — which is what a server sends for a lock with no further detail — is
+     * missed and the file reads as unlocked.
+     */
+    val ACTIVE_LOCK = Regex("<[a-z0-9]*:?activelock[\\s/>]", RegexOption.IGNORE_CASE)
   }
 }
