@@ -432,6 +432,47 @@ class WebDavClientTest {
     assertEquals(DavError.Server(500), result.error)
   }
 
+  // --- lock and conflict together ---------------------------------------------
+  //
+  // Since the desktop takes a lock on open, a save can now fail for two
+  // different reasons at once: the file is held AND its content moved on.
+  // Which one the user is told decides whether they wait or resolve, so the
+  // ordering is pinned here rather than left to emerge.
+
+  @Test
+  fun `a locked file reports waiting, not conflict, when the server answers 423 first`() {
+    val (client, _) = clientWith { response(423) }
+    val result = client.write("haus.gan", "x".toByteArray(), "\"stale\"") as DavResult.Failed
+    // The server checks the lock before the precondition, so a stale ETag
+    // against a held file still reads as "someone has it open".
+    assertEquals(DavError.LockedElsewhere, result.error)
+  }
+
+  @Test
+  fun `a stale etag on an unlocked file still reports a conflict`() {
+    val (client, _) = clientWith { response(412) }
+    val result = client.write("haus.gan", "x".toByteArray(), "\"stale\"") as DavResult.Failed
+    assertEquals(DavError.ChangedElsewhere, result.error)
+  }
+
+  @Test
+  fun `a weak etag whose content moved on is decided here, before the server sees a PUT`() {
+    val (client, backend) = clientWith { request ->
+      when (request.method) {
+        "HEAD" -> response(200, mapOf("ETag" to "\"someone-else\""))
+        else -> response(423)   // the server would have said "locked"
+      }
+    }
+    val result = client.write("haus.gan", "x".toByteArray(), "W/\"mine\"") as DavResult.Failed
+    // The client answers ChangedElsewhere without ever sending the PUT, so the
+    // server never gets to say 423. Reachable only in the one-second window
+    // where the stored tag is still weak — after a normal open it is strong
+    // and the server decides. Named here because it is the one case where the
+    // app, not the server, picks the message.
+    assertEquals(DavError.ChangedElsewhere, result.error)
+    assertTrue(backend.requests.none { it.method == "PUT" })
+  }
+
   @Test
   fun `spaces and hashes in a name are escaped`() {
     val (client, _) = clientWith { response(200) }
