@@ -373,3 +373,84 @@ jederzeit überschreiben kann.
 **Zurückzusetzen, sobald ein Desktop-Build keine Sperre mehr nimmt oder kein
 `If-Match` mehr sendet.** Die Warnung, die dabei verstummt, ist das Einzige
 zwischen einem Benutzer und einem still überschriebenen Nachmittag.
+
+---
+
+## 11. Schwache ETags: der dritte Zweig, und was daraus wird
+
+**Stand: entworfen, Stufe 1 zu bauen, Stufe 2 bewusst nicht.**
+
+`resolveIfMatch` behandelt einen gemerkten schwachen ETag in drei Fällen.
+Zwei sind richtig, der dritte schreibt **bedingungslos** — und verletzt damit
+S3: ein `PUT` ohne `If-Match` darf nur die bewusste Entscheidung des Benutzers
+sein, nie etwas, das die App von selbst tut.
+
+| gemerkt schwach, dann … | heute | richtig |
+|---|---|---|
+| opaker Teil verschieden | Konflikt, kein `PUT` | bleibt |
+| aktueller Wert stark | `PUT` mit starkem `If-Match` | bleibt |
+| aktueller Wert noch schwach | **`PUT` ohne Bedingung** | siehe unten |
+
+### Warum das überhaupt auftritt
+
+`If-Match` vergleicht **stark** (RFC 7232). Ein schwacher Wert passt nie, auch
+nicht auf sich selbst. Am echten Server gemessen, gleicher opaker Teil:
+
+    If-Match: "6-6591692f2d6cc"     → 204
+    If-Match: W/"6-6591692f2d6cc"   → 412
+
+Ein Client, der den ETag unmittelbar nach einem `PUT` holt, bekommt ihn nach
+`ap_make_etag` schwach. Schickt er genau den zurück, antwortet der Server
+**immer** `412` — Konfliktdialog, obwohl niemand etwas geändert hat.
+
+### Zwei Ursachen, die man nicht verwechseln darf
+
+* **Kurzes Fenster.** Sub-Sekunden-mtime, vergeht von selbst. Der Fall auf
+  diesem Server.
+* **Dauerhaft schwach.** Wird die Repräsentation unterwegs verändert, verlangt
+  RFC 9110 einen schwachen ETag — `mod_deflate`, nginx mit `gzip`, jeder
+  komprimierende Proxy oder CDN. Das vergeht **nie**.
+
+Wer davon betroffen ist, hat also meist keinen exotischen DAV-Server, sondern
+einen gewöhnlichen mit eingeschalteter Komprimierung. Dass es hier nicht
+auftritt, liegt nur daran, dass in Caddy kein `encode` steht und `mod_deflate`
+nicht geladen ist — gemessen, mit drei `Accept-Encoding`-Varianten.
+
+### Die drei Stufen
+
+1. **Warten und nochmal fragen.** Rund 1,1 s, `HEAD` wiederholen. Wird der
+   Wert stark, normal weiter. Deckt diesen Server vollständig ab. **Das ist zu
+   bauen**, und es ersetzt den bedingungslosen Zweig.
+2. **Immer noch schwach → sperren statt blind schreiben.** `LOCK`, `PUT` mit
+   `If: (<token>)`, `UNLOCK`. Stärker als `If-Match`, nicht schwächer.
+   **Bewusst nicht gebaut**, siehe unten.
+3. **`DAV: 1` und dauerhaft schwach.** Dann kann dieser Server den Benutzer
+   nicht schützen, und das gehört ihm gesagt. Eine wahre Aussage über den
+   Server, keine Ausrede.
+
+### Warum Stufe 2 nicht gebaut wird
+
+Die App nimmt **nie** eine Sperre; ein Test hält das fest. Ein Telefon wird
+vom Betriebssystem jederzeit beendet, verliert das Netz, wird weggewischt.
+Eine Sperre ohne `UNLOCK` blockiert dann den Menschen, der am Schreibtisch
+sitzt. Optimistische Nebenläufigkeit verliert schlimmstenfalls einen
+Speichervorgang, eine verwaiste Sperre kostet eine Arbeitssitzung.
+
+Falls es doch einmal gebraucht wird, ist die eingehegte Form die Grundlage —
+Sperre nur für die Dauer des einen `PUT`, sofort wieder gelöst. **Aber der
+erste Entwurf davon war schon falsch**, und das zeigt, warum ungeprüfter
+Code für einen unauslösbaren Fall nichts taugt:
+
+* Ich hatte `Timeout: Second-60` vorgeschlagen — „dann ist der PC nach einer
+  Minute wieder frei".
+* Dieser Server hat **`DavMinTimeout 600`**. Das ist ein **Minimum**: Apache
+  hebt kleinere Wünsche an. Aus einer Minute werden zehn.
+* Nach oben deckelt er dagegen **gar nicht** — `Second-99999` wurde gewährt,
+  rund 27,7 Stunden. Die Zurückhaltung des Clients ist die einzige
+  Verteidigung, der Server hat keine.
+
+**Die Obergrenze der Blockade bestimmt also nicht der Client.** Er kann sie
+nur *nachlesen*: die `LOCK`-Antwort enthält `<D:timeout>`. Genau dort müsste
+die App entscheiden, ob sie die Sperre behält oder sofort wieder löst. Ein
+Entwurf, der von `Second-60` ausgeht, wäre mit einer falschen Zusicherung
+angetreten.
