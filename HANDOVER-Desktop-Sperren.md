@@ -364,3 +364,79 @@ Keine Änderung am Produktivcode: `412` → `ChangedElsewhere` (Konflikt),
 `423` → `LockedElsewhere` (warten). Diese Zuordnung war richtig, nur meine
 Begründung war es nicht. 256 Kerntests, keine Fehler.
 `DESKTOP_HONOURS_LOCKS` bleibt `false` bis T4a.
+
+---
+
+## 7. Aus den T4-Messungen vom 15.08.2026 — bitte anpassen
+
+Drei Befunde, die eure Seite betreffen. Der erste ist der dringende.
+
+### 7a. Euer `Unconditional`-Zweig hat ein Loch, und es ist meines gewesen
+
+`IfMatchResolution.kt` ist eine Portierung meines Codes, letzte Zeile:
+
+```kotlin
+return if (isWeakEtag(current)) IfMatchDecision.Unconditional else IfMatchDecision.Send(current)
+```
+
+**Diesen Zweig habe ich heute entfernt.** Die Begründung, die in eurem
+Kommentar wie in meinem stand — „nur die Millisekunden, in denen jemand
+zweimal innerhalb einer Sekunde speichert" — setzt voraus, dass Schwäche
+immer nur Apaches mtime-Fenster ist. Am Server gemessen:
+
+* **Kurz schwach:** Sub-Sekunden-mtime. Vergeht von selbst.
+* **Dauerhaft schwach:** Wird die Repräsentation unterwegs verändert,
+  verlangt RFC 9110 einen schwachen ETag — `mod_deflate`, nginx mit `gzip`,
+  jeder komprimierende Proxy oder ein CDN. Das vergeht **nie**.
+
+Im zweiten Fall ist der Zweig kein Randfall, sondern **jeder Schreibvorgang**.
+D3 fiele damit still auf den Zustand vor D3 zurück: bedingungslos schreiben,
+ohne Anzeichen, dass der Schutz weg ist.
+
+Dass es heute nicht auftritt, ist Zufall der Konfiguration — in Caddy steht
+kein `encode`, `mod_deflate` ist nicht geladen. Gemessen, mit drei
+`Accept-Encoding`-Varianten. Wird Komprimierung irgendwann eingeschaltet,
+bricht es lautlos.
+
+**Was ich stattdessen gebaut habe:** rund 1,1 s warten, erneut fragen. Wird
+der Wert stark, normal weiter — das deckt das echte Fenster ab. Bleibt er
+schwach, **den Schreibvorgang ablehnen** und sagen, dass dieser Server keine
+Versionsprüfung beantworten kann. Das bewusste „trotzdem überschreiben" des
+Benutzers geht weiterhin durch; nur die App tut es nicht mehr von selbst.
+
+### 7b. Euer Kommentar hat die Häufigkeit vertauscht
+
+> Called ONLY when [remembered] is weak — one extra request in a rare case,
+> none in the normal one.
+
+Für euer eigenes Aufrufumfeld stimmt das nicht. `MiltonResourceImpl.java:360`
+setzt `myEtagAtRead = fetchCurrentEtag()` **unmittelbar nach dem PUT** — genau
+in der Sekunde, in der Apache schwach meldet. Der gemerkte ETag ist nach jedem
+Speichern schwach, und der „seltene" Weg ist der, den ihr ab dem zweiten
+Speichern **immer** geht.
+
+Heute folgenlos, weil bis zum nächsten Speichern eine Sekunde vergeht und die
+Nachfrage einen starken Wert liefert. Aber es heißt: Was in 7a steht, trifft
+euch auf dem Hauptweg, nicht in einer Ecke.
+
+### 7c. `OPTIONS` beweist nichts über den Pfad
+
+Am Server gemessen: `OPTIONS` auf einen Pfad, den es **nicht gibt**, antwortet
+`200` und meldet `DAV: 1,2`. `OPTIONS` beschreibt den Server, nicht die
+Ressource. Falls ihr irgendwo eine Verbindungsprüfung habt, die daraus
+schließt, dass die Adresse stimmt: Sie kann eine falsche Adresse nicht
+erkennen. Der Unterschied steckt allein im `Allow` — ohne `PROPFIND` und `GET`
+darin gibt es den Pfad nicht. Meine Prüfung fragt jetzt zusätzlich per
+`PROPFIND Depth 0` nach der Sammlung selbst.
+
+### 7d. Und eine Verpflichtung, die neu auf euch liegt
+
+`ProjectViewModel.DESKTOP_HONOURS_LOCKS` steht seit heute auf `true`. Die App
+sagt ihren Benutzern damit **nicht mehr**, dass der PC ihre Arbeit jederzeit
+überschreiben kann.
+
+Diese Aussage hängt vollständig an euch: Sobald ein Desktop-Build keine Sperre
+mehr nimmt **oder** kein `If-Match` mehr sendet — auch still, wie in 7a —,
+ist sie falsch, und die App verschweigt eine Gefahr, die es wieder gibt.
+**Sagt bitte Bescheid, bevor sich daran etwas ändert**, dann setze ich sie
+zurück.
