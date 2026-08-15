@@ -300,3 +300,67 @@ deshalb ihre Warnung zum Bearbeitungsschutz aufrecht und stuft den Speicher
 **nicht** als verwaltet ein, obwohl der Server sperren kann — siehe
 `ProjectViewModel.DESKTOP_HONOURS_LOCKS`. Diese Konstante ist in derselben
 Änderung auf `true` zu setzen, die D1 und D3 abschließt.
+
+---
+
+## 6. Antwort auf eure Übergabe vom 15.08.2026
+
+### 6a. T4 sind zwei Läufe, nicht einer — bitte mit T4a anfangen
+
+Eure Messung nehme ich an: Dieser Apache wertet die Vorbedingung **vor** der
+Sperre aus. Ich hatte in einem Testkommentar die umgekehrte Reihenfolge
+behauptet, hergeleitet statt gemessen; korrigiert.
+
+Genau daraus folgt aber, dass euer vorgeschlagener T4 nicht prüft, was er
+prüfen soll. In Schritt 2 sperrt ihr **und ändert die Datei**. Damit ist das
+Telefon veraltet, der Server antwortet `412`, und die App zeigt einen
+Konflikt — den Weg, den `412` schon vor D1 nahm. Der Sperrweg wird dabei nie
+betreten.
+
+* **T4a — der neue Weg.** Sperren, **nichts ändern**. Telefon ist aktuell.
+  Erwartung: `423` → „wird gerade am PC bearbeitet", kein Konfliktdialog.
+* **T4b — die Gegenprobe.** Sperren **und** ändern. Erwartung: `412` →
+  Konfliktdialog.
+
+**Nur T4a kann `DESKTOP_HONOURS_LOCKS = true` tragen.** T4b allein belegt die
+Zusicherung nicht, weil der Weg, um den es dabei geht, ungegangen bliebe.
+Beide zusammen zeigen, dass die App die Fälle auseinanderhält.
+
+### 6b. Der Android-Zweig ist umgeschrieben — nicht ziehen, sondern zurücksetzen
+
+Natalie hat ja gesagt, und ich habe es auf meinem eigenen Zweig selbst
+gemacht; ihr müsst ihn nicht anfassen. `claude/gantt-android-app-wxxu9o` ist
+mit `--force-with-lease` neu geschoben.
+
+**Wenn ihr den Zweig lokal habt, nicht `git pull`.** Ein Zusammenführen holt
+die alten Commits zurück und macht die Bereinigung rückgängig:
+
+```
+git fetch origin claude/gantt-android-app-wxxu9o
+git reset --hard origin/claude/gantt-android-app-wxxu9o   # nur falls ausgecheckt
+```
+
+Zwei Berichtigungen zu eurer Fassung:
+
+* Es waren **fünf** Commits, nicht vier: `8b4d5adf8`, `4a9d48a25`,
+  `d6066c240`, `8af6e22a4`, `8e7b47502`. Eure Zählung ging vermutlich von den
+  Commits aus, die die Dateien *anfassen*; der Wert steht aber auch im Baum
+  jedes Commits dazwischen.
+* **Der Force-Push entfernt es nicht von GitHub.** Verwaiste Commits bleiben
+  über ihre SHA abrufbar. Nachgeprüft, nicht vermutet: `8e7b47502` liefert
+  nach dem Umschreiben weiter eine vollständige Antwort über die API. Wer das
+  wirklich weg haben will, kommt an GitHub-Support nicht vorbei. Für den
+  geplanten öffentlichen Fork ist das ohnehin der falsche Weg — der bekommt
+  eine **frische** Historie, nicht diese.
+
+Belegt ist die Bereinigung so: Baum-Hash von HEAD vorher und nachher
+identisch (`3686532060318fa91c5d14e21ed53f5df7044851`), 43 Commits vorher wie
+nachher, Betreffzeilen und geänderte Dateien je Commit identisch, und beide
+Werte in keinem Commit des Zweigs mehr auffindbar.
+
+### 6c. Was auf der Android-Seite steht
+
+Keine Änderung am Produktivcode: `412` → `ChangedElsewhere` (Konflikt),
+`423` → `LockedElsewhere` (warten). Diese Zuordnung war richtig, nur meine
+Begründung war es nicht. 256 Kerntests, keine Fehler.
+`DESKTOP_HONOURS_LOCKS` bleibt `false` bis T4a.
