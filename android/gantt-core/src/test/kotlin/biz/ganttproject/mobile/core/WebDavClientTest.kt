@@ -437,19 +437,33 @@ class WebDavClientTest {
   // Since the desktop takes a lock on open, a save can now fail for two
   // different reasons at once: the file is held AND its content moved on.
   // Which one the user is told decides whether they wait or resolve, so the
-  // ordering is pinned here rather than left to emerge.
+  // answer is pinned here rather than left to emerge.
+  //
+  // Which of the two the server reports is the server's decision, not ours.
+  // Measured against the built Apache on 15 August 2026 by the desktop
+  // session, with a control:
+  //
+  //   held, no If-Match         -> 423
+  //   held, If-Match current    -> 423
+  //   held, If-Match stale      -> 412   <- the precondition is evaluated first
+  //
+  // So a stale ETag reads as a conflict whether or not anyone holds the file,
+  // and 423 is reachable only from an up-to-date phone. An earlier comment
+  // here claimed the opposite ordering; it was derived, not measured, and it
+  // was wrong. The client maps whatever arrives and does not re-rank it.
 
   @Test
-  fun `a locked file reports waiting, not conflict, when the server answers 423 first`() {
+  fun `423 means waiting, whatever the request carried`() {
     val (client, _) = clientWith { response(423) }
-    val result = client.write("haus.gan", "x".toByteArray(), "\"stale\"") as DavResult.Failed
-    // The server checks the lock before the precondition, so a stale ETag
-    // against a held file still reads as "someone has it open".
+    val result = client.write("haus.gan", "x".toByteArray(), "\"current\"") as DavResult.Failed
     assertEquals(DavError.LockedElsewhere, result.error)
   }
 
   @Test
-  fun `a stale etag on an unlocked file still reports a conflict`() {
+  fun `a stale etag reports a conflict, held or not`() {
+    // Both of these are 412 on the real server: the held case because the
+    // precondition is checked before the lock, the unheld case for the
+    // obvious reason. One mapping covers both.
     val (client, _) = clientWith { response(412) }
     val result = client.write("haus.gan", "x".toByteArray(), "\"stale\"") as DavResult.Failed
     assertEquals(DavError.ChangedElsewhere, result.error)

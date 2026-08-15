@@ -198,6 +198,31 @@ Projekt vom Telefon aus wirklich `423` liefert, und dass ein Projekt nach
 Telefon → PC → Telefon byteweise unverändert ist außer an den geänderten
 Stellen.
 
+### T4 sind zwei Läufe, nicht einer
+
+Die Desktop-Sitzung hat am 15.08.2026 gemessen, dass dieser Apache die
+Vorbedingung **vor** der Sperre auswertet:
+
+| Lage | Antwort |
+|---|---|
+| gehalten, `If-Match` aktuell | `423` |
+| gehalten, `If-Match` veraltet | `412` |
+
+Damit hängt das Ergebnis von T4 nicht daran, ob gesperrt ist, sondern daran,
+ob das Telefon aktuell ist. Ein Lauf, in dem die Gegenseite **sperrt und die
+Datei ändert**, prüft deshalb nur den Konfliktweg — den Weg, den `412` schon
+vor D1 nahm. Der neue Weg bleibt dabei unberührt.
+
+* **T4a — Sperrweg (der neue).** Gegenseite sperrt und ändert **nichts**.
+  Telefon ist aktuell. Erwartung: `423` → „wird gerade am PC bearbeitet",
+  kein Konfliktdialog.
+* **T4b — Konfliktweg (die Gegenprobe).** Gegenseite sperrt **und** ändert.
+  Erwartung: `412` → Konfliktdialog.
+
+Beide zusammen zeigen, dass die App die Fälle auseinanderhält. Nur T4b zu
+fahren belegt `DESKTOP_HONOURS_LOCKS` nicht: der Weg, den die Zusicherung
+betrifft, wäre nie gegangen worden.
+
 ## 9. Was bewusst nicht gebaut wird
 
 * **Kein Hintergrund-Sync**, kein periodisches Abfragen. Requests nur auf
