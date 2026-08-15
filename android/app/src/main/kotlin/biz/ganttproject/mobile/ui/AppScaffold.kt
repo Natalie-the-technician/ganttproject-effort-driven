@@ -697,6 +697,8 @@ private fun davErrorText(error: DavError): String = when (error) {
   // not. Shown as a server error rather than silently as nothing.
   DavError.ChangedElsewhere -> stringResource(R.string.sync_err_server, 412)
   DavError.LockedElsewhere -> stringResource(R.string.sync_err_server, 423)
+  DavError.BadAddress -> stringResource(R.string.error_bad_server_address)
+  DavError.WeakEtagUnusable -> stringResource(R.string.error_no_conditional_writes)
 }
 
 @Composable
