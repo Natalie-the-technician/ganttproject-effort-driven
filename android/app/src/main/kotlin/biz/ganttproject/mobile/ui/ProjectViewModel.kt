@@ -174,9 +174,16 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
      *
      * A constant rather than a setting: the app cannot observe what the
      * desktop does, and a user-facing switch would be a promise the user has
-     * no way to check. Set to true in the same change that lands D1 and D3.
+     * no way to check.
+     *
+     * True since 15 August 2026. D1 and D3 are built on the desktop side and
+     * T1–T5 have run against the real server; the phone half was measured the
+     * same day, see [currentSyncGuarantee]. Set back to false the moment a
+     * desktop build stops taking locks or stops sending If-Match — the
+     * warning it silences is the only thing standing between a user and a
+     * silently overwritten afternoon.
      */
-    const val DESKTOP_HONOURS_LOCKS = false
+    const val DESKTOP_HONOURS_LOCKS = true
   }
 
   private val store = ProjectStore(application)
@@ -584,18 +591,24 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    * needs.
    */
   private fun currentSyncGuarantee(): SyncGuarantee =
-    // Deliberately still UNMANAGED_FILE even against a locking server.
-    //
     // The guarantee is a property of every client that touches the file, not
-    // of the server alone. The desktop currently takes no lock at all — the
-    // configured timeout never reaches HttpDocument (both call sites hard-wire
-    // -1) and acquireLock() is called from nowhere — and it sends no If-Match.
-    // So a phone edit can still be silently overwritten from the PC, which is
-    // exactly what this warning is about.
+    // of the server alone, which is why this stayed UNMANAGED_FILE for as long
+    // as the desktop took no lock: the configured timeout never reached
+    // HttpDocument, acquireLock() was called from nowhere, and no If-Match was
+    // sent. A phone edit could be silently overwritten from the PC, and that
+    // is what the warning was about.
     //
-    // Flip to MANAGED_SERVER once D1 and D3 in HANDOVER-Desktop-Sperren.md are
-    // built and T1/T3 pass. Until then, silencing the warning would tell the
-    // user they are safe when they are not.
+    // Both halves are now measured against the real server rather than argued.
+    // Desktop side: D1 and D3 built, T1, T2, T3 and T5 passed. Phone side,
+    // 15 August 2026, with the file held under an exclusive write lock:
+    //
+    //   locked   -> PUT answered 423, "gerade am PC in Bearbeitung",
+    //               the edit kept on the phone, no conflict dialog
+    //   unlocked -> the same unchanged edit saved, four minutes later,
+    //               same ETag, same file: 204
+    //
+    // The second run is what makes the first one mean anything. Without it a
+    // 423 shows only that something failed, not that the lock caused it.
     if (open?.isRemote == true && prefs.davSupportsLocking() && DESKTOP_HONOURS_LOCKS) {
       SyncGuarantee.MANAGED_SERVER
     } else {

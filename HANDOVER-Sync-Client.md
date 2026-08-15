@@ -292,3 +292,61 @@ Modul, eigene Abnahme. Kurz, damit hier keine Lücke bleibt:
 * **D3** Der Desktop sendet kein `If-Match` und überschreibt ohne Sperre
   bedingungslos. Bis das behoben ist, ist der Schutz einseitig: Das Telefon
   kann nichts vom PC überschreiben, der PC vom Telefon schon.
+
+---
+
+## 10. T4 am echten Server gefahren — 15.08.2026
+
+Beide Läufe gegen `https://<serveradresse>/intern/t4-probe.gan`, Sperre von der
+Server-Sitzung per `curl -X LOCK` gehalten, Mitschnitt im Apache-Log.
+
+**Vorbedingung, dreifach gemessen:** Der ETag hielt über das `LOCK` hinweg
+still (`"3cb6-…2ade8"` vor und nach dem Sperren, je drei Messungen). Ohne das
+wäre aus T4a unbemerkt T4b geworden, weil das Telefon veraltet gewesen wäre.
+
+| | Lage | Antwort | Anzeige |
+|---|---|---|---|
+| **T4a** | gesperrt, Telefon aktuell | `423` | „Gerade am PC in Bearbeitung … Deine Änderungen sind sicher und bleiben auf dem Telefon." |
+| **T4c** | Sperre gelöst, sonst alles gleich | `204` | „Gespeichert" |
+
+Vier Minuten Abstand, dieselbe Datei, derselbe ETag, dieselbe unveränderte
+Bearbeitung auf dem Telefon. **Der einzige Unterschied war die Sperre.** Erst
+damit ist sie als Ursache festgenagelt; ein `423` allein zeigt nur, dass etwas
+fehlschlug.
+
+Nach T4a stand „Nicht gespeicherte Änderungen" in der Titelzeile — die
+Bearbeitung war erhalten, nicht verworfen. Das ist der Teil, der im Ernstfall
+zählt.
+
+### Was dabei nebenbei belegt wurde
+
+* **Die App schickt beim Speichern wirklich ein `PUT`.** Bis dahin eine
+  Behauptung aus dem Quelltext.
+* **Die Weak-ETag-Behandlung wirkt am echten Server.** Das `HEAD` unmittelbar
+  vor jedem `PUT` ist der Pfad aus `resolveIfMatch`: der gemerkte Wert stammte
+  aus einem `HEAD` keine Sekunde nach dem Schreiben, Apache meldete ihn
+  deshalb schwach. Ohne diese Behandlung hätte T4a einen **falschen Konflikt**
+  gemeldet statt der Sperrmeldung.
+* **`lockState()` funktioniert auf dem Gerät.** Beim Öffnen stand ein
+  `PROPFIND` auf der Datei im Log, 34 Sekunden vor der Sperre, und die App
+  zeigte korrekt nichts an.
+
+### Was nicht belegt ist
+
+Der `If-Match`-Wert selbst. Das Access-Log führt keine Anfrage-Header. Ein
+**veralteter** Wert ist ausgeschlossen (der hätte `412` ergeben, nicht `423`),
+und aus dem Client folgt, dass ein aktueller gesetzt war: ohne gemerkte Fassung
+verweigert `RemoteStore.save` und schickt gar nichts, und der `HEAD` davor tritt
+nur auf dem Weak-Pfad auf, der mit einem starken `If-Match` endet. Das ist
+hergeleitet, nicht gemessen. Serverseitig zeigt es ein `LogFormat` mit
+`%{If-Match}i`; als eigener Vorgang, nie während einer Messung.
+
+### Folge
+
+`ProjectViewModel.DESKTOP_HONOURS_LOCKS` steht auf `true`. Die App stuft ein
+Serverprojekt jetzt als verwalteten Speicher ein, statt zu warnen, dass der PC
+jederzeit überschreiben kann.
+
+**Zurückzusetzen, sobald ein Desktop-Build keine Sperre mehr nimmt oder kein
+`If-Match` mehr sendet.** Die Warnung, die dabei verstummt, ist das Einzige
+zwischen einem Benutzer und einem still überschriebenen Nachmittag.
