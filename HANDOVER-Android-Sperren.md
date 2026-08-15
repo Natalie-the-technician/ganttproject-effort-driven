@@ -9,11 +9,33 @@ Server gelaufen und bestanden.
 
 ## Das Wichtigste in einem Satz
 
-**`423 Locked` ist ab jetzt der Normalfall, nicht der Sonderfall.** Der Desktop nimmt beim Öffnen
-eines WebDAV-Projekts eine Sperre über **120 Minuten** — vorher nahm er nie eine.
+**`423 Locked` kommt neu hinzu — aber nur, wenn euer ETag aktuell ist.** Der Desktop nimmt beim
+Öffnen eines WebDAV-Projekts eine Sperre über **120 Minuten**; vorher nahm er nie eine.
 
-Euer `DavError.LockedElsewhere` war damit bisher praktisch toter Code. Er wird jetzt der häufigste
-Fehlschlag, den ein Benutzer zu sehen bekommt: immer dann, wenn am PC dasselbe Projekt offen ist.
+### Korrektur, 15.08.2026 — gemessen statt hergeleitet
+
+Ich hatte hier zuerst geschrieben, `423` werde der Normalfall. **Das war falsch.** Gemessen am
+echten Server, mit Kontrolle:
+
+| Lage | Antwort des Servers |
+|---|---|
+| gesperrt, kein `If-Match` | `423` |
+| gesperrt, `If-Match` **aktuell** | `423` |
+| gesperrt, `If-Match` **veraltet** | **`412`** |
+
+**Dieser Apache wertet die Vorbedingung zuerst aus.** Die Sperre kommt nur zum Zug, wenn `If-Match`
+passt. Für euch heißt das:
+
+- Die Konfliktzeile eurer Tabelle bleibt, wie sie ist: veralteter ETag → `412` → `ChangedElsewhere`.
+  **In diesem Fall ändert sich nichts.**
+- `423` seht ihr nur, wenn das Telefon auf dem aktuellen Stand ist und der PC die Datei offen hat.
+  Das ist der neue Fall — und dort ist „warten" die richtige Auskunft.
+
+Euer `DavError.LockedElsewhere` war bisher praktisch toter Code und wird jetzt erreichbar, aber
+seltener, als ich zuerst behauptet habe.
+
+Gemessen ohne Oberfläche: eine Sperre lässt sich mit `curl -X LOCK` selbst setzen, die Frage ist
+eine Eigenschaft des Servers und nicht von GanttProject.
 
 ---
 
@@ -37,8 +59,8 @@ Abschalten kann Natalie es über `webdav.lockTimeout = -1`. Dann schützt nur no
 
 ### 1. `423` braucht eine echte Erzählung, nicht eine Fehlermeldung
 
-Bisher konnte dieser Fall kaum auftreten. Jetzt tritt er bei jeder normalen Arbeitssitzung am PC
-auf. Was der Benutzer wissen muss:
+Bisher konnte dieser Fall gar nicht auftreten. Jetzt tritt er auf, wenn das Telefon aktuell ist und
+am PC dasselbe Projekt offen liegt. Was der Benutzer wissen muss:
 
 - **Nichts ist verloren.** Seine Änderungen liegen weiter auf dem Telefon.
 - **Es ist ein Warten, kein Fehler.** Jemand hat das Projekt am PC offen.
@@ -117,9 +139,28 @@ PC dauerhaft Zugangsdaten vorliegen.
 
 ---
 
+## Ein Fehler, den euer Warten aufgedeckt hat
+
+Dass ihr `DESKTOP_HONOURS_LOCKS` auf `false` gelassen habt, war richtig — und zwar aus einem Grund,
+den keiner von uns vorhergesehen hat.
+
+Beim ersten Speichern **mit** gehaltener Sperre verweigerte der Desktop den Dienst: „Dokument kann
+nicht geschrieben werden", ohne dass es je zu einem `PUT` kam. Milton setzt beim PROPFIND
+`lockToken` und `lockOwner` gemeinsam, nach einem eigenen `lock()` aber nur das Token. Der Besitzer
+bleibt `null`, `getLockOwners()` liefert `"Unknown user"`, `isWritable()` wird `false` — **der PC
+sperrte sich selbst aus.**
+
+Im Original unerreichbar, weil `acquireLock()` dort keinen Aufrufer hatte. D1 hat einen latenten
+Fehler zu einem echten gemacht. Behoben und mit `tools/lockprobe` samt Gegenprobe belegt.
+
+Hättet ihr vorher umgestellt, wäre die Zusicherung falsch gewesen.
+
 ## Offene Punkte auf meiner Seite
 
-- **D2** (Beschriftung „ohne Sperre öffnen") noch nicht umgesetzt.
+- **D2** ist halb erledigt. Die Protokollzeile bei abgeschalteter Sperre steht. Der Hinweistext auf
+  der Einstellungsseite ist gebaut, aber **nicht als sichtbar bestätigt**: diese Seite zeigt bei
+  Natalie überhaupt nichts ausser „Hinzufügen", und die unangetastete FTP-Seite ist genauso leer.
+  Getrennte Baustelle, als Nächstes dran.
 - **T4** braucht das Telefon und ist von hier aus nicht beurteilbar. Wenn ihr es fahrt: der PC muss
   das Projekt dabei offen haben, sonst prüft es nichts.
 - Beim Start meldet der PC „Failed to parse document", wenn das zuletzt benutzte Projekt auf WebDAV
