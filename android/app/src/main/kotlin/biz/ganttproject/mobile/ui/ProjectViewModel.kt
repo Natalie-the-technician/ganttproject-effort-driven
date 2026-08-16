@@ -34,6 +34,7 @@ import biz.ganttproject.mobile.data.FileResult
 import biz.ganttproject.mobile.data.OpenProject
 import biz.ganttproject.mobile.data.ProjectStore
 import biz.ganttproject.mobile.data.RemoteStore
+import biz.ganttproject.mobile.widget.WidgetSnapshot
 import biz.ganttproject.mobile.data.RecentFile
 import biz.ganttproject.mobile.data.SecureStore
 import androidx.glance.appwidget.updateAll
@@ -270,8 +271,8 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
       when (val result = saveThrough(project, force)) {
         is FileResult.Ok -> {
           _state.update { it.copy(busy = false, project = snapshot(project), notice = Notice.Saved) }
-          // The widget reads local files, so only those go stale on save.
-          if (!project.isRemote) refreshWidget()
+          if (project.isRemote) writeWidgetSnapshot(project)
+          refreshWidget()
         }
         is FileResult.Err ->
           _state.update { it.copy(busy = false, fileError = result.error) }
@@ -403,13 +404,33 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    */
   fun useOpenProjectForWidget() {
     val project = open ?: return
-    // A server project has an https address, and the widget reads through the
-    // content resolver — it would store happily and then draw nothing, with
-    // no error anywhere. Refused here rather than half-working.
-    if (project.isRemote) return
-    prefs.setWidgetProject(project.uri.toString(), project.displayName)
+    // A server project is drawn from a snapshot rather than through the
+    // content resolver, which cannot open an https address. The snapshot is
+    // written here, so the widget has something the moment it is pointed at
+    // the project instead of after the next save.
+    val remote = project.remoteName
+    prefs.setWidgetProject(project.uri.toString(), project.displayName, remote)
+    if (remote != null) writeWidgetSnapshot(project) else WidgetSnapshot(getApplication<Application>()).clear()
     _state.update { it.copy(widget = readWidgetSettings()) }
     refreshWidget()
+  }
+
+  /**
+   * Keeps the widget's copy of a server project in step.
+   *
+   * Called wherever the app learns what the server holds — on opening and
+   * after a successful save. Never on a timer: the snapshot is a picture of
+   * what we last saw, and pretending otherwise would make the timestamp on
+   * the widget a lie.
+   */
+  private fun writeWidgetSnapshot(project: OpenProject) {
+    if (prefs.widgetRemoteName() != project.remoteName) return
+    runCatching {
+      WidgetSnapshot(getApplication<Application>()).write(
+        project.document.toXmlBytes(),
+        System.currentTimeMillis()
+      )
+    }
   }
 
   fun setWidgetWindowDays(days: Int) {
@@ -479,6 +500,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         is FileResult.Ok -> {
           open = result.value
           revision = 0
+          writeWidgetSnapshot(result.value)
           val locked = remote.isLockedElsewhere(name)
           _state.update {
             it.copy(

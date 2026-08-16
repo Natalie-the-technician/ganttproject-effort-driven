@@ -14,7 +14,12 @@ import biz.ganttproject.mobile.core.agenda
 import biz.ganttproject.mobile.core.compareFingerprint
 import biz.ganttproject.mobile.core.contentFingerprint
 import biz.ganttproject.mobile.core.FileChangeState
+import biz.ganttproject.mobile.core.DavResult
+import biz.ganttproject.mobile.core.WebDavClient
+import biz.ganttproject.mobile.core.WebDavConfig
 import biz.ganttproject.mobile.data.AppPreferences
+import biz.ganttproject.mobile.data.SecureStore
+import biz.ganttproject.mobile.net.AndroidHttpBackend
 import java.time.LocalDate
 
 /** What the widget managed to load, and what went wrong if it did not. */
@@ -34,7 +39,14 @@ sealed interface WidgetState {
      * from the widget is switched off, the list stays — a plan is worth
      * looking at even when you must not change it from here.
      */
-    val canEdit: Boolean
+    val canEdit: Boolean,
+    /**
+     * When the drawn content was last fetched, or 0 for a local file, which
+     * is read directly and is therefore never out of date.
+     */
+    val snapshotAt: Long = 0L,
+    /** Why the last tap did nothing, for the half minute after it. */
+    val notice: String? = null
   ) : WidgetState
 }
 
@@ -60,7 +72,20 @@ enum class WidgetEditResult {
    * can be a redraw behind the setting, and the tap that is already in flight
    * has to land somewhere.
    */
-  DISABLED
+  DISABLED,
+
+  /**
+   * Refused because the project is open on the desktop.
+   *
+   * Its own outcome, not a [CONFLICT]: nothing collided and nothing is lost,
+   * the file is simply held. Telling somebody to resolve a conflict that does
+   * not exist would send them into the app to compare two versions that are
+   * the same.
+   */
+  LOCKED,
+
+  /** The server could not be reached. Nothing was written. */
+  OFFLINE
 }
 
 /**
@@ -79,9 +104,22 @@ class WidgetProject(private val context: Context) {
 
   private val prefs = AppPreferences(context)
 
+  private val snapshot = WidgetSnapshot(context)
+
+  /** The project name on the server, or null when the widget shows a file. */
+  private val remoteName: String? get() = prefs.widgetRemoteName()
+
   fun load(): WidgetState {
-    val uri = prefs.widgetProjectUri()?.let(Uri::parse) ?: return WidgetState.NoProject
-    val bytes = readBytes(uri) ?: return WidgetState.Unreadable
+    val remote = remoteName
+    val bytes = if (remote != null) {
+      // Never the network here. A redraw is the system's decision, not the
+      // user's, and a widget that fetches whenever Android feels like it is
+      // background traffic by another name.
+      snapshot.read() ?: return WidgetState.Unreadable
+    } else {
+      val uri = prefs.widgetProjectUri()?.let(Uri::parse) ?: return WidgetState.NoProject
+      readBytes(uri) ?: return WidgetState.Unreadable
+    }
     val document = runCatching { GanttDocument.load(bytes) }.getOrNull()
       ?: return WidgetState.Unreadable
     val model = document.read()
@@ -90,8 +128,74 @@ class WidgetProject(private val context: Context) {
       projectName = model.name.ifBlank { prefs.widgetProjectName().orEmpty() },
       items = agenda(model, LocalDate.now(), days),
       windowDays = days,
-      canEdit = prefs.editScope().allowsWidgetEdits
+      canEdit = prefs.editScope().allowsWidgetEdits,
+      snapshotAt = if (remote != null) prefs.widgetSnapshotAt() else 0L,
+      notice = prefs.widgetNotice()
     )
+  }
+
+  /**
+   * Fetches the project from the server and replaces the snapshot.
+   *
+   * The refresh button. Everything else about the widget avoids the network;
+   * this is the one place the user asks for it, so it is the one place that
+   * goes.
+   */
+  fun refresh(): WidgetEditResult {
+    val name = remoteName ?: return WidgetEditResult.SAVED
+    val client = client() ?: return WidgetEditResult.FAILED
+    return when (val result = client.read(name)) {
+      is DavResult.Ok -> {
+        snapshot.write(result.value.bytes, System.currentTimeMillis())
+        WidgetEditResult.SAVED
+      }
+      is DavResult.Failed -> failureFor(result.error)
+    }
+  }
+
+  private fun client(): WebDavClient? {
+    val base = prefs.davBaseUrl() ?: return null
+    val user = prefs.davUsername() ?: return null
+    val password = SecureStore(context).getSecret(SecureStore.KEY_DAV_PASSWORD) ?: return null
+    return WebDavClient(AndroidHttpBackend(), WebDavConfig(base, user, password))
+  }
+
+  private fun failureFor(error: biz.ganttproject.mobile.core.DavError): WidgetEditResult =
+    when (error) {
+      biz.ganttproject.mobile.core.DavError.LockedElsewhere -> WidgetEditResult.LOCKED
+      biz.ganttproject.mobile.core.DavError.ChangedElsewhere -> WidgetEditResult.CONFLICT
+      is biz.ganttproject.mobile.core.DavError.Network -> WidgetEditResult.OFFLINE
+      else -> WidgetEditResult.FAILED
+    }
+
+  /**
+   * Applies [change] to the project on the server.
+   *
+   * Read, change, write back conditionally — the same shape as the local
+   * path, with the server doing the checking instead of a fingerprint. The
+   * ETag is fetched here rather than remembered: the widget holds nothing
+   * between taps, and a stored one would let a tap write against a version
+   * the user never saw.
+   */
+  private fun editRemote(name: String, change: (GanttDocument) -> Boolean): WidgetEditResult {
+    if (!prefs.editScope().allowsWidgetEdits) return WidgetEditResult.DISABLED
+    val client = client() ?: return WidgetEditResult.FAILED
+    val current = when (val result = client.read(name)) {
+      is DavResult.Ok -> result.value
+      is DavResult.Failed -> return failureFor(result.error)
+    }
+    val etag = current.etag ?: return WidgetEditResult.FAILED
+    val document = runCatching { GanttDocument.load(current.bytes) }.getOrNull()
+      ?: return WidgetEditResult.FAILED
+    if (!change(document)) return WidgetEditResult.FAILED
+    val bytes = document.toXmlBytes()
+    return when (val result = client.write(name, bytes, etag)) {
+      is DavResult.Ok -> {
+        snapshot.write(bytes, System.currentTimeMillis())
+        WidgetEditResult.SAVED
+      }
+      is DavResult.Failed -> failureFor(result.error)
+    }
   }
 
   /** Marks a task finished. */
@@ -114,6 +218,7 @@ class WidgetProject(private val context: Context) {
     // Read fresh from disk on every tap, never cached: the widget lives in a
     // different process from the app, so a value cached here would keep
     // writing after the user switched editing off.
+    remoteName?.let { return editRemote(it, change) }
     if (!prefs.editScope().allowsWidgetEdits) return WidgetEditResult.DISABLED
     val uri = prefs.widgetProjectUri()?.let(Uri::parse) ?: return WidgetEditResult.FAILED
     val before = readBytes(uri) ?: return WidgetEditResult.FAILED

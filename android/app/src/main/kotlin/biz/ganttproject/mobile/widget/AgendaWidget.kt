@@ -37,6 +37,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import biz.ganttproject.mobile.MainActivity
 import biz.ganttproject.mobile.R
+import biz.ganttproject.mobile.data.AppPreferences
 import biz.ganttproject.mobile.core.AgendaItem
 import biz.ganttproject.mobile.core.formatHours
 import java.time.format.DateTimeFormatter
@@ -113,6 +114,35 @@ private fun WidgetBody(context: Context, state: WidgetState) {
           )
         }
 
+        // Only for a server project. A local file is read straight from disk
+        // on every redraw, so it is never out of date and there is nothing to
+        // fetch — a refresh button there would promise an act it does not
+        // perform.
+        if (state.snapshotAt > 0L) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+              text = context.getString(R.string.widget_snapshot_at, snapshotLabel(context, state.snapshotAt)),
+              style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant),
+              maxLines = 1,
+              modifier = GlanceModifier.defaultWeight()
+            )
+            Text(
+              text = context.getString(R.string.widget_refresh),
+              style = TextStyle(color = GlanceTheme.colors.primary),
+              maxLines = 1,
+              modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>())
+            )
+          }
+        }
+
+        state.notice?.let { key ->
+          Text(
+            text = context.getString(noticeText(key)),
+            style = TextStyle(color = GlanceTheme.colors.error),
+            maxLines = 2
+          )
+        }
+
         if (state.items.isEmpty()) {
           WidgetHint(context.getString(R.string.widget_nothing_due), openApp = false)
         } else {
@@ -124,6 +154,28 @@ private fun WidgetBody(context: Context, state: WidgetState) {
         }
       }
     }
+  }
+}
+
+/**
+ * "14:32" for a snapshot from today, otherwise a date.
+ *
+ * A bare time on a three-day-old snapshot would read as "just now", which is
+ * the thing this label exists to prevent.
+ */
+private fun noticeText(key: String): Int = when (key) {
+  "locked" -> R.string.widget_locked
+  "offline" -> R.string.widget_offline
+  else -> R.string.widget_failed
+}
+
+private fun snapshotLabel(context: Context, millis: Long): String {
+  val taken = java.time.Instant.ofEpochMilli(millis)
+    .atZone(java.time.ZoneId.systemDefault())
+  return if (taken.toLocalDate() == java.time.LocalDate.now()) {
+    java.time.format.DateTimeFormatter.ofPattern("HH:mm").format(taken)
+  } else {
+    java.time.format.DateTimeFormatter.ofPattern("d.M. HH:mm").format(taken)
   }
 }
 
@@ -242,6 +294,24 @@ class AddHoursAction : ActionCallback {
 }
 
 /**
+ * Fetches the current version from the server on request.
+ *
+ * The counterpart to drawing from a snapshot: nothing is fetched on its own,
+ * and this is how the user asks. Deliberately a button rather than a schedule
+ * — a widget that polls somebody's own server all day is impolite in a way
+ * that never shows up in testing.
+ */
+class RefreshAction : ActionCallback {
+  override suspend fun onAction(
+    context: Context,
+    glanceId: GlanceId,
+    parameters: ActionParameters
+  ) {
+    handleResult(context, glanceId, WidgetProject(context).refresh())
+  }
+}
+
+/**
  * Redraws after a change, and sends the user to the app when the widget must
  * not decide on its own.
  *
@@ -253,6 +323,14 @@ private suspend fun handleResult(context: Context, glanceId: GlanceId, result: W
   // DISABLED needs no reaction beyond the redraw below, which removes the
   // buttons that should not have been there. Sending the user to the app
   // would punish them for a tap the widget itself offered.
+  AppPreferences(context).setWidgetNotice(
+    when (result) {
+      WidgetEditResult.LOCKED -> "locked"
+      WidgetEditResult.OFFLINE -> "offline"
+      WidgetEditResult.FAILED -> "failed"
+      else -> null
+    }
+  )
   if (result == WidgetEditResult.CONFLICT) {
     context.startActivity(
       Intent(context, MainActivity::class.java)

@@ -162,6 +162,11 @@
     <string name="widget_unreadable">The project could not be read. Tap to open the app.</string>
     <string name="widget_nothing_due">Nothing due in this period.</string>
     <string name="widget_window_label">next %1$d d</string>
+    <string name="widget_snapshot_at">As of %1$s</string>
+    <string name="widget_refresh">Refresh</string>
+    <string name="widget_locked">Open on the PC — nothing was changed</string>
+    <string name="widget_offline">Server not reachable — nothing was changed</string>
+    <string name="widget_failed">The change could not be saved</string>
     <string name="widget_overdue">Overdue</string>
     <string name="widget_add_half_hour">+½ h</string>
     <string name="widget_project">Project for the widget</string>

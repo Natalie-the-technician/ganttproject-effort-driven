@@ -175,10 +175,59 @@ class AppPreferences(context: Context) {
 
   fun widgetProjectName(): String? = prefs.getString(KEY_WIDGET_NAME, null)
 
-  fun setWidgetProject(uri: String?, displayName: String?) {
+  fun setWidgetProject(uri: String?, displayName: String?, remoteName: String? = null) {
     prefs.edit()
       .putString(KEY_WIDGET_URI, uri)
       .putString(KEY_WIDGET_NAME, displayName)
+      .putString(KEY_WIDGET_REMOTE, remoteName)
+      .apply()
+  }
+
+  /**
+   * The project name on the sync server, or null when the widget points at a
+   * local file.
+   *
+   * The widget draws from a snapshot either way; this decides where a tap
+   * writes to and what the refresh button fetches.
+   */
+  fun widgetRemoteName(): String? = prefs.getString(KEY_WIDGET_REMOTE, null)?.ifBlank { null }
+
+  /**
+   * When the snapshot behind the widget was taken, or 0 when there is none.
+   *
+   * Shown on the widget rather than kept internal. A widget that draws
+   * yesterday's numbers as though they were current is the same class of
+   * mistake as an address field that shows only its first thirty characters:
+   * correct in what it displays, wrong in what it lets you conclude.
+   */
+  fun widgetSnapshotAt(): Long = prefs.getLong(KEY_WIDGET_SNAPSHOT_AT, 0L)
+
+  fun setWidgetSnapshotAt(millis: Long) {
+    prefs.edit().putLong(KEY_WIDGET_SNAPSHOT_AT, millis).apply()
+  }
+
+  /**
+   * Why the last tap on the widget did nothing, for the seconds after it.
+   *
+   * A widget has no dialog and no snackbar, so a refused tap would otherwise
+   * be indistinguishable from a tap that did not register — the failure mode
+   * that had somebody pressing "open from server" three times in two seconds
+   * because an empty result looked exactly like nothing happening.
+   *
+   * Expires by itself rather than being cleared. A redraw can come from
+   * anywhere at any time, and a flag that has to be reset somewhere would
+   * eventually be shown by the redraw that nobody thought about.
+   */
+  fun widgetNotice(): String? {
+    val at = prefs.getLong(KEY_WIDGET_NOTICE_AT, 0L)
+    if (at == 0L || System.currentTimeMillis() - at > NOTICE_LIFETIME_MS) return null
+    return prefs.getString(KEY_WIDGET_NOTICE, null)?.ifBlank { null }
+  }
+
+  fun setWidgetNotice(key: String?) {
+    prefs.edit()
+      .putString(KEY_WIDGET_NOTICE, key)
+      .putLong(KEY_WIDGET_NOTICE_AT, if (key == null) 0L else System.currentTimeMillis())
       .apply()
   }
 
@@ -241,6 +290,13 @@ class AppPreferences(context: Context) {
     private const val KEY_WIDGET_URI = "widget_project_uri"
     private const val KEY_WIDGET_NAME = "widget_project_name"
     private const val KEY_WIDGET_DAYS = "widget_window_days"
+    private const val KEY_WIDGET_REMOTE = "widget_remote_name"
+    private const val KEY_WIDGET_SNAPSHOT_AT = "widget_snapshot_at"
+    private const val KEY_WIDGET_NOTICE = "widget_notice"
+    private const val KEY_WIDGET_NOTICE_AT = "widget_notice_at"
+
+    /** Long enough to be read, short enough not to outlive its occasion. */
+    private const val NOTICE_LIFETIME_MS = 30_000L
     private const val KEY_EDIT_SCOPE = "edit_scope"
     private const val KEY_DAV_URL = "dav_base_url"
     private const val KEY_DAV_USER = "dav_username"
