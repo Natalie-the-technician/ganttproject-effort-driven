@@ -37,6 +37,7 @@ import biz.ganttproject.mobile.data.RemoteStore
 import biz.ganttproject.mobile.widget.WidgetSnapshot
 import biz.ganttproject.mobile.data.RecentFile
 import biz.ganttproject.mobile.data.SecureStore
+import biz.ganttproject.mobile.data.WidgetTarget
 import androidx.glance.appwidget.updateAll
 import biz.ganttproject.mobile.net.AndroidHttpBackend
 import biz.ganttproject.mobile.widget.AgendaWidget
@@ -609,7 +610,16 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
   /** Opens whatever project the widget is pointed at. */
   fun openWidgetProject() {
-    prefs.widgetProjectUri()?.let { openUri(Uri.parse(it)) }
+    // Branch on where the widget's project lives, exactly as save() and
+    // saveIfDirty() do. The stored URI is an https address for a server
+    // project, and openUri hands it to the ContentResolver, which cannot open
+    // one — the app then reports that the file could not be opened, which is
+    // true of the attempt and says nothing about the file.
+    when (val target = prefs.widgetTarget()) {
+      is WidgetTarget.Remote -> openRemote(target.name)
+      is WidgetTarget.Local -> openUri(Uri.parse(target.uri))
+      WidgetTarget.None -> Unit
+    }
   }
 
   // ------------------------------------------------------- Edit protection

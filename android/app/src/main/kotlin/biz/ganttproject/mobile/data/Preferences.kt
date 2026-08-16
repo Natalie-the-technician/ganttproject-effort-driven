@@ -29,6 +29,17 @@ import javax.crypto.spec.GCMParameterSpec
  * primitive (AES-GCM with a keystore-held key) in far less code and with no
  * dependency to keep up with.
  */
+/** Which project the home-screen widget shows, and where it lives. */
+sealed interface WidgetTarget {
+  data object None : WidgetTarget
+
+  /** A file on the device, reachable through the `ContentResolver`. */
+  data class Local(val uri: String) : WidgetTarget
+
+  /** A project on the sync server, reachable only over HTTP. */
+  data class Remote(val name: String) : WidgetTarget
+}
+
 class SecureStore(context: Context) {
 
   private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -171,7 +182,26 @@ class AppPreferences(context: Context) {
    * the file was first opened — that grant is what lets a widget touch the
    * file at all, without any storage permission.
    */
-  fun widgetProjectUri(): String? = prefs.getString(KEY_WIDGET_URI, null)
+  private fun widgetProjectUri(): String? = prefs.getString(KEY_WIDGET_URI, null)
+
+  /**
+   * Where the widget's project lives, as one answer that cannot be half-read.
+   *
+   * [widgetProjectUri] returns an `https` address for a server project, and a
+   * caller that reads it without asking [widgetRemoteName] first hands that
+   * address to the `ContentResolver`, which cannot open it. That mistake was
+   * made three times in one evening — in the save path, in the auto-save
+   * path, and in the widget tap — always by code that had no reason to
+   * suspect the value was not a file.
+   *
+   * A caller of this cannot forget, because there is nothing to forget: the
+   * type does not let a URI out without saying it is one.
+   */
+  fun widgetTarget(): WidgetTarget {
+    widgetRemoteName()?.let { return WidgetTarget.Remote(it) }
+    val uri = widgetProjectUri() ?: return WidgetTarget.None
+    return WidgetTarget.Local(uri)
+  }
 
   fun widgetProjectName(): String? = prefs.getString(KEY_WIDGET_NAME, null)
 

@@ -19,6 +19,7 @@ import biz.ganttproject.mobile.core.WebDavClient
 import biz.ganttproject.mobile.core.WebDavConfig
 import biz.ganttproject.mobile.data.AppPreferences
 import biz.ganttproject.mobile.data.SecureStore
+import biz.ganttproject.mobile.data.WidgetTarget
 import biz.ganttproject.mobile.net.AndroidHttpBackend
 import java.time.LocalDate
 
@@ -107,19 +108,19 @@ class WidgetProject(private val context: Context) {
   private val snapshot = WidgetSnapshot(context)
 
   /** The project name on the server, or null when the widget shows a file. */
-  private val remoteName: String? get() = prefs.widgetRemoteName()
+  private val remoteName: String? get() = (prefs.widgetTarget() as? WidgetTarget.Remote)?.name
 
   fun load(): WidgetState {
-    val remote = remoteName
-    val bytes = if (remote != null) {
+    val target = prefs.widgetTarget()
+    val bytes = when (target) {
       // Never the network here. A redraw is the system's decision, not the
       // user's, and a widget that fetches whenever Android feels like it is
       // background traffic by another name.
-      snapshot.read() ?: return WidgetState.Unreadable
-    } else {
-      val uri = prefs.widgetProjectUri()?.let(Uri::parse) ?: return WidgetState.NoProject
-      readBytes(uri) ?: return WidgetState.Unreadable
+      is WidgetTarget.Remote -> snapshot.read() ?: return WidgetState.Unreadable
+      is WidgetTarget.Local -> readBytes(Uri.parse(target.uri)) ?: return WidgetState.Unreadable
+      WidgetTarget.None -> return WidgetState.NoProject
     }
+    val remote = (target as? WidgetTarget.Remote)?.name
     val document = runCatching { GanttDocument.load(bytes) }.getOrNull()
       ?: return WidgetState.Unreadable
     val model = document.read()
@@ -220,7 +221,8 @@ class WidgetProject(private val context: Context) {
     // writing after the user switched editing off.
     remoteName?.let { return editRemote(it, change) }
     if (!prefs.editScope().allowsWidgetEdits) return WidgetEditResult.DISABLED
-    val uri = prefs.widgetProjectUri()?.let(Uri::parse) ?: return WidgetEditResult.FAILED
+    val target = prefs.widgetTarget() as? WidgetTarget.Local ?: return WidgetEditResult.FAILED
+    val uri = Uri.parse(target.uri)
     val before = readBytes(uri) ?: return WidgetEditResult.FAILED
     val document = runCatching { GanttDocument.load(before) }.getOrNull()
       ?: return WidgetEditResult.FAILED
