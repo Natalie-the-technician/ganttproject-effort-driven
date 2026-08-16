@@ -2242,6 +2242,46 @@ plausibel begruendet und falsch.
 Nicht am Server nachweisbar: Natalies Apache komprimiert nicht, der Zweig ist dort nicht
 erreichbar. Abgedeckt sind die Faelle durch Einheitstests (11 statt 8).
 
+### Doppelklick auf eine .gan: "Failed to launch JVM" -- und es lag NICHT am Arbeitsverzeichnis
+
+Die Uebergabe vermutete das Arbeitsverzeichnis: beim Doppelklick ist es der Ordner der .gan-Datei,
+nicht der Programmordner, und diese Fehlerfamilie hatte diese Sitzung schon mehrfach. Plausibel,
+und falsch.
+
+Gemessen, mit dem Protokoll als Merkmal fuer "die JVM lief" -- ein Fenster sieht diese Sitzung
+nicht, aus ihr gestartete Prozesse haben keinen sichtbaren Bildschirm:
+
+| Lauf | Ergebnis |
+|---|---|
+| Arbeitsverzeichnis Programmordner, ohne Argument | Protokoll geschrieben |
+| Arbeitsverzeichnis `C:\`, ohne Argument | Protokoll geschrieben |
+| Arbeitsverzeichnis `C:\`, **mit** .gan-Argument | kein Protokoll |
+| Arbeitsverzeichnis `C:\`, volle Argumentliste + .gan | Protokoll geschrieben |
+
+Das Arbeitsverzeichnis ist egal. **Es liegt am Argument.**
+
+Ursache: jpackage schreibt `--arguments` als `[ArgOptions]` in die .cfg und benutzt sie **nur als
+Vorgabe**. Kommt beim Aufruf auch nur ein Argument von aussen -- beim Doppelklick der Dateipfad --,
+ersetzt es die Vorgabe **vollstaendig**. eclipsito bekam dann einen Dateinamen ohne `--app` und ohne
+`--version-dirs`, brach ab, und der Starter meldete pauschal "Failed to launch JVM". Die Meldung
+nennt die JVM, gemeint ist der Rueckgabewert der Hauptklasse.
+
+Behebung: eigene Hauptklasse `ForkLauncher` (`ganttproject-builder/launcher/`), die die Argumente im
+Code mitbringt und die von aussen anhaengt. `--arguments` faellt damit weg -- sonst stuenden die
+Vorgaben beim Start ohne Datei doppelt in der Liste. Den app-Ordner bestimmt sie ueber den Ort der
+eigenen Klasse, ersatzweise ueber `jpackage.app-path`.
+
+Belegt: alle drei Faelle starten, und der Lauf mit Datei durchlaeuft zusaetzlich die
+Oeffnen-Zustandsmaschine (`ProjectOpenActivityCreated -> Started -> DocumentReady`) und baut die
+H2-Spiegeldatenbank auf. Beides fehlt im Lauf ohne Datei -- die Datei wird also geladen, nicht nur
+durchgereicht.
+
+**Zwei Messfehler auf dem Weg dorthin**, beide erst durch eine Gegenprobe aufgefallen:
+- "Prozess laeuft noch" als Merkmal fuer Erfolg ist wertlos: ein Fehlerdialog haelt den Prozess
+  genauso am Leben.
+- Der erste Vergleichslauf uebergab gar kein Argument -- also genau die Variable nicht, um die es
+  ging.
+
 ### Offen aus dieser Sitzung
 
 - **Startmeldung "Failed to parse document".** Beim Start oeffnet GanttProject das zuletzt

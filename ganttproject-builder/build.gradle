@@ -155,6 +155,19 @@ task distApp(dependsOn: [distBin, distRuntime]) {
             exclude 'runtime/**', 'ganttproject.exe', '*.l4j.ini'
         }
 
+        // [Fork-Aenderung] Eigene Hauptklasse in den app-Ordner uebersetzen, siehe ForkLauncher.
+        //
+        // Sie liegt als .class direkt im Zwischenstand, weil app.classpath den app-Ordner selbst
+        // enthaelt (weiter unten angehaengt). Ein eigenes Jar waere Zierrat: eine Klasse.
+        println '= Uebersetze die eigene Starterklasse ...'
+        injected.exec.exec {
+            commandLine new File(jdk, 'bin/javac').toString(),
+                    '-encoding', 'UTF-8',
+                    '-classpath', new File(staging, 'eclipsito.jar').toString(),
+                    '-d', staging.toString(),
+                    file('launcher/net/sourceforge/ganttproject/launcher/ForkLauncher.java').toString()
+        }
+
         def args = [new File(jdk, 'bin/jpackage').toString(),
                     '--type', 'app-image',
                     '--name', 'GanttProject',
@@ -163,24 +176,20 @@ task distApp(dependsOn: [distBin, distRuntime]) {
                     '--input', staging.toString(),
                     '--runtime-image', new File(distBinDir, 'runtime').toString(),
                     '--main-jar', 'eclipsito.jar',
-                    '--main-class', 'com.bardsoftware.eclipsito.Launch',
+                    // [Fork-Aenderung] Eigene Hauptklasse statt eclipsito direkt.
+                    //
+                    // Die eclipsito-Argumente standen frueher hier als --arguments und landeten als
+                    // [ArgOptions] in der .cfg. Das ist eine VORGABE: sobald der Starter mit einem
+                    // Argument aufgerufen wird -- beim Doppelklick auf eine .gan uebergibt Windows
+                    // den Dateipfad -- ersetzt dieses Argument die Vorgabe vollstaendig. eclipsito
+                    // bekam dann nur einen Dateinamen, ohne --app und ohne --version-dirs, brach ab,
+                    // und der Starter meldete pauschal "Failed to launch JVM".
+                    //
+                    // ForkLauncher bringt die Argumente im Code mit und haengt die von aussen an.
+                    // Deshalb hier KEIN --arguments mehr: die Vorgabe waere sonst beim Start ohne
+                    // Datei ein zweites Mal in der Liste.
+                    '--main-class', 'net.sourceforge.ganttproject.launcher.ForkLauncher',
                     '--icon', file('ganttproject.ico').toString()]
-        // Ein eigenes --arguments je Argument. Ein einziger String wuerde von jpackage anders
-        // zerlegt, als hier gemeint ist -- der Pfad mit dem Semikolon ist genau so ein Fall.
-        // "-log true" gehoert dazu: ohne das schreibt GanttProject nur den Umgebungsblock und
-        // keine Zeile ueber den Start der Oberflaeche. Bei einem Fenster-Programm gibt es keine
-        // Konsole, das Protokoll ist also die einzige Spur -- ohne sie ist jeder Fehlstart eine
-        // Blackbox. ganttproject.bat uebergibt es ebenfalls.
-        ['--verbosity', '1',
-         // $APPDIR statt "plugins": eclipsito loest einen relativen Pfad gegen das
-         // ARBEITSVERZEICHNIS auf, und das ist beim Doppelklick nicht der Programmordner. Es
-         // suchte die Plugins dann dort, wo gestartet wurde, fand nichts und tat gar nichts --
-         // kein Fenster, kein Protokoll. jpackage ersetzt $APPDIR durch den app-Ordner.
-         '--version-dirs', '$APPDIR/plugins;~/.ganttproject.d/updates',
-         '--app', 'net.sourceforge.ganttproject.GanttProject',
-         '-log', 'true'].each {
-            args += ['--arguments', it]
-        }
         args += ['--java-options', '-Xmx2048m', '--java-options', '-Dgpcloud=prod',
                  '--java-options', '-Dorg.jooq.no-logo=true',
                  '--java-options', '-Dsun.java2d.d3d=false']
