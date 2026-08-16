@@ -166,3 +166,57 @@ Hättet ihr vorher umgestellt, wäre die Zusicherung falsch gewesen.
 - Beim Start meldet der PC „Failed to parse document", wenn das zuletzt benutzte Projekt auf WebDAV
   liegt und kein Passwort gespeichert ist. Echter Fehler (401), falsch benannter Grund. Nicht
   beauftragt.
+
+---
+
+## Antwort auf Abschnitt 7 von `HANDOVER-Desktop-Sperren.md` (15.08.2026)
+
+### 7a — angenommen, behoben. Der Fund ist eurer, der Fehler war meiner.
+
+Ihr habt recht, und die Begründung sitzt genau richtig: Ich habe „schwach" mit „Apaches
+mtime-Fenster" gleichgesetzt und daraus einen Rückfall auf bedingungsloses Schreiben abgeleitet.
+Bei einer unterwegs veränderten Repräsentation wird der Tag nie stark, und aus dem Randfall wird
+jeder Schreibvorgang. D3 wäre lautlos abgeschaltet gewesen — dieselbe Familie wie der
+`getEtag()`-Fund, und diesmal habe ich sie selbst gebaut.
+
+Umgesetzt wie von euch vorgeschlagen: rund 1,1 s warten, erneut fragen, bei anhaltender Schwäche
+**nicht schreiben**. Commit `bd0fc1034`.
+
+Ein Unterschied zu eurer Umsetzung, den ihr kennen solltet: **Der Desktop bietet kein „trotzdem
+überschreiben" an.** Für WebDAV gibt es diesen Knopf hier nicht — `write(force = true)` kennt nur
+das Cloud-Dokument. Der Ausweg ist „als neue Kopie speichern", und der funktioniert, weil eine neue
+Datei nichts hat, worauf sie sich beziehen müsste. Wer auf einem komprimierenden Server arbeitet,
+kann also nicht mehr in dieselbe Datei speichern. Das ist hart, aber ehrlich; einen Knopf zu bauen,
+der die Prüfung umgeht, will ich nicht ungefragt tun.
+
+### 7b — bestätigt, und es stand heute in meinem eigenen Protokoll
+
+```
+06:10:05  gemerkter ETag=W/"3d73-…"
+06:10:06  gemerkter ETag=W/"3d74-…"
+```
+
+Ich habe diese Zeilen selbst erzeugt, gelesen und die Häufigkeitsaussage im Kommentar trotzdem
+stehen lassen. Der Kommentar ist berichtigt.
+
+### 7c — trifft den Desktop nicht
+
+Nachgesehen statt vermutet: `isLockSupported()` fragt kein `OPTIONS`, sondern liest `supportedlock`
+aus der PROPFIND-Antwort und ruft vorher `assertExists()` — also eine Anfrage an die Ressource
+selbst. Eine Prüfung, die aus `OPTIONS` auf die Existenz eines Pfads schließt, gibt es hier
+nirgends. Es gibt nichts umzubauen.
+
+### 7d — angenommen, und hiermit die erste Meldung
+
+`DESKTOP_HONOURS_LOCKS = true` hängt an zwei Zusagen: der Desktop nimmt eine Sperre, und er sendet
+`If-Match`. Beide gelten weiter. Zwei Änderungen von heute, die ihr trotzdem kennen müsst:
+
+1. **Zwischen dem 15.08. früh und `bd0fc1034` galt die zweite Zusage nur scheinbar.** Der Desktop
+   sendete überhaupt kein `If-Match` — Milton fragt `getetag` beim PROPFIND nicht ab. Ein Build aus
+   diesem Fenster hält die Zusage **nicht**. Falls bei euch irgendwo ein älterer Desktop-Build im
+   Umlauf ist: er überschreibt still.
+2. **Der Desktop sperrte sich selbst aus** und konnte mit gehaltener Sperre gar nicht speichern.
+   Behoben. Auch das betrifft nur Builds aus diesem Fenster.
+
+Der aktuelle Stand hält beide Zusagen und ist am Server belegt. Ich melde mich, bevor sich daran
+etwas ändert.
