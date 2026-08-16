@@ -59,6 +59,11 @@ import javax.swing.text.html.HTMLEditorKit;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+// [Fork-Aenderung] fuer reportBrokenLayout.
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
+import java.util.ArrayList;
+import net.sourceforge.ganttproject.GPLogger;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.io.File;
@@ -382,8 +387,90 @@ public abstract class UIUtil {
     center.setAlignmentX(Component.LEFT_ALIGNMENT);
     planePageWrapper.add(center, BorderLayout.NORTH);
     result.add(planePageWrapper, BorderLayout.CENTER);
+    reportBrokenLayout(result);
     return result;
 
+  }
+
+  /**
+   * [Fork-Aenderung] Meldet Teile einer Einstellungsseite, die unmoeglich sichtbar sein koennen.
+   *
+   * WOZU: Auf der WebDAV-Seite hatten die Serverdetails eine Breite von MINUS 75. BorderLayout gibt
+   * WEST seine volle Wunschbreite und der Mitte nur den Rest -- auch wenn der negativ ist. Man
+   * konnte Server anlegen, aber Adresse, Benutzer und Passwort nie sehen. Nichts im Protokoll,
+   * keine Ausnahme; die Seite sah einfach halb leer aus, und niemand konnte sagen warum.
+   *
+   * Diese Pruefung haengt an {@link #createTopAndCenter}, weil ALLE Einstellungsseiten dort
+   * durchlaufen -- die Alternative waere gewesen, jede Seite einzeln anzusehen und die naechste zu
+   * uebersehen.
+   *
+   * Gemeldet wird nur, was zweifelsfrei kaputt ist: negative Groesse, oder ein Teil, der ueber den
+   * Rand der Seite hinausragt. Null Breite bleibt ungemeldet -- Fuellelemente haben die zu Recht.
+   * Eine Meldung, die auch im heilen Fall kommt, liest bald niemand mehr.
+   */
+  private static void reportBrokenLayout(final JComponent page) {
+    page.addComponentListener(new ComponentAdapter() {
+      private boolean alreadyChecked = false;
+
+      @Override
+      public void componentResized(ComponentEvent event) {
+        if (alreadyChecked || page.getWidth() <= 0) {
+          return;
+        }
+        alreadyChecked = true;
+        // Nach dem Ereignis, damit die Anordnung wirklich abgeschlossen ist.
+        SwingUtilities.invokeLater(() -> {
+          List<String> broken = new ArrayList<>();
+          collectBroken(page, page, 0, 0, broken);
+          if (!broken.isEmpty()) {
+            GPLogger.log("Einstellungsseite " + page.getWidth() + "x" + page.getHeight()
+                + ": Teile ausserhalb des Darstellbaren:" + String.join("", broken));
+          }
+        });
+      }
+    });
+  }
+
+  /** Ein Behaelter mit Kindern, der selbst keine Flaeche hat: sein Inhalt ist unerreichbar. */
+  private static boolean isEmptyContainer(Component c) {
+    return (c.getWidth() == 0 || c.getHeight() == 0)
+        && c instanceof Container
+        && ((Container) c).getComponentCount() > 0;
+  }
+
+  private static void collectBroken(Component c, JComponent page, int x, int y, List<String> out) {
+    // Innerhalb eines Rollbereichs ist ein zu grosser Inhalt der Normalfall, kein Fehler.
+    if (c instanceof JScrollPane) {
+      return;
+    }
+    if (c != page) {
+      int right = x + c.getWidth();
+      int bottom = y + c.getHeight();
+      String problem = null;
+      if (c.getWidth() < 0 || c.getHeight() < 0) {
+        problem = "negative Groesse";
+      } else if (isEmptyContainer(c)) {
+        // NACHTRAEGLICH ERGAENZT, weil die Pruefung ohne das einen echten Fehler durchgelassen hat:
+        // setDividerLocation(0.5) auf einer noch ungemessenen JSplitPane schiebt den Trenner an den
+        // Rand, eine Seite bekommt die Breite 0 -- nicht negativ, nicht hinausragend, also still.
+        // Ein Behaelter MIT Inhalt und OHNE Groesse ist immer ein Fehler; ein leeres Fuellelement
+        // mit Groesse 0 ist keiner. Deshalb wird auf Inhalt geprueft, nicht nur auf die Groesse.
+        problem = "Groesse 0, obwohl Inhalt vorhanden";
+      } else if (right > page.getWidth() || bottom > page.getHeight()) {
+        problem = "ragt hinaus";
+      }
+      if (problem != null) {
+        out.add(String.format("%n  %-28s x=%4d y=%4d breite=%5d hoehe=%5d  -- %s",
+            c.getClass().getSimpleName(), x, y, c.getWidth(), c.getHeight(), problem));
+        // Kinder nicht zusaetzlich melden: sie erben den Fehler und ergaeben nur Rauschen.
+        return;
+      }
+    }
+    if (c instanceof Container) {
+      for (Component child : ((Container) c).getComponents()) {
+        collectBroken(child, page, x + child.getX(), y + child.getY(), out);
+      }
+    }
   }
 
   public static JMenu createTooltiplessJMenu(Action action) {

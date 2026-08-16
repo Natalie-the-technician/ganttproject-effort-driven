@@ -2282,6 +2282,60 @@ durchgereicht.
 - Der erste Vergleichslauf uebergab gar kein Argument -- also genau die Variable nicht, um die es
   ging.
 
+### Die Einstellungsseiten zeigten fast nichts -- und dreimal war der Verdacht falsch
+
+Natalies Befund: die WebDAV-Seite zeigt nur "Hinzufuegen", die FTP-Seite ein Feld statt vier. Der
+Weg dahin ist lehrreich, weil drei plausible Erklaerungen nacheinander widerlegt wurden.
+
+**Widerlegt 1 -- "UIUtil stirbt beim Laden".** Ein Prueflauf ausserhalb des Programms warf im
+statischen Initialisierer eine NullPointerException (`new ImageIcon(null)`). Artefakt: meinem
+Klassenpfad fehlte die `resources`-Wurzel, die eclipsito zur Laufzeit setzt. Derselbe Stolperstein
+wie bei der Textpruefung -- ich bin ihm am selben Tag zweimal aufgesessen.
+
+**Widerlegt 2 -- "die Optionsgruppe hat Groesse null".** Gemessen: 234x84, mit Beschriftung,
+Zahlenfeld und Haken. Der Baukasten ist in Ordnung.
+
+**Bestaetigt und behoben, aber nicht die Ursache -- negative Breite.** Eine eingebaute Pruefung in
+`UIUtil.createTopAndCenter` lieferte: Seite 591 breit, Serverliste 656 breit, **Serverdetails
+-75 breit**. BorderLayout gibt WEST die volle Wunschbreite und der Mitte den Rest, auch wenn der
+negativ ist. Ersetzt durch eine JSplitPane. Damit war das Feld fuer Adresse, Benutzer und Passwort
+ueberhaupt erst wieder vorhanden.
+
+**Die eigentliche Ursache: der Inhalt wurde nie gezeichnet.** Nach dem Umbau meldete die Pruefung
+nichts mehr, und die Seite blieb trotzdem leer. Eine vollstaendige Aufstellung zeigte JSplitPane
+581x462, Serverdetails 194x214, Ueberschrift 579x20 -- alle auf sichtbar. Die Teile waren also da
+und richtig bemessen. Ein Vergroessern des Fensters brachte alles auf einmal zum Vorschein.
+
+In `SettingsDialog.kt` stand:
+
+```kotlin
+if (borderPane.width != 0.0) { resize = {} }
+```
+
+`resize()` lief damit genau einmal, fuer die ZUERST gezeigte Seite. Jede weitere Seite ist ein
+`SwingNode`, dessen eingebetteter Swing-Inhalt ohne Anstoss weder neu angeordnet noch gezeichnet
+wird. Genau deshalb war "Allgemein" vollstaendig und alles andere leer -- die Asymmetrie war der
+Hinweis, den ich zu lange uebersehen habe.
+
+Behoben mit `refreshSwingContent()`: `revalidate()` + `repaint()` auf dem Swing-Inhalt nach jedem
+Seitenwechsel. Das Stilllegen von `resize()` BLEIBT: es dauerhaft laufen zu lassen behebt es zwar
+auch, laesst den Dialog aber bei jedem Wechsel wachsen, bis "Uebernehmen" ueber den Bildschirmrand
+hinausragt -- am Bildschirm gesehen und wieder verworfen.
+
+Ergebnis am Bildschirm geprueft: WebDAV zeigt Serverliste, Serverdetails, Sperr-Einstellungen und
+den D2-Hinweis; FTP zeigt wieder alle vier Felder; Gantt-Diagramm vollstaendig.
+
+**Und noch einmal toter Code.** Der erste Behebungsversuch ging in `AbstractPagesDialog` -- der
+Dialog, der wirklich laeuft, ist `SettingsDialogFx`; `SettingsDialog2` ist auskommentiert. Das ist
+in dieser Sitzung die dritte Stelle nach `CloudProjectActionBase` (D2) und `createLockAction` (D1).
+**Vor jeder Behebung pruefen, ob die Klasse ueberhaupt aufgerufen wird.**
+
+### D2 ist damit fertig
+
+Der Hinweistext unter den Sperr-Einstellungen ist am Bildschirm bestaetigt: vollstaendig, richtig
+umbrochen, Umlaute in Ordnung. Vorher war er gebaut, aber unsichtbar -- nicht wegen des Textes,
+sondern wegen des Zeichenfehlers oben.
+
 ### Offen aus dieser Sitzung
 
 - **Startmeldung "Failed to parse document".** Beim Start oeffnet GanttProject das zuletzt

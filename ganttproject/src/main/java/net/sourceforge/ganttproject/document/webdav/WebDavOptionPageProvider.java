@@ -144,7 +144,8 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     }
     //Box result = Box.createHorizontalBox();
     JPanel serversPanel = new JPanel(new BorderLayout());
-    serversPanel.add(serverList.createDefaultComponent(), BorderLayout.CENTER);
+    final JComponent listComponent = serverList.createDefaultComponent();
+    serversPanel.add(listComponent, BorderLayout.CENTER);
 
     OptionsPageBuilder builder = new OptionsPageBuilder();
     GPOptionGroup lockingGroup = new GPOptionGroup("webdav.lock", webdavStorage.getWebDavLockTimeoutOption(), webdavStorage.getWebDavReleaseLockOption());
@@ -159,19 +160,41 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     // Der Hinweis nennt auch, was dann NOCH schuetzt. Ohne diesen Halbsatz liest sich die Zeile
     // wie "du bist ungeschuetzt", und das waere seit D3 schlicht falsch.
     JPanel lockingPanel = new JPanel(new BorderLayout());
-    lockingPanel.add(builder.buildPlanePage(new GPOptionGroup[] {lockingGroup}), BorderLayout.CENTER);
+    final JComponent lockingOptions = builder.buildPlanePage(new GPOptionGroup[] {lockingGroup});
+    lockingPanel.add(lockingOptions, BorderLayout.CENTER);
     JLabel lockingHint = new JLabel(ForkI18nKt.forkText("fork.webdav.lockTimeout.hint"));
     lockingHint.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
     lockingPanel.add(lockingHint, BorderLayout.SOUTH);
     serversPanel.add(lockingPanel, BorderLayout.SOUTH);
 
     builder = new OptionsPageBuilder(null, OptionsPageBuilder.ONE_COLUMN_LAYOUT);
-    JPanel result = new JPanel(new BorderLayout());
-    result.add(serversPanel, BorderLayout.WEST);
     JComponent serverDetails = builder.buildPlanePage(new GPOptionGroup[] {optionGroup});
     serverDetails.setPreferredSize(new Dimension(300, 300));
-    result.add(serverDetails, BorderLayout.CENTER);
-    //result.add(Box.createHorizontalGlue());
-    return OptionPageProviderBase.wrapContentComponent(result, getCanonicalPageTitle(), null);
+
+    // [Fork-Aenderung] Geteilte Flaeche statt BorderLayout WEST/CENTER.
+    //
+    // FEHLER IM ORIGINAL: BorderLayout gibt WEST seine volle Wunschbreite und der Mitte nur den
+    // Rest -- auch wenn der negativ ist. Am Bildschirm gemessen, mit der eingebauten Diagnose:
+    //
+    //   Seite          breite= 591
+    //   Serverliste    x=  5  breite= 656   (ragt 70 px hinaus)
+    //   Serverdetails  x=661  breite= -75   (negativ, also nicht vorhanden)
+    //
+    // Damit liessen sich Server anlegen, aber Adresse, Benutzer und Passwort nie sehen oder
+    // aendern. Genau das hiess "die Servereinstellung ist kaputt".
+    //
+    // JSplitPane statt fester Pixelwerte: es teilt, was da ist, und gibt keiner Seite eine
+    // negative Breite. Reicht der Platz nicht, kann der Mensch den Trenner ziehen -- eine
+    // hartkodierte Breite waere bei anderer Schriftgroesse oder Bildschirmskalierung wieder falsch.
+    JSplitPane result = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, serversPanel, serverDetails);
+    result.setResizeWeight(0.5);
+    result.setBorder(BorderFactory.createEmptyBorder());
+    // KEIN setDividerLocation(double) hier. Der Anteil wird gegen die AKTUELLE Groesse gerechnet,
+    // und die ist zu diesem Zeitpunkt noch null -- der Trenner landet dann am Rand und eine Seite
+    // bekommt die Breite 0. resizeWeight allein teilt beim ersten Anordnen richtig auf.
+    final JComponent page = OptionPageProviderBase.wrapContentComponent(result, getCanonicalPageTitle(), null);
+
+    return page;
   }
+
 }

@@ -70,6 +70,22 @@ data class OptionPageItem(
   }
 }
 
+/**
+ * [Fork-Aenderung] Stoesst das Anordnen und Zeichnen des eingebetteten Swing-Inhalts an.
+ *
+ * Ein [SwingNode] rechnet die Groesse seines Inhalts nicht selbst nach, wenn er nach dem Aufbau
+ * der Oberflaeche gesetzt wird. Ohne diesen Anstoss bleibt die Seite leer, bis irgendetwas anderes
+ * eine Groessenaenderung ausloest -- beim Maximieren des Fensters erschien dann alles auf einmal.
+ */
+private fun refreshSwingContent(node: javafx.scene.Node) {
+  (node as? SwingNode)?.content?.let { swingContent ->
+    SwingUtilities.invokeLater {
+      swingContent.revalidate()
+      swingContent.repaint()
+    }
+  }
+}
+
 class OptionPageUi(editItem: ObservableObject<OptionPageItem?>, var resize: ()->Unit): ItemEditorPane {
   private val borderPane = BorderPane()
   override val node: Node
@@ -83,6 +99,24 @@ class OptionPageUi(editItem: ObservableObject<OptionPageItem?>, var resize: ()->
             FXUtil.runLater(500) {
               resize()
               it.fxNode.requestFocus()
+              // [Fork-Aenderung] Den eingebetteten Swing-Inhalt zum Zeichnen anstossen.
+              //
+              // FEHLER: resize() wird gleich unten nach der ersten Seite stillgelegt. Jede weitere
+              // Seite ist ein SwingNode, dessen Inhalt ohne einen Anstoss weder neu angeordnet
+              // noch gezeichnet wird: die Seite sah leer aus.
+              //
+              // Am Bildschirm nachgewiesen, und die Asymmetrie war der Hinweis: "Allgemein" (die
+              // erste Seite) war vollstaendig, WebDAV zeigte nur den obersten Knopf, die
+              // unangetastete FTP-Seite ein einzelnes Feld statt vier. Das Protokoll meldete
+              // dabei fuer WebDAV JSplitPane 581x462 und Serverdetails 194x214, alle auf
+              // sichtbar -- die Teile waren also da und richtig bemessen, nur ungezeichnet.
+              // Ein Vergroessern des Fensters brachte alles auf einmal zum Vorschein.
+              //
+              // BEWUSST NICHT resize() dauerhaft laufen lassen: das behebt es zwar auch, laesst
+              // den Dialog aber bei jedem Seitenwechsel wachsen, bis "Uebernehmen" ueber den
+              // Bildschirmrand hinausragt. Am Bildschirm gesehen. Ein Anstoss zum Neuzeichnen
+              // reicht und aendert die Fenstergroesse nicht.
+              refreshSwingContent(it.fxNode)
               if (borderPane.width != 0.0) {
                 resize = {}
               }
