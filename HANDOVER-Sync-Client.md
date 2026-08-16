@@ -370,6 +370,29 @@ hergeleitet, nicht gemessen. Serverseitig zeigt es ein `LogFormat` mit
 Serverprojekt jetzt als verwalteten Speicher ein, statt zu warnen, dass der PC
 jederzeit überschreiben kann.
 
+### Die Zusicherung gilt dem aktuellen Desktop, nicht jedem Desktop
+
+Die Desktop-Sitzung hat am 15.08.2026 zwei Dinge offengelegt, die beide nur
+Builds aus einem bestimmten Fenster betreffen — aber ein Telefon kann nicht
+sehen, welcher Build am anderen Ende läuft:
+
+1. **Bis `bd0fc1034` sendete der Desktop überhaupt kein `If-Match`.** Milton
+   fragt `getetag` beim PROPFIND nicht ab, der gemerkte Wert war immer leer,
+   und D3 fiel still auf bedingungsloses Schreiben zurück. Ein Desktop aus
+   diesem Fenster **überschreibt eine Telefonänderung wortlos**, obwohl die
+   App inzwischen keine Warnung mehr zeigt.
+2. **Der Desktop sperrte sich selbst aus** und konnte mit eigener Sperre nicht
+   speichern. Ebenfalls behoben, ebenfalls nur in diesem Fenster.
+
+Daraus folgt eine Bedingung, die im Code nicht steht und nicht stehen kann:
+`DESKTOP_HONOURS_LOCKS = true` setzt voraus, dass auf den beteiligten PCs
+**auch wirklich ein aktueller Desktop-Build läuft**. Ein alter Build macht die
+Zusicherung falsch, ohne dass die App etwas davon merkt.
+
+Das ist die Kehrseite davon, eine Konstante statt einer Einstellung zu nehmen:
+Sie ist ehrlich darüber, dass die App es nicht prüfen kann — aber sie prüft es
+eben auch nicht.
+
 **Zurückzusetzen, sobald ein Desktop-Build keine Sperre mehr nimmt oder kein
 `If-Match` mehr sendet.** Die Warnung, die dabei verstummt, ist das Einzige
 zwischen einem Benutzer und einem still überschriebenen Nachmittag.
