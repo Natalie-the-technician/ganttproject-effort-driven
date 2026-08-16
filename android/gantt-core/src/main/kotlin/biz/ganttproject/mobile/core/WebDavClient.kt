@@ -127,6 +127,17 @@ sealed interface DavError {
    * no sign that it is missing.
    */
   data object WeakEtagUnusable : DavError
+
+  /**
+   * A project of that name is already on the server.
+   *
+   * Also a 412, because [WebDavClient.createNew] asks with `If-None-Match: *`
+   * — but a wholly different thing to say. The version conflict means "decide
+   * whose work survives"; this one means "pick another name", and showing the
+   * first would put the rescue copy in front of the same dialog it was
+   * escaping from.
+   */
+  data object AlreadyExists : DavError
 }
 
 sealed interface DavResult<out T> {
@@ -453,6 +464,10 @@ class WebDavClient(
       is DavResult.Failed -> return result
       is DavResult.Ok -> result.value
     }
+    // 412 here is the precondition we set ourselves — the name is taken. Left
+    // as ChangedElsewhere it would answer a rescue copy with the very conflict
+    // dialog the user is trying to escape.
+    if (response.status == 412) return DavResult.Failed(DavError.AlreadyExists)
     if (response.status !in 200..299) return DavResult.Failed(errorFor(response.status))
     return DavResult.Ok(response.header("etag"))
   }

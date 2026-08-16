@@ -213,6 +213,14 @@
     <string name="error_gone_from_server">Dieses Projekt liegt nicht mehr auf dem Server. Vielleicht wurde es umbenannt oder gelöscht.</string>
     <string name="error_bad_server_address">Die Serveradresse in den Einstellungen ist keine gültige Adresse. Prüfe, ob dort nur die Adresse steht, zum Beispiel https://beispiel.de/projekte/.</string>
     <string name="error_no_conditional_writes">Dieser Server kann beim Speichern die Fassung nicht prüfen — er kann dein Speichern also nicht davon unterscheiden, dass du die Arbeit eines anderen überschreibst. Es wurde nichts gespeichert. Meist liegt es daran, dass am Server oder an einem Proxy davor die Komprimierung eingeschaltet ist.</string>
+    <string name="error_name_taken">Auf dem Server gibt es schon ein Projekt mit diesem Namen. Wähle einen anderen — es wurde nichts überschrieben.</string>
+    <string name="action_save_to_server">Auf Server speichern</string>
+    <string name="action_save_copy_server">Kopie auf Server speichern</string>
+    <string name="save_to_server_title">Auf Server speichern</string>
+    <string name="save_to_server_body">Das Projekt wird unter diesem Namen auf den Sync-Server geschrieben, und du arbeitest danach an dieser Fassung weiter. Ein vorhandenes Projekt gleichen Namens wird nicht überschrieben.</string>
+    <string name="save_copy_server_body">Auf dem Server entsteht unter diesem Namen ein zweites Projekt. Deine ungespeicherte Arbeit kommt dort hinein, das Original bleibt, wie es ist.</string>
+    <string name="save_to_server_name">Dateiname</string>
+    <string name="saved_to_server">Auf dem Server gespeichert</string>
 
     <string name="locked_title">Gerade am PC in Bearbeitung</string>
     <string name="notice_opened_while_locked">Dieses Projekt ist gerade am PC geöffnet. Lesen und Bearbeiten geht hier trotzdem — nur Speichern wird abgelehnt, bis es dort geschlossen ist, spätestens nach zwei Stunden.</string>

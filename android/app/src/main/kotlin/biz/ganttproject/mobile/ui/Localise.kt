@@ -42,6 +42,7 @@ fun FileError.text(): String = when (this) {
   FileError.GoneFromServer -> stringResource(R.string.error_gone_from_server)
   FileError.BadServerAddress -> stringResource(R.string.error_bad_server_address)
   FileError.NoConditionalWrites -> stringResource(R.string.error_no_conditional_writes)
+  FileError.NameTaken -> stringResource(R.string.error_name_taken)
 }
 
 @Composable

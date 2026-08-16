@@ -165,6 +165,18 @@ class WebDavClientTest {
   }
 
   @Test
+  fun `a taken name is not reported as a version conflict`() {
+    // Both are 412 and they mean opposite things. Reporting the wrong one
+    // answers "keep both versions" with "decide which version survives" —
+    // the dialog the copy exists to escape.
+    val (client, _) = clientWith { response(412) }
+    val taken = (client.createNew("haus.gan", "x".toByteArray()) as DavResult.Failed).error
+    val stale = (client.write("haus.gan", "x".toByteArray(), "\"old\"") as DavResult.Failed).error
+    assertEquals(DavError.AlreadyExists, taken)
+    assertEquals(DavError.ChangedElsewhere, stale)
+  }
+
+  @Test
   fun `createNew refuses to clobber an existing project`() {
     val (client, backend) = clientWith { response(201, mapOf("ETag" to "\"n\"")) }
     client.createNew("neu.gan", "x".toByteArray())

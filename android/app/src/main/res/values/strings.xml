@@ -221,6 +221,14 @@
     <string name="error_gone_from_server">This project is no longer on the server. It may have been renamed or deleted.</string>
     <string name="error_bad_server_address">The server address in the settings is not a valid address. Check that it holds only the address, for example https://example.com/projects/.</string>
     <string name="error_no_conditional_writes">This server cannot check versions when saving, so it cannot tell your save apart from overwriting work that is not yours. Saving was not attempted. This usually means compression is switched on for the server or a proxy in front of it.</string>
+    <string name="error_name_taken">There is already a project of that name on the server. Choose another one — nothing was overwritten.</string>
+    <string name="action_save_to_server">Save to server</string>
+    <string name="action_save_copy_server">Save copy to server</string>
+    <string name="save_to_server_title">Save to server</string>
+    <string name="save_to_server_body">The project is written to the sync server under this name and you keep working on that copy. An existing project of the same name is not overwritten.</string>
+    <string name="save_copy_server_body">A second project is created on the server under this name. Your unsaved work goes into it; the original is left as it is.</string>
+    <string name="save_to_server_name">File name</string>
+    <string name="saved_to_server">Saved to the server</string>
 
     <string name="locked_title">Open on the PC right now</string>
     <string name="notice_opened_while_locked">This project is open on the PC right now. You can read and edit it here — saving will be refused until it is closed there, at the latest after two hours.</string>

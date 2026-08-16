@@ -136,6 +136,9 @@ sealed interface Notice {
    * would be the avoidable version of the same news.
    */
   data object OpenedWhileLocked : Notice
+
+  /** A project was created on the sync server. */
+  data object SavedToServer : Notice
 }
 
 /** One time entry plus the decision the user has (or has not) made about it. */
@@ -324,6 +327,46 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
   fun overwriteAnyway() {
     _state.update { it.copy(fileError = null) }
     save(force = true)
+  }
+
+  /** Whether a project could be put on the server at all right now. */
+  fun canSaveToServer(): Boolean = _dav.value.baseUrl.isNotBlank()
+
+  /**
+   * Writes the open project to the server under [name].
+   *
+   * Always a *create*, never an overwrite: [RemoteStore.saveCopy] asks with
+   * `If-None-Match: *`, so a name that is taken comes back as
+   * [FileError.NameTaken] and nothing on the server is touched. That matters
+   * most on the path this is reached from — someone rescuing work out of a
+   * conflict must not be able to land it on top of a third version.
+   *
+   * @param adopt continue on the new file instead of the current one. True for
+   * "save to server", which is a Save As and would otherwise leave the user
+   * editing a copy that quietly diverges from the one they just created. False
+   * for the rescue copy out of the conflict dialog, where the point is to keep
+   * the original open.
+   */
+  fun saveToServer(name: String, adopt: Boolean) {
+    val project = open ?: return
+    val remote = remoteStore() ?: return
+    val target = if (name.endsWith(".gan", ignoreCase = true)) name else "$name.gan"
+    viewModelScope.launch {
+      _state.update { it.copy(busy = true, fileError = null) }
+      when (val result = remote.saveCopy(project, target)) {
+        is FileResult.Ok ->
+          if (adopt) {
+            // Re-opened rather than adopted in place: it costs one GET and
+            // leaves the app holding an ETag the server actually issued,
+            // instead of one assembled here from what we hoped we wrote.
+            openRemote(target)
+            _state.update { it.copy(notice = Notice.SavedToServer) }
+          } else {
+            _state.update { it.copy(busy = false, notice = Notice.SavedToServer) }
+          }
+        is FileResult.Err -> _state.update { it.copy(busy = false, fileError = result.error) }
+      }
+    }
   }
 
   /** Writes the current state to a second file, leaving the original alone. */

@@ -77,6 +77,9 @@ sealed interface FileError {
    */
   data object NoConditionalWrites : FileError
 
+  /** A project of that name is already on the server. Pick another one. */
+  data object NameTaken : FileError
+
   /** The project is no longer on the server — deleted or renamed. */
   data object GoneFromServer : FileError
 

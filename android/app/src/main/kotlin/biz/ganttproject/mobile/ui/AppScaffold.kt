@@ -75,6 +75,15 @@ import biz.ganttproject.mobile.data.FileError
 private enum class Tab { GANTT, RESOURCES, IMPORT }
 
 /**
+ * A pending "write this to the server under a name" question.
+ *
+ * [adopt] distinguishes the two callers, which want opposite things once the
+ * write succeeds: the menu action is a Save As and continues on the new file,
+ * the rescue copy out of a conflict keeps the original open.
+ */
+private data class ServerSaveRequest(val suggestedName: String, val adopt: Boolean)
+
+/**
  * Tabs survive rotation as an ordinal rather than as the enum itself.
  * rememberSaveable only accepts what a Bundle accepts, and relying on enums
  * being Serializable would fail at runtime, not at compile time - the worst
@@ -101,6 +110,10 @@ fun AppScaffold(
   // The level the user just picked but has not confirmed yet. Non-null only
   // while the "are you sure" dialog is up.
   var pendingScope by remember { mutableStateOf<EditScope?>(null) }
+  // Non-null while the name dialog for "save to server" is up. `adopt` carries
+  // which of the two callers opened it, because they want opposite things
+  // afterwards — see ProjectViewModel.saveToServer.
+  var serverSaveRequest by remember { mutableStateOf<ServerSaveRequest?>(null) }
   val snackbarHost = remember { SnackbarHostState() }
 
   // The picker asks for any type: GanttProject files have no registered MIME
@@ -120,6 +133,7 @@ fun AppScaffold(
   // composable and cannot be called from a coroutine.
   val importedTemplate = stringResource(R.string.import_done, "%s")
   val lockedText = stringResource(R.string.notice_opened_while_locked)
+  val savedToServerText = stringResource(R.string.saved_to_server)
   LaunchedEffect(state.notice) {
     when (val notice = state.notice) {
       Notice.Saved -> snackbarHost.showSnackbar(savedText)
@@ -130,6 +144,7 @@ fun AppScaffold(
       // read as a failure.
       Notice.OpenedWhileLocked ->
         snackbarHost.showSnackbar(lockedText, duration = SnackbarDuration.Long)
+      Notice.SavedToServer -> snackbarHost.showSnackbar(savedToServerText)
       null -> Unit
     }
     if (state.notice != null) viewModel.dismissNotice()
@@ -221,6 +236,18 @@ fun AppScaffold(
                 )
               }
             }
+            if (state.project != null && viewModel.canSaveToServer()) {
+              DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_save_to_server)) },
+                onClick = {
+                  menuOpen = false
+                  serverSaveRequest = ServerSaveRequest(
+                    suggestedName = state.project.displayName,
+                    adopt = true
+                  )
+                }
+              )
+            }
             DropdownMenuItem(
               text = { Text(stringResource(R.string.action_settings)) },
               onClick = { menuOpen = false; settingsOpen = true }
@@ -292,12 +319,26 @@ fun AppScaffold(
         title = { Text(stringResource(R.string.conflict_title)) },
         text = { Text(error.text()) },
         confirmButton = {
+          // A rescue copy belongs where the original is. Sending a server
+          // project through the Android file picker takes the rescued work off
+          // the server and onto the phone, which is the opposite of what
+          // somebody reaching for it in a conflict expects — and the server
+          // never sees it.
+          val remote = state.project?.isRemote == true && viewModel.canSaveToServer()
+          val stem = state.project?.displayName?.removeSuffix(".gan") ?: "project"
           TextButton(onClick = {
-            val name = state.project?.displayName?.removeSuffix(".gan") ?: "project"
             viewModel.dismissError()
-            saveCopy.launch("$name-phone.gan")
+            if (remote) {
+              serverSaveRequest = ServerSaveRequest("$stem-telefon.gan", adopt = false)
+            } else {
+              saveCopy.launch("$stem-phone.gan")
+            }
           }) {
-            Text(stringResource(R.string.action_save_copy))
+            Text(
+              stringResource(
+                if (remote) R.string.action_save_copy_server else R.string.action_save_copy
+              )
+            )
           }
         },
         dismissButton = {
@@ -356,6 +397,48 @@ fun AppScaffold(
       },
       dismissButton = {
         TextButton(onClick = { confirmCloseOpen = false }) {
+          Text(stringResource(R.string.action_cancel))
+        }
+      }
+    )
+  }
+
+  serverSaveRequest?.let { request ->
+    var name by remember(request) { mutableStateOf(request.suggestedName) }
+    AlertDialog(
+      onDismissRequest = { serverSaveRequest = null },
+      title = { Text(stringResource(R.string.save_to_server_title)) },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          Text(
+            stringResource(
+              if (request.adopt) R.string.save_to_server_body
+              else R.string.save_copy_server_body
+            ),
+            style = MaterialTheme.typography.bodyMedium
+          )
+          OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text(stringResource(R.string.save_to_server_name)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+          )
+        }
+      },
+      confirmButton = {
+        TextButton(
+          enabled = name.isNotBlank(),
+          onClick = {
+            viewModel.saveToServer(name.trim(), request.adopt)
+            serverSaveRequest = null
+          }
+        ) {
+          Text(stringResource(R.string.action_save))
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { serverSaveRequest = null }) {
           Text(stringResource(R.string.action_cancel))
         }
       }
@@ -699,6 +782,7 @@ private fun davErrorText(error: DavError): String = when (error) {
   DavError.LockedElsewhere -> stringResource(R.string.sync_err_server, 423)
   DavError.BadAddress -> stringResource(R.string.error_bad_server_address)
   DavError.WeakEtagUnusable -> stringResource(R.string.error_no_conditional_writes)
+  DavError.AlreadyExists -> stringResource(R.string.error_name_taken)
 }
 
 @Composable
