@@ -57,6 +57,11 @@ class HttpDocumentOutputStream extends ByteArrayOutputStream {
       // gebaut ist -- siehe ProjectUIFacadeImpl.saveProjectTrySave. Lieber gar kein Knopf als
       // einer, der nichts tut.
       throw new VersionMismatchException(false);
+    } catch (WebDavResource.WebDavVersioningUnavailableException e) {
+      // [Fork-Aenderung] Andere Ursache, andere Meldung. Hier hat NIEMAND die Datei geaendert --
+      // der Server kann die Frage nur nicht beantworten. Wuerde das als Konflikt durchgereicht,
+      // suchte der Benutzer nach einem Kollegen, den es nicht gibt.
+      throw new VersionMismatchException(false, true);
     } catch (WebDavException e) {
       throw new IOException(e);
     }

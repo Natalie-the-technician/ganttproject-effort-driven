@@ -43,18 +43,27 @@ sealed interface IfMatchDecision {
   data class Send(val etag: String) : IfMatchDecision
 
   /**
-   * Write without a condition.
-   *
-   * Only reached when the server has just confirmed that the file still carries the very content
-   * we last wrote, and merely reports it weakly. A deliberate, narrow concession: for those
-   * milliseconds it reopens the check-then-write gap the server exists to close. The alternative
-   * is refusing to save whenever somebody saves twice within a second — a certain annoyance
-   * traded against a remote risk.
+   * Write without a condition. Reached only when nothing is remembered — a first write, or a read
+   * whose version the server would not tell us. There is no version to be conditional on.
    */
   data object Unconditional : IfMatchDecision
 
   /** Somebody else changed the file. Do not write. */
   data object Conflict : IfMatchDecision
+
+  /**
+   * The server never answers with a strong ETag, so no write can be made conditional. Do not write.
+   *
+   * WHY THIS IS NOT "just write it then": a weak tag is not always Apache's mtime window. RFC 9110
+   * *requires* a weak validator whenever the representation is transformed in transit —
+   * `mod_deflate`, nginx with `gzip`, any compressing proxy, any CDN. Then it never becomes strong,
+   * and a branch that falls back to unconditional writing turns from a millisecond-wide concession
+   * into **every single save**: D3 would be switched off, permanently and without a sign.
+   *
+   * Refusing is the honest answer. Silently writing blind is the failure this whole mechanism
+   * exists to prevent, and the user would have no way of knowing it had come back.
+   */
+  data object VersioningUnavailable : IfMatchDecision
 }
 
 /** `W/"abc"` is weak, `"abc"` is strong. */
@@ -70,20 +79,52 @@ fun isWeakEtag(etag: String): Boolean = etag.trimStart().startsWith("W/")
  */
 fun opaqueEtag(etag: String): String = etag.trim().removePrefix("W/").trim()
 
+/** How long to wait out Apache's sub-second mtime window before asking a second time. */
+const val WEAK_ETAG_RETRY_MILLIS = 1100L
+
 /**
  * @param remembered the ETag the pending changes are based on, or null when none is known.
- * @param currentFromServer asks the server for the ETag the file carries right now. Called ONLY
- * when [remembered] is weak — one extra request in a rare case, none in the normal one. Returns
- * null when the question cannot be answered.
+ * @param currentFromServer asks the server for the ETag the file carries right now. Returns null
+ * when the question cannot be answered. Called only when [remembered] is weak — but note that this
+ * is NOT the rare case it looks like: [MiltonResourceImpl] re-reads the ETag straight after every
+ * `PUT`, which is exactly the second in which Apache answers weakly. From the second save of a
+ * session onwards, this is the normal path.
+ * @param pause waits between the two questions. A parameter so that tests need not really sleep.
  */
-fun resolveIfMatch(remembered: String?, currentFromServer: () -> String?): IfMatchDecision {
+// @JvmOverloads: MiltonResourceImpl ist Java und sieht Kotlins Vorgabewerte sonst nicht.
+@JvmOverloads
+fun resolveIfMatch(
+  remembered: String?,
+  currentFromServer: () -> String?,
+  pause: () -> Unit = { Thread.sleep(WEAK_ETAG_RETRY_MILLIS) }
+): IfMatchDecision {
   if (remembered == null) return IfMatchDecision.Unconditional
   if (!isWeakEtag(remembered)) return IfMatchDecision.Send(remembered)
 
+  when (val first = judge(remembered, currentFromServer())) {
+    is Judged.Decided -> return first.decision
+    Judged.StillWeak -> {}
+  }
+
+  // Still weak. Two very different things look alike here, and only time tells them apart:
+  // Apache's sub-second mtime window, which passes, and a transformed representation
+  // (compression, proxy, CDN), which never does. So wait out the first and ask again.
+  pause()
+  return when (val second = judge(remembered, currentFromServer())) {
+    is Judged.Decided -> second.decision
+    Judged.StillWeak -> IfMatchDecision.VersioningUnavailable
+  }
+}
+
+private sealed interface Judged {
+  data class Decided(val decision: IfMatchDecision) : Judged
+  data object StillWeak : Judged
+}
+
+private fun judge(remembered: String, current: String?): Judged {
   // Cannot ask: send the weak tag and let the server refuse. Refusing is the safe direction,
   // writing blind is not.
-  val current = currentFromServer() ?: return IfMatchDecision.Send(remembered)
-
-  if (opaqueEtag(current) != opaqueEtag(remembered)) return IfMatchDecision.Conflict
-  return if (isWeakEtag(current)) IfMatchDecision.Unconditional else IfMatchDecision.Send(current)
+  if (current == null) return Judged.Decided(IfMatchDecision.Send(remembered))
+  if (opaqueEtag(current) != opaqueEtag(remembered)) return Judged.Decided(IfMatchDecision.Conflict)
+  return if (isWeakEtag(current)) Judged.StillWeak else Judged.Decided(IfMatchDecision.Send(current))
 }

@@ -48,22 +48,66 @@ class IfMatchResolutionTest : TestCase() {
    * Sending the strong form is exactly right — it still identifies our content.
    */
   fun testAWeakTagIsReplacedByTheStrongOneTheServerNowReports() {
-    assertEquals(IfMatchDecision.Send("\"abc\""), resolveIfMatch("W/\"abc\"") { "\"abc\"" })
+    assertEquals(IfMatchDecision.Send("\"abc\""), resolveIfMatch("W/\"abc\"", currentFromServer = { "\"abc\"" }))
   }
 
   /**
-   * Still weak, same value: the server just told us the file is what we last wrote. Writing
-   * unconditionally is the narrow concession — sending the weak tag would fail against everything,
-   * including itself.
+   * Still weak on the first ask, strong on the second: Apache's sub-second mtime window. Waiting it
+   * out and asking again is what keeps ordinary saving working.
    */
-  fun testAStillWeakButUnchangedTagWritesUnconditionally() {
-    assertEquals(IfMatchDecision.Unconditional, resolveIfMatch("W/\"abc\"") { "W/\"abc\"" })
+  fun testStillWeakThenStrongAfterWaiting() {
+    val answers = mutableListOf("W/\"abc\"", "\"abc\"")
+    var paused = 0
+    val decision = resolveIfMatch("W/\"abc\"", { answers.removeAt(0) }, { paused++ })
+    assertEquals(IfMatchDecision.Send("\"abc\""), decision)
+    assertEquals("the second question must come after waiting, not immediately", 1, paused)
+  }
+
+  /**
+   * THE HOLE THIS REPLACES. Until 15.08.2026 this returned Unconditional, justified with "only the
+   * milliseconds in which somebody saves twice within a second".
+   *
+   * That assumed weakness is always Apache's mtime window. It is not: RFC 9110 *requires* a weak
+   * validator whenever the representation is transformed in transit — mod_deflate, nginx with gzip,
+   * any compressing proxy, any CDN. There it never becomes strong, so the branch would not be a
+   * rare concession but EVERY save, and conditional writing would be switched off permanently
+   * without any sign of it.
+   *
+   * Refusing is the honest answer. The Android session found this in the ported copy of this very
+   * function.
+   */
+  fun testAServerThatStaysWeakGetsNoWriteAtAll() {
+    assertEquals(
+      IfMatchDecision.VersioningUnavailable,
+      resolveIfMatch("W/\"abc\"", { "W/\"abc\"" }, {})
+    )
+  }
+
+  /** Somebody else wrote while we were waiting out the window. Still a conflict, not a write. */
+  fun testAChangeDuringTheWaitIsAConflict() {
+    val answers = mutableListOf("W/\"abc\"", "\"xyz\"")
+    assertEquals(
+      IfMatchDecision.Conflict,
+      resolveIfMatch("W/\"abc\"", { answers.removeAt(0) }, {})
+    )
+  }
+
+  /** No waiting, and no second question, when the first answer already decides it. */
+  fun testTheServerIsNotAskedTwiceWithoutNeed() {
+    var asked = 0
+    val decision = resolveIfMatch(
+      "W/\"abc\"",
+      { asked++; "\"abc\"" },
+      { fail("waited although the first answer already decided it") }
+    )
+    assertEquals(IfMatchDecision.Send("\"abc\""), decision)
+    assertEquals(1, asked)
   }
 
   /** THE case the whole mechanism exists for: somebody else wrote in the meantime. */
   fun testADifferentValueIsAConflict() {
-    assertEquals(IfMatchDecision.Conflict, resolveIfMatch("W/\"abc\"") { "\"xyz\"" })
-    assertEquals(IfMatchDecision.Conflict, resolveIfMatch("W/\"abc\"") { "W/\"xyz\"" })
+    assertEquals(IfMatchDecision.Conflict, resolveIfMatch("W/\"abc\"", currentFromServer = { "\"xyz\"" }))
+    assertEquals(IfMatchDecision.Conflict, resolveIfMatch("W/\"abc\"", currentFromServer = { "W/\"xyz\"" }))
   }
 
   /**
@@ -71,7 +115,7 @@ class IfMatchResolutionTest : TestCase() {
    * direction, writing blind is not. A wrong conflict costs a click, a lost change costs work.
    */
   fun testWhenTheServerCannotBeAskedTheWeakTagGoesOutAnyway() {
-    assertEquals(IfMatchDecision.Send("W/\"abc\""), resolveIfMatch("W/\"abc\"") { null })
+    assertEquals(IfMatchDecision.Send("W/\"abc\""), resolveIfMatch("W/\"abc\"", currentFromServer = { null }))
   }
 
   /**

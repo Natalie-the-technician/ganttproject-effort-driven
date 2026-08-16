@@ -420,10 +420,13 @@ class ProjectSaveFlow(
           // nicht: dort hat schlicht jemand anders die Datei geaendert. Am Bildschirm gesehen --
           // der Dialog nannte Natalie einen Grund, den es in ihrem Fall gar nicht gab, und ein
           // falscher Grund fuehrt zur falschen Entscheidung.
-          it.i18n = if (onlineDoc != null) {
-            RootLocalizer.createWithRootKey(rootKey = "cloud.versionMismatch", baseLocalizer = RootLocalizer)
-          } else {
-            foreignChangeLocalizer
+          it.i18n = when {
+            // Niemand hat geaendert -- der Server kann die Frage nicht beantworten. Eigener Text,
+            // sonst sucht der Benutzer einen Kollegen, den es nicht gibt.
+            e.versioningUnavailable -> noVersioningLocalizer
+            onlineDoc != null ->
+              RootLocalizer.createWithRootKey(rootKey = "cloud.versionMismatch", baseLocalizer = RootLocalizer)
+            else -> foreignChangeLocalizer
           }
           it.styleClass = "dlg-lock"
           it.styleSheets.add("/biz/ganttproject/storage/cloud/GPCloudStorage.css")
@@ -488,9 +491,23 @@ private val DOCUMENT_LOGGER = GPLogger.create("Document.Info")
  * Schluessel zurueck. Der Rueckfall ist noetig, weil die Knopfbeschriftungen
  * (`document.option.makeCopy`) global liegen und hier nicht doppelt gepflegt werden sollen.
  */
-private val foreignChangeLocalizer = object : Localizer {
+private val foreignChangeLocalizer = forkPrefixedLocalizer("fork.webdav.versionMismatch.")
+
+/**
+ * [Fork-Aenderung] Texte fuer "der Server kann keine Versionspruefung beantworten".
+ *
+ * Eigener Text, weil hier NIEMAND die Datei geaendert hat. Der Konflikttext waere schlicht falsch.
+ */
+private val noVersioningLocalizer = forkPrefixedLocalizer("fork.webdav.noVersioning.")
+
+/**
+ * Stellt [prefix] vor den Schluessel und faellt sonst auf den globalen Schluessel zurueck. Der
+ * Rueckfall ist noetig, weil die Knopfbeschriftungen (`document.option.makeCopy`) global liegen und
+ * hier nicht doppelt gepflegt werden sollen.
+ */
+private fun forkPrefixedLocalizer(prefix: String) = object : Localizer {
   override fun create(key: String): LocalizedString = LocalizedString(key, this)
   override fun formatTextOrNull(key: String, vararg args: Any): String? =
-    ForkLocalizer.formatTextOrNull("fork.webdav.versionMismatch.$key", *args)
+    ForkLocalizer.formatTextOrNull("$prefix$key", *args)
       ?: RootLocalizer.formatTextOrNull(key, *args)
 }

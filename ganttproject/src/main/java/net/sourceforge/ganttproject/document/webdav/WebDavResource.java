@@ -54,6 +54,25 @@ public interface WebDavResource {
       super(message, cause);
     }
   }
+  /**
+   * [Fork-Aenderung] Der Server kann keine Versionspruefung beantworten: er liefert ausschliesslich
+   * schwache ETags, und gegen einen schwachen Tag laesst sich kein If-Match bilden.
+   *
+   * Muss von {@link WebDavConflictException} unterscheidbar sein, weil die Ursache eine voellig
+   * andere ist. Beim Konflikt hat jemand die Datei geaendert; hier hat niemand etwas getan, der
+   * Server kann die Frage nur nicht beantworten. Wer dem Benutzer hier "jemand anderes hat
+   * geaendert" anzeigt, schickt ihn auf die Suche nach einem Kollegen, den es nicht gibt.
+   *
+   * Der Fall ist nicht theoretisch: RFC 9110 VERLANGT einen schwachen Validator, sobald die
+   * Repraesentation unterwegs veraendert wird -- mod_deflate, nginx mit gzip, jeder komprimierende
+   * Proxy, jedes CDN. Dann wird der Tag nie stark.
+   */
+  class WebDavVersioningUnavailableException extends WebDavException {
+    public WebDavVersioningUnavailableException(String message) {
+      super(message);
+    }
+  }
+
   class WebDavRuntimeException extends RuntimeException {
     public WebDavRuntimeException(String message) {
       super(message);

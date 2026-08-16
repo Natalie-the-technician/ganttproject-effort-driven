@@ -345,6 +345,15 @@ public class MiltonResourceImpl implements WebDavResource {
           throw new WebDavConflictException(MessageFormat.format(
               "The file {0} was changed by somebody else since it was read", myUrl.path));
         }
+        if (decision instanceof IfMatchDecision.VersioningUnavailable) {
+          // [Fork-Aenderung] Lieber nicht schreiben als blind schreiben. Frueher stand hier ein
+          // Rueckfall auf "bedingungslos", begruendet mit Apaches Sekundenfenster. Liefert der
+          // Server dauerhaft schwache ETags -- Komprimierung, Proxy, CDN -- war das kein Randfall
+          // mehr, sondern jeder Schreibvorgang, und D3 waere lautlos abgeschaltet gewesen.
+          throw new WebDavVersioningUnavailableException(MessageFormat.format(
+              "The server does not provide a strong ETag for {0}, so no write can be made"
+                  + " conditional", myUrl.path));
+        }
         if (decision instanceof IfMatchDecision.Send) {
           String etag = ((IfMatchDecision.Send) decision).getEtag();
           parentFolder.upload(getName(), is, Long.valueOf(byteArray.length),
