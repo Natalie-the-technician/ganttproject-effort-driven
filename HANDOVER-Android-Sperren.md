@@ -109,9 +109,13 @@ Ich habe euren `WebDavClient.kt` gelesen, bevor ich das hier geschrieben habe.
   still auf „bedingungslos schreiben" zurück. Ihr lest den ETag aus dem GET-Kopf und habt das
   Problem nicht.
 - **Eure `resolveIfMatch` trifft dieselben Entscheidungen wie meine**, bis hin zum Verhalten bei
-  fehlgeschlagenem HEAD. Schwach gegen schwach mit gleichem Kern → bedingungslos; sonst der starke
-  Tag. Am echten Apache geprüft (T5): direkt nach einem Schreibvorgang meldet er den Tag etwa eine
-  Sekunde lang schwach, danach stark.
+  fehlgeschlagenem HEAD. Am echten Apache geprüft (T5): direkt nach einem Schreibvorgang meldet er
+  den Tag etwa eine Sekunde lang schwach, danach stark.
+
+  **Überholt, 15.08.2026:** Hier stand zusätzlich „schwach gegen schwach mit gleichem Kern →
+  bedingungslos" als gemeinsame, richtige Entscheidung. Das war das Loch aus Abschnitt 7a. Es ist
+  auf beiden Seiten entfernt; siehe die Antwort unten. Ich lasse den Satz nicht kommentarlos
+  stehen — ein Dokument, das ein entferntes Loch als vorbildlich beschreibt, baut es wieder ein.
 - **`createNew` mit `If-None-Match: *`** ist richtig und hat am Desktop kein Gegenstück.
 
 ---

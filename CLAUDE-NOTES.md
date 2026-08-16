@@ -2208,6 +2208,40 @@ nichts. `423` erscheint nur, wenn das Telefon aktuell ist und der PC die Datei o
 Gemessen ohne Oberflaeche: die Sperre laesst sich per `curl -X LOCK` selbst setzen, die Frage ist
 eine Eigenschaft des Servers und nicht von GanttProject.
 
+### 7a aus der Android-Uebergabe: mein Unconditional-Zweig war ein Loch
+
+`resolveIfMatch` gab bei schwachem Server-Tag `Unconditional` zurueck. Meine Begruendung im
+Kommentar: "nur die Millisekunden, in denen jemand zweimal innerhalb einer Sekunde speichert".
+
+Die setzt voraus, dass Schwaeche immer nur Apaches mtime-Fenster ist. **RFC 9110 verlangt einen
+schwachen Validator, sobald die Repraesentation unterwegs veraendert wird** -- mod_deflate, nginx
+mit gzip, jeder komprimierende Proxy, jedes CDN. Dort wird der Tag nie stark. Dann ist der Zweig
+kein Randfall, sondern jeder Schreibvorgang, und D3 waere lautlos abgeschaltet.
+
+Jetzt: 1,1 s warten, erneut fragen, bei anhaltender Schwaeche **nicht schreiben** und das auch so
+sagen. Eigene Ausnahme und eigener Text -- hier hat NIEMAND die Datei geaendert, der Konflikttext
+waere falsch.
+
+**Gefunden hat es die Android-Sitzung, in der Portierung meiner eigenen Funktion.** Und 7b, ihre
+Verschaerfung, stand am selben Tag in meinem eigenen Protokoll:
+
+```
+06:10:05  gemerkter ETag=W/"3d73-..."
+06:10:06  gemerkter ETag=W/"3d74-..."
+```
+
+`myEtagAtRead = fetchCurrentEtag()` steht unmittelbar nach dem PUT, also genau in der Sekunde, in
+der Apache schwach meldet. Der "seltene" Weg ist ab dem zweiten Speichern der Normalweg. Ich habe
+diese Zeilen selbst erzeugt, gelesen und die Haeufigkeitsaussage trotzdem stehen lassen.
+
+**Was daran zu lernen ist**, und es ist dasselbe wie beim ETag und bei der Selbstaussperrung: Die
+Begruendung eines Sonderfalls muss gegen die Faelle geprueft werden, die es wirklich gibt, nicht
+gegen den einen, den man beim Schreiben im Kopf hatte. Alle drei Fehler dieser Sitzung waren
+plausibel begruendet und falsch.
+
+Nicht am Server nachweisbar: Natalies Apache komprimiert nicht, der Zweig ist dort nicht
+erreichbar. Abgedeckt sind die Faelle durch Einheitstests (11 statt 8).
+
 ### Offen aus dieser Sitzung
 
 - **Startmeldung "Failed to parse document".** Beim Start oeffnet GanttProject das zuletzt
