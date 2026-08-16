@@ -107,7 +107,11 @@ jobs:
         if: failure()
         run: |
           echo "--- compiler diagnostics ---"
-          grep -E '^(e|w): ' assemble.log | head -50 || echo "none found"
+          # Kotlin marks its diagnostics with "e: "/"w: ", but a build can
+          # also fail in resource merging or javac, and those say neither.
+          # Missing them once cost an afternoon of green core tests next to a
+          # red APK, so the net is wider than one toolchain.
+          grep -E '^(e|w): |error:|FAILED|Failed to ' assemble.log | head -50 || echo "none found"
 
       - name: Lint
         run: ./gradlew :app:lintDebug
