@@ -21,7 +21,16 @@ class WebdavStorage(
     private val myMode: StorageDialogBuilder.Mode,
     private val myOpenDocument: (Document) -> Unit,
     private val myDialogUi: StorageDialogBuilder.DialogUi,
-    private val myOptions: GPCloudStorageOptions
+    private val myOptions: GPCloudStorageOptions,
+    /**
+     * [Fork-Aenderung] Sperrdauer in Minuten, negativ heisst "nicht sperren".
+     *
+     * Muss hier durchgereicht werden, weil dies der Weg ist, den ein Mensch tatsaechlich benutzt:
+     * die Ablage-Auswahl. Zuvor stand in [WebdavBrowserPane] fest NO_LOCK, wodurch ueber diesen
+     * Weg geoeffnete Projekte NIE gesperrt wurden -- unabhaengig von der Einstellung. Am Server
+     * nachgewiesen: ein Schreibversuch von aussen lieferte 204 statt 423.
+     */
+    private val myLockTimeout: Int
 ) : StorageUi {
 
   private val myBorderPane = BorderPane()
@@ -43,7 +52,7 @@ class WebdavStorage(
   override fun createUi(): Pane = myBorderPane.apply { center = doCreateUi() }
 
   private fun createStorageUi(): Pane {
-    val serverUi = WebdavBrowserPane(myServer, myMode, myOpenDocument, myDialogUi)
+    val serverUi = WebdavBrowserPane(myServer, myMode, myOpenDocument, myDialogUi, myLockTimeout)
     return serverUi.createStorageUi()
   }
 
