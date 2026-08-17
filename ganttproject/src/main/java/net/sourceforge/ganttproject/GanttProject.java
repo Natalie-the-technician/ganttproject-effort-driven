@@ -23,17 +23,21 @@ import biz.ganttproject.app.*;
 import biz.ganttproject.lib.fx.TreeTableCellsKt;
 import biz.ganttproject.platform.UpdateOptions;
 import biz.ganttproject.storage.cloud.GPCloudOptions;
+// [Fork-Aenderung] Neue Importe fuer die Toggl-Token-Ablage und den Verbindungstest.
 import net.sourceforge.ganttproject.gui.NotificationChannel;
+import net.sourceforge.ganttproject.timetracking.ConnectionCheckMessageSink;
+// Kotlin legt Deklarationen auf Dateiebene in eine Klasse <Dateiname>Kt.
+import net.sourceforge.ganttproject.timetracking.ImportPeriodDialogKt;
+import net.sourceforge.ganttproject.timetracking.TaskChoiceDialogKt;
+import net.sourceforge.ganttproject.timetracking.TogglConnectionAction;
+import net.sourceforge.ganttproject.timetracking.TogglImportAction;
 // [Fork-Aenderung] Kapazitaetsverteilung.
-// Der Melder ist ein gewoehnlicher Kotlin-Funktionstyp -- genau das, was die vier Aktionen
-// als `report: (Boolean, String) -> Unit` erwarten.
-import kotlin.jvm.functions.Function2;
-import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.fork.AskBeforeWriting;
 import net.sourceforge.ganttproject.fork.BackfillAction;
 import net.sourceforge.ganttproject.fork.LevellingAction;
 import net.sourceforge.ganttproject.fork.EstimateQualityAction;
 import net.sourceforge.ganttproject.fork.RecurrenceAction;
+import net.sourceforge.ganttproject.timetracking.TogglTokenOptions;
 import biz.ganttproject.storage.cloud.GPCloudStatusBar;
 import com.beust.jcommander.Parameter;
 import com.google.common.base.Supplier;
@@ -160,21 +164,41 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     }
     mHuman.add(resourceActionSet.getResourceSendMailAction());
     mHuman.add(resourceActionSet.getCloudResourceList());
-    // [Fork-Aenderung] Die Meldungen der Fork-Aktionen.
-    //
-    // Sie werden hier SELBST gebaut statt ueber showNotificationDialog. Jenes bettet den Text in
-    // die Vorlagen <kanal>.channel.itemTitle/itemBody ein -- und fuer den Kanal RSS gibt es diese
-    // Vorlagen nicht. Der Kasten haette dann "rss.channel.itemBody" angezeigt und unsere Meldung
-    // stillschweigend verschluckt, weil MessageFormat ohne {0} das Argument verwirft.
-    Function2<Boolean, String, Unit> forkMessages = (isProblem, message) -> {
+    // [Fork-Aenderung] Verbindungstest zu Toggl. Steht im Ressourcen-Menue, weil der Token an der
+    // Ressource haengt. Der Test liest nur und schreibt nichts.
+    // Die Meldung wird hier SELBST gebaut statt ueber showNotificationDialog. Jenes bettet den
+    // Text in die Vorlagen <kanal>.channel.itemTitle/itemBody ein -- und fuer den Kanal RSS gibt es
+    // diese Vorlagen nicht. Der Kasten haette dann "rss.channel.itemBody" angezeigt und unsere
+    // Meldung stillschweigend verschluckt, weil MessageFormat ohne {0} das Argument verwirft.
+    ConnectionCheckMessageSink togglMessages = (isProblem, message) -> {
       var manager = getUIFacade().getNotificationManager();
       manager.addNotifications(List.of(manager.createNotification(
           isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS,
-          ForkI18nKt.forkText("fork.effort.section"),
+          TogglConnectionAction.getNotificationTitle(),
           "<p>" + message.replace("\n", "<br>") + "</p>",
           null)));
-      return Unit.INSTANCE;
     };
+    mHuman.add(new TogglConnectionAction(getHumanResourceManager(), togglMessages));
+
+    // [Fork-Aenderung] Import der Toggl-Zeiten. Vor dem Schreiben wird gefragt: die Vorschau nennt
+    // die Summen UND was uebersprungen wird. showOptionDialog ist nicht blockierend, deshalb
+    // bekommt die Aktion einen Rueckruf statt eines Rueckgabewerts.
+    mHuman.add(new TogglImportAction(
+        getTaskManager(),
+        getHumanResourceManager(),
+        getProject().getTaskCustomColumnManager(),
+        getProjectDatabase(),
+        getUndoManager(),
+        togglMessages,
+        (message, answer) -> getUIFacade().showOptionDialog(
+            JOptionPane.QUESTION_MESSAGE,
+            message,
+            new Action[] {
+                OkAction.create("ok", () -> { answer.accept(true); return Unit.INSTANCE; }),
+                CancelAction.create("cancel", () -> { answer.accept(false); return Unit.INSTANCE; })
+            }),
+        ImportPeriodDialogKt.getASK_FOR_THE_PERIOD(),
+        TaskChoiceDialogKt.getASK_FOR_THE_TASKS()));
 
     // [Fork-Aenderung] Kapazitaetsverteilung. Steht im Ressourcen-Menue, weil beides an den
     // Ressourcen haengt: Aufwand pro Tag und wer wann kann.
@@ -196,7 +220,7 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         getHumanResourceManager().getCustomPropertyManager(),
         getProjectDatabase(),
         getUndoManager(),
-        forkMessages,
+        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
     mHuman.add(new LevellingAction(
         getTaskManager(),
@@ -209,13 +233,13 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         // waere nach dem ersten Oeffnen einer Datei verwaist -- am Rechner gemessen.
         () -> (java.util.List<net.sourceforge.ganttproject.GanttPreviousState>) getBaselines(),
         java.time.LocalDate::now,
-        forkMessages,
+        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
 
     // [Fork-Aenderung] Auswertung der Schaetzguete. Schreibt NICHTS und fragt deshalb auch nicht.
     //
     // EIN FENSTER, KEINE BENACHRICHTIGUNG, und das ist am Bildschirm gemessen: ueber
-    // forkMessages landet die Meldung als kleines Zeichen unten rechts, das man erst anklicken
+    // togglMessages landet die Meldung als kleines Zeichen unten rechts, das man erst anklicken
     // muss. Fuer eine Erfolgsmeldung reicht das; ein mehrzeiliger Bericht, der GELESEN werden
     // soll, ist dort praktisch unsichtbar -- beim ersten Durchlauf habe ich ihn selbst nicht
     // gefunden und dachte, der Menuepunkt tue nichts.
@@ -237,7 +261,7 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         getProject().getTaskCustomColumnManager(),
         getProjectDatabase(),
         getUndoManager(),
-        forkMessages,
+        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
@@ -279,6 +303,9 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     options.addOptions(GPCloudOptions.INSTANCE.getOptionGroup());
     options.addOptions(getRssFeedChecker().getOptions());
     options.addOptions(UpdateOptions.INSTANCE.getOptionGroup());
+    // [Fork-Aenderung] Toggl-Token je Person. Gehoert in die Anwendungseinstellungen
+    // (~/.ganttproject) und ausdruecklich NICHT in die Projektdatei - die wird geteilt.
+    options.addOptions(TogglTokenOptions.INSTANCE.getOptionGroup());
     options.addOptions(myTaskManagerConfig.getTaskOptions());
     startupLogger.debug("2. loading options");
     initOptions();
