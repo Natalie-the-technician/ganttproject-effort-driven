@@ -2584,6 +2584,69 @@ entstanden die 959 Tage. Dass die Zahl damit auf 0 geht, ist eine **Erwartung**,
 
 ---
 
+## 18. Sitzung 9 — Zeitzonenfalle, zeitabhaengige Kapazitaet, Kapazitaet je Person
+
+### Die Zeitzonenfalle (der wichtigste Fund der Sitzung)
+
+`GanttLanguage.setLocale` ersetzt beim Start die Standard-Zeitzone der JVM:
+`TimeZone.getTimeZone("UTC")`, dann `setRawOffset(oertlicher Versatz)`. Die Kennung bleibt "UTC",
+der Versatz ist der oertliche. Die alte `TimeZone`-Schnittstelle liefert den verbogenen Versatz --
+`java.time` loest die Kennung auf und liefert **null**.
+
+**Fuer diesen Fork heisst das: `ZoneId.systemDefault()` ist gegen Modell-Daten unbrauchbar.**
+Gemessen (Deutsch, Sommerzeit): ein Modell-Datum ueber `java.time` gelesen ist **einen Tag zu
+frueh**, und ein Feiertag wird nie gefunden -- `myOneOffEvents` ist nach dem genauen Zeitpunkt
+geschluesselt, und der lag zwei Stunden daneben.
+
+Angerichtet hat es Folgendes: die Verteilung hielt Feiertage fuer Arbeitstage und schrieb zu frueh
+liegende Enden. Vier Vorgaenge in Natalies Plan verloren Dauer (11 -> 8, 26 -> 16, 3 -> 1, 3 -> 2),
+einer begann auf einem Feiertag. Am Aufwand gemessen fehlten 24 bzw. 80 Stunden Arbeit.
+Umrechnung jetzt in `fork/LegacyDates.kt` ueber `GregorianCalendar`, gegen `DateParser` des
+Originals geprueft.
+
+**Die Lehre, und sie gilt fuer jede kuenftige Aenderung:** kein Test der reinen Rechnung konnte das
+finden. Die Rechnung war richtig; sie bekam falsche Kalenderauskuenfte. Wo der Fork das
+Projektmodell anfasst, braucht es einen Test MIT dem Modell (`LevellingWriteBackTest`).
+
+### Ergebnis der Kapazitaetsverteilung an Natalies Plan
+
+| Stand | ueberlastete Tage | Spitze |
+|---|---|---|
+| nach dem Befuellen | 2309 | 1000 % |
+| Verteilung, Vorgaenge gedehnt | 1204 | 600 % |
+| nach der Gruppen-Aufloesung | 959 | 600 % |
+| mit Meilensteinen, nach der Zeitzonenkorrektur | **0** | **100 %** |
+
+Gegengeprueft: keine geaenderte Blattdauer, kein Start auf einem Feiertag, kein Aufwandswert
+veraendert, keine verletzte Verknuepfung. Letztes Ende 2063 -- eine Person, 162 Vorgaenge.
+
+### Zeitabhaengige Tagesleistung
+
+Neue Ressourcen-Spalte "Stundenplan", Format `2027-04-01: 6; 2027-10-01: 8`. Die Dauer eines
+Vorgangs haengt damit vom Starttag ab; die Verteilung fragt sie **fuer jeden Kandidaten** neu und
+liefert die tatsaechlich gelegte Dauer zurueck. Fehler im Text werden gemeldet, die Menuepunkte
+verweigern die Arbeit -- ein stiller Rueckfall auf die feste Stundenzahl saehe plausibel aus und
+waere falsch.
+
+### Kapazitaet je Person
+
+Die Verteilung hatte **einen** Topf. Zwei Personen haetten nicht gleichzeitig arbeiten koennen.
+Jetzt ein Topf je Person, Vorgaenge ohne Zuordnung teilen sich einen gemeinsamen.
+
+### Zwei Fallen fuer die naechste Sitzung
+
+- **Dieser Fork hat ZWEI Testmodule**: `ganttproject` und `ganttproject-tester`. Wer nur eines
+  laufen laesst, uebersieht die Haelfte. In dieser Sitzung hat genau das einen Fehler
+  durchgelassen, den das zweite Modul sofort fing.
+- **Eine Spalte im Konstruktor von `GanttProjectImpl` anzulegen macht jede Datei unladbar**, die
+  dieselbe Spalte enthaelt ("Column with ID=... is already registered", gemeldet als "Failed to
+  parse document" fuer die ganze Datei). Spalten gehoeren NACH das Laden.
+- `GPCloudDocumentTest.testMirroredAutomaticallyWhenHasOptions` faellt unter Windows aus, weil der
+  Originalcode einen Pfad doppelt zusammensetzt (`FileDocument.kt:132`). Nicht von diesem Fork
+  verursacht, nicht behoben.
+
+---
+
 ## Offene Vormerkungen
 
 **Korrektur am 17.08.2026:** die ersten beiden Eintraege standen hier noch als "nicht
