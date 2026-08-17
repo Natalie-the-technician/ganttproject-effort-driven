@@ -28,7 +28,6 @@ import net.sourceforge.ganttproject.task.TaskManager
 import net.sourceforge.ganttproject.undo.GPUndoManager
 import java.awt.event.ActionEvent
 import java.time.LocalDate
-import java.time.ZoneId
 
 /**
  * Die beiden Menuepunkte der Kapazitaetsverteilung.
@@ -126,8 +125,8 @@ class LevellingAction(
       report(false, forkText("fork.levelling.noTasks"))
       return
     }
-    val projectStart = taskManager.projectStart?.toInstant()
-      ?.atZone(ZoneId.systemDefault())?.toLocalDate() ?: LocalDate.now()
+    // toModelLocalDate, nicht java.time: siehe LegacyDates.kt.
+    val projectStart = taskManager.projectStart?.toModelLocalDate() ?: LocalDate.now()
     val result = levelTasks(tasks, projectStart, workingDayTest(taskManager.calendar))
 
     val cycles = result.conflicts.filterIsInstance<LevelConflict.Cycle>()
@@ -138,7 +137,7 @@ class LevellingAction(
 
     val moved = result.starts.count { (id, start) ->
       val task = taskManager.getTask(id.toIntOrNull() ?: return@count false) ?: return@count false
-      task.start.time.toInstant().atZone(ZoneId.systemDefault()).toLocalDate() != start
+      task.start.time.toModelLocalDate() != start
     }
     if (moved == 0 && result.conflicts.isEmpty()) {
       report(false, forkText("fork.levelling.nothing"))

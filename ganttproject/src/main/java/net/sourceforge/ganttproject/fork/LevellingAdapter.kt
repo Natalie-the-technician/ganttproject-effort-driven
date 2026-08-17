@@ -96,11 +96,12 @@ fun workingDayTest(calendar: GPCalendar): (LocalDate) -> Boolean = { day ->
   calendar.getDayMask(day.toLegacyDate()) and GPCalendar.DayMask.WORKING != 0
 }
 
-private fun LocalDate.toLegacyDate(): Date =
-  Date.from(this.atStartOfDay(ZoneId.systemDefault()).toInstant())
+// Die Umrechnung liegt in LegacyDates.kt und benutzt AUSDRUECKLICH NICHT java.time:
+// GanttProject verbiegt beim Start die Standard-Zeitzone, und java.time sieht die Verbiegung
+// nicht. Die Begruendung samt Messung steht dort.
+private fun LocalDate.toLegacyDate(): Date = this.toModelDate()
 
-private fun Date.toLocalDate(): LocalDate =
-  this.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+private fun Date.toLocalDate(): LocalDate = this.toModelLocalDate()
 
 /**
  * Sammelt die Blattvorgaenge fuer die Verteilung.
