@@ -2475,6 +2475,48 @@ den Kindern ableitet. Das laesst sich nicht abstellen und ist auch richtig so.
 Die entscheidende Zahl hatte ich frueh gemessen und als harmlos abgetan: "153 Nachfolger starten
 spaeter als noetig (Puffer, kein Problem)". Genau dieser Puffer ist es, den der Planer entfernt.
 
+### Das fehlende Stueck: Kapazitaetsverteilung (levelling)
+
+Abschnitt 3 dieser Notizen nennt seit Sitzung 1 zwei Probleme und bezeichnet das zweite als
+"das eigentliche Problem des Nutzers". Punkt 1 (Dauer aus Aufwand) ist gebaut und laeuft. **Punkt 2
+war nie gebaut.** Sichtbar wurde die Luecke erst am 17.08., als Natalies Python-Simulator wegfiel --
+er hatte die Verteilung uebernommen und sie damit unsichtbar gemacht.
+
+Natalies Frage dazu -- "heisst das, du hast mich die ganze Zeit verarscht?" -- war berechtigt in
+der Sache: das erklaerte Ziel fehlte weiterhin, und niemand hat es ihr gesagt. Im Quelltext stand
+es (`This algorithm does NOT do resource levelling`), aber ein englischer Kommentar ist keine
+Mitteilung.
+
+**Ihre Entscheidungen, am 17.08. getroffen:**
+
+| Frage | Entscheidung |
+|---|---|
+| Reihenfolge bei Gleichstand | Prioritaet, dann Reihenfolge im Plan |
+| Gleichzeitige Arbeit | erlaubt, solange die Summe 100 % nicht uebersteigt |
+| Feste Termine erkennen | Haken "Termin fest" UND Feld "fruehester Beginn" |
+| Konflikt bei festem Termin | Termin halten, Konflikt melden |
+| Befuellen der 226 Vorgaenge | Aufwand aus Dauer ableiten und alles ihr zuordnen |
+
+Ausdruecklich NICHT fest sind Meilensteine: sie tragen kein eigenes Datum, sondern folgen ihren
+Abhaengigkeiten. Natalies Einwand gegen meinen Vorschlag, und er war richtig.
+
+**Gebaut, Schritt 1 und 2, beide als reine Rechnung ohne GanttProject-Typen:**
+- `ResourceLevelling.kt` -- die Verteilung. 13 Tests.
+- `EffortBackfill.kt` -- Aufwand aus Dauer ableiten. 10 Tests.
+
+**Die Sicherheitseigenschaft des Befuellens**, und der Grund fuer genau diese Ableitung:
+`Aufwand := Dauer x Stunden/Tag`, und die Rueckrechnung `ceil(Aufwand / Stunden/Tag)` ergibt wieder
+dieselbe Dauer. **Nach dem Befuellen sieht der Plan aus wie vorher.** Ueber 320 Kombinationen aus
+Dauer und Tagesleistung geprueft. Was verschiebt, ist die Verteilung -- und die laeuft getrennt,
+mit Vorschau.
+
+**Falle festgehalten:** die gespeicherten Prioritaetswerte sind nicht nach Wichtigkeit sortiert --
+`LOWEST("3")`, `LOW("0")`, `NORMAL("1")`, `HIGH("2")`, `HIGHEST("4")`. Wer danach sortiert, stellt
+die niedrigste Prioritaet zwischen HIGH und HIGHEST. Richtig ist `Priority.ordinal`.
+
+**Noch nicht gebaut:** Verdrahtung ins Projektmodell, Vorschau, Menuepunkt. In dieser Reihenfolge,
+und das Befuellen zuerst -- ohne Zuordnungen laeuft die Verteilung an Natalies Plan ins Leere.
+
 ### Offen aus dieser Sitzung
 
 - **Startmeldung "Failed to parse document".** Beim Start oeffnet GanttProject das zuletzt
