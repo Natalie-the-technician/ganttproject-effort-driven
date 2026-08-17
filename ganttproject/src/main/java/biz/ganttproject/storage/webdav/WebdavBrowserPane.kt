@@ -167,7 +167,19 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
       }
       onFailed = EventHandler {
         showMaskPane.accept(false)
-        dialogUi.error("WebdavService failed!", "", null)
+        // [Fork-Aenderung] Den Grund nennen, statt ihn wegzuwerfen.
+        //
+        // FEHLER IM ORIGINAL: hier stand dialogUi.error("WebdavService failed!", "", null). Die
+        // Ausnahme des Dienstes wurde weder angezeigt noch protokolliert -- der Benutzer bekam
+        // einen roten Kasten mit leerem Text, und im Protokoll stand nichts. Am Bildschirm
+        // gesehen: Natalie kam nicht auf ihren Server, und es war nicht feststellbar, ob es an
+        // Passwort, Adresse, Zertifikat oder Netz lag.
+        //
+        // Falsches Passwort und unerreichbarer Server sehen fuer den Benutzer sonst gleich aus,
+        // fuehren aber zu voellig verschiedenen naechsten Schritten.
+        val cause = myLoadService.exception
+        GPLogger.log(cause ?: RuntimeException("WebdavService failed, aber ohne Ausnahme"))
+        dialogUi.error("WebdavService failed!", cause?.message ?: "", cause)
       }
       onCancelled = EventHandler {
         showMaskPane.accept(false)
