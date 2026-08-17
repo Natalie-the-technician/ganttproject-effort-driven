@@ -36,6 +36,14 @@ import javafx.util.StringConverter
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RoleManager
+// [Fork-Aenderung] Neue Importe fuer den Toggl-Token.
+import net.sourceforge.ganttproject.fork.forkText
+import net.sourceforge.ganttproject.timetracking.TogglTokenOptions
+import net.sourceforge.ganttproject.timetracking.ASK_IN_A_DIALOG
+import net.sourceforge.ganttproject.timetracking.TokenKeyChange
+import net.sourceforge.ganttproject.timetracking.tokenKeyChange
+import net.sourceforge.ganttproject.timetracking.tokenFor
+import net.sourceforge.ganttproject.timetracking.tokenKeyFor
 
 class MainPropertiesPanel(private val resource: HumanResource) {
   val title: String = RootLocalizer.formatText("general")
@@ -54,6 +62,16 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   private val totalLoadOption = ObservableDouble("totalLoad", resource.totalLoad).also {
     it.setWritable(false)
   }
+  /**
+   * [Fork-Aenderung] Der Toggl-Token dieser Person.
+   *
+   * Liegt NICHT im Projekt, sondern in den Anwendungseinstellungen — die Projektdatei wird
+   * geteilt und liegt im Vault. Siehe TogglTokenOptions; dort steht auch, dass der Token
+   * kodiert, aber nicht verschluesselt abgelegt wird.
+   */
+  private val togglTokenOption = ObservableString(
+    "togglToken", tokenFor(resource, TogglTokenOptions.tokens.value))
+
   private var onRequestFocus = {}
 
   private fun getFxNode() = StackPane().apply {
@@ -71,6 +89,15 @@ class MainPropertiesPanel(private val resource: HumanResource) {
       money(rateOption)
       money(totalCostOption)
       numeric(totalLoadOption)
+
+      // [Fork-Aenderung] Zeiterfassung. Beschriftungen fest verdrahtet, weil die
+      // Uebersetzungsdateien im Submodul des Original-Repositories liegen und ein unbekannter
+      // Schluessel sonst als Schluessel im Dialog stuende.
+      skip()
+      title(TOGGL_SECTION_LABEL)
+      text(togglTokenOption) {
+        labelText = TOGGL_TOKEN_LABEL
+      }
     }
     onRequestFocus = pane::requestFocus
     children.add(pane.node)
@@ -79,14 +106,58 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   fun requestFocus() = onRequestFocus()
 
   fun save() {
+    // [Fork-Aenderung] Der Schluessel der Token-Ablage wird aus E-Mail bzw. Name gebildet - und
+    // BEIDE werden in den Zeilen direkt darunter geaendert. Deshalb muss der alte Schluessel
+    // vorher feststehen, sonst bleibt der Token unter ihm liegen: fuer die Person unauffindbar
+    // (der Verbindungstest meldet "kein Token", obwohl sie einen eingetragen hat) und als
+    // Geheimnis in ~/.ganttproject zurueck. Siehe movedToken.
+    val previousTokenKey = tokenKeyFor(resource)
+
     nameOption.ifChanged(resource::setName)
     phoneOption.ifChanged(resource::setPhone)
     emailOption.ifChanged(resource::setMail)
     roleOption.ifChanged(resource::setRole)
     rateOption.ifChanged(resource::setStandardPayRate)
+    saveTogglToken(previousTokenKey)
+  }
+
+  /**
+   * [Fork-Aenderung] Der Token wandert in die Anwendungseinstellungen, nicht ins Projekt. Ein
+   * leeres Feld entfernt den Eintrag.
+   *
+   * Bewusst NICHT an `togglTokenOption.ifChanged` gehaengt: der Eintrag muss auch dann umziehen,
+   * wenn nur die E-Mail-Adresse geaendert wurde und das Token-Feld unberuehrt blieb. Genau das ist
+   * der haeufigste Fall — Ressource mit Namen anlegen, Token eintragen, spaeter die Adresse
+   * nachtragen.
+   *
+   * Geschrieben wird nur, wenn sich der Speicher wirklich aendert, damit ein Dialog, in dem
+   * niemand etwas angefasst hat, die Einstellungsdatei nicht anfasst.
+   */
+  private fun saveTogglToken(previousTokenKey: String) {
+    val outcome = tokenKeyChange(
+      storedTokens = TogglTokenOptions.tokens.value,
+      previousKey = previousTokenKey,
+      newKey = tokenKeyFor(resource),
+      editedToken = togglTokenOption.value?.trim().orEmpty())
+
+    when (outcome) {
+      is TokenKeyChange.Unchanged -> Unit
+      is TokenKeyChange.Move -> TogglTokenOptions.tokens.value = outcome.tokens
+      // [Fork-Aenderung] Frueher wurde hier still ueberschrieben. Liegt unter der neuen Adresse
+      // bereits ein ANDERER Token, kostet jeder Ausgang ein Geheimnis -- das entscheidet nicht
+      // dieser Dialog, sondern die Person. Der Ressourcentabelle liegt dieselbe Regel zugrunde.
+      is TokenKeyChange.Collision ->
+        ASK_IN_A_DIALOG.ask(outcome) { chosen -> TogglTokenOptions.tokens.value = chosen }
+    }
   }
 
 }
+
+// [Fork-Aenderung] Beschriftungen aus dem eigenen Textbuendel dieses Forks. Die
+// Uebersetzungsdateien des Originals liegen in einem Submodul, das aus diesem Fork nicht
+// beschrieben werden kann; siehe ForkI18n.kt.
+private val TOGGL_SECTION_LABEL get() = forkText("fork.toggl.section")
+private val TOGGL_TOKEN_LABEL get() = forkText("fork.toggl.token")
 
 private val roleStringConverter = object : StringConverter<Role>() {
   override fun toString(role: Role): String  = role.name
