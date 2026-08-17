@@ -330,6 +330,30 @@ alles mitnimmt, was je darin stand — auch aus der Vorgeschichte.
 Hostname plus Benutzername ist bei einem Basic-Auth-Endpunkt die halbe
 Anmeldung, und solche Endpunkte werden gescannt, sobald sie im Netz stehen.
 
+### Wonach zu suchen ist, und warum die naheliegende Suche versagt
+
+Am 15.08.2026 habe ich die Historie dieses Zweigs bereinigt und danach geprüft,
+ob der Wert noch vorkommt. Die Prüfung suchte den **vollständigen Hostnamen**
+und meldete „sauber". Am 16.08. fand die Desktop-Sitzung trotzdem ein
+Vorkommen: die **blanke Domain**, ohne Unterdomain, in einem Satz über
+Rücksetzmails. Die Aussage stimmte über die Zeichenkette und war als Schluss
+falsch.
+
+**Nach dem unterscheidenden Wortteil suchen, nicht nach dem Wert.** Der
+Hostname kommt in mindestens drei Formen vor — als FQDN, als blanke Domain,
+und als Firmenname in Fließtext. Eine Suche nach der einen findet die anderen
+nicht.
+
+```
+grep -rniE 'firmenteil|benutzerteil' .          # Arbeitsstand
+for c in $(git rev-list <basis>..HEAD); do      # Historie
+  git grep -liE 'firmenteil|benutzerteil' "$c" -- .
+done
+```
+
+Case-insensitive, weil der Firmenname großgeschrieben auftaucht, wo die
+Adresse klein steht — und genau daran ist die erste Prüfung vorbeigelaufen.
+
 Der Ort dafür ist `/root/SERVER-UMBAU-LOG.md` auf dem Server. Hier stehen
 Platzhalter.
 
