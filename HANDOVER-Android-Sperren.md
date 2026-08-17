@@ -137,6 +137,15 @@ Der letzte hat den Namen aus dem *Stand* entfernt — die drei davor enthalten i
 begrenzt. Wenn es weg soll, muss der Zweig umgeschrieben und mit `--force-with-lease` neu
 geschoben werden. Das ist Natalies Entscheidung, nicht meine und nicht eure.
 
+> **ÜBERHOLT UND IN ZWEI PUNKTEN FALSCH, 17.08.2026.** Die Zahl stimmt nicht — es waren fünf
+> Commits, und `120a60049` war die Bereinigung, kein Träger; meine Suche mit `git log -S` findet
+> nur, was ein Vorkommen hinzufügt oder entfernt, nicht jeden Baum, der es enthält. Und der
+> Ratschlag stimmt nicht: **ein Umschreiben entfernt nichts von GitHub** — der alte Commit bleibt
+> über seine Kennung abrufbar. Der Zweig ist am 15.08. umgeschrieben worden; ein weiteres Mal wäre
+> schädlich, weil Releases inzwischen auf Commits dieses Zweigs zeigen. Einzelheiten und ein
+> Restbefund stehen unten unter „Antwort auf die Rückmeldung vom 17.08.". Ich lasse den Absatz
+> stehen statt ihn zu löschen: wer ihm gefolgt ist, soll sehen, woran er war.
+
 **Kein gespeichertes Passwort am PC.** Natalie hat den Haken „Passwort speichern" ausdrücklich
 abgelehnt, weil er es im Klartext in `~/.ganttproject` ablegt. Geht also nicht davon aus, dass am
 PC dauerhaft Zugangsdaten vorliegen.
@@ -224,3 +233,64 @@ nirgends. Es gibt nichts umzubauen.
 
 Der aktuelle Stand hält beide Zusagen und ist am Server belegt. Ich melde mich, bevor sich daran
 etwas ändert.
+
+---
+
+## Antwort auf die Rueckmeldung vom 17.08.
+
+### T4 ist gefahren — angenommen, und die Aufteilung war der Punkt
+
+T4a/T4b/T4c beantworten genau die Frage, die meine eigene Messung offen liess. Ich hatte nur
+gemessen, was der Server bei **veraltetem** ETag unter Sperre tut (`412`) — der Sperrweg selbst
+wird erst von T4a betreten, und nur der traegt die Zusicherung. Dass ein Lauf nicht reicht, ist
+richtig, und mir war es nicht aufgefallen.
+
+Dem Argument, dass kein echter Desktop-Build schreiben muss, stimme ich zu: geprueft wird die
+Antwort des Servers. Dass der Desktop sperrt und `If-Match` sendet, haengt an T1, T2, T3, T5 und
+`tools/lockprobe`.
+
+### Zum Servernamen: zwei Berichtigungen an mir, und ein neuer Befund
+
+**Meine Zaehlung war falsch, und die Methode war der Grund.** Ich hatte mit `git log -S` gesucht.
+Das findet Commits, die das Vorkommen **hinzufuegen oder entfernen** — nicht alle, in deren Baum der
+Wert steht. Vier war deshalb zu wenig; die Zaehlung ueber die Baeume ist die richtige.
+
+**Meine Empfehlung war in ihrer Voraussetzung falsch.** Ich hatte geschrieben, ein Umschreiben
+entferne den Wert von GitHub. Das tut es nicht — ihr habt es nachgeprueft, und der alte Commit
+liefert weiter eine vollstaendige API-Antwort. Ein Force-Push macht die Objekte unerreichbar ueber
+Zweige, nicht ueber ihre Kennung. Wer meinem Satz gefolgt waere, haette sich in Sicherheit gewiegt.
+
+**NEUER BEFUND, bitte pruefen:** Im heutigen Zweigstand traegt **ein Commit den Namen weiterhin im
+Baum**:
+
+```
+a485f7915  2026-08-14  Write up account provisioning as its own server handover
+           HANDOVER-Server-Zugaenge.md  (1 Vorkommen)
+```
+
+Geprueft gegen einen frischen `git fetch`; `1287d6156` liegt in demselben Stand, mein Abbild ist
+also nicht veraltet. Die **Spitze** des Zweigs ist sauber — die Historie nicht.
+
+Ich sage ausdruecklich nicht, dass daraus etwas folgen muss. Nach eurem eigenen Nachweis entfernt
+auch ein weiteres Umschreiben nichts von GitHub, und Releases zeigen inzwischen auf Commits dieses
+Zweigs. Ich melde es, weil "der Zweig ist umgeschrieben" und "der Name ist aus der Historie
+verschwunden" nicht dasselbe sind, und die zweite Aussage stimmt nicht.
+
+### Zu Natalies Einstellungsseite: ja, erledigt — aber es waren zwei Fehler
+
+`9658f303e` behebt das Zeichnen. Das Bildschirmfoto braucht ihr nicht mehr; ich habe die Seite
+selbst per Computeruse durchgeklickt.
+
+Dahinter lag aber noch ein zweiter, schwererer Fehler, behoben in `b7eeb5bf3`:
+
+```java
+public GPOptionGroup[] getOptionGroups() {
+  // TODO Auto-generated method stub
+  return new GPOptionGroup[0];
+}
+```
+
+`OptionPageProviderBase.commit()` laeuft ueber diese Liste. Sie war leer — **"Uebernehmen" hat auf
+der WebDAV-Seite nie etwas uebernommen**: weder Adresse noch Benutzername, Passwort oder
+Sperrdauer. Deshalb hatte Natalies Servereintrag keine Adresse, und die Anmeldung scheiterte mit
+"I/O problems when accessing <Servername>". Inzwischen von ihr bestaetigt: geht jetzt.
