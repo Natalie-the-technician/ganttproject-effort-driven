@@ -216,6 +216,32 @@ class DialogImplSwingInFx(content: JComponent, private val buttonActions: Array<
               }
               dlg.layout()
               dlg.scene.window.sizeToScene()
+              // [Fork-Aenderung] ---- Anfang ----
+              //
+              // DEN SWING-INHALT ZUM ZEICHNEN BRINGEN. AM BILDSCHIRM GEMESSEN: der
+              // Basisplan-Dialog erschien als SCHWARZE FLAECHE und zeichnete sich erst, wenn man
+              // ihn mit der Maus verschob. Ein Dialog, der leer aussieht, ist von einem kaputten
+              // nicht zu unterscheiden -- ich hielt ihn selbst zuerst fuer defekt.
+              //
+              // Die Ursache liegt im SwingNode: sein Inhalt wird auf dem Swing-Faden gesetzt,
+              // waehrend das JavaFX-Fenster schon steht. Ohne einen Anstoss bleibt die Flaeche
+              // leer, bis eine Groessenaenderung sie neu zusammensetzt.
+              //
+              // WARUM GENAU SO: drei Versuche vorher liefen ins Leere, weil sie im FALSCHEN
+              // Dialog sassen -- DialogBuilder.java baut einen reinen Swing-Dialog, benutzt wird
+              // aber dieser hier. Gemerkt habe ich es erst, als eine Probe (Titel aendern) nicht
+              // ansprang. Wer hier etwas aendert: erst pruefen, ob der Code ueberhaupt laeuft.
+              SwingUtilities.invokeLater {
+                contentPane.invalidate()
+                contentPane.validate()
+                contentPane.repaint()
+                Platform.runLater {
+                  val fenster = dlg.scene.window
+                  fenster.width += 1.0
+                  fenster.width -= 1.0
+                }
+              }
+              // [Fork-Aenderung] ---- Ende ----
             }
           }
         }
