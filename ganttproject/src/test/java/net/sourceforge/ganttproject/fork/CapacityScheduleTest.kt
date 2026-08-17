@@ -214,3 +214,79 @@ class CapacityScheduleTest {
     assertEquals(10, ergebnis.durations["b"])
   }
 }
+
+/**
+ * Die Verteilung mit MEHREREN Personen.
+ *
+ * WOZU: bis zum 17.08.2026 hatte die Verteilung einen einzigen Kapazitaetstopf. Zwei Personen
+ * haetten damit nicht gleichzeitig arbeiten koennen -- die Verteilung haette ihre Vorgaenge
+ * hintereinandergelegt und ein Ergebnis geliefert, das plausibel aussieht und den Plan um Monate
+ * verlaengert. Natalie plant heute allein; das darf aber nicht der Grund sein, warum es stimmt.
+ */
+class MehrerePersonenTest {
+  private val montagBisFreitag: (LocalDate) -> Boolean = {
+    it.dayOfWeek != DayOfWeek.SATURDAY && it.dayOfWeek != DayOfWeek.SUNDAY
+  }
+  private val montag = LocalDate.of(2026, 8, 17)
+
+  @Test
+  fun `zwei personen arbeiten gleichzeitig`() {
+    val tasks = listOf(
+      LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("1")),
+      LevelTask("b", 1, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("2")))
+    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    assertEquals(montag, ergebnis.starts["a"])
+    assertEquals(montag, ergebnis.starts["b"], "die zweite Person hat ihre eigene Kapazitaet")
+    assertTrue(ergebnis.conflicts.isEmpty())
+  }
+
+  @Test
+  fun `dieselbe person kann es nicht gleichzeitig`() {
+    // Gegenprobe: dieselbe Aufstellung, aber beide Vorgaenge bei derselben Person.
+    val tasks = listOf(
+      LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("1")),
+      LevelTask("b", 1, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("1")))
+    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    assertEquals(montag, ergebnis.starts["a"])
+    assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["b"], "erst danach")
+  }
+
+  @Test
+  fun `ein vorgang mit zwei personen belegt beide`() {
+    val tasks = listOf(
+      LevelTask("gemeinsam", 0, 2, durationDays = 5, loadPercent = 100,
+        resourceIds = listOf("1", "2")),
+      LevelTask("nur1", 1, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("1")),
+      LevelTask("nur2", 2, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("2")))
+    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    assertEquals(montag, ergebnis.starts["gemeinsam"])
+    // Beide Toepfe sind belegt, also muessen BEIDE Folgevorgaenge warten.
+    assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["nur1"])
+    assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["nur2"])
+  }
+
+  @Test
+  fun `die ueberlastmeldung nennt die person`() {
+    val tasks = listOf(
+      LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("7"),
+        fixedStart = montag),
+      LevelTask("b", 1, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("7"),
+        fixedStart = montag))
+    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    val ueberlast = ergebnis.conflicts.filterIsInstance<LevelConflict.Overload>()
+    assertTrue(ueberlast.isNotEmpty(), "zwei feste Termine am selben Tag sprengen die Kapazitaet")
+    assertEquals("7", ueberlast.first().resourceId)
+  }
+
+  @Test
+  fun `ohne zuordnung teilen sich alle einen topf`() {
+    // Das war das bisherige Verhalten und muss so bleiben: ein Vorgang ohne Zuordnung belegt
+    // Zeit, von der man nur nicht weiss, wessen. Ihn als kostenlos zu behandeln waere die
+    // gefaehrlichere Annahme.
+    val tasks = listOf(
+      LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100),
+      LevelTask("b", 1, 2, durationDays = 5, loadPercent = 100))
+    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["b"])
+  }
+}

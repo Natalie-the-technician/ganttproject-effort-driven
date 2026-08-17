@@ -163,7 +163,11 @@ class TokenStoreTest : TestCase() {
 
     val after = movedToken(before, mailKey, mailKey, "GEHEIM")
 
-    assertEquals(before, after)
+    // GEAENDERT AM 17.08.2026: verglichen wird der INHALT, nicht der Text. Seit der Token
+    // verschluesselt gespeichert wird, sind zwei Texte desselben Inhalts nie mehr gleich --
+    // DPAPI mischt Zufall bei, damit gleiche Geheimnisse nicht am gleichen Chiffretext zu
+    // erkennen sind. Was der Test meint, ist "es geht nichts verloren und nichts kommt hinzu".
+    assertEquals(decodeTokenMap(before), decodeTokenMap(after))
   }
 
   fun testMovingWhenNothingWasStoredJustAddsTheToken() {
@@ -213,9 +217,14 @@ class TokenStoreTest : TestCase() {
 
   /** The settings file must not change just because it was written again. */
   fun testOrderIsDeterministic() {
-    val one = encodeTokenMap(mapOf("b" to "2", "a" to "1"))
-    val other = encodeTokenMap(mapOf("a" to "1", "b" to "2"))
+    // GEAENDERT AM 17.08.2026, als der Token verschluesselt wurde: die beiden Texte sind nicht
+    // mehr Byte fuer Byte gleich, und das ist Absicht -- DPAPI mischt Zufall bei, damit zwei
+    // gleiche Geheimnisse nicht am gleichen Chiffretext zu erkennen sind. Geprueft wird
+    // weiterhin, was der Test eigentlich meint: die Reihenfolge haengt nicht von der Eingabe ab.
+    val one = decodeTokenMap(encodeTokenMap(mapOf("b" to "2", "a" to "1")))
+    val other = decodeTokenMap(encodeTokenMap(mapOf("a" to "1", "b" to "2")))
     assertEquals(one, other)
+    assertEquals(listOf("a", "b"), one.keys.toList())
   }
 
   /** A hand-edited or truncated settings file must not cost the remaining tokens. */

@@ -32,8 +32,13 @@ class EffortBackfillTest : TestCase() {
 
   private fun task(
     id: String, dauer: Int, gruppe: Boolean = false, meilenstein: Boolean = false,
-    aufwand: Double? = null, zuordnungen: Int = 0
-  ) = BackfillTask(id, id, dauer, gruppe, meilenstein, aufwand, zuordnungen)
+    aufwand: Double? = null, zuordnungen: Int = 0, warten: Boolean = false
+  // BENANNTE Argumente, nicht der Reihe nach: als BackfillTask um "isWaitOnly" erweitert wurde,
+  // rutschten die Werte hier stillschweigend eine Stelle weiter und der Test brach erst beim
+  // Uebersetzen -- bei zwei Booleans nebeneinander haette er auch einfach falsch messen koennen.
+  ) = BackfillTask(id = id, name = id, durationDays = dauer, isContainer = gruppe,
+    isMilestone = meilenstein, isWaitOnly = warten, existingEffortHours = aufwand,
+    assignmentCount = zuordnungen)
 
   /**
    * DIE SICHERHEITSEIGENSCHAFT. Aufwand aus Dauer ableiten und wieder zurueckrechnen muss

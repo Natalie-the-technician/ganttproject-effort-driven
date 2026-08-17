@@ -277,7 +277,10 @@ private fun Task.toLevelTask(
       .flatMap { leavesUnder[it] ?: listOf(it) }
       .distinct(),
     fixedStart = fixed,
-    earliestStart = earliest
+    earliestStart = earliest,
+    // Wessen Kapazitaet belegt wird. Meilensteine und Wartevorgaenge belegen mit 0 % ohnehin
+    // nichts; sie bekommen trotzdem ihre Zuordnung mit, damit die Auswertung stimmt.
+    resourceIds = this.assignments.mapNotNull { it.resource?.id?.toString() }.distinct()
   )
 }
 

@@ -108,14 +108,27 @@ open class GanttProjectImpl(
     // Effort-driven scheduling: recalculate durations when the resources change. Registered here,
     // in the UI-free project class, so that it also works headless (import, command line, tests).
     humanResourceManager.addView(EffortDrivenTrigger(this.taskManager))
-    // [Fork-Aenderung] Die beiden Spalten der Tagesleistung anlegen, falls es sie noch nicht gibt.
-    //
-    // WARUM HIER UND NICHT ERST BEI BEDARF: bisher entstand die Spalte "Stunden pro Tag" nur,
-    // wenn jemand sie von Hand im Spaltenverwalter anlegte -- wer das nicht wusste, plante
-    // stillschweigend mit den vorgegebenen acht Stunden weiter. Beim "Stundenplan" waere das noch
-    // schlimmer: eine Eigenschaft, die man nicht sieht, kann man auch nicht eintragen.
-    //
-    // findOrCreate ist mehrfach aufrufbar; ein zweiter Aufruf legt nichts Neues an.
+  }
+
+  /**
+   * [Fork-Aenderung] Legt die beiden Spalten der Tagesleistung an, falls es sie noch nicht gibt.
+   *
+   * WARUM UEBERHAUPT: bisher entstand die Spalte "Stunden pro Tag" nur, wenn jemand sie von Hand
+   * im Spaltenverwalter anlegte -- wer das nicht wusste, plante stillschweigend mit den
+   * vorgegebenen acht Stunden weiter. Beim "Stundenplan" waere das noch schlimmer: eine
+   * Eigenschaft, die man nicht sieht, kann man auch nicht eintragen.
+   *
+   * WARUM NICHT IM KONSTRUKTOR, und das ist am Rechner gemessen: dort angelegt, scheitert
+   * anschliessend das LADEN jeder Datei, die dieselbe Spalte enthaelt --
+   * "Column with ID=hours_per_day is already registered", und zwar als
+   * `DocumentException: Failed to parse document` fuer die GANZE Datei. Gefunden hat es
+   * `GanttChartSelectionTest` im Modul ganttproject-tester, weil die Zwischenablage denselben Weg
+   * geht: speichern und sofort wieder lesen.
+   *
+   * Hier aufgerufen wird nach dem Laden, wenn die Spalten aus der Datei bereits eingetragen sind.
+   * findOrCreate ist dann ein Nullvorgang.
+   */
+  fun ensureCapacityColumns() {
     EffortDrivenProperties.findOrCreateResourceHours(humanResourceManager.customPropertyManager)
     EffortDrivenProperties.findOrCreateResourceSchedule(humanResourceManager.customPropertyManager)
   }

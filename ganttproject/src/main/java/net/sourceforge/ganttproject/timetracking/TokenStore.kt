@@ -20,6 +20,8 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.timetracking
 
+import net.sourceforge.ganttproject.fork.SecretStore
+
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -54,7 +56,31 @@ fun encodeTokenMap(tokens: Map<String, String>): String =
   tokens.entries
     .filter { it.value.isNotEmpty() }
     .sortedBy { it.key }
-    .joinToString(PAIR_SEPARATOR) { "${it.key.urlEncoded()}$FIELD_SEPARATOR${it.value.urlEncoded()}" }
+    .joinToString(PAIR_SEPARATOR) {
+      "${it.key.urlEncoded()}$FIELD_SEPARATOR${protectedToken(it.value).urlEncoded()}"
+    }
+
+/**
+ * [Fork-Aenderung] Der Token, wie er in die Einstellungsdatei geschrieben wird: verschluesselt.
+ *
+ * Vorher lag er dort im Klartext -- lesbar fuer alles, was unter demselben Benutzerkonto laeuft.
+ * Beim WebDAV-Passwort ist das seit dem 17.08.2026 geloest; hier folgt der Token nach.
+ *
+ * ZWEI EIGENARTEN, beide bewusst:
+ *
+ * 1. DIE ZUSAGE "unchanged content always yields the same line" GILT SO NICHT MEHR, und das ist
+ *    Absicht: DPAPI mischt Zufall bei, damit zwei gleiche Geheimnisse nicht am gleichen
+ *    Chiffretext zu erkennen sind. Der gespeicherte Text sieht also nach jedem Schreiben anders
+ *    aus, sein INHALT bleibt gleich. Was die Zusage schuetzen sollte -- keine Aenderung ohne
+ *    Grund -- betrifft eine Einstellungsdatei, die ohnehin bei jedem Beenden neu geschrieben wird;
+ *    dass die Karte ueberall Klartext fuehrt, ist der wichtigere Wert.
+ * 2. Laesst sich nicht verschluesseln (kein Windows, fehlende Bibliothek), bleibt es beim
+ *    bisherigen Verhalten statt den Token zu verlieren. Beim Passwort war "nicht speichern" die
+ *    richtige Antwort, weil man es neu eintippen kann; ein verlorener Token dagegen faellt erst
+ *    beim naechsten Import auf, und dann fehlt die Ursache.
+ */
+private fun protectedToken(token: String): String =
+  if (SecretStore.isProtected(token)) token else SecretStore.protect(token) ?: token
 
 /** Reads the store back. Unreadable pairs are skipped rather than failing the whole settings file. */
 fun decodeTokenMap(text: String?): Map<String, String> {
@@ -65,7 +91,12 @@ fun decodeTokenMap(text: String?): Map<String, String> {
       val key = fields[0].urlDecodedOrNull()
       val token = fields[1].urlDecodedOrNull()
       if (!key.isNullOrEmpty() && !token.isNullOrEmpty()) {
-        result[key] = token
+        // [Fork-Aenderung] Hier entschluesselt, nicht erst bei der Verwendung: die Karte fuehrt
+        // Klartext. Alles andere im Programm -- Vergleiche, Verschieben, Kollisionspruefung --
+        // rechnet mit Token, nicht mit Chiffretexten. Ein Chiffretext in der Karte hatte in einem
+        // ersten Anlauf genau dort Schaden angerichtet: zwei Chiffretexte DESSELBEN Tokens sind
+        // verschieden, und die Kollisionsfrage waere gestellt worden, wo es keine gibt.
+        result[key] = SecretStore.reveal(token)
       }
     }
   }
@@ -168,7 +199,12 @@ fun tokenKeyChange(
   // Compare against the NORMALISED text, not the raw one: a store that was written by an older
   // version may differ in order or encoding without differing in content, and rewriting it for
   // that reason alone would churn the settings file.
-  if (target == encodeTokenMap(decodeTokenMap(storedTokens))) return TokenKeyChange.Unchanged
+  // [Fork-Aenderung] INHALTE vergleichen, nicht Texte. Seit der Token verschluesselt gespeichert
+  // wird, sind zwei Texte desselben Inhalts nie mehr gleich -- DPAPI mischt Zufall bei. Ein
+  // Textvergleich haette hier nie wieder "Unchanged" ergeben, und jede Bearbeitung einer
+  // Ressource haette die Einstellungsdatei neu geschrieben. Am Rechner gemessen, gefunden von
+  // testAnUntouchedDialogChangesNothing.
+  if (decodeTokenMap(target) == decodeTokenMap(storedTokens)) return TokenKeyChange.Unchanged
 
   // A collision needs the key to actually move, a token to move there, and a DIFFERENT one
   // already sitting in the way. An emptied field is a removal, not a collision.

@@ -79,7 +79,19 @@ data class LevelTask(
   val fixedStart: LocalDate? = null,
 
   /** „Fruehester Beginn": nicht vor diesem Datum, spaeter aber schon. */
-  val earliestStart: LocalDate? = null
+  val earliestStart: LocalDate? = null,
+  /**
+   * Die Personen, deren Kapazitaet dieser Vorgang belegt.
+   *
+   * WARUM DAS NOETIG IST: bis dahin hatte die Verteilung EINEN Kapazitaetstopf. Bei zwei Personen
+   * haette sie deren Arbeit hintereinander gelegt, als koennten sie nicht gleichzeitig arbeiten --
+   * still und plausibel aussehend. Natalie plant heute allein; das darf aber nicht der Grund sein,
+   * warum es richtig aussieht.
+   *
+   * Leer heisst: niemand ist zugeordnet. Diese Vorgaenge teilen sich einen gemeinsamen Topf --
+   * sie belegen Zeit, von der man nur nicht weiss, wessen.
+   */
+  val resourceIds: List<String> = emptyList()
 )
 
 sealed interface LevelConflict {
@@ -91,7 +103,11 @@ sealed interface LevelConflict {
     val id: String, val fixedStart: LocalDate, val earliestPossible: LocalDate) : LevelConflict
 
   /** An diesem Tag verlangt die Summe der Vorgaenge mehr als 100 %. Entsteht nur durch feste Termine. */
-  data class Overload(val day: LocalDate, val percent: Int, val ids: List<String>) : LevelConflict
+  data class Overload(
+    val day: LocalDate, val percent: Int, val ids: List<String>,
+    /** Wessen Kapazitaet ueberschritten ist. Leer: der Topf der nicht zugeordneten Vorgaenge. */
+    val resourceId: String = ""
+  ) : LevelConflict
 
   /** Die Vorgaenge haengen im Kreis. Sie werden nicht verteilt. */
   data class Cycle(val ids: List<String>) : LevelConflict
@@ -130,8 +146,9 @@ fun levelTasks(
     return LevelResult(emptyMap(), listOf(LevelConflict.Cycle(tasks.map { it.id })))
   }
 
-  // Belegung je Arbeitstag, in Prozent. Nur Tage, an denen etwas liegt, stehen darin.
-  val used = mutableMapOf<LocalDate, Int>()
+  // Belegung je PERSON und Arbeitstag, in Prozent. Nur Tage, an denen etwas liegt, stehen darin.
+  // Der Schluessel "" ist der Topf der nicht zugeordneten Vorgaenge.
+  val used = mutableMapOf<String, MutableMap<LocalDate, Int>>()
   val starts = mutableMapOf<String, LocalDate>()
   val durations = mutableMapOf<String, Int>()
   val ends = mutableMapOf<String, LocalDate>()
@@ -158,23 +175,33 @@ fun levelTasks(
       days = findEarliestWindow(earliest, task, durationAt, used, isWorkingDay)
     }
 
-    days.forEach { used[it] = (used[it] ?: 0) + task.loadPercent }
+    task.pools.forEach { pool ->
+      val belegung = used.getOrPut(pool) { mutableMapOf() }
+      days.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadPercent }
+    }
     starts[id] = days.first()
     durations[id] = days.size
     ends[id] = nextWorkingDay(days.last().plusDays(1), isWorkingDay)
   }
 
   // Ueberlast kann nach dem Verteilen nur noch dort stehen, wo feste Termine sie erzwungen haben.
-  used.filterValues { it > 100 }.toSortedMap().forEach { (day, percent) ->
-    val onThatDay = tasks.filter { t ->
-      val s = starts[t.id] ?: return@filter false
-      workingDays(s, durations[t.id] ?: t.durationDays, isWorkingDay).contains(day)
-    }.map { it.id }
-    conflicts.add(LevelConflict.Overload(day, percent, onThatDay))
+  used.toSortedMap().forEach { (pool, belegung) ->
+    belegung.filterValues { it > 100 }.toSortedMap().forEach { (day, percent) ->
+      val onThatDay = tasks.filter { t ->
+        if (!t.pools.contains(pool)) return@filter false
+        val s = starts[t.id] ?: return@filter false
+        workingDays(s, durations[t.id] ?: t.durationDays, isWorkingDay).contains(day)
+      }.map { it.id }
+      conflicts.add(LevelConflict.Overload(day, percent, onThatDay, pool))
+    }
   }
 
   return LevelResult(starts, conflicts, durations)
 }
+
+/** Die Kapazitaetstoepfe, die dieser Vorgang belegt. Ohne Zuordnung der gemeinsame Topf "". */
+internal val LevelTask.pools: List<String>
+  get() = if (resourceIds.isEmpty()) listOf("") else resourceIds
 
 /**
  * Reihenfolge der Abarbeitung: nur Vorgaenge, deren Vorgaenger schon liegen, und unter diesen der
@@ -234,7 +261,7 @@ private fun findEarliestWindow(
   earliest: LocalDate,
   task: LevelTask,
   durationAt: (LevelTask, LocalDate) -> Int,
-  used: Map<LocalDate, Int>,
+  used: Map<String, MutableMap<LocalDate, Int>>,
   isWorkingDay: (LocalDate) -> Boolean
 ): List<LocalDate> {
   val loadPercent = task.loadPercent
@@ -243,7 +270,10 @@ private fun findEarliestWindow(
     // Die Dauer haengt vom Starttag ab, sobald die Tagesleistung zeitabhaengig ist -- sie muss
     // deshalb FUER JEDEN KANDIDATEN neu gefragt werden, nicht einmal vorab.
     val window = workingDays(candidate, durationAt(task, candidate), isWorkingDay)
-    val blockedAt = window.firstOrNull { (used[it] ?: 0) + loadPercent > 100 }
+    // Ein Tag blockiert, sobald er fuer EINE der beteiligten Personen zu voll ist.
+    val blockedAt = window.firstOrNull { day ->
+      task.pools.any { pool -> (used[pool]?.get(day) ?: 0) + loadPercent > 100 }
+    }
     if (blockedAt == null) {
       return window
     }

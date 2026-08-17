@@ -569,11 +569,20 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
    */
   public void newProject() {
     getProjectUIFacade().createProject(getProject());
+    // [Fork-Aenderung] Auch ein neues Projekt bekommt die beiden Spalten der Tagesleistung --
+    // sonst haette nur ein geoeffnetes Projekt sie, und wer neu anfaengt, plant unbemerkt mit den
+    // vorgegebenen acht Stunden.
+    getProjectImpl().ensureCapacityColumns();
   }
 
   @Override
   public void open(Document document) throws IOException, DocumentException {
     document.read();
+    // [Fork-Aenderung] NACH dem Lesen: die Spalten der Tagesleistung anlegen, falls die Datei
+    // sie nicht mitbringt. Vor dem Lesen aufgerufen wuerde das Laden jeder Datei scheitern, die
+    // dieselbe Spalte enthaelt ("Column with ID=hours_per_day is already registered") -- am
+    // Rechner gemessen, siehe ensureCapacityColumns().
+    getProjectImpl().ensureCapacityColumns();
     getDocumentManager().addToRecentDocuments(document);
     //myMRU.add(document.getPath(), true);
     myObservableDocument.set(document);

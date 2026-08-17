@@ -140,7 +140,10 @@ class TogglTokensTest : TestCase() {
     try {
       val stored = TogglTokenOptions.tokens.value
       person.keepingTokenReachable { person.phone = "0123" }
-      assertEquals(stored, TogglTokenOptions.tokens.value)
+      // GEAENDERT AM 17.08.2026: INHALT statt Text, aus demselben Grund wie oben. Der Test meint
+      // "eine Bearbeitung, die den Schluessel nicht anfasst, schreibt nichts um" -- und genau das
+      // wird geprueft, seit tokenKeyChange die Inhalte vergleicht.
+      assertEquals(decodeTokenMap(stored), decodeTokenMap(TogglTokenOptions.tokens.value))
     } finally {
       TogglTokenOptions.tokens.value = before
     }
@@ -386,6 +389,9 @@ class TogglTokensTest : TestCase() {
     val second = resource("Anders", 2, "anders@example.org")
     val oneWay = withToken(withToken("", first, "A"), second, "B")
     val otherWay = withToken(withToken("", second, "B"), first, "A")
-    assertEquals(oneWay, otherWay)
+    // GEAENDERT AM 17.08.2026: INHALTE vergleichen. Der Token wird verschluesselt gespeichert,
+    // und DPAPI mischt Zufall bei -- zwei Texte desselben Inhalts sind nie mehr gleich. Gemeint
+    // ist "die Reihenfolge der Eingabe aendert das Ergebnis nicht", und das gilt weiterhin.
+    assertEquals(decodeTokenMap(oneWay), decodeTokenMap(otherWay))
   }
 }

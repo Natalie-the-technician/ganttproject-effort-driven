@@ -63,6 +63,9 @@ object SecretStore {
    * @return den gekennzeichneten Chiffretext, oder null wenn nicht verschluesselt werden kann.
    * Null heisst ausdruecklich "nicht speichern" und nicht "im Klartext speichern".
    */
+  /** Ob dieser gespeicherte Wert bereits verschluesselt ist. */
+  fun isProtected(stored: String): Boolean = stored.startsWith(MARKER)
+
   fun protect(plain: String): String? {
     if (!isAvailable || plain.isEmpty()) {
       return null
