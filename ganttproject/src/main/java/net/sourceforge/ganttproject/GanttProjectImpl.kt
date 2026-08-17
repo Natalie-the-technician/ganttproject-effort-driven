@@ -48,6 +48,7 @@ import net.sourceforge.ganttproject.resource.OverwritingMerger
 import net.sourceforge.ganttproject.roles.RoleManager
 import net.sourceforge.ganttproject.storage.LazyProjectDatabaseProxy
 // [Fork-Aenderung] Neuer Import fuer den Ausloeser der Dauerberechnung.
+import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenTrigger
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.task.*
@@ -107,6 +108,16 @@ open class GanttProjectImpl(
     // Effort-driven scheduling: recalculate durations when the resources change. Registered here,
     // in the UI-free project class, so that it also works headless (import, command line, tests).
     humanResourceManager.addView(EffortDrivenTrigger(this.taskManager))
+    // [Fork-Aenderung] Die beiden Spalten der Tagesleistung anlegen, falls es sie noch nicht gibt.
+    //
+    // WARUM HIER UND NICHT ERST BEI BEDARF: bisher entstand die Spalte "Stunden pro Tag" nur,
+    // wenn jemand sie von Hand im Spaltenverwalter anlegte -- wer das nicht wusste, plante
+    // stillschweigend mit den vorgegebenen acht Stunden weiter. Beim "Stundenplan" waere das noch
+    // schlimmer: eine Eigenschaft, die man nicht sieht, kann man auch nicht eintragen.
+    //
+    // findOrCreate ist mehrfach aufrufbar; ein zweiter Aufruf legt nichts Neues an.
+    EffortDrivenProperties.findOrCreateResourceHours(humanResourceManager.customPropertyManager)
+    EffortDrivenProperties.findOrCreateResourceSchedule(humanResourceManager.customPropertyManager)
   }
 
   override fun setModified() {

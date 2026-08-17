@@ -99,7 +99,16 @@ sealed interface LevelConflict {
 
 data class LevelResult(
   val starts: Map<String, LocalDate>,
-  val conflicts: List<LevelConflict>
+  val conflicts: List<LevelConflict>,
+  /**
+   * Die Dauer, mit der der Vorgang tatsaechlich gelegt wurde.
+   *
+   * Sie kann von [LevelTask.durationDays] ABWEICHEN, sobald die Tagesleistung zeitabhaengig ist:
+   * derselbe Aufwand braucht in einem Abschnitt mit vier Stunden mehr Tage als in einem mit acht.
+   * Wer die Termine zurueckschreibt, muss DIESE Dauer verwenden -- sonst stuende im Plan ein Ende,
+   * das zur gerechneten Belegung nicht passt.
+   */
+  val durations: Map<String, Int> = emptyMap()
 )
 
 /**
@@ -110,7 +119,8 @@ data class LevelResult(
 fun levelTasks(
   tasks: List<LevelTask>,
   projectStart: LocalDate,
-  isWorkingDay: (LocalDate) -> Boolean
+  isWorkingDay: (LocalDate) -> Boolean,
+  durationAt: (LevelTask, LocalDate) -> Int = { task, _ -> task.durationDays }
 ): LevelResult {
   val byId = tasks.associateBy { it.id }
   val conflicts = mutableListOf<LevelConflict>()
@@ -123,6 +133,7 @@ fun levelTasks(
   // Belegung je Arbeitstag, in Prozent. Nur Tage, an denen etwas liegt, stehen darin.
   val used = mutableMapOf<LocalDate, Int>()
   val starts = mutableMapOf<String, LocalDate>()
+  val durations = mutableMapOf<String, Int>()
   val ends = mutableMapOf<String, LocalDate>()
 
   for (id in order) {
@@ -142,13 +153,14 @@ fun levelTasks(
       if (start < earliest) {
         conflicts.add(LevelConflict.FixedDateNotReachable(id, start, earliest))
       }
-      days = workingDays(start, task.durationDays, isWorkingDay)
+      days = workingDays(start, durationAt(task, start), isWorkingDay)
     } else {
-      days = findEarliestWindow(earliest, task.durationDays, task.loadPercent, used, isWorkingDay)
+      days = findEarliestWindow(earliest, task, durationAt, used, isWorkingDay)
     }
 
     days.forEach { used[it] = (used[it] ?: 0) + task.loadPercent }
     starts[id] = days.first()
+    durations[id] = days.size
     ends[id] = nextWorkingDay(days.last().plusDays(1), isWorkingDay)
   }
 
@@ -156,12 +168,12 @@ fun levelTasks(
   used.filterValues { it > 100 }.toSortedMap().forEach { (day, percent) ->
     val onThatDay = tasks.filter { t ->
       val s = starts[t.id] ?: return@filter false
-      workingDays(s, t.durationDays, isWorkingDay).contains(day)
+      workingDays(s, durations[t.id] ?: t.durationDays, isWorkingDay).contains(day)
     }.map { it.id }
     conflicts.add(LevelConflict.Overload(day, percent, onThatDay))
   }
 
-  return LevelResult(starts, conflicts)
+  return LevelResult(starts, conflicts, durations)
 }
 
 /**
@@ -220,14 +232,17 @@ private fun workingDays(
  */
 private fun findEarliestWindow(
   earliest: LocalDate,
-  durationDays: Int,
-  loadPercent: Int,
+  task: LevelTask,
+  durationAt: (LevelTask, LocalDate) -> Int,
   used: Map<LocalDate, Int>,
   isWorkingDay: (LocalDate) -> Boolean
 ): List<LocalDate> {
+  val loadPercent = task.loadPercent
   var candidate = nextWorkingDay(earliest, isWorkingDay)
   while (true) {
-    val window = workingDays(candidate, durationDays, isWorkingDay)
+    // Die Dauer haengt vom Starttag ab, sobald die Tagesleistung zeitabhaengig ist -- sie muss
+    // deshalb FUER JEDEN KANDIDATEN neu gefragt werden, nicht einmal vorab.
+    val window = workingDays(candidate, durationAt(task, candidate), isWorkingDay)
     val blockedAt = window.firstOrNull { (used[it] ?: 0) + loadPercent > 100 }
     if (blockedAt == null) {
       return window

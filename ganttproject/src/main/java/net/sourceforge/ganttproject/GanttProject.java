@@ -222,6 +222,7 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         askBeforeWriting));
     mHuman.add(new LevellingAction(
         getTaskManager(),
+        getHumanResourceManager(),
         getProject().getTaskCustomColumnManager(),
         getHumanResourceManager().getCustomPropertyManager(),
         getUndoManager(),

@@ -30,6 +30,12 @@ import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskContainmentHierarchyFacade
 import net.sourceforge.ganttproject.task.TaskManager
 import java.util.function.Supplier
+import net.sourceforge.ganttproject.fork.CapacityChange
+import net.sourceforge.ganttproject.fork.CapacityParseResult
+import net.sourceforge.ganttproject.fork.CapacitySchedule
+import net.sourceforge.ganttproject.fork.daysNeeded
+import net.sourceforge.ganttproject.fork.toModelLocalDate
+import net.sourceforge.ganttproject.fork.workingDayTest
 import kotlin.math.ceil
 
 /**
@@ -88,6 +94,17 @@ object EffortDrivenProperties {
       ?: manager.createDefinition(TASK_EFFORT_ACTUAL_HOURS, CustomPropertyClass.DOUBLE.iD,
                                   forkText("fork.column.actualEffort"), null)
 
+  /**
+   * [Fork-Aenderung] Zeitabhaengige Tagesleistung als Text, siehe [net.sourceforge.ganttproject
+   * .fork.CapacitySchedule]. Leer heisst: es gilt durchgehend [RESOURCE_HOURS_PER_DAY].
+   */
+  const val RESOURCE_HOURS_SCHEDULE = "hours_schedule"
+
+  fun findOrCreateResourceSchedule(manager: CustomPropertyManager): CustomPropertyDefinition =
+    manager.findEffortDefinition(RESOURCE_HOURS_SCHEDULE)
+      ?: manager.createDefinition(RESOURCE_HOURS_SCHEDULE, CustomPropertyClass.TEXT.iD,
+                                  forkText("fork.column.hoursSchedule"), null)
+
   fun findOrCreateResourceHours(manager: CustomPropertyManager): CustomPropertyDefinition =
     manager.findEffortDefinition(RESOURCE_HOURS_PER_DAY)
       ?: manager.createDefinition(RESOURCE_HOURS_PER_DAY, CustomPropertyClass.DOUBLE.iD,
@@ -145,6 +162,46 @@ fun HumanResource.hoursPerDay(manager: CustomPropertyManager): Double {
   val value = (raw as? Number)?.toDouble() ?: raw.toString().toDoubleOrNull()
     ?: return EffortDrivenProperties.DEFAULT_HOURS_PER_DAY
   return if (value > 0.0) value else EffortDrivenProperties.DEFAULT_HOURS_PER_DAY
+}
+
+/**
+ * [Fork-Aenderung] Der Stundenplan dieser Person: die Tagesleistung ueber die Zeit.
+ *
+ * Die Fehler des Textes werden MITGELIEFERT und nicht verschluckt -- wer rechnet, soll die Wahl
+ * haben, bei einem Tippfehler die Arbeit zu verweigern, statt still mit der alten Zahl
+ * weiterzurechnen.
+ */
+fun HumanResource.capacitySchedule(manager: CustomPropertyManager): CapacityParseResult {
+  val base = this.hoursPerDay(manager)
+  val def = manager.findEffortDefinition(EffortDrivenProperties.RESOURCE_HOURS_SCHEDULE)
+    ?: return CapacityParseResult(CapacitySchedule(base), emptyList())
+  return CapacitySchedule.parse(this.getCustomField(def)?.toString(), base)
+}
+
+/**
+ * [Fork-Aenderung] Der Stundenplan, den ein Vorgang ueber seine Zuordnungen sieht.
+ *
+ * Mehrere Personen werden zusammengezaehlt, jeweils mit ihrem Anteil -- genauso, wie es
+ * [Task.availableHoursPerDay] fuer den festen Wert tut.
+ */
+fun Task.capacitySchedule(resourceProperties: CustomPropertyManager): CapacityParseResult {
+  val parts = this.assignments.mapNotNull { assignment ->
+    assignment.resource?.let { it.capacitySchedule(resourceProperties) to assignment.load / 100.0 }
+  }
+  if (parts.isEmpty()) {
+    return CapacityParseResult(CapacitySchedule(0.0), emptyList())
+  }
+  val errors = parts.flatMap { it.first.errors }
+  if (parts.size == 1 && parts[0].second == 1.0) {
+    return CapacityParseResult(parts[0].first.schedule, errors)
+  }
+  // Bei mehreren Zuordnungen alle Wechseltage zusammenlegen und je Tag summieren.
+  val base = parts.sumOf { (result, share) -> result.schedule.base * share }
+  val days = parts.flatMap { it.first.schedule.changes.map { c -> c.from } }.distinct().sorted()
+  val changes = days.map { day ->
+    CapacityChange(day, parts.sumOf { (result, share) -> result.schedule.hoursOn(day) * share })
+  }
+  return CapacityParseResult(CapacitySchedule(base, changes), errors)
 }
 
 /**
@@ -250,7 +307,22 @@ abstract class EffortDrivenDurationAlgorithm(
     if (availability <= 0.0) {
       return
     }
-    val days = computeDurationDays(effort, availability)
+    // [Fork-Aenderung] Zeitabhaengige Tagesleistung: ein Vorgang, der ueber eine Grenze laeuft,
+    // wird davor mit der alten und danach mit der neuen Stundenzahl gerechnet. Ohne Abschnitte
+    // ist das Ergebnis nachweislich dasselbe wie vorher (CapacityScheduleTest).
+    //
+    // Bei einem fehlerhaften Stundenplan bleibt es bei der festen Zahl: die Meldung gehoert an die
+    // Oberflaeche, und ein Algorithmus, der bei jedem Durchlauf einen Dialog aufmacht, waere
+    // unbrauchbar. Die beiden Menuepunkte der Verteilung pruefen den Text und verweigern die
+    // Arbeit -- dort sieht der Mensch den Fehler.
+    val schedule = task.capacitySchedule(resourceProps)
+    val start = task.start?.time?.toModelLocalDate()
+    val days = if (schedule.hasErrors || schedule.schedule.isConstant || start == null) {
+      computeDurationDays(effort, availability)
+    } else {
+      daysNeeded(effort, start, schedule.schedule, isWorkingDay = workingDayTest(taskManager.calendar))
+        ?: computeDurationDays(effort, availability)
+    }
     val newDuration = taskManager.createLength(days.toLong())
     val current = task.duration
     // Avoid firing a change event when nothing actually changes: important once this algorithm

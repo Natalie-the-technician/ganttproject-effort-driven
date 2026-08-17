@@ -26,12 +26,14 @@ import biz.ganttproject.customproperty.CustomPropertyClass
 import biz.ganttproject.customproperty.CustomPropertyDefinition
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.resource.HumanResource
+import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskImpl
 import net.sourceforge.ganttproject.task.TaskManager
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.task.algorithm.availableHoursPerDay
+import net.sourceforge.ganttproject.task.algorithm.capacitySchedule
 import net.sourceforge.ganttproject.task.algorithm.effortHours
 import net.sourceforge.ganttproject.task.algorithm.findEffortDefinition
 import net.sourceforge.ganttproject.task.algorithm.hoursPerDay
@@ -163,6 +165,78 @@ fun collectLevelTasks(
   return result
 }
 
+/**
+ * Was am Stundenplan der Beteiligten nicht stimmt.
+ *
+ * WOZU EIN EIGENER DURCHGANG: die Rechnung selbst faellt bei einem fehlerhaften Stundenplan auf
+ * die feste Stundenzahl zurueck -- sie kann mitten im Durchlauf keinen Dialog aufmachen. Genau
+ * dieser Rueckfall ist aber die gefaehrliche Stelle: der Plan saehe richtig aus und waere es nicht.
+ * Deshalb wird VOR der Arbeit gefragt, und der Mensch entscheidet.
+ */
+data class CapacityProblems(
+  /** Lesefehler im Text, je Person einmal. */
+  val errors: Map<String, List<String>>,
+  /** Vorgaenge, die mit der eingetragenen Tagesleistung nie fertig werden (Abschnitt mit 0 Std.). */
+  val unreachable: List<String>
+) {
+  val hasErrors: Boolean get() = errors.isNotEmpty()
+}
+
+fun capacityProblems(
+  taskManager: TaskManager,
+  taskProperties: CustomPropertyManager,
+  resourceManager: HumanResourceManager,
+  resourceProperties: CustomPropertyManager
+): CapacityProblems {
+  val errors = mutableMapOf<String, List<String>>()
+  resourceManager.resources.forEach { resource ->
+    val result = resource.capacitySchedule(resourceProperties)
+    if (result.hasErrors) {
+      errors[resource.name ?: resource.id.toString()] = result.errors
+    }
+  }
+  val isWorkingDay = workingDayTest(taskManager.calendar)
+  val unreachable = mutableListOf<String>()
+  if (errors.isEmpty()) {
+    taskManager.tasks.forEach { task ->
+      val effort = task.effortHours(taskProperties) ?: return@forEach
+      val schedule = task.capacitySchedule(resourceProperties)
+      if (schedule.schedule.isConstant) return@forEach
+      val start = task.start?.time?.toModelLocalDate() ?: return@forEach
+      if (daysNeeded(effort, start, schedule.schedule, isWorkingDay = isWorkingDay) == null) {
+        unreachable.add(task.name ?: task.taskID.toString())
+      }
+    }
+  }
+  return CapacityProblems(errors, unreachable)
+}
+
+/**
+ * Die Dauer eines Vorgangs, wenn er an einem bestimmten Tag beginnt.
+ *
+ * Ohne zeitabhaengige Tagesleistung ist das immer dieselbe Zahl, und die Verteilung verhaelt sich
+ * wie zuvor. Mit Abschnitten haengt die Dauer vom Starttag ab -- deshalb eine Funktion und keine
+ * Zahl im [LevelTask].
+ */
+fun durationAtStart(
+  taskManager: TaskManager,
+  taskProperties: CustomPropertyManager,
+  resourceProperties: CustomPropertyManager
+): (LevelTask, LocalDate) -> Int {
+  val isWorkingDay = workingDayTest(taskManager.calendar)
+  return fabrik@{ levelTask, start ->
+    val task = taskManager.getTask(levelTask.id.toIntOrNull() ?: return@fabrik levelTask.durationDays)
+      ?: return@fabrik levelTask.durationDays
+    val effort = task.effortHours(taskProperties) ?: return@fabrik levelTask.durationDays
+    val schedule = task.capacitySchedule(resourceProperties)
+    if (schedule.hasErrors || schedule.schedule.isConstant) {
+      return@fabrik levelTask.durationDays
+    }
+    daysNeeded(effort, start, schedule.schedule, isWorkingDay = isWorkingDay)
+      ?: levelTask.durationDays
+  }
+}
+
 private fun Task.toLevelTask(
   order: Int, taskProperties: CustomPropertyManager, resourceProperties: CustomPropertyManager,
   leavesUnder: Map<String, List<String>>
@@ -218,14 +292,25 @@ fun applyLevellingAsSingleEdit(
   starts: Map<String, LocalDate>,
   taskManager: TaskManager,
   undoManager: GPUndoManager,
-  editName: String
+  editName: String,
+  /**
+   * Die Dauer, mit der die Verteilung gerechnet hat. Fehlt ein Eintrag, bleibt die bisherige
+   * Dauer stehen.
+   *
+   * WARUM DAS NOETIG IST: bei zeitabhaengiger Tagesleistung braucht derselbe Aufwand in einem
+   * Abschnitt mit vier Stunden mehr Tage als in einem mit acht. Wer beim Zurueckschreiben die
+   * ALTE Dauer nimmt, schreibt ein Ende, das zur gerechneten Belegung nicht passt -- und die
+   * Verteilung waere fuer die betroffenen Tage wertlos.
+   */
+  durations: Map<String, Int> = emptyMap()
 ): Int {
   val isWorkingDay = workingDayTest(taskManager.calendar)
   val moves = starts.mapNotNull { (id, newStart) ->
     val task = taskManager.getTask(id.toIntOrNull() ?: return@mapNotNull null)
       ?: return@mapNotNull null
-    if (task.start.time.toLocalDate() == newStart) null
-    else Triple(task, newStart, task.duration.length.coerceAtLeast(1))
+    val neueDauer = durations[id] ?: task.duration.length
+    if (task.start.time.toLocalDate() == newStart && neueDauer == task.duration.length) null
+    else Triple(task, newStart, neueDauer.coerceAtLeast(1))
   }
   if (moves.isEmpty()) {
     return 0

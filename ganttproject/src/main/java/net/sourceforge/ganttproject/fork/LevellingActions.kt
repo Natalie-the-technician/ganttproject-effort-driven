@@ -81,6 +81,19 @@ class BackfillAction(
       report(true, forkText("fork.levelling.manyResources", resources.size))
       return
     }
+    // Ein fehlerhafter Stundenplan wuerde still auf die feste Stundenzahl zurueckfallen. Lieber
+    // gar nicht rechnen als plausibel falsch rechnen.
+    val probleme = capacityProblems(taskManager, taskProperties, resourceManager, resourceProperties)
+    if (probleme.hasErrors) {
+      val text = StringBuilder()
+      probleme.errors.forEach { (person, fehler) ->
+        text.append(forkText("fork.capacity.error.title", person)).appendLine()
+        fehler.forEach { text.append("  • ").append(it).appendLine() }
+      }
+      text.appendLine().append(forkText("fork.capacity.error.consequence"))
+      report(true, text.toString())
+      return
+    }
     val resource = resources[0]
     val hoursPerDay = resource.dailyHours(resourceProperties)
     val proposal = proposeBackfill(collectBackfillTasks(taskManager, taskProperties), hoursPerDay)
@@ -110,6 +123,7 @@ class BackfillAction(
 /** Die Vorgaenge so verteilen, dass niemand mehr als 100 % gleichzeitig leisten muss. */
 class LevellingAction(
   private val taskManager: TaskManager,
+  private val resourceManager: HumanResourceManager,
   private val taskProperties: CustomPropertyManager,
   private val resourceProperties: CustomPropertyManager,
   private val undoManager: GPUndoManager,
@@ -120,6 +134,19 @@ class LevellingAction(
   override fun getLocalizedName(): String = forkText("fork.levelling.run")
 
   override fun actionPerformed(event: ActionEvent?) {
+    // Ein fehlerhafter Stundenplan wuerde still auf die feste Stundenzahl zurueckfallen. Lieber
+    // gar nicht rechnen als plausibel falsch rechnen.
+    val probleme = capacityProblems(taskManager, taskProperties, resourceManager, resourceProperties)
+    if (probleme.hasErrors) {
+      val text = StringBuilder()
+      probleme.errors.forEach { (person, fehler) ->
+        text.append(forkText("fork.capacity.error.title", person)).appendLine()
+        fehler.forEach { text.append("  • ").append(it).appendLine() }
+      }
+      text.appendLine().append(forkText("fork.capacity.error.consequence"))
+      report(true, text.toString())
+      return
+    }
     val tasks = collectLevelTasks(taskManager, taskProperties, resourceProperties)
     if (tasks.isEmpty()) {
       report(false, forkText("fork.levelling.noTasks"))
@@ -127,7 +154,8 @@ class LevellingAction(
     }
     // toModelLocalDate, nicht java.time: siehe LegacyDates.kt.
     val projectStart = taskManager.projectStart?.toModelLocalDate() ?: LocalDate.now()
-    val result = levelTasks(tasks, projectStart, workingDayTest(taskManager.calendar))
+    val result = levelTasks(tasks, projectStart, workingDayTest(taskManager.calendar),
+      durationAtStart(taskManager, taskProperties, resourceProperties))
 
     val cycles = result.conflicts.filterIsInstance<LevelConflict.Cycle>()
     if (cycles.isNotEmpty()) {
@@ -166,7 +194,7 @@ class LevellingAction(
         return@ask
       }
       val written = applyLevellingAsSingleEdit(result.starts, taskManager, undoManager,
-        forkText("fork.levelling.undo"))
+        forkText("fork.levelling.undo"), result.durations)
       report(false, forkText("fork.levelling.done", written))
     }
   }
