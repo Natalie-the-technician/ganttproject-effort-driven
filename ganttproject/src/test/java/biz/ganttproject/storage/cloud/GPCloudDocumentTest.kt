@@ -57,6 +57,22 @@ data class TestResponse(override val decodedBody: ByteArray = byteArrayOf(),
  */
 class GPCloudDocumentTest {
   private lateinit var testMirrorFolder: File
+
+  /**
+   * [Fork-Aenderung] Ein ABSOLUTER Pfad wird nicht an den Testordner angehaengt.
+   *
+   * `File(parent, child)` haengt auch dann an, wenn `child` absolut ist. Unter Linux entsteht
+   * daraus ein legaler Pfad ("/tmp/xyz/tmp/abc"), unter Windows ein unmoeglicher
+   * ("C:\Temp\123\C:\Users\..."), und `mkdirs()` scheitert mit
+   * "Failed to create parent directories to file". Der Test setzt weiter unten
+   * `offlineMirror = mirrorFile.absolutePath` -- genau so ein absoluter Pfad.
+   *
+   * Deshalb faellt dieser Test seit jeher NUR unter Windows aus. Er hat nichts mit diesem Fork zu
+   * tun; er stand nur in jedem Testlauf als roter Punkt und musste jedes Mal von Hand eingeordnet
+   * werden.
+   */
+  private fun mirrorFile(path: String): File =
+    File(path).let { if (it.isAbsolute) it else File(testMirrorFolder, path) }
   private lateinit var mockHttpClient: GPCloudHttpClient
 
   @BeforeEach
@@ -82,7 +98,7 @@ class GPCloudDocumentTest {
 
   private fun prepareReadCall(doc: GPCloudDocument, responseBuilder: ()->TestResponse) {
     doc.httpClientFactory = { mockHttpClient }
-    doc.offlineDocumentFactory = { path -> FileDocument(File(testMirrorFolder, path)) }
+    doc.offlineDocumentFactory = { path -> FileDocument(mirrorFile(path)) }
     doc.executor = MoreExecutors.newDirectExecutorService()
 
     EasyMock.reset(mockHttpClient)
@@ -282,7 +298,7 @@ class GPCloudDocumentTest {
     val executor = Executors.newSingleThreadExecutor()
     val doc = GPCloudDocument(teamRefid = "team1", teamName = "Team 1", projectRefid = "prj1", projectName = "Project 1", projectJson = null)
     doc.httpClientFactory = { mockHttpClient }
-    doc.offlineDocumentFactory = { path -> FileDocument(File(testMirrorFolder, path)) }
+    doc.offlineDocumentFactory = { path -> FileDocument(mirrorFile(path)) }
     doc.executor = executor
     doc.isNetworkAvailable = Callable {
       if (retryCounter.count > 0) {

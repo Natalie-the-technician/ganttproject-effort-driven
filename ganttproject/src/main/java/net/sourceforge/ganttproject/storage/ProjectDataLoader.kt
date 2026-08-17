@@ -62,7 +62,15 @@ fun buildInsertTaskQuery(dsl: DSLContext, task: Task): Insert<TaskRecord> {
     if (def.calculationMethod == null) {
 
       task.customValues.getValue(def)?.let {
-       customProps[DSL.field(""" "${def.id}" """, def.type)] = it
+       // [Fork-Aenderung] Datumswerte umsetzen. jOOQ kennt GregorianCalendar nicht und wirft
+       // "Type class java.util.GregorianCalendar is not supported in dialect DEFAULT" -- damit
+       // war JEDE Datums-Spalte mit einem Wert unbrauchbar, auch eine selbst angelegte. Am
+       // Bildschirm gefunden, als die Spalte "Fertig bis" ihren ersten Wert bekam.
+       //
+       // Umgesetzt wird ueber die Kalenderfelder, NICHT ueber toInstant(): GanttProject verbiegt
+       // beim Start die Standard-Zeitzone, und java.time sieht die Verbiegung nicht. Die
+       // Begruendung steht in fork/LegacyDates.kt.
+       customProps[DSL.field(""" "${def.id}" """, sqlType(def.type))] = sqlValue(it)
       }
     }
   }
@@ -100,4 +108,28 @@ fun buildInsertTaskDto(task: Task): OperationDto.InsertOperationDto {
       Tables.TASK.NOTES.name to task.externalizedNotes(),
     )
   )
+}
+
+/**
+ * [Fork-Aenderung] Der Typ, den jOOQ fuer diese Spalte versteht.
+ *
+ * `GregorianCalendar` versteht es nicht; `LocalDate` schon, und die H2-Spalte ist ohnehin `date`
+ * (SqlCustomPropertyStorageManager:107).
+ */
+private fun sqlType(type: Class<*>): Class<*> =
+  if (java.util.GregorianCalendar::class.java.isAssignableFrom(type) ||
+      java.util.Date::class.java.isAssignableFrom(type)) java.time.LocalDate::class.java else type
+
+/** [Fork-Aenderung] Der Wert in der Form, die zu [sqlType] passt. */
+private fun sqlValue(value: Any): Any = when (value) {
+  is java.util.GregorianCalendar -> java.time.LocalDate.of(
+    value.get(java.util.Calendar.YEAR),
+    value.get(java.util.Calendar.MONTH) + 1,
+    value.get(java.util.Calendar.DAY_OF_MONTH))
+  is java.util.Date -> java.util.GregorianCalendar().let { c ->
+    c.time = value
+    java.time.LocalDate.of(c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH) + 1,
+      c.get(java.util.Calendar.DAY_OF_MONTH))
+  }
+  else -> value
 }

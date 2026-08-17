@@ -83,6 +83,164 @@ tasks.register('distZip', Zip) {
 }
 tasks.distZip.dependsOn distBin
 
+// [Fork-Aenderung] Baut die mitgelieferte Java-Laufzeit, damit ganttproject.exe startet.
+//
+// WARUM DAS NOETIG IST: ganttproject-launch4j.xml verweist auf eine Laufzeit unter .\runtime\.
+// Erzeugt wurde die hier nie -- der jlink-Block in der Wurzel-build.gradle ist auskommentiert, und
+// distWin kopiert ein runtime/ aus dem Projektstamm, das es nicht gibt. Ohne runtime\ faellt die
+// exe auf die System-Java zurueck und bricht mit "GanttProject needs Java 21+ with JavaFX modules"
+// ab, bevor ein Fenster erscheint. Am Bildschirm nachgewiesen.
+//
+// ALL-MODULE-PATH statt einer Modulliste: GanttProject laedt seine Erweiterungen ueber eclipsito
+// zur Laufzeit nach. Was dabei gebraucht wird, ist statisch nicht zuverlaessig zu ermitteln, und
+// ein fehlendes Modul faellt erst im Betrieb auf. Der Preis sind rund 200 MB.
+task distRuntime(dependsOn: distBin) {
+    doLast {
+        def jdk = file(System.getProperty('java.home'))
+        def jmods = new File(jdk, 'jmods')
+        if (!jmods.isDirectory()) {
+            throw new GradleException(
+                "Keine jmods in ${jdk} -- die mitgelieferte Laufzeit braucht ein volles JDK.\n" +
+                "Mit JAVA_HOME auf ein JDK MIT JavaFX bauen, hier zuletzt jdk-21.0.12-full.")
+        }
+        def target = new File(distBinDir, 'runtime')
+        // Vorhandene Laufzeit stehen lassen. Zwei Gruende: 200 MB bei jedem Bau neu zu erzeugen
+        // ist Verschwendung, und Windows gibt die geladenen DLLs (jvm.dll) nach dem Beenden nicht
+        // sofort frei -- das Loeschen scheiterte dann mit "Zugriff verweigert", obwohl kein
+        // Prozess mehr lief. `clean` raeumt dist-bin ohnehin komplett weg.
+        if (new File(target, 'bin/java.exe').isFile()) {
+            println "= Mitgelieferte Laufzeit ist vorhanden, bleibt stehen (fuer Neubau: clean)."
+            return
+        }
+        println "= Baue mitgelieferte Laufzeit nach ${target} ..."
+        injected.exec.exec {
+            commandLine new File(jdk, 'bin/jlink').toString(),
+                '--module-path', jmods.toString(),
+                '--add-modules', 'ALL-MODULE-PATH',
+                '--strip-debug', '--no-header-files', '--no-man-pages', '--compress=zip-6',
+                '--output', target.toString()
+        }
+    }
+}
+
+// [Fork-Aenderung] Baut einen echten Windows-Starter mit jpackage.
+//
+// WARUM NICHT DIE VORHANDENE ganttproject.exe: die ist eine EINGECHECKTE, vorgebaute
+// launch4j-Datei und laut PE-Kopf 32-Bit (i386). Sie laedt die JVM im selben Prozess und kann
+// deshalb keine 64-Bit-Laufzeit laden -- nachgemessen: jstack meldet "Unable to attach to 32-bit
+// process running under WOW64". Der Prozess startet, tut nichts, das Protokoll bleibt leer, und
+// weil <errTitle> leer ist, kommt nicht einmal eine Meldung. Neu erzeugen laesst sie sich hier
+// nicht: die launch4j-Aufrufe im Bau sind auskommentiert und zeigen auf /opt/launch4j, einen
+// Linux-Pfad.
+//
+// jpackage liegt im JDK, erzeugt einen 64-Bit-Starter und bindet die Laufzeit ein. Der Aufruf
+// bildet nach, was ganttproject.bat tut: eclipsito als Hauptklasse, dieselben Argumente,
+// dieselben --add-exports aus javaExportOptions (die Liste, die auch runApp benutzt).
+task distApp(dependsOn: [distBin, distRuntime]) {
+    doLast {
+        def jdk = file(System.getProperty('java.home'))
+        def target = file('dist-app')
+        // Zwischenstand ohne runtime/: was in --input liegt, kopiert jpackage mit. Die Laufzeit
+        // kommt ueber --runtime-image und waere sonst doppelt im Ergebnis, rund 200 MB umsonst.
+        def staging = file("${layout.buildDirectory.get().asFile}/jpackage-input")
+        // ERST neben dist-app bauen, DANN tauschen. Vorher wurde dist-app als Erstes geloescht;
+        // scheiterte das Loeschen an einer Windows-Dateisperre (die Handles eines beendeten
+        // GanttProject bleiben kurz bestehen), blieb ein halb geloeschtes dist-app zurueck -- eine
+        // .exe, die beim Doppelklick nichts tut, weil app/plugins fehlt. Am Bildschirm passiert.
+        def fresh = file("${layout.buildDirectory.get().asFile}/jpackage-out")
+        injected.fs.delete { delete staging, fresh }
+        injected.fs.copy {
+            from distBinDir
+            into staging
+            exclude 'runtime/**', 'ganttproject.exe', '*.l4j.ini'
+        }
+
+        // [Fork-Aenderung] Eigene Hauptklasse in den app-Ordner uebersetzen, siehe ForkLauncher.
+        //
+        // Sie liegt als .class direkt im Zwischenstand, weil app.classpath den app-Ordner selbst
+        // enthaelt (weiter unten angehaengt). Ein eigenes Jar waere Zierrat: eine Klasse.
+        println '= Uebersetze die eigene Starterklasse ...'
+        injected.exec.exec {
+            commandLine new File(jdk, 'bin/javac').toString(),
+                    '-encoding', 'UTF-8',
+                    '-classpath', new File(staging, 'eclipsito.jar').toString(),
+                    '-d', staging.toString(),
+                    file('launcher/net/sourceforge/ganttproject/launcher/ForkLauncher.java').toString()
+        }
+
+        def args = [new File(jdk, 'bin/jpackage').toString(),
+                    '--type', 'app-image',
+                    '--name', 'GanttProject',
+                    '--app-version', "${project.version}".replaceAll('[^0-9.].*$', ''),
+                    '--dest', fresh.toString(),
+                    '--input', staging.toString(),
+                    '--runtime-image', new File(distBinDir, 'runtime').toString(),
+                    '--main-jar', 'eclipsito.jar',
+                    // [Fork-Aenderung] Eigene Hauptklasse statt eclipsito direkt.
+                    //
+                    // Die eclipsito-Argumente standen frueher hier als --arguments und landeten als
+                    // [ArgOptions] in der .cfg. Das ist eine VORGABE: sobald der Starter mit einem
+                    // Argument aufgerufen wird -- beim Doppelklick auf eine .gan uebergibt Windows
+                    // den Dateipfad -- ersetzt dieses Argument die Vorgabe vollstaendig. eclipsito
+                    // bekam dann nur einen Dateinamen, ohne --app und ohne --version-dirs, brach ab,
+                    // und der Starter meldete pauschal "Failed to launch JVM".
+                    //
+                    // ForkLauncher bringt die Argumente im Code mit und haengt die von aussen an.
+                    // Deshalb hier KEIN --arguments mehr: die Vorgabe waere sonst beim Start ohne
+                    // Datei ein zweites Mal in der Liste.
+                    '--main-class', 'net.sourceforge.ganttproject.launcher.ForkLauncher',
+                    '--icon', file('ganttproject.ico').toString()]
+        args += ['--java-options', '-Xmx2048m', '--java-options', '-Dgpcloud=prod',
+                 '--java-options', '-Dorg.jooq.no-logo=true',
+                 '--java-options', '-Dsun.java2d.d3d=false']
+        // javaExportOptions ist eine flache Liste aus Schalter und Wert. Beides muss in EIN
+        // --java-options, und zwar mit '=' verbunden: "--add-exports=modul/paket=ALL-UNNAMED".
+        //
+        // NACHGEWIESEN, warum nicht mit Leerzeichen: jpackage zerlegt den Wert daran und schreibt
+        // zwei Zeilen in die .cfg. Der Schalter verliert damit sein Argument, die JVM bricht beim
+        // Start ab -- der Prozess laeuft, zeigt kein Fenster und schreibt kein Protokoll. Genau so
+        // gesehen.
+        javaExportOptions.collate(2).each { pair ->
+            args += ['--java-options', pair.join('=')]
+        }
+
+        println '= Baue Windows-Starter mit jpackage ...'
+        injected.exec.exec { commandLine args }
+
+        // Den app-Ordner SELBST auf den Klassenpfad. jpackage traegt dort nur die Jar-Dateien ein;
+        // ganttproject.bat setzt aber zusaetzlich %GP_HOME%, also das Verzeichnis. Ohne das kam
+        // die Oberflaeche nicht hoch -- der Start blieb nach "Starting the UI" stehen, das
+        // Protokoll endete nach dem Umgebungsblock. Mit dem Verzeichnis laeuft er durch.
+        def cfg = new File(fresh, 'GanttProject/app/GanttProject.cfg')
+        if (!cfg.isFile()) {
+            throw new GradleException("jpackage schrieb keine Konfiguration: ${cfg}")
+        }
+        // Ohne regulaeren Ausdruck: in der Ersetzung waere $APPDIR ein Gruppenverweis und der
+        // Aufruf braeche mit "Illegal group reference" ab.
+        def lines = cfg.readLines()
+        def lastCp = lines.findLastIndexOf { it.startsWith('app.classpath=') }
+        if (lastCp < 0) {
+            throw new GradleException("Kein app.classpath in ${cfg} -- Aufbau unerwartet.")
+        }
+        lines.add(lastCp + 1, 'app.classpath=$APPDIR')
+        cfg.text = lines.join(System.lineSeparator()) + System.lineSeparator()
+
+        // Erst jetzt, wo der neue Stand vollstaendig daneben liegt, den alten ersetzen.
+        def built = new File(fresh, 'GanttProject/GanttProject.exe')
+        if (!built.isFile()) {
+            throw new GradleException("jpackage lieferte keinen Starter: ${built}")
+        }
+        injected.fs.delete { delete target }
+        if (target.exists()) {
+            throw new GradleException(
+                "dist-app liess sich nicht ersetzen -- laeuft GanttProject noch?\n" +
+                "Der neue Stand liegt unversehrt in ${fresh}.")
+        }
+        injected.fs.copy { from fresh; into target }
+        println "= Fertig: ${new File(target, 'GanttProject/GanttProject.exe')}"
+    }
+}
+
 task distWin(dependsOn: distBin) {
     doLast {
         println '======== Building Windows Installer ========'

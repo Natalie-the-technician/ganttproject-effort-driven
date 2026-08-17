@@ -8,3 +8,18 @@ ganttproject-builder/dist-win
 ganttproject-builder/dist-bin
 ganttproject-builder/runtime
 **/*.css.map
+
+# [Fork-Aenderung] Laufzeit-Protokolle. Entstehen beim Testlauf im Modulordner.
+**/ganttproject.log
+
+# [Fork-Aenderung] Ergebnis von distApp (jpackage): Bauausgabe samt Laufzeit, ~200 MB.
+ganttproject-builder/dist-app
+
+# [Fork-Aenderung] Bauausgabe von compileSass (ganttproject/build.gradle:102).
+# ENG gefasst: ein globales **/*.css wuerde 13 handgepflegte Upstream-Dateien
+# unter src/main/java/ mit ausblenden.
+ganttproject/src/main/resources/**/*.css
+
+# [Fork-Aenderung] Bauausgabe von biz.ganttproject.app.libs:copyPlugin.
+ganttproject-builder/lib/slf4j*.jar
+ganttproject-builder/lib/logback*.jar
