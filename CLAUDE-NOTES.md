@@ -2586,12 +2586,14 @@ entstanden die 959 Tage. Dass die Zahl damit auf 0 geht, ist eine **Erwartung**,
 
 ## Offene Vormerkungen
 
-- `NOTIZ-Ist-Stunden.md` — Vorschlag, ein drittes Custom Property `effort_actual_hours` zu
-  ergaenzen. **Nicht beauftragt.** Natalie sagt Bescheid, wenn es umgesetzt werden soll.
-  Nicht ungefragt einbauen.
-- `NOTIZ-Zeiterfassung-Import.md` — Vorschlag, Ist-Zeiten aus Toggl Track ueber die API zu
-  importieren, mit Zuordnungsvorschlaegen, Lernspeicher und Token je Ressource.
-  **Nicht beauftragt.** Setzt NOTIZ-Ist-Stunden.md voraus.
+**Korrektur am 17.08.2026:** die ersten beiden Eintraege standen hier noch als "nicht
+beauftragt", waren aber laengst gebaut. Wer diese Liste liest, ohne den Code zu pruefen, haelt
+fertige Arbeit fuer offen -- deshalb hier ausdruecklich richtiggestellt.
+
+- ~~`NOTIZ-Ist-Stunden.md` — drittes Custom Property `effort_actual_hours`.~~ **GEBAUT**
+  (`EffortDrivenProperties.findOrCreateTaskActualEffort`, Spalte "Ist-Aufwand (Std.)").
+- ~~`NOTIZ-Zeiterfassung-Import.md` — Ist-Zeiten aus Toggl Track.~~ **GEBAUT**
+  (`timetracking/`, zwei Menuepunkte unter Ressourcen, mit Zuordnungsdialog und Import-Ledger).
 - `ENTWURF-Ist-Stunden-Import.md` — Umsetzungsentwurf zu beiden Vormerkungen, aufbauend
   auf dem Stand nach Sitzung 3. Enthaelt die Zuordnung der bekannten Fallen zu den
   einzelnen Schritten. **Nicht beauftragt.**
