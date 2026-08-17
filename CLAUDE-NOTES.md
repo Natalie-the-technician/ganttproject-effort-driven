@@ -2431,6 +2431,50 @@ Schlussfolgerung stimmte, eines der beiden Argumente nicht.
 Daraus die Verbesserung: der Dialog zeigt jetzt die UNTERSTE Ursache ("Der angegebene Host ist
 unbekannt (beispiel.ungueltig)") statt der obersten, die nur den Anzeigenamen nennt.
 
+### Warum der Planer Natalies Plan bei jedem Oeffnen umterminiert
+
+Das Warnfenster beim Start ist kein Schoenheitsfehler, sondern eine Warnung vor Datenverlust.
+
+**Gemessen**, indem der Plan geoeffnet, das Ergebnis unter neuem Namen gespeichert und gegen das
+Original verglichen wurde:
+
+| | |
+|---|---|
+| Vorgaenge mit geaendertem Start | **167 von 226** |
+| davon nach vorne gezogen | 163 |
+| groesste Verschiebung | **2424 Tage, rund 6,6 Jahre frueher** |
+
+**Ursache:** Die Datei traegt Termine, die der Python-Simulator nach KAPAZITAET gelegt hat -- ein
+Vorgang liegt spaeter, weil jemand belegt ist, nicht weil eine Abhaengigkeit es verlangt.
+GanttProject kennt keine Kapazitaetsplanung; sein Planer legt jeden Vorgang so frueh, wie die
+Abhaengigkeiten es zulassen. Ohne ausdrueckliche Schranke holt er deshalb jeden Puffer heraus.
+
+**Die Gefahr:** Wer den Plan oeffnet und speichert, schreibt diese Verschiebung zurueck. Die
+Kapazitaetsplanung waere weg, ohne dass es jemand bemerkt.
+
+**Abhilfe, geprueft:** Der Erzeuger schreibt an jedes BLATT zusaetzlich
+
+```xml
+thirdDate="<start>" thirdDate-constraint="1"
+```
+
+`1` ist `TaskImpl.EARLIESTBEGIN`; `SchedulerImpl.java:148` macht daraus eine untere Schranke.
+Nachgemessen an einer Kopie mit 190 so festgenagelten Blaettern: **aus 167 verschobenen Vorgaengen
+werden 4** -- und die vier sind ausnahmslos Gruppen, deren Termine GanttProject grundsaetzlich aus
+den Kindern ableitet. Das laesst sich nicht abstellen und ist auch richtig so.
+
+**VIER FALSCHE FAEHRTEN auf dem Weg dorthin**, jede vor dem Melden widerlegt:
+1. *Wochenendstarts* -- keine.
+2. *Verletzte Ende-Anfang-Verknuepfungen* -- keine. Beim ersten Anlauf hatte ich das Vorgangsende
+   als letzten Arbeitstag gerechnet statt als Tag danach; auch nach der Korrektur: null.
+3. *Vier Gruppen mit falschem Startdatum* -- stimmt, erklaert aber nichts: eine Kopie mit
+   korrigierten Gruppenstarts zeigte dieselbe lange Liste.
+4. *Unser eigener Aufwands-Algorithmus* (`EffortDrivenDurationAlgorithm` meldet jeden Vorgang, den
+   er anfasst) -- trifft nicht zu, Natalies Datei hat gar keine Aufwandsspalten.
+
+Die entscheidende Zahl hatte ich frueh gemessen und als harmlos abgetan: "153 Nachfolger starten
+spaeter als noetig (Puffer, kein Problem)". Genau dieser Puffer ist es, den der Planer entfernt.
+
 ### Offen aus dieser Sitzung
 
 - **Startmeldung "Failed to parse document".** Beim Start oeffnet GanttProject das zuletzt
