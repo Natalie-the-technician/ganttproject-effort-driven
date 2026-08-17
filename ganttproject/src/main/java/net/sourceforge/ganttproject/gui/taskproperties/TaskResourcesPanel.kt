@@ -49,6 +49,16 @@ import net.sourceforge.ganttproject.roles.RoleManager
 import net.sourceforge.ganttproject.task.CostStub
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskMutator
+// [Fork-Aenderung] Neue Importe fuer die aufwandsgetriebene Planung.
+import biz.ganttproject.customproperty.CustomPropertyHolder
+import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
+import net.sourceforge.ganttproject.task.algorithm.EffortInput
+import net.sourceforge.ganttproject.task.algorithm.actualEffortHours
+import net.sourceforge.ganttproject.task.algorithm.effortHours
+import net.sourceforge.ganttproject.task.algorithm.findEffortDefinition
+import net.sourceforge.ganttproject.task.algorithm.hoursPerDay
+import net.sourceforge.ganttproject.fork.forkText
+import net.sourceforge.ganttproject.task.algorithm.parseEffortInput
 import org.controlsfx.control.tableview2.TableColumn2
 import org.controlsfx.control.tableview2.TableView2
 import java.math.BigDecimal
@@ -203,7 +213,27 @@ class TaskResourcesPanel(
         prefWidth = 150.0
       }
 
-      columns.addAll(idCol, nameCol, unitCol, coordinatorCol, roleCol)
+      // [Fork-Aenderung] Neue Spalte: zeigt die Tagesstunden der Ressource, mit denen die
+      // Dauerberechnung rechnet. NUR ANZEIGE - die Tagesstunden gelten global fuer alle Aufgaben
+      // dieser Ressource und werden deshalb in der Ressourcenverwaltung bearbeitet, nicht hier.
+      // Ein zweiter Editor an dieser Stelle wuerde fremde Termine verschieben, ohne dass man es
+      // im Aufgabendialog bemerkt.
+      // Feste Beschriftung statt i18n-Schluessel: die Uebersetzungsdateien liegen im Submodul
+      // biz.ganttproject.app.localization, das auf das Original-Repository zeigt und hier nicht
+      // beschrieben werden darf. Ein unbekannter Schluessel wuerde als Schluessel angezeigt
+      // (RootLocalizer.formatText liefert bei fehlendem Eintrag den Schluessel zurueck).
+      val hoursPerDayCol = TableColumn2<ResourceAssignmentRow, String>(EFFORT_LABEL_HOURS_PER_DAY).apply {
+        setCellValueFactory { row ->
+          val resource = row.value.assignment?.resource
+          SimpleStringProperty(
+            resource?.let { formatHours(it.hoursPerDay(hrManager.customPropertyManager)) } ?: "")
+        }
+        isEditable = false
+        prefWidth = 90.0
+      }
+
+      // [Fork-Aenderung] hoursPerDayCol ist neu, die uebrigen Spalten sind Original.
+      columns.addAll(idCol, nameCol, unitCol, coordinatorCol, roleCol, hoursPerDayCol)
     }
 
     // Create split layout with table and cost panel
@@ -226,6 +256,98 @@ class TaskResourcesPanel(
       right = createCostPanel()
     }
   }
+
+  // [Fork-Aenderung] ---- Anfang: neuer Block fuer die aufwandsgetriebene Planung ----
+
+  /**
+   * Editor for the effort of this task, in hours. Empty means "no effort set", which switches the
+   * feature off for this task and leaves its duration alone.
+   */
+  private val effortField = TextField().apply {
+    prefColumnCount = 6
+    text = task.effortHours(task.manager.customPropertyManager)?.let { formatHours(it) } ?: ""
+  }
+
+  /**
+   * Writes the edited effort into the custom property holder that the properties dialog is about
+   * to commit.
+   *
+   * This must NOT write to `task.customValues` directly. CustomColumnsPanel.save() replaces the
+   * whole property set of the task with a copy it took when the dialog was opened, so a direct
+   * write would be silently overwritten when the user presses OK. Going through the same holder
+   * keeps a single write path.
+   *
+   * The property definition is created only when a value is actually entered, so that projects
+   * which do not use the feature do not silently gain a column.
+   */
+  fun applyEffort(holder: CustomPropertyHolder) {
+    val definitions = task.manager.customPropertyManager
+    when (val input = parseEffortInput(effortField.text)) {
+      is EffortInput.Clear ->
+        // Only clear when the property exists; do not create it just to write nothing into it.
+        // [Fork-Aenderung] Kennung ODER Name: eine vom Nutzer selbst angelegte Spalte traegt den
+        // getippten Text nur im Namen. Mit reiner Kennungssuche liess sich so ein Feld nicht mehr
+        // leeren - der alte Wert waere stehen geblieben, ohne Hinweis.
+        definitions.findEffortDefinition(EffortDrivenProperties.TASK_EFFORT_HOURS)?.let {
+          holder.setValue(it, null)
+        }
+      is EffortInput.Hours ->
+        holder.setValue(EffortDrivenProperties.findOrCreateTaskEffort(definitions), input.value)
+      is EffortInput.Invalid -> Unit
+    }
+  }
+
+  /**
+   * Editor for the hours ACTUALLY spent on this task. Empty means "nothing recorded".
+   *
+   * Sits next to the planned effort on purpose: the two numbers are only useful side by side.
+   * It is a plain record — see [Task.actualEffortHours]; typing a value here must never move a
+   * date, change the completion percentage or touch the planned effort.
+   */
+  private val actualEffortField = TextField().apply {
+    prefColumnCount = 6
+    text = task.actualEffortHours(task.manager.customPropertyManager)?.let { formatHours(it) } ?: ""
+  }
+
+  /**
+   * Writes the edited actual effort into the custom property holder that the properties dialog is
+   * about to commit. Same rules as [applyEffort]:
+   *
+   * - never write to `task.customValues` directly, or CustomColumnsPanel.save() overwrites it with
+   *   the copy it took when the dialog was opened,
+   * - reuse [parseEffortInput] instead of parsing here, so that a comma keeps working and both
+   *   fields accept exactly the same input,
+   * - create the definition only when a value is actually entered.
+   *
+   * Invalid input leaves the stored value alone. It is deliberately NOT reset to the old text in
+   * the field: a typo should stay visible for correction instead of vanishing on OK.
+   */
+  fun applyActualEffort(holder: CustomPropertyHolder) {
+    val definitions = task.manager.customPropertyManager
+    when (val input = parseEffortInput(actualEffortField.text)) {
+      is EffortInput.Clear ->
+        // Only clear when the property exists; do not create it just to write nothing into it.
+        // [Fork-Aenderung] Kennung ODER Name, siehe applyEffort.
+        definitions.findEffortDefinition(
+          EffortDrivenProperties.TASK_EFFORT_ACTUAL_HOURS)?.let { holder.setValue(it, null) }
+      is EffortInput.Hours ->
+        holder.setValue(EffortDrivenProperties.findOrCreateTaskActualEffort(definitions), input.value)
+      is EffortInput.Invalid -> Unit
+    }
+  }
+
+  /** Adds the effort editors underneath the cost fields of the right hand pane. */
+  private fun addEffortEditor(propertyPane: PropertyPane) {
+    propertyPane.add(Label(EFFORT_LABEL_SECTION).apply {
+      styleClass.add("section-title")
+    }, 0, 3, 2, 1)
+    propertyPane.add(Label(EFFORT_LABEL_EFFORT_HOURS), 0, 4)
+    propertyPane.add(effortField, 1, 4)
+    propertyPane.add(Label(EFFORT_LABEL_ACTUAL_HOURS), 0, 5)
+    propertyPane.add(actualEffortField, 1, 5)
+  }
+
+  // [Fork-Aenderung] ---- Ende des neuen Blocks ----
 
   private fun createCostPanel(): Region {
     val propertyPane = PropertyPane()
@@ -251,6 +373,9 @@ class TaskResourcesPanel(
     propertyPane.add(calculatedValueLabel, 1, 1)
     builder.createMoneyOptionEditor(costValue).also { propertyPane.add(it, 1, 2) }
 
+    // [Fork-Aenderung] Aufwandsfeld unter den Kostenfeldern ergaenzt.
+    addEffortEditor(propertyPane)
+
     return propertyPane
   }
 
@@ -271,6 +396,22 @@ class TaskResourcesPanel(
 
 // --------------------------------------------------------------------------------------------------------------------
 private val i18n = RootLocalizer
+
+// [Fork-Aenderung] Beschriftungen der neuen Bedienelemente. Sie stehen im eigenen Textbuendel
+// dieses Forks, nicht in den i18n-Dateien des Originals: diese liegen in einem Submodul, das auf
+// das Repository von bardsoftware zeigt und aus diesem Fork nicht beschrieben werden kann.
+// Begruendung und Mechanik siehe ForkI18n.kt.
+private val EFFORT_LABEL_SECTION get() = forkText("fork.effort.section")
+private val EFFORT_LABEL_EFFORT_HOURS get() = forkText("fork.effort.hours")
+private val EFFORT_LABEL_HOURS_PER_DAY get() = forkText("fork.effort.hoursPerDay")
+private val EFFORT_LABEL_ACTUAL_HOURS get() = forkText("fork.effort.actualHours")
+
+/**
+ * [Fork-Aenderung] Neue Hilfsfunktion: Stunden ohne ueberfluessige Nachkommastelle anzeigen,
+ * damit in der Tabelle "8" statt "8.0" steht.
+ */
+private fun formatHours(hours: Double): String =
+  if (hours == hours.toLong().toDouble()) hours.toLong().toString() else hours.toString()
 
 // --------------------------------------------------------------------------------------------------------------------
 

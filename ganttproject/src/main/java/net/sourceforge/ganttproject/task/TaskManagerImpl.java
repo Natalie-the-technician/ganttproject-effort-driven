@@ -237,7 +237,24 @@ public class TaskManagerImpl implements TaskManager {
     };
     ChartBoundsAlgorithm alg5 = new ChartBoundsAlgorithm();
     var algCriticalPath = new CriticalPathAlgorithmImpl(this, getCalendar());
-    myAlgorithmCollection = new AlgorithmCollection(this, alg1, alg2, alg3, alg4, alg5, algCriticalPath, myScheduler);
+    // [Fork-Aenderung] ---- Anfang: dieser ganze Block ist neu, im Original nicht vorhanden ----
+    // Baut den Algorithmus, der die Dauer aus Aufwand und Tagesverfuegbarkeit rechnet.
+    // The resource custom properties are resolved on every run: the resource manager may be absent
+    // (config.getResourceManager() is null in tests) and is wired up after the task manager.
+    EffortDrivenDurationAlgorithm algEffortDriven = new EffortDrivenDurationAlgorithm(
+        this, getCustomPropertyManager(),
+        () -> {
+          HumanResourceManager resourceManager = getConfig().getResourceManager();
+          return resourceManager == null ? null : resourceManager.getCustomPropertyManager();
+        }) {
+      @Override
+      protected TaskContainmentHierarchyFacade createContainmentFacade() {
+        return TaskManagerImpl.this.getTaskHierarchy();
+      }
+    };
+    // [Fork-Aenderung] ---- Ende des neuen Blocks ----
+    // [Fork-Aenderung] Im Original ohne "algEffortDriven": das Argument ist neu.
+    myAlgorithmCollection = new AlgorithmCollection(this, alg1, alg2, alg3, alg4, alg5, algCriticalPath, algEffortDriven, myScheduler);
     addTaskListener(new TaskListenerAdapter() {
       @Override
       public void dependencyChanged(@NotNull TaskDependencyEvent e) {
