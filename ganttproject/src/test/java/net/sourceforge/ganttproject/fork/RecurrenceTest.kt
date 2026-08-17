@@ -171,3 +171,68 @@ class RecurrenceTest {
     assertEquals(LocalDate.of(2029, 2, 28), termine[1])
   }
 }
+
+/**
+ * Die Schaetzguete-Auswertung: geschaetzt gegen gebraucht.
+ *
+ * Natalies Regel, die den Aufbau bestimmt: verglichen werden STUNDEN gegen die URSPRUENGLICHE
+ * Schaetzung, und der Zeitraum, ueber den sie anfielen, ist gleichgueltig.
+ */
+class EstimateQualityTest {
+  private fun row(id: String, geschaetzt: Double, gebraucht: Double, fertig: Int) =
+    EstimateRow(id, id, geschaetzt, gebraucht, fertig)
+
+  @Test
+  fun `der gesamtfaktor kommt aus summen, nicht aus mittelwerten`() {
+    // Ein kleiner Ausreisser (20 Minuten geschaetzt, 2 Stunden gebraucht: Faktor 6) darf das Bild
+    // nicht verdrehen. Aus Summen: (0.33 + 40) / (0.33 + 2 ... ) -- gerechnet unten.
+    val bericht = buildEstimateReport(listOf(
+      row("gross", 40.0, 44.0, 100),
+      row("klein", 0.33, 2.0, 100)), remainingPlannedHours = 0.0)
+    // Summen: geschaetzt 40,33, gebraucht 46,0 -> 1,14. Der Mittelwert der Einzelfaktoren waere
+    // (1,1 + 6,06) / 2 = 3,58 und damit voellig irrefuehrend.
+    assertEquals(1.14, bericht.overallFactor, 0.01)
+  }
+
+  @Test
+  fun `nur abgeschlossene zaehlen fuer den faktor`() {
+    val bericht = buildEstimateReport(listOf(
+      row("fertig", 10.0, 15.0, 100),
+      row("laeuft", 10.0, 2.0, 50)), remainingPlannedHours = 0.0)
+    assertEquals(1, bericht.finished.size)
+    assertEquals(1.5, bericht.overallFactor, 0.001)
+  }
+
+  @Test
+  fun `laufende ueber der schaetzung werden getrennt gemeldet`() {
+    // Sie sind eine Warnung, kein Urteil: der Vorgang kann noch teurer werden, aber die
+    // Schaetzung ist noch nicht widerlegt -- er ist ja nicht fertig.
+    val bericht = buildEstimateReport(listOf(
+      row("laeuft", 9.0, 15.0, 50)), remainingPlannedHours = 0.0)
+    assertEquals(0, bericht.finished.size, "kein Urteil ueber die Schaetzguete")
+    assertEquals(1, bericht.runningOver.size, "aber sichtbar")
+  }
+
+  @Test
+  fun `die hochrechnung uebertraegt den faktor auf das offene`() {
+    val bericht = buildEstimateReport(listOf(
+      row("a", 10.0, 20.0, 100)), remainingPlannedHours = 100.0)
+    assertEquals(2.0, bericht.overallFactor, 0.001)
+    assertEquals(200.0, bericht.remainingExpectedHours, 0.001)
+  }
+
+  @Test
+  fun `ohne grundlage wird nichts behauptet`() {
+    val bericht = buildEstimateReport(emptyList(), remainingPlannedHours = 50.0)
+    assertEquals(false, bericht.hasBasis)
+    assertEquals(1.0, bericht.overallFactor, 0.001, "ohne Messung wird nichts hochgerechnet")
+  }
+
+  @Test
+  fun `genau getroffen ist kein ueberzug`() {
+    // Gegenprobe: sonst stuende jeder Vorgang in der Liste der Ueberschreitungen.
+    val bericht = buildEstimateReport(listOf(row("a", 8.0, 8.0, 100)), 0.0)
+    assertTrue(bericht.overruns.isEmpty())
+    assertEquals(1.0, bericht.overallFactor, 0.001)
+  }
+}

@@ -76,6 +76,71 @@ fun Task.isWaitOnly(manager: CustomPropertyManager): Boolean {
   return raw as? Boolean ?: raw.toString().equals("true", ignoreCase = true)
 }
 
+/**
+ * Spaetestes Ende. [Fork-Aenderung]
+ *
+ * Natalies harte Termine sind ENDtermine -- Umsatzsteuervoranmeldung zum 10., Jahresabschluss,
+ * Antragsfristen. "Termin fest" haelt dagegen einen ANFANG. Beides ist noetig, und beides bedeutet
+ * etwas anderes.
+ */
+const val TASK_DEADLINE = "deadline"
+
+fun findOrCreateDeadline(manager: CustomPropertyManager): CustomPropertyDefinition =
+  manager.findEffortDefinition(TASK_DEADLINE)
+    ?: manager.createDefinition(TASK_DEADLINE, CustomPropertyClass.DATE.iD,
+                                forkText("fork.column.deadline"), null)
+
+/** Die eingetragene Frist, oder null. */
+fun Task.deadlineDate(manager: CustomPropertyManager): LocalDate? {
+  val def = manager.findEffortDefinition(TASK_DEADLINE) ?: return null
+  return when (val raw = this.customValues.getValue(def)) {
+    null -> null
+    is LocalDate -> raw
+    is java.util.Date -> raw.toModelLocalDate()
+    is java.util.GregorianCalendar -> raw.time.toModelLocalDate()
+    else -> runCatching { LocalDate.parse(raw.toString()) }.getOrNull()
+  }
+}
+
+/**
+ * Der urspruenglich geschaetzte Aufwand. [Fork-Aenderung]
+ *
+ * Wird GENAU EINMAL gesetzt und danach nie wieder angefasst -- das ist der ganze Sinn. Wer eine
+ * Schaetzung nachbessert, vergleicht die Ist-Stunden sonst gegen die nachgebesserte Zahl und lernt
+ * nichts mehr ueber seine Schaetzguete: die Abweichung verschwindet genau in dem Moment, in dem
+ * man sie bemerkt.
+ *
+ * Natalies Satz dazu, am 17.08.2026: "wenn ich zb 15 statt 9h brauche ist ja egal ueber welchen
+ * Zeitraum die Stunden verteilt waren".
+ */
+const val TASK_EFFORT_ORIGINAL = "effort_original_hours"
+
+fun findOrCreateOriginalEffort(manager: CustomPropertyManager): CustomPropertyDefinition =
+  manager.findEffortDefinition(TASK_EFFORT_ORIGINAL)
+    ?: manager.createDefinition(TASK_EFFORT_ORIGINAL, CustomPropertyClass.DOUBLE.iD,
+                                forkText("fork.column.effortOriginal"), null)
+
+/** Die urspruengliche Schaetzung, oder null. */
+fun Task.originalEffortHours(manager: CustomPropertyManager): Double? {
+  val def = manager.findEffortDefinition(TASK_EFFORT_ORIGINAL) ?: return null
+  val raw = this.customValues.getValue(def) ?: return null
+  return (raw as? Number)?.toDouble() ?: raw.toString().toDoubleOrNull()
+}
+
+/**
+ * Haelt die heutige Schaetzung fest, falls noch keine festgehalten ist.
+ *
+ * @return true, wenn etwas geschrieben wurde.
+ */
+fun Task.rememberOriginalEffort(manager: CustomPropertyManager): Boolean {
+  if (this.originalEffortHours(manager) != null) {
+    return false
+  }
+  val heute = this.effortHours(manager) ?: return false
+  this.customValues.setValue(findOrCreateOriginalEffort(manager), heute)
+  return true
+}
+
 fun findOrCreateDateFixed(manager: CustomPropertyManager): CustomPropertyDefinition =
   manager.findEffortDefinition(TASK_DATE_FIXED)
     ?: manager.createDefinition(TASK_DATE_FIXED, CustomPropertyClass.BOOLEAN.iD,
@@ -91,6 +156,35 @@ fun Task.isDateFixed(manager: CustomPropertyManager): Boolean {
   val def = manager.findEffortDefinition(TASK_DATE_FIXED) ?: return false
   val raw = this.customValues.getValue(def) ?: return false
   return raw as? Boolean ?: raw.toString().equals("true", ignoreCase = true)
+}
+
+/**
+ * Vorgaenge, die in der Vergangenheit liegen und an denen noch nicht gearbeitet wurde.
+ *
+ * Sie sind der Grund fuer die Rueckfrage vor dem Verteilen: sie stehen zu lassen waere eine Luege
+ * ueber den Plan, sie ungefragt zu verschieben ein Umschreiben der Vergangenheit.
+ */
+fun unstartedInThePast(taskManager: TaskManager, today: LocalDate = LocalDate.now()): List<Task> {
+  val hierarchy = taskManager.taskHierarchy
+  return taskManager.tasks.filter { task ->
+    hierarchy.getNestedTasks(task).isEmpty() &&
+      task.completionPercentage == 0 &&
+      task.start.time.toModelLocalDate() < today
+  }
+}
+
+/** Arbeitstage von [from] (einschliesslich) bis [to] (ausschliesslich). */
+internal fun workingDaysBetween(
+  from: LocalDate, to: LocalDate, isWorkingDay: (LocalDate) -> Boolean
+): Int {
+  var tage = 0
+  var tag = from
+  var schutz = 0
+  while (tag < to && schutz++ < 100_000) {
+    if (isWorkingDay(tag)) tage++
+    tag = tag.plusDays(1)
+  }
+  return tage
 }
 
 /** Der Kalender des Projekts als Funktion, damit die Rechnung ihn ohne Modell benutzen kann. */
@@ -115,9 +209,20 @@ private fun Date.toLocalDate(): LocalDate = this.toModelLocalDate()
 fun collectLevelTasks(
   taskManager: TaskManager,
   taskProperties: CustomPropertyManager,
-  resourceProperties: CustomPropertyManager
+  resourceProperties: CustomPropertyManager,
+  /** Der heutige Tag. Alles davor ist Vergangenheit. */
+  today: LocalDate = LocalDate.now(),
+  /**
+   * Ob nicht begonnene Vorgaenge aus der Vergangenheit nach vorn geschoben werden duerfen.
+   *
+   * DIESE ANTWORT GIBT DER MENSCH, nicht der Algorithmus. Ein Vorgang ohne erfasste Zeit, der in
+   * der Vergangenheit liegt, ist liegengeblieben -- ihn stehen zu lassen waere eine Luege ueber
+   * den Plan, ihn ungefragt zu verschieben ein Umschreiben der Vergangenheit.
+   */
+  moveUnstartedPast: Boolean = true
 ): List<LevelTask> {
   val hierarchy = taskManager.taskHierarchy
+  val isWorkingDay = workingDayTest(taskManager.calendar)
 
   // Kennung -> Blaetter darunter. Fuer ein Blatt es selbst, fuer eine Gruppe alle ihre Blaetter.
   //
@@ -156,7 +261,8 @@ fun collectLevelTasks(
   fun walk(task: Task) {
     val nested = hierarchy.getNestedTasks(task)
     if (nested.isEmpty()) {
-      result.add(task.toLevelTask(order++, taskProperties, resourceProperties, leavesUnder))
+      result.add(task.toLevelTask(order++, taskProperties, resourceProperties, leavesUnder, today,
+        isWorkingDay, moveUnstartedPast))
     } else {
       nested.forEach { walk(it) }
     }
@@ -239,7 +345,8 @@ fun durationAtStart(
 
 private fun Task.toLevelTask(
   order: Int, taskProperties: CustomPropertyManager, resourceProperties: CustomPropertyManager,
-  leavesUnder: Map<String, List<String>>
+  leavesUnder: Map<String, List<String>>, today: LocalDate, isWorkingDay: (LocalDate) -> Boolean,
+  moveUnstartedPast: Boolean
 ): LevelTask {
   // Die Auslastung aus den Zuordnungen. Ohne Zuordnung gilt 100 %: der Vorgang belegt den Tag,
   // auch wenn niemand eingetragen ist. Ihn als kostenlos zu behandeln waere die gefaehrlichere
@@ -251,14 +358,43 @@ private fun Task.toLevelTask(
     this.isMilestone || this.isWaitOnly(taskProperties) -> 0
     else -> this.assignments.sumOf { it.load.toDouble() }.toInt().let { if (it <= 0) 100 else it }
   }
+  // DREI FAELLE, und sie sind nicht dasselbe. Natalies Regel vom 17.08.2026, woertlich:
+  //
+  //   "Du musst sehen wenn ich mit etwas noch garnicht begonnen habe, also keine zeit darauf ist
+  //    dann muss das natürlich aufgeschoben werden, dafür braucht es aber eine frage ob das der
+  //    Fall ist bevor es passiert. Was auf keinen Fall geht wenn etwas schon abgeschlossen ist es
+  //    zu verändern. [...] wenn ich ab heute doppelt so viel zeit habe werden Vorgänge die ich
+  //    schon angefangen habe ja auch schneller fertig"
+  //
+  // 1. ABGESCHLOSSEN (100 %): unantastbar. Weder Termin noch Dauer werden angefasst -- auch die
+  //    Dauer nicht, denn sie ist gemessene Vergangenheit und keine Vorhersage mehr.
+  // 2. ANGEFANGEN (0 < % < 100): der ANFANG steht, er ist Vergangenheit. Der REST wird mit der
+  //    heutigen Tagesleistung gerechnet: mehr Stunden am Tag heissen frueher fertig.
+  // 3. NICHT BEGONNEN (0 %): darf verschoben werden. Liegt so ein Vorgang in der Vergangenheit,
+  //    FRAGT die Aktion vorher -- ungefragt die Vergangenheit umzuschreiben waere genau das, was
+  //    nicht passieren darf.
+  val startTag = this.start.time.toLocalDate()
+  val fertig = this.completionPercentage >= 100
+  val angefangen = this.completionPercentage > 0
   val available = this.availableHoursPerDay(resourceProperties)
   val effort = this.effortHours(taskProperties)
-  val duration = if (effort != null && available > 0.0) {
-    durationFromEffort(effort, available)
-  } else {
-    this.duration.length.coerceAtLeast(1)
+  val duration = when {
+    // Fall 1: gemessene Vergangenheit, keine Rechnung.
+    fertig -> this.duration.length.coerceAtLeast(1)
+    // Fall 2: verstrichener Teil plus der Rest zur heutigen Tagesleistung.
+    angefangen && effort != null && available > 0.0 -> {
+      val restAnteil = (100 - this.completionPercentage).coerceIn(0, 100) / 100.0
+      val verstrichen = if (startTag < today) workingDaysBetween(startTag, today, isWorkingDay) else 0
+      verstrichen + durationFromEffort(effort * restAnteil, available)
+    }
+    effort != null && available > 0.0 -> durationFromEffort(effort, available)
+    else -> this.duration.length.coerceAtLeast(1)
   }
-  val fixed = if (this.isDateFixed(taskProperties)) this.start.time.toLocalDate() else null
+  // Fest steht der Termin bei 1 und 2; bei 3 nur, wenn der Haken "Termin fest" gesetzt ist --
+  // oder wenn der Mensch entschieden hat, liegengebliebene Arbeit NICHT nach vorn zu schieben.
+  val liegengeblieben = !angefangen && startTag < today
+  val bleibtLiegen = liegengeblieben && !moveUnstartedPast
+  val fixed = if (this.isDateFixed(taskProperties) || angefangen || bleibtLiegen) startTag else null
   val earliest = if (this.thirdDateConstraint == TaskImpl.EARLIESTBEGIN && this.third != null) {
     this.third.time.toLocalDate()
   } else {
@@ -278,6 +414,8 @@ private fun Task.toLevelTask(
       .distinct(),
     fixedStart = fixed,
     earliestStart = earliest,
+    frozen = angefangen || bleibtLiegen,
+    deadline = this.deadlineDate(taskProperties),
     // Wessen Kapazitaet belegt wird. Meilensteine und Wartevorgaenge belegen mit 0 % ohnehin
     // nichts; sie bekommen trotzdem ihre Zuordnung mit, damit die Auswertung stimmt.
     resourceIds = this.assignments.mapNotNull { it.resource?.id?.toString() }.distinct()
@@ -433,6 +571,9 @@ fun applyBackfillAsSingleEdit(
     proposal.effortHours.forEach { (id, hours) ->
       taskManager.getTask(id.toIntOrNull() ?: return@forEach)?.let { task ->
         task.customValues.setValue(effortDef, hours)
+        // Die Schaetzung zugleich als URSPRUENGLICHE festhalten. Nur beim ersten Mal -- danach
+        // ist sie der feste Vergleichswert fuer die Ist-Stunden.
+        task.rememberOriginalEffort(taskProperties)
         touched++
       }
     }
@@ -480,6 +621,28 @@ private fun endAfterWorkingDays(
   }
   return end
 }
+
+/**
+ * Der Auslastungsgrad einer Person in Prozent. [Fork-Aenderung]
+ *
+ * Ohne Eintrag 100. Werte ausserhalb 1..100 werden auf 100 zurueckgesetzt statt zu gelten: ein
+ * Vertipper wuerde die Verteilung sonst still unbrauchbar machen -- bei 5 % passt nichts mehr
+ * zusammen, und der Plan reichte ins naechste Jahrhundert.
+ */
+fun HumanResource.utilisationPercent(manager: CustomPropertyManager): Int {
+  val def = manager.findEffortDefinition(RESOURCE_UTILISATION) ?: return 100
+  val raw = this.getCustomField(def) ?: return 100
+  val wert = (raw as? Number)?.toInt() ?: raw.toString().toIntOrNull() ?: return 100
+  return if (wert in 1..100) wert else 100
+}
+
+/** Auslastungsgrad, als Eigenschaft der Person. [Fork-Aenderung] */
+const val RESOURCE_UTILISATION = "utilisation_percent"
+
+fun findOrCreateUtilisation(manager: CustomPropertyManager): CustomPropertyDefinition =
+  manager.findEffortDefinition(RESOURCE_UTILISATION)
+    ?: manager.createDefinition(RESOURCE_UTILISATION, CustomPropertyClass.INTEGER.iD,
+                                forkText("fork.column.utilisation"), null)
 
 /** Die Tagesleistung der Person, auf die sich die Ableitung stuetzt. */
 fun HumanResource.dailyHours(resourceProperties: CustomPropertyManager): Double =

@@ -22,6 +22,7 @@ package net.sourceforge.ganttproject.fork
 
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.action.GPAction
+import net.sourceforge.ganttproject.GanttPreviousState
 import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.task.TaskManager
@@ -127,6 +128,13 @@ class LevellingAction(
   private val taskProperties: CustomPropertyManager,
   private val resourceProperties: CustomPropertyManager,
   private val undoManager: GPUndoManager,
+  /**
+   * Die Basisplaene des Projekts. Vor dem Verteilen wird angeboten, den heutigen Stand zu
+   * sichern -- ohne das sind die bisherigen Termine nach dem Speichern weg, und Rueckgaengig
+   * hilft nur, solange das Programm laeuft.
+   */
+  private val baselines: MutableList<GanttPreviousState>,
+  private val today: () -> LocalDate = { LocalDate.now() },
   private val report: (Boolean, String) -> Unit,
   private val ask: AskBeforeWriting
 ) : GPAction("levelling.run") {
@@ -147,15 +155,43 @@ class LevellingAction(
       report(true, text.toString())
       return
     }
-    val tasks = collectLevelTasks(taskManager, taskProperties, resourceProperties)
+    // DIE FRAGE ZUR VERGANGENHEIT, und sie kommt VOR allem anderen -- die Antwort aendert die
+    // Rechnung, nicht nur das Schreiben. Gestellt wird sie nur, wenn es solche Vorgaenge gibt:
+    // eine Frage ohne Anlass ist eine Frage, die man wegklickt.
+    val liegengeblieben = unstartedInThePast(taskManager, today())
+    if (liegengeblieben.isEmpty()) {
+      weiter(moveUnstartedPast = true, verschobeneAusDerVergangenheit = 0)
+      return
+    }
+    val frage = StringBuilder(forkText("fork.levelling.past.ask", liegengeblieben.size))
+      .appendLine().appendLine().append(forkText("fork.levelling.past.what"))
+      .appendLine().appendLine().append(forkText("fork.levelling.past.hint"))
+    liegengeblieben.take(5).forEach {
+      frage.appendLine().append("  - ").append(it.name)
+    }
+    ask.ask(frage.toString()) { verschieben ->
+      weiter(verschieben, if (verschieben) liegengeblieben.size else 0)
+    }
+  }
+
+  private fun weiter(moveUnstartedPast: Boolean, verschobeneAusDerVergangenheit: Int) {
+    val tasks = collectLevelTasks(taskManager, taskProperties, resourceProperties, today(),
+      moveUnstartedPast)
     if (tasks.isEmpty()) {
       report(false, forkText("fork.levelling.noTasks"))
       return
     }
     // toModelLocalDate, nicht java.time: siehe LegacyDates.kt.
-    val projectStart = taskManager.projectStart?.toModelLocalDate() ?: LocalDate.now()
-    val result = levelTasks(tasks, projectStart, workingDayTest(taskManager.calendar),
-      durationAtStart(taskManager, taskProperties, resourceProperties))
+    val projectStart = taskManager.projectStart?.toModelLocalDate() ?: today()
+    // AB HEUTE, nicht ab Projektbeginn: unerledigte Arbeit in die Vergangenheit zu legen ergibt
+    // keinen Plan. Was schon angefangen ist, bleibt trotzdem liegen -- das regelt `frozen`.
+    val abWann = maxOf(projectStart, today())
+    val auslastung = resourceManager.resources.associate {
+      it.id.toString() to it.utilisationPercent(resourceProperties)
+    }
+    val result = levelTasks(tasks, abWann, workingDayTest(taskManager.calendar),
+      durationAtStart(taskManager, taskProperties, resourceProperties),
+      capacityOf = { pool -> auslastung[pool] ?: 100 })
 
     val cycles = result.conflicts.filterIsInstance<LevelConflict.Cycle>()
     if (cycles.isNotEmpty()) {
@@ -172,6 +208,8 @@ class LevellingAction(
       return
     }
 
+    val fristen = result.conflicts.filterIsInstance<LevelConflict.DeadlineMissed>()
+    val eingefroren = tasks.count { it.frozen }
     val unreachable = result.conflicts.filterIsInstance<LevelConflict.FixedDateNotReachable>()
     val overloads = result.conflicts.filterIsInstance<LevelConflict.Overload>()
     val message = StringBuilder(forkText("fork.levelling.preview", moved, tasks.size))
@@ -193,9 +231,22 @@ class LevellingAction(
       if (!confirmed) {
         return@ask
       }
-      val written = applyLevellingAsSingleEdit(result.starts, taskManager, undoManager,
-        forkText("fork.levelling.undo"), result.durations)
-      report(false, forkText("fork.levelling.done", written))
+      // ZUERST der Basisplan, DANN das Verteilen. Andersherum haelt er die schon verschobenen
+      // Termine fest und ist wertlos.
+      val baselineText = StringBuilder(forkText("fork.baseline.ask"))
+        .appendLine().appendLine().append(forkText("fork.baseline.what"))
+        .appendLine().appendLine().append(forkText("fork.baseline.hint"))
+      ask.ask(baselineText.toString()) { sichern ->
+        val meldung = StringBuilder()
+        if (sichern) {
+          val name = forkText("fork.baseline.name", today().toString())
+          baselines.add(GanttPreviousState(name, GanttPreviousState.createTasks(taskManager)))
+          meldung.append(forkText("fork.baseline.done", name)).appendLine()
+        }
+        val written = applyLevellingAsSingleEdit(result.starts, taskManager, undoManager,
+          forkText("fork.levelling.undo"), result.durations)
+        report(false, meldung.append(forkText("fork.levelling.done", written)).toString())
+      }
     }
   }
 }

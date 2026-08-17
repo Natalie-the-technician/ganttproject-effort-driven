@@ -290,3 +290,80 @@ class MehrerePersonenTest {
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["b"])
   }
 }
+
+/**
+ * Die drei Erweiterungen vom 17.08.2026: eingefrorene Arbeit, Fristen, Auslastungsgrad.
+ *
+ * WOZU: ohne die erste war die Verteilung ein EINMALWERKZEUG -- beim zweiten Lauf haette sie
+ * abgehakte Vorgaenge neu gelegt und die Vergangenheit umgeschrieben.
+ */
+class WiederholtVerteilenTest {
+  private val montagBisFreitag: (LocalDate) -> Boolean = {
+    it.dayOfWeek != DayOfWeek.SATURDAY && it.dayOfWeek != DayOfWeek.SUNDAY
+  }
+  private val montag = LocalDate.of(2026, 8, 17)
+
+  @Test
+  fun `eingefrorene arbeit bleibt liegen und belegt trotzdem`() {
+    val fertig = LevelTask("fertig", 0, 2, durationDays = 5, loadPercent = 100,
+      frozen = true, fixedStart = montag)
+    val offen = LevelTask("offen", 1, 2, durationDays = 5, loadPercent = 100)
+    val ergebnis = levelTasks(listOf(fertig, offen), montag, montagBisFreitag)
+
+    assertEquals(montag, ergebnis.starts["fertig"], "die erledigte Arbeit wird nicht verschoben")
+    assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["offen"],
+      "und sie belegt weiter -- sonst plant die Verteilung dieselbe Woche zweimal")
+  }
+
+  @Test
+  fun `eingefrorene arbeit wird auch dann nicht verschoben, wenn sie sich ueberlappt`() {
+    // Zwei angefangene Vorgaenge am selben Tag: das ist die Wirklichkeit, nicht ein Fehler der
+    // Verteilung. Sie darf daran nichts aendern -- melden ja, umlegen nein.
+    val a = LevelTask("a", 0, 2, durationDays = 3, loadPercent = 100, frozen = true,
+      fixedStart = montag)
+    val b = LevelTask("b", 1, 2, durationDays = 3, loadPercent = 100, frozen = true,
+      fixedStart = montag)
+    val ergebnis = levelTasks(listOf(a, b), montag, montagBisFreitag)
+    assertEquals(montag, ergebnis.starts["a"])
+    assertEquals(montag, ergebnis.starts["b"])
+    assertTrue(ergebnis.conflicts.any { it is LevelConflict.Overload }, "aber gemeldet wird es")
+  }
+
+  @Test
+  fun `eine nicht zu haltende frist wird gemeldet, nicht erzwungen`() {
+    val a = LevelTask("a", 0, 2, durationDays = 10, loadPercent = 100)
+    val b = LevelTask("b", 1, 2, durationDays = 10, loadPercent = 100,
+      deadline = LocalDate.of(2026, 8, 31))
+    val ergebnis = levelTasks(listOf(a, b), montag, montagBisFreitag)
+
+    val verpasst = ergebnis.conflicts.filterIsInstance<LevelConflict.DeadlineMissed>()
+    assertEquals(1, verpasst.size)
+    assertEquals("b", verpasst[0].id)
+    assertTrue(verpasst[0].missingDays > 0, "die Zahl der fehlenden Tage gehoert dazu")
+    // Der Vorgang wurde NICHT vorgezogen: die Frist zu erzwingen verschoebe nur das Problem.
+    assertEquals(LocalDate.of(2026, 8, 31), ergebnis.starts["b"])
+  }
+
+  @Test
+  fun `eine haltbare frist meldet nichts`() {
+    // Gegenprobe: sonst wuerde der Test oben auch bei einer Meldung fuer jeden Vorgang bestehen.
+    val a = LevelTask("a", 0, 2, durationDays = 3, loadPercent = 100,
+      deadline = LocalDate.of(2026, 12, 31))
+    val ergebnis = levelTasks(listOf(a), montag, montagBisFreitag)
+    assertTrue(ergebnis.conflicts.none { it is LevelConflict.DeadlineMissed })
+  }
+
+  @Test
+  fun `ein auslastungsgrad unter 100 laesst luft`() {
+    // Zwei Vorgaenge zu je 60 % passen bei 100 % nicht zusammen (120), bei 100 % auch nicht --
+    // aber einer zu 60 % und einer zu 30 % passen bei 100 %, nicht mehr bei 80 %.
+    val a = LevelTask("a", 0, 2, durationDays = 5, loadPercent = 60)
+    val b = LevelTask("b", 1, 2, durationDays = 5, loadPercent = 30)
+    val voll = levelTasks(listOf(a, b), montag, montagBisFreitag)
+    assertEquals(montag, voll.starts["b"], "bei 100 % passen 60 und 30 zusammen")
+
+    val gebremst = levelTasks(listOf(a, b), montag, montagBisFreitag, capacityOf = { 80 })
+    assertEquals(LocalDate.of(2026, 8, 24), gebremst.starts["b"],
+      "bei 80 % nicht mehr -- genau das ist der Puffer")
+  }
+}

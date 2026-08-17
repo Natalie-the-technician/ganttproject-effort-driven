@@ -35,6 +35,7 @@ import net.sourceforge.ganttproject.timetracking.TogglImportAction;
 import net.sourceforge.ganttproject.fork.AskBeforeWriting;
 import net.sourceforge.ganttproject.fork.BackfillAction;
 import net.sourceforge.ganttproject.fork.LevellingAction;
+import net.sourceforge.ganttproject.fork.EstimateQualityAction;
 import net.sourceforge.ganttproject.fork.RecurrenceAction;
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions;
 import biz.ganttproject.storage.cloud.GPCloudStatusBar;
@@ -227,8 +228,18 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         getProject().getTaskCustomColumnManager(),
         getHumanResourceManager().getCustomPropertyManager(),
         getUndoManager(),
+        // Die Basisplaene des Projekts: vor dem Verteilen wird angeboten, den heutigen Stand zu
+        // sichern. Ohne das sind die bisherigen Termine nach dem Speichern weg.
+        getProject().getBaselines(),
+        java.time.LocalDate::now,
         (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
+
+    // [Fork-Aenderung] Auswertung der Schaetzguete. Schreibt NICHTS und fragt deshalb auch nicht.
+    mHuman.add(new EstimateQualityAction(
+        getTaskManager(),
+        getProject().getTaskCustomColumnManager(),
+        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; }));
 
     // [Fork-Aenderung] Serienvorgaenge: aus einem Vorgang mit Wiederholung werden viele. Fragt
     // vorher, legt nichts doppelt an und ist EIN Rueckgaengig-Schritt.

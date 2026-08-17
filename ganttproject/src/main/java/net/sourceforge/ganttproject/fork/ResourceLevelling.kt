@@ -91,7 +91,25 @@ data class LevelTask(
    * Leer heisst: niemand ist zugeordnet. Diese Vorgaenge teilen sich einen gemeinsamen Topf --
    * sie belegen Zeit, von der man nur nicht weiss, wessen.
    */
-  val resourceIds: List<String> = emptyList()
+  val resourceIds: List<String> = emptyList(),
+  /**
+   * Fertige oder angefangene Arbeit: bleibt genau da, wo sie liegt.
+   *
+   * WARUM DAS NOETIG IST: die Verteilung war ohne dieses Feld ein EINMALWERKZEUG. Beim zweiten
+   * Lauf haette sie auch abgehakte Vorgaenge neu gelegt und die Vergangenheit umgeschrieben.
+   * Eingefrorene Vorgaenge belegen ihre Kapazitaet weiterhin -- sonst plante die Verteilung
+   * angefangene Arbeit doppelt.
+   *
+   * Der Termin, an dem sie liegen, steht in [fixedStart]: fuer eingefrorene Arbeit ist der
+   * heutige Termin per Definition der feste. Ein eigenes Feld waere eine zweite Wahrheit ueber
+   * denselben Sachverhalt.
+   */
+  val frozen: Boolean = false,
+  /**
+   * Spaetestes Ende. Wird NICHT erzwungen -- wer eine Frist erzwingt, verschiebt nur das Problem
+   * an eine Stelle, an der es niemand sieht. Ist sie nicht zu halten, wird sie gemeldet.
+   */
+  val deadline: LocalDate? = null
 )
 
 sealed interface LevelConflict {
@@ -111,6 +129,16 @@ sealed interface LevelConflict {
 
   /** Die Vorgaenge haengen im Kreis. Sie werden nicht verteilt. */
   data class Cycle(val ids: List<String>) : LevelConflict
+
+  /**
+   * Eine Frist ist mit der vorhandenen Kapazitaet nicht zu halten.
+   *
+   * @property missingDays um so viele Arbeitstage ist es zu spaet. Die Zahl steht dabei, weil
+   * "zu spaet" allein keine Entscheidung erlaubt: zwei Tage loest man anders als vier Monate.
+   */
+  data class DeadlineMissed(
+    val id: String, val deadline: LocalDate, val actualEnd: LocalDate, val missingDays: Int
+  ) : LevelConflict
 }
 
 data class LevelResult(
@@ -132,11 +160,21 @@ data class LevelResult(
  * @param isWorkingDay der Kalender, als Funktion. So bleibt die Rechnung ohne Programm pruefbar,
  * und Feiertage kommen aus GanttProjects eigenem Kalender statt aus einer zweiten Wochenendlogik.
  */
+/**
+ * @param capacityOf wie viel eines Arbeitstages bei dieser Person verplant werden darf. 100
+ * heisst: jeder Tag randvoll. Ein Plan, der jeden Tag zu 100 % verplant, geht bei der ersten
+ * Stoerung kaputt -- dieser Plan reicht bis 2063, da ist jede Woche eine Stoerung.
+ *
+ * Eine FUNKTION und keine Zahl, weil der Auslastungsgrad zur Person gehoert: wer den Hauptberuf
+ * noch hat, plant anders als jemand in Vollzeit. Der Wert wirkt NUR auf die Suche nach einem
+ * freien Fenster; feste Termine und eingefrorene Arbeit bleiben, wo sie sind.
+ */
 fun levelTasks(
   tasks: List<LevelTask>,
   projectStart: LocalDate,
   isWorkingDay: (LocalDate) -> Boolean,
-  durationAt: (LevelTask, LocalDate) -> Int = { task, _ -> task.durationDays }
+  durationAt: (LevelTask, LocalDate) -> Int = { task, _ -> task.durationDays },
+  capacityOf: (String) -> Int = { 100 }
 ): LevelResult {
   val byId = tasks.associateBy { it.id }
   val conflicts = mutableListOf<LevelConflict>()
@@ -153,8 +191,26 @@ fun levelTasks(
   val durations = mutableMapOf<String, Int>()
   val ends = mutableMapOf<String, LocalDate>()
 
+  // ERST die eingefrorene Arbeit eintragen, und zwar vor allem anderen: sie belegt Kapazitaet,
+  // die fuer den Rest nicht mehr zur Verfuegung steht. Wuerde sie in der normalen Reihenfolge
+  // abgearbeitet, koennte ein beweglicher Vorgang sich vorher auf denselben Tag legen.
+  tasks.filter { it.frozen }.forEach { task ->
+    val liegtAuf = nextWorkingDay(task.fixedStart ?: projectStart, isWorkingDay)
+    val days = workingDays(liegtAuf, durationAt(task, liegtAuf), isWorkingDay)
+    task.pools.forEach { pool ->
+      val belegung = used.getOrPut(pool) { mutableMapOf() }
+      days.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadPercent }
+    }
+    starts[task.id] = days.first()
+    durations[task.id] = days.size
+    ends[task.id] = nextWorkingDay(days.last().plusDays(1), isWorkingDay)
+  }
+
   for (id in order) {
     val task = byId.getValue(id)
+    if (task.frozen) {
+      continue
+    }
 
     var earliest = maxOf(projectStart, task.earliestStart ?: projectStart)
     for (p in task.predecessors) {
@@ -172,7 +228,7 @@ fun levelTasks(
       }
       days = workingDays(start, durationAt(task, start), isWorkingDay)
     } else {
-      days = findEarliestWindow(earliest, task, durationAt, used, isWorkingDay)
+      days = findEarliestWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf)
     }
 
     task.pools.forEach { pool ->
@@ -184,9 +240,31 @@ fun levelTasks(
     ends[id] = nextWorkingDay(days.last().plusDays(1), isWorkingDay)
   }
 
+  // Fristen: gemeldet, nicht erzwungen. Geprueft wird das ENDE, denn eine Frist ist ein Endtermin.
+  tasks.forEach { task ->
+    val frist = task.deadline ?: return@forEach
+    val ende = ends[task.id] ?: return@forEach
+    // ends[] ist der erste Arbeitstag NACH dem Vorgang; der letzte Arbeitstag liegt davor.
+    val letzterTag = generateSequence(ende.minusDays(1)) { it.minusDays(1) }
+      .first { isWorkingDay(it) || it < projectStart }
+    if (letzterTag.isAfter(frist)) {
+      val fehlend = workingDays(nextWorkingDay(frist.plusDays(1), isWorkingDay),
+        1, isWorkingDay).let {
+        var tage = 0
+        var tag = nextWorkingDay(frist.plusDays(1), isWorkingDay)
+        while (!tag.isAfter(letzterTag) && tage < 100_000) {
+          if (isWorkingDay(tag)) tage++
+          tag = tag.plusDays(1)
+        }
+        tage
+      }
+      conflicts.add(LevelConflict.DeadlineMissed(task.id, frist, letzterTag, fehlend))
+    }
+  }
+
   // Ueberlast kann nach dem Verteilen nur noch dort stehen, wo feste Termine sie erzwungen haben.
   used.toSortedMap().forEach { (pool, belegung) ->
-    belegung.filterValues { it > 100 }.toSortedMap().forEach { (day, percent) ->
+    belegung.filterValues { it > capacityOf(pool) }.toSortedMap().forEach { (day, percent) ->
       val onThatDay = tasks.filter { t ->
         if (!t.pools.contains(pool)) return@filter false
         val s = starts[t.id] ?: return@filter false
@@ -262,7 +340,8 @@ private fun findEarliestWindow(
   task: LevelTask,
   durationAt: (LevelTask, LocalDate) -> Int,
   used: Map<String, MutableMap<LocalDate, Int>>,
-  isWorkingDay: (LocalDate) -> Boolean
+  isWorkingDay: (LocalDate) -> Boolean,
+  capacityOf: (String) -> Int
 ): List<LocalDate> {
   val loadPercent = task.loadPercent
   var candidate = nextWorkingDay(earliest, isWorkingDay)
@@ -272,7 +351,7 @@ private fun findEarliestWindow(
     val window = workingDays(candidate, durationAt(task, candidate), isWorkingDay)
     // Ein Tag blockiert, sobald er fuer EINE der beteiligten Personen zu voll ist.
     val blockedAt = window.firstOrNull { day ->
-      task.pools.any { pool -> (used[pool]?.get(day) ?: 0) + loadPercent > 100 }
+      task.pools.any { pool -> (used[pool]?.get(day) ?: 0) + loadPercent > capacityOf(pool) }
     }
     if (blockedAt == null) {
       return window

@@ -22,7 +22,10 @@ package net.sourceforge.ganttproject.gui.taskproperties
 
 import biz.ganttproject.customproperty.CustomPropertyHolder
 import biz.ganttproject.customproperty.CustomPropertyManager
+import net.sourceforge.ganttproject.fork.findOrCreateOriginalEffort
 import net.sourceforge.ganttproject.storage.ProjectDatabase
+import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
+import net.sourceforge.ganttproject.task.algorithm.findEffortDefinition
 
 /**
  * Lets every effort field write into the property holder, and only THEN brings the mirror table
@@ -52,6 +55,25 @@ fun applyEffortFieldsThenSyncColumns(
   fields: List<(CustomPropertyHolder) -> Unit>
 ) {
   fields.forEach { field -> field(holder) }
-  // Must stay AFTER the loop. See above.
+  // [Fork-Aenderung] Die erste eingetippte Schaetzung zugleich als URSPRUENGLICHE festhalten.
+  //
+  // WARUM HIER: das ist die Stelle, an der ein Mensch eine Schaetzung eintraegt. Wer sie spaeter
+  // nachbessert, vergleicht die Ist-Stunden sonst gegen die nachgebesserte Zahl -- und die
+  // Abweichung verschwindet genau in dem Moment, in dem man sie bemerkt.
+  //
+  // Nur wenn noch nichts festgehalten ist. Ein zweiter Aufruf aendert nichts.
+  rememberOriginalEffort(holder, definitions)
+  // Must stay AFTER the loop and after the line above: both may create a definition. See above.
   projectDatabase.onCustomColumnChange(definitions)
+}
+
+private fun rememberOriginalEffort(
+  holder: CustomPropertyHolder, definitions: CustomPropertyManager) {
+  val effortDef = definitions.findEffortDefinition(EffortDrivenProperties.TASK_EFFORT_HOURS)
+    ?: return
+  val heute = holder.getValue(effortDef) ?: return
+  val originalDef = findOrCreateOriginalEffort(definitions)
+  if (holder.getValue(originalDef) == null) {
+    holder.setValue(originalDef, heute)
+  }
 }
