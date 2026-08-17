@@ -100,10 +100,29 @@ public class MainApplication implements IPlatformRunnable {
     }
 
 
+    // [Fork-Aenderung] Beendet die Anwendung wirklich.
+    //
+    // FEHLER IM ORIGINAL, am Bildschirm nachgewiesen: "Projekt -> Beenden" und dann "Nicht
+    // speichern" schloss das Programm nicht, das Hauptfenster blieb offen (dreimal reproduziert).
+    //
+    // Ursache: Dieser Rueckruf setzte nur myLock und rief notify(). Der Block, der darauf WARTET,
+    // ist weiter unten auskommentiert (Upstream-Commit "commented out or removed usages of the
+    // main application window"). Also wartet niemand, launch() kehrt sofort zurueck, und das
+    // System.exit(0) in Zeile 122 laeuft zu einem Zeitpunkt, zu dem myLock noch false ist.
+    // Ergebnis: quitApplication() macht alles richtig -- Optionen speichern, Projekt schliessen --
+    // und niemand beendet den Prozess.
+    //
+    // withSystemExit ist NICHT immer true: der Aktualisierer benutzt false, um neu zu starten
+    // statt zu beenden. Deshalb die Bedingung.
     Consumer<Boolean> onApplicationQuit = withSystemExit -> {
       synchronized(myLock) {
         myLock.set(withSystemExit);
         myLock.notify();
+      }
+      if (withSystemExit) {
+        logger.debug("Application quit requested, terminating");
+        GPLogger.close();
+        System.exit(0);
       }
     };
     GanttProject.setApplicationQuitCallback(onApplicationQuit);
