@@ -57,7 +57,21 @@ public class HttpDocument extends AbstractURLDocument {
   private final int myTimeout;
 
   public HttpDocument(String url, String username, String password, StringOption proxyOption) throws IOException, WebDavException {
-    this(new MiltonResourceFactory(username, password, proxyOption).createResource(new WebDavUri(url)), username, password, -1);
+    this(url, username, password, proxyOption, NO_LOCK);
+  }
+
+  /**
+   * [Fork-Aenderung] Wie oben, aber mit Sperrdauer.
+   *
+   * FEHLER IM ORIGINAL: Die Ueberladung darueber setzte fest {@code -1}, und sie ist der Weg, ueber
+   * den GanttProject WebDAV-Dokumente ueberhaupt oeffnet. Die Einstellung {@code webdav.lockTimeout}
+   * erreichte das Dokument damit nie — sie ging nur an den Oeffnen-Dialog. Wer sie auf 120 stellte,
+   * aenderte nichts, ohne dass es irgendwo aufgefallen waere.
+   */
+  public HttpDocument(String url, String username, String password, StringOption proxyOption, int lockTimeout)
+      throws IOException, WebDavException {
+    this(new MiltonResourceFactory(username, password, proxyOption).createResource(new WebDavUri(url)),
+        username, password, lockTimeout);
   }
 
   public HttpDocument(WebDavResource webdavResource, String username, String password, int lockTimeout) throws IOException {
@@ -128,7 +142,24 @@ public class HttpDocument extends AbstractURLDocument {
 
   @Override
   public boolean acquireLock() {
-    if (locked || myTimeout < 0) {
+    if (locked) {
+      return true;
+    }
+    if (myTimeout < 0) {
+      // [Fork-Aenderung] D2: sagen, dass hier nicht gesperrt wird.
+      //
+      // Der Rueckgabewert bleibt true -- der Aufrufer soll nicht warnen, denn niemand hat versagt:
+      // die Einstellung steht auf "nie sperren". Aber "Erfolg" zu melden, ohne etwas getan zu
+      // haben, war bisher vollkommen stumm. Wer die Sperrdauer irgendwann einmal negativ gesetzt
+      // hat, arbeitet seither ohne Sperre und findet dafuer nirgends einen Beleg.
+      //
+      // Die Uebergabe verlangte diese Beschriftung am Knopf "ohne Sperre oeffnen". Den gibt es
+      // nicht mehr: sein Dialog haengt an CloudProjectActionBase, und diese Klasse hat im ganzen
+      // Repo keine Ableitung und keinen weiteren Verweis -- toter Code. Erreichbar ist die Wahl
+      // heute nur ueber diese Einstellung, also gehoert der Hinweis hierher.
+      GPLogger.log("WebDAV: keine Sperre fuer " + getFileName()
+          + " -- die Sperrdauer steht auf \"nie sperren\". Gegen versehentliches Ueberschreiben"
+          + " schuetzt weiterhin If-Match beim Speichern.");
       return true;
     }
     if (null == getWebdavResource()) {

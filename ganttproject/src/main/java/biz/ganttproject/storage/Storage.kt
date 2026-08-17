@@ -45,6 +45,9 @@ import javafx.stage.FileChooser
 import net.sourceforge.ganttproject.document.Document
 import net.sourceforge.ganttproject.document.DocumentManager
 import net.sourceforge.ganttproject.document.ReadOnlyProxyDocument
+// [Fork-Aenderung] fuer die Sperrdauer der WebDAV-Ablage.
+import net.sourceforge.ganttproject.document.webdav.HttpDocument
+import net.sourceforge.ganttproject.document.webdav.WebDavStorageImpl
 import net.sourceforge.ganttproject.document.webdav.WebDavServerDescriptor
 import net.sourceforge.ganttproject.gui.AuthenticationFlow
 import java.io.File
@@ -209,11 +212,37 @@ class StoragePane internal constructor(
         openDocument)
     val cloudStorage = GPCloudStorage(dialogUi, mode, currentDocument, openDocument, documentManager)
     storageUiList.addAll(listOf(localStorage, recentProjects, cloudStorage))
+    // [Fork-Aenderung] Die eingestellte Sperrdauer bis zur Ablage-Auswahl durchreichen.
+    //
+    // Vorher setzte WebdavBrowserPane fest NO_LOCK. Da dies der Weg ist, den ein Mensch
+    // tatsaechlich benutzt, wurde ueber WebDAV geoeffnete Projekte NIE gesperrt -- unabhaengig
+    // davon, was in den Einstellungen stand. Am Server nachgewiesen: Schreiben von aussen lieferte
+    // 204 statt 423, obwohl das Projekt offen war.
+    val webdavLockTimeout =
+      (documentManager.webDavStorageUi as? WebDavStorageImpl)?.webDavLockTimeoutOption?.value
+        ?: HttpDocument.NO_LOCK
     cloudStorageOptions.webdavServers.mapTo(storageUiList) {
-      WebdavStorage(it, mode, openDocument, dialogUi, cloudStorageOptions)
+      WebdavStorage(it, mode, openDocument, dialogUi, cloudStorageOptions, webdavLockTimeout)
     }
 
-    val initialStorageId = selectedId ?: if (mode == StorageDialogBuilder.Mode.OPEN) recentProjects.id else localStorage.id
+    // [Fork-Aenderung] Beim Speichern die Ablage vorwaehlen, in der das Projekt LIEGT.
+    //
+    // FEHLER IM ORIGINAL: hier stand fest `localStorage.id` fuer den Speichern-Fall. Wer ein
+    // Projekt von einem WebDAV-Server offen hat und "Speichern unter" waehlt, landete deshalb auf
+    // "Dieser Computer" -- mit der vollstaendigen WebDAV-Adresse als oertlichem Pfad im Namensfeld
+    // und einer roten Fehlermeldung "Uebergeordnetes Verzeichnis existiert nicht". Am Bildschirm
+    // gesehen, direkt nach einem Schreibkonflikt: genau in dem Moment, in dem "als Kopie speichern"
+    // der einzige Ausweg ist, fuehrt die Vorauswahl in die Irre.
+    //
+    // Der Weg funktionierte, man musste nur links den Server anklicken. Aber die Vorauswahl ist
+    // eine Behauptung darueber, was der Mensch vermutlich will, und die war hier falsch.
+    val currentStorageId = storageUiList.filterIsInstance<WebdavStorage>()
+      .map { it.id }
+      .firstOrNull { rootUrl -> rootUrl.isNotBlank() && currentDocument.uri?.toString()?.startsWith(rootUrl) == true }
+    val initialStorageId = selectedId ?: when {
+      mode == StorageDialogBuilder.Mode.OPEN -> recentProjects.id
+      else -> currentStorageId ?: localStorage.id
+    }
 
     // Iterate the list of available storages and create for each storage:
     // - a list item with optional settings button if settings are available

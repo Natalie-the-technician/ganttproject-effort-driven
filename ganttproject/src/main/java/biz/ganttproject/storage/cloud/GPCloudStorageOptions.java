@@ -5,6 +5,8 @@ import biz.ganttproject.core.option.EnumerationOption;
 import biz.ganttproject.core.option.GPAbstractOption;
 import biz.ganttproject.core.option.ListOption;
 import com.google.common.base.Strings;
+// [Fork-Aenderung] Passwoerter nicht mehr im Klartext ablegen.
+import net.sourceforge.ganttproject.fork.SecretStore;
 import com.google.common.collect.ImmutableSet;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -108,7 +110,19 @@ public class GPCloudStorageOptions extends GPAbstractOption<WebDavServerDescript
     for (WebDavServerDescriptor server : myServers) {
       result.append("\n").append(server.getName()).append("\t").append(server.getRootUrl()).append("\t").append(server.getUsername());
       if (server.getSavePassword()) {
-        result.append("\t").append(server.getPassword());
+        // [Fork-Aenderung] Verschluesselt statt im Klartext.
+        //
+        // FEHLER IM ORIGINAL: hier stand das Passwort unveraendert in der Datei. Jedes Programm
+        // unter demselben Benutzer konnte es lesen, und es wanderte in jede Sicherung von
+        // ~/.ganttproject. Der Haken wurde deshalb nicht gesetzt und das Passwort stattdessen bei
+        // jedem Start neu getippt -- Sicherheit, die Muehe kostet, wird irgendwann abgeschaltet.
+        //
+        // Liefert protect() null (kein Windows, oder DPAPI nicht verfuegbar), wird NICHT
+        // gespeichert. Lieber weiter fragen als stillschweigend Klartext schreiben.
+        String protectedPassword = SecretStore.INSTANCE.protect(server.getPassword());
+        if (protectedPassword != null) {
+          result.append("\t").append(protectedPassword);
+        }
       }
     }
     return result.toString();
@@ -130,7 +144,10 @@ public class GPCloudStorageOptions extends GPAbstractOption<WebDavServerDescript
           server.setUsername(parts[2]);
         }
         if (parts.length >= 4) {
-          server.setPassword(parts[3]);
+          // [Fork-Aenderung] Entschluesseln. Ein Wert ohne Kennzeichen stammt aus der Zeit vor
+          // dieser Aenderung und wird unveraendert uebernommen -- beim naechsten Speichern ist er
+          // verschluesselt.
+          server.setPassword(SecretStore.INSTANCE.reveal(parts[3]));
           server.setSavePassword(true);
         }
         if (!server.getRootUrl().isEmpty()) {

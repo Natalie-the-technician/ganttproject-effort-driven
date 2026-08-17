@@ -22,6 +22,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
 import net.sourceforge.ganttproject.document.webdav.WebDavResource.WebDavException;
+// [Fork-Aenderung] Ein Schreibkonflikt wird als Versionskonflikt gemeldet, nicht als IO-Fehler.
+import biz.ganttproject.storage.VersionMismatchException;
 
 
 /**
@@ -46,6 +48,20 @@ class HttpDocumentOutputStream extends ByteArrayOutputStream {
     WebDavResource wr = myDocument.getWebdavResource();
     try {
       wr.write(toByteArray());
+    } catch (WebDavResource.WebDavConflictException e) {
+      // [Fork-Aenderung] Ein Konflikt ist kein Ein-/Ausgabefehler. Als IOException verpackt
+      // erschiene er als "irgendetwas ging schief", und die Speicherlogik koennte dem Menschen
+      // nicht die Wahl anbieten, die es hier gibt: als Kopie speichern statt zu ueberschreiben.
+      //
+      // canOverwrite=false, weil der Weg zum erzwungenen Schreiben fuer WebDAV bewusst noch nicht
+      // gebaut ist -- siehe ProjectUIFacadeImpl.saveProjectTrySave. Lieber gar kein Knopf als
+      // einer, der nichts tut.
+      throw new VersionMismatchException(false);
+    } catch (WebDavResource.WebDavVersioningUnavailableException e) {
+      // [Fork-Aenderung] Andere Ursache, andere Meldung. Hier hat NIEMAND die Datei geaendert --
+      // der Server kann die Frage nur nicht beantworten. Wuerde das als Konflikt durchgereicht,
+      // suchte der Benutzer nach einem Kollegen, den es nicht gibt.
+      throw new VersionMismatchException(false, true);
     } catch (WebDavException e) {
       throw new IOException(e);
     }
