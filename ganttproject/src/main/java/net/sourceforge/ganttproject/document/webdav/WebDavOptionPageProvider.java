@@ -28,11 +28,30 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     // TODO Auto-generated constructor stub
   }
 
+  /**
+   * [Fork-Aenderung] Die Gruppen dieser Seite, damit "Uebernehmen" sie auch uebernimmt.
+   *
+   * FEHLER IM ORIGINAL: hier stand `return new GPOptionGroup[0];` mit dem Kommentar
+   * "TODO Auto-generated method stub". {@link OptionPageProviderBase#commit()} laeuft ueber genau
+   * diese Liste -- war sie leer, wurde NICHTS uebernommen: weder Adresse noch Benutzername,
+   * Passwort oder Sperrdauer. Ein neu angelegter Server blieb ohne Adresse zurueck, und der
+   * naechste Verbindungsversuch scheiterte mit "I/O problems when accessing <Servername>" -- der
+   * Name stand dort, wo der Rechnername haette stehen sollen. Genau so am Bildschirm gesehen.
+   *
+   * Die Felder werden erst in {@link #buildPageComponent()} gefuellt. Bis dahin eine leere Liste
+   * zurueckzugeben ist richtig und kein Rueckfall: vor dem Aufbau der Seite gibt es nichts zu
+   * uebernehmen.
+   */
   @Override
   public GPOptionGroup[] getOptionGroups() {
-    // TODO Auto-generated method stub
-    return new GPOptionGroup[0];
+    if (myServerOptions == null || myLockingOptions == null) {
+      return new GPOptionGroup[0];
+    }
+    return new GPOptionGroup[] {myServerOptions, myLockingOptions};
   }
+
+  private GPOptionGroup myServerOptions;
+  private GPOptionGroup myLockingOptions;
 
   @Override
   public boolean hasCustomComponent() {
@@ -125,6 +144,8 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     });
 
     GPOptionGroup optionGroup = new GPOptionGroup("webdav.server", urlOption, usernameOption, passwordOption, savePasswordOption);
+    // [Fork-Aenderung] merken, damit getOptionGroups() sie liefert und "Uebernehmen" wirkt.
+    myServerOptions = optionGroup;
 
     serverList.getTableAndActions().addSelectionListener(new SelectionListener<WebDavServerDescriptor>() {
       @Override
@@ -151,6 +172,7 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     GPOptionGroup lockingGroup = new GPOptionGroup("webdav.lock", webdavStorage.getWebDavLockTimeoutOption(), webdavStorage.getWebDavReleaseLockOption());
     lockingGroup.setI18Nkey(builder.getI18N().getCanonicalOptionLabelKey(webdavStorage.getWebDavLockTimeoutOption()), "webdav.lockTimeout.label");
     lockingGroup.setI18Nkey(builder.getI18N().getCanonicalOptionLabelKey(webdavStorage.getWebDavReleaseLockOption()), "option.webdav.lock.releaseOnProjectClose.label");
+    myLockingOptions = lockingGroup;
     // [Fork-Aenderung] D2: benennen, was eine negative Sperrdauer abschaltet.
     //
     // "Timeout (Minuten)" sagt nicht, dass ein Wert unter 0 "nie sperren" bedeutet -- und

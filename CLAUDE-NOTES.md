@@ -2336,6 +2336,47 @@ Der Hinweistext unter den Sperr-Einstellungen ist am Bildschirm bestaetigt: voll
 umbrochen, Umlaute in Ordnung. Vorher war er gebaut, aber unsichtbar -- nicht wegen des Textes,
 sondern wegen des Zeichenfehlers oben.
 
+### Die WebDAV-Einstellungsseite speicherte NICHTS
+
+Natalie kam nicht mehr auf ihren Server. Die Kette bis zur Ursache:
+
+**Der rote Kasten war leer.** `WebdavBrowserPane` rief
+`dialogUi.error("WebdavService failed!", "", null)` -- die Ausnahme wurde weder angezeigt noch
+protokolliert. Erst nachdem das behoben war, stand dort: **"I/O problems when accessing Noctuvo"**.
+
+**Der Servername stand, wo der Rechnername hingehoert.** Also hatte der Eintrag gar keine Adresse.
+Nachgesehen in `~/.ganttproject`:
+
+```
+<option id="webdav.servers"><![CDATA[
+Noctuvo<TAB><TAB>]]></option>
+```
+
+Name, dann zwei leere Felder. **Ursache:**
+
+```java
+public GPOptionGroup[] getOptionGroups() {
+  // TODO Auto-generated method stub
+  return new GPOptionGroup[0];
+}
+```
+
+`OptionPageProviderBase.commit()` laeuft ueber genau diese Liste. Sie war leer, also uebernahm
+"Uebernehmen" nichts: nicht die Adresse, nicht den Benutzernamen, nicht das Passwort und auch nicht
+die Sperrdauer. Ein Stub, der seit Jahren dort steht.
+
+Belegt mit einem Wegwerf-Eintrag: nach dem Umbau steht
+`ProbeWegwerf	https://beispiel.ungueltig/dav` in der Einstellungsdatei, vorher stand dort nichts.
+Danach die Sicherung zurueckgespielt, damit nichts von der Probe bleibt.
+
+**EIGENER MESSFEHLER dabei:** Der erste Prueflauf zeigte "nicht gespeichert", weil ich GanttProject
+mit `Stop-Process -Force` beendet hatte. Die Einstellungen werden erst beim ORDENTLICHEN Beenden
+geschrieben. Ein hart abgeschossenes Programm beweist nichts ueber sein Speichern.
+
+**Nebenbefund:** Der Eintrag "Test", der gestern funktioniert hat, steht nicht mehr in der Datei.
+Wann er verschwand, ist nicht mehr feststellbar; mit dem Stub konnte ohnehin nie etwas gespeichert
+werden.
+
 ### Offen aus dieser Sitzung
 
 - **Startmeldung "Failed to parse document".** Beim Start oeffnet GanttProject das zuletzt
