@@ -112,6 +112,29 @@ internal class ProjectEventListenerImpl(
     // ...
   }
 
+  /**
+   * [Fork-Aenderung] Diese Methode fehlte im Original — das ist die Ursache eines still
+   * verschluckten Datenverlusts.
+   *
+   * `ProjectUIFacadeImpl.createProject` ruft beim Anlegen eines neuen Projekts erst
+   * `project.close()` (das setzt ueber [projectClosed] `isProjectOpen = false`) und danach
+   * `fireProjectCreated()`. Da `projectCreated` bisher nicht behandelt wurde, blieb die Sperre
+   * dauerhaft zu: `LazyProjectDatabaseProxy.onCustomColumnChange` verwarf ab dann JEDE
+   * Spaltenaenderung stillschweigend, ohne Fehler. Die Spiegeltabelle bekam keine Spalte, und
+   * jeder Schreibvorgang auf eine benutzerdefinierte Eigenschaft scheiterte mit
+   * `Column "..." not found`. Weil `MutatorImpl.commit()` Datenbankfehler nur protokolliert,
+   * lief die Anwendung scheinbar weiter — bis gar kein Vorgang mehr anlegbar war.
+   *
+   * Betrifft nicht nur die aufwandsgetriebene Planung: JEDE benutzerdefinierte Spalte, die nach
+   * "Projekt -> Neu" angelegt wird, war davon betroffen.
+   *
+   * Vorgehen wie in [projectRestoring]: die Spiegeldatenbank verwerfen und frisch aufbauen.
+   */
+  override fun projectCreated() = withLogger({ "Failed to initialize the database for a new project" }) {
+    projectDatabase.shutdown()
+    initProjectDatabase()
+  }
+
   override fun projectRestoring(completion: Barrier<Document?>) {
     completion.await {
       projectDatabase.shutdown()

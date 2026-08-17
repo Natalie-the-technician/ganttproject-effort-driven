@@ -47,6 +47,15 @@ import net.sourceforge.ganttproject.resource.HumanResourceMerger
 import net.sourceforge.ganttproject.resource.OverwritingMerger
 import net.sourceforge.ganttproject.roles.RoleManager
 import net.sourceforge.ganttproject.storage.LazyProjectDatabaseProxy
+// [Fork-Aenderung] Neuer Import fuer den Ausloeser der Dauerberechnung.
+import net.sourceforge.ganttproject.fork.findOrCreateDateFixed
+import net.sourceforge.ganttproject.fork.findOrCreateDeadline
+import net.sourceforge.ganttproject.fork.findOrCreateOriginalEffort
+import net.sourceforge.ganttproject.fork.findOrCreateRecurrence
+import net.sourceforge.ganttproject.fork.findOrCreateUtilisation
+import net.sourceforge.ganttproject.fork.findOrCreateWaitOnly
+import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
+import net.sourceforge.ganttproject.task.algorithm.EffortDrivenTrigger
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.task.*
 import net.sourceforge.ganttproject.task.event.createTaskListenerWithTimerBarrier
@@ -100,6 +109,47 @@ open class GanttProjectImpl(
 
   init {
     myCalendar.addListener { setModified() }
+    // [Fork-Aenderung] Diese Zeile ist neu, im Original nicht vorhanden. Ohne sie laeuft die
+    // Dauerberechnung nie an — sie ist der einzige Punkt, an dem das Feature eingeschaltet wird.
+    // Effort-driven scheduling: recalculate durations when the resources change. Registered here,
+    // in the UI-free project class, so that it also works headless (import, command line, tests).
+    humanResourceManager.addView(EffortDrivenTrigger(this.taskManager))
+  }
+
+  /**
+   * [Fork-Aenderung] Legt die beiden Spalten der Tagesleistung an, falls es sie noch nicht gibt.
+   *
+   * WARUM UEBERHAUPT: bisher entstand die Spalte "Stunden pro Tag" nur, wenn jemand sie von Hand
+   * im Spaltenverwalter anlegte -- wer das nicht wusste, plante stillschweigend mit den
+   * vorgegebenen acht Stunden weiter. Beim "Stundenplan" waere das noch schlimmer: eine
+   * Eigenschaft, die man nicht sieht, kann man auch nicht eintragen.
+   *
+   * WARUM NICHT IM KONSTRUKTOR, und das ist am Rechner gemessen: dort angelegt, scheitert
+   * anschliessend das LADEN jeder Datei, die dieselbe Spalte enthaelt --
+   * "Column with ID=hours_per_day is already registered", und zwar als
+   * `DocumentException: Failed to parse document` fuer die GANZE Datei. Gefunden hat es
+   * `GanttChartSelectionTest` im Modul ganttproject-tester, weil die Zwischenablage denselben Weg
+   * geht: speichern und sofort wieder lesen.
+   *
+   * Hier aufgerufen wird nach dem Laden, wenn die Spalten aus der Datei bereits eingetragen sind.
+   * findOrCreate ist dann ein Nullvorgang.
+   */
+  fun ensureCapacityColumns() {
+    val ressourcen = humanResourceManager.customPropertyManager
+    val vorgaenge = taskManager.customPropertyManager
+    EffortDrivenProperties.findOrCreateResourceHours(ressourcen)
+    EffortDrivenProperties.findOrCreateResourceSchedule(ressourcen)
+    findOrCreateUtilisation(ressourcen)
+    // ALLE Spalten dieses Forks, und zwar vollzaehlig. AM 17.08.2026 GEMESSEN: vier davon --
+    // "Fertig bis", "Auslastung", "Warten", "Termin fest" -- wurden NIRGENDS angelegt. Sie
+    // existierten im Code, waren aber fuer niemanden ausfuellbar; die Verteilung las sie brav und
+    // fand immer nichts. Dieselbe Fehlerfamilie wie die toten Menuepunkte aus Sitzung 8: gebaut,
+    // nicht erreichbar, und von aussen nicht von "funktioniert nicht" zu unterscheiden.
+    findOrCreateRecurrence(vorgaenge)
+    findOrCreateDeadline(vorgaenge)
+    findOrCreateWaitOnly(vorgaenge)
+    findOrCreateDateFixed(vorgaenge)
+    findOrCreateOriginalEffort(vorgaenge)
   }
 
   override fun setModified() {

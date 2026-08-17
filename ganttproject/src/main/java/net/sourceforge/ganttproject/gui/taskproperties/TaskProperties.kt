@@ -59,6 +59,19 @@ class TaskPropertiesController(private val task: Task, roleManager: RoleManager,
     task.createMutator().also { mutator ->
       mainPropertiesPanel.save(mutator)
       customPropertiesPanel.save {
+        // [Fork-Aenderung] Aufwand und Ist-Stunden werden in DENSELBEN Halter geschrieben, den die
+        // Custom-Property-Registerkarte gleich committet. Wuerden die Felder direkt auf
+        // task.customValues schreiben, wuerde dieser Aufruf sie mit der beim Oeffnen gezogenen
+        // Kopie stillschweigend ueberschreiben.
+        // [Fork-Aenderung] Reihenfolge (Felder schreiben, DANN Spalten abgleichen) steckt in
+        // applyEffortFieldsThenSyncColumns - dort ist sie ohne JavaFX pruefbar und durch einen
+        // Gegentest abgesichert. Ein weiteres Feld kommt in diese Liste, sonst aendert sich hier
+        // nichts.
+        applyEffortFieldsThenSyncColumns(
+          holder = it,
+          definitions = task.manager.customPropertyManager,
+          projectDatabase = projectDatabase,
+          fields = listOf(resourcesPanel::applyEffort, resourcesPanel::applyActualEffort))
         mutator.setCustomProperties(it)
       }
       predecessorsPanel.commit()

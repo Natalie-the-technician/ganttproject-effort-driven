@@ -23,6 +23,17 @@ import biz.ganttproject.app.*;
 import biz.ganttproject.lib.fx.TreeTableCellsKt;
 import biz.ganttproject.platform.UpdateOptions;
 import biz.ganttproject.storage.cloud.GPCloudOptions;
+import net.sourceforge.ganttproject.gui.NotificationChannel;
+// [Fork-Aenderung] Kapazitaetsverteilung.
+// Der Melder ist ein gewoehnlicher Kotlin-Funktionstyp -- genau das, was die vier Aktionen
+// als `report: (Boolean, String) -> Unit` erwarten.
+import kotlin.jvm.functions.Function2;
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
+import net.sourceforge.ganttproject.fork.AskBeforeWriting;
+import net.sourceforge.ganttproject.fork.BackfillAction;
+import net.sourceforge.ganttproject.fork.LevellingAction;
+import net.sourceforge.ganttproject.fork.EstimateQualityAction;
+import net.sourceforge.ganttproject.fork.RecurrenceAction;
 import biz.ganttproject.storage.cloud.GPCloudStatusBar;
 import com.beust.jcommander.Parameter;
 import com.google.common.base.Supplier;
@@ -149,6 +160,85 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     }
     mHuman.add(resourceActionSet.getResourceSendMailAction());
     mHuman.add(resourceActionSet.getCloudResourceList());
+    // [Fork-Aenderung] Die Meldungen der Fork-Aktionen.
+    //
+    // Sie werden hier SELBST gebaut statt ueber showNotificationDialog. Jenes bettet den Text in
+    // die Vorlagen <kanal>.channel.itemTitle/itemBody ein -- und fuer den Kanal RSS gibt es diese
+    // Vorlagen nicht. Der Kasten haette dann "rss.channel.itemBody" angezeigt und unsere Meldung
+    // stillschweigend verschluckt, weil MessageFormat ohne {0} das Argument verwirft.
+    Function2<Boolean, String, Unit> forkMessages = (isProblem, message) -> {
+      var manager = getUIFacade().getNotificationManager();
+      manager.addNotifications(List.of(manager.createNotification(
+          isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS,
+          ForkI18nKt.forkText("fork.effort.section"),
+          "<p>" + message.replace("\n", "<br>") + "</p>",
+          null)));
+      return Unit.INSTANCE;
+    };
+
+    // [Fork-Aenderung] Kapazitaetsverteilung. Steht im Ressourcen-Menue, weil beides an den
+    // Ressourcen haengt: Aufwand pro Tag und wer wann kann.
+    //
+    // BEIDE FRAGEN VOR DEM SCHREIBEN, und beide sind EIN Rueckgaengig-Schritt. Die Verteilung
+    // kann bei einem gewachsenen Plan zwei Drittel aller Vorgaenge verschieben -- das ungefragt
+    // zu tun waere genau die stille Aenderung, die dieser Fork mehrfach gefunden hat.
+    AskBeforeWriting askBeforeWriting = (message, answer) -> getUIFacade().showOptionDialog(
+        JOptionPane.QUESTION_MESSAGE,
+        message,
+        new Action[] {
+            OkAction.create("ok", () -> { answer.invoke(true); return Unit.INSTANCE; }),
+            CancelAction.create("cancel", () -> { answer.invoke(false); return Unit.INSTANCE; })
+        });
+    mHuman.add(new BackfillAction(
+        getTaskManager(),
+        getHumanResourceManager(),
+        getProject().getTaskCustomColumnManager(),
+        getHumanResourceManager().getCustomPropertyManager(),
+        getProjectDatabase(),
+        getUndoManager(),
+        forkMessages,
+        askBeforeWriting));
+    mHuman.add(new LevellingAction(
+        getTaskManager(),
+        getHumanResourceManager(),
+        getProject().getTaskCustomColumnManager(),
+        getHumanResourceManager().getCustomPropertyManager(),
+        getUndoManager(),
+        // Die Basisplaene JEDES MAL FRISCH holen: das Feld myPreviousStates wird beim Schliessen
+        // eines Projekts durch eine neue Liste ersetzt (Zeile 819). Eine hier festgehaltene Liste
+        // waere nach dem ersten Oeffnen einer Datei verwaist -- am Rechner gemessen.
+        () -> (java.util.List<net.sourceforge.ganttproject.GanttPreviousState>) getBaselines(),
+        java.time.LocalDate::now,
+        forkMessages,
+        askBeforeWriting));
+
+    // [Fork-Aenderung] Auswertung der Schaetzguete. Schreibt NICHTS und fragt deshalb auch nicht.
+    //
+    // EIN FENSTER, KEINE BENACHRICHTIGUNG, und das ist am Bildschirm gemessen: ueber
+    // forkMessages landet die Meldung als kleines Zeichen unten rechts, das man erst anklicken
+    // muss. Fuer eine Erfolgsmeldung reicht das; ein mehrzeiliger Bericht, der GELESEN werden
+    // soll, ist dort praktisch unsichtbar -- beim ersten Durchlauf habe ich ihn selbst nicht
+    // gefunden und dachte, der Menuepunkt tue nichts.
+    mHuman.add(new EstimateQualityAction(
+        getTaskManager(),
+        getProject().getTaskCustomColumnManager(),
+        (isProblem, message) -> {
+          getUIFacade().showOptionDialog(
+              isProblem ? JOptionPane.WARNING_MESSAGE : JOptionPane.INFORMATION_MESSAGE,
+              message,
+              new Action[] { OkAction.create("ok", () -> Unit.INSTANCE) });
+          return Unit.INSTANCE;
+        }));
+
+    // [Fork-Aenderung] Serienvorgaenge: aus einem Vorgang mit Wiederholung werden viele. Fragt
+    // vorher, legt nichts doppelt an und ist EIN Rueckgaengig-Schritt.
+    mHuman.add(new RecurrenceAction(
+        getTaskManager(),
+        getProject().getTaskCustomColumnManager(),
+        getProjectDatabase(),
+        getUndoManager(),
+        forkMessages,
+        askBeforeWriting));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
     bar.add(mHuman);
@@ -487,11 +577,20 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
    */
   public void newProject() {
     getProjectUIFacade().createProject(getProject());
+    // [Fork-Aenderung] Auch ein neues Projekt bekommt die beiden Spalten der Tagesleistung --
+    // sonst haette nur ein geoeffnetes Projekt sie, und wer neu anfaengt, plant unbemerkt mit den
+    // vorgegebenen acht Stunden.
+    getProjectImpl().ensureCapacityColumns();
   }
 
   @Override
   public void open(Document document) throws IOException, DocumentException {
     document.read();
+    // [Fork-Aenderung] NACH dem Lesen: die Spalten der Tagesleistung anlegen, falls die Datei
+    // sie nicht mitbringt. Vor dem Lesen aufgerufen wuerde das Laden jeder Datei scheitern, die
+    // dieselbe Spalte enthaelt ("Column with ID=hours_per_day is already registered") -- am
+    // Rechner gemessen, siehe ensureCapacityColumns().
+    getProjectImpl().ensureCapacityColumns();
     getDocumentManager().addToRecentDocuments(document);
     //myMRU.add(document.getPath(), true);
     myObservableDocument.set(document);
@@ -525,7 +624,22 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
       var barrier = getProjectUIFacade().ensureProjectSaved(getProject());
       barrier.await(result -> {
         if (result) {
-          getProject().close();
+          // [Fork-Aenderung] Scheitert das Schliessen, wird trotzdem beendet -- und die Ursache
+          // steht im Protokoll.
+          //
+          // NACHGEWIESEN: Nach "Beenden" und "Nicht speichern" blieb der Prozess ohne Fenster
+          // zurueck. Die letzte Protokollzeile war options.save() aus dieser Methode, danach
+          // nichts. getProject().close() warf also eine Ausnahme, die der Barrier verschluckte;
+          // doQuitApplication wurde nie erreicht. Das Fenster verschwand trotzdem, weil der
+          // zweite Rueckruf am selben Barrier (GanttProjectFxApp) Platform.exit() aufruft.
+          //
+          // Wer beenden will und "nicht speichern" gewaehlt hat, soll beenden -- ein Prozess, der
+          // unsichtbar weiterlaeuft, ist schlimmer als ein unsauber geschlossenes Projekt.
+          try {
+            getProject().close();
+          } catch (Throwable e) {
+            GPLogger.log(e);
+          }
           doQuitApplication(withSystemExit);
         } else {
           //++setVisible(true);

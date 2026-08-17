@@ -38,6 +38,12 @@ class GanttDialogProperties(private val tasks: Array<GanttTask?>) {
             uiFacade.getUndoManager().undoableEdit(language.getText("properties.changed"), Runnable {
                 val mutator = taskPropertiesController.save()
                 mutator.commit()
+                // [Fork-Aenderung] Der Aufwand ist eine Eigenschaft der AUFGABE. Waehrend deren
+                // Mutator committet, liefert task.createMutator() einen wiedereingetretenen
+                // Mutator, dessen commit() nichts tut - eine dort gesetzte Dauer waere verloren.
+                // Deshalb erst hier, nach dem Commit, und VOR dem Terminalgorithmus darunter:
+                // der Algorithmus setzt die Dauer, danach propagiert der Scheduler die Termine.
+                project.taskManager.algorithmCollection.effortDrivenDurationAlgorithm.run()
                 try {
                     project.taskManager.getAlgorithmCollection().recalculateTaskScheduleAlgorithm.run()
                 } catch (e: TaskDependencyException) {
