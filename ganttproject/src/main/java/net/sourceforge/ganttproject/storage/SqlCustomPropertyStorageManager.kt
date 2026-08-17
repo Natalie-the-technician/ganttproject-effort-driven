@@ -88,6 +88,15 @@ fun generateSqlValueLiteral(def: CustomPropertyDefinition, value: Any?): String 
   value?.let {
     when (def.propertyClass) {
       CustomPropertyClass.TEXT -> "'${value}'"
+      // [Fork-Aenderung] Ein Datum als "$value" ergaebe die toString-Ausgabe eines
+      // GregorianCalendar ("java.util.GregorianCalendar[time=...]") und damit kaputtes SQL.
+      // Geschrieben wird ISO, das versteht H2 und es ist ausserdem richtig sortierbar.
+      CustomPropertyClass.DATE -> when (value) {
+        is java.util.GregorianCalendar -> "'%04d-%02d-%02d'".format(
+          value.get(java.util.Calendar.YEAR), value.get(java.util.Calendar.MONTH) + 1,
+          value.get(java.util.Calendar.DAY_OF_MONTH))
+        else -> "'$value'"
+      }
       else -> "$value"
     }
   } ?: "NULL"
@@ -106,5 +115,10 @@ private fun CustomPropertyClass.asSqlType() = when (this) {
   CustomPropertyClass.INTEGER -> "integer"
   CustomPropertyClass.DATE -> "date"
   CustomPropertyClass.BOOLEAN -> "boolean"
-  CustomPropertyClass.DOUBLE -> "numeric"
+  // [Fork-Aenderung] War "numeric". In H2 hat NUMERIC ohne Angabe die Nachkommastellen NULL, die
+  // Spiegeltabelle rundete also jede Dezimalzahl auf eine ganze: 12,5 Stunden wurden zu 13.
+  // Betrifft JEDE benutzerdefinierte Dezimalspalte, nicht nur die Zeiterfassung - beim geplanten
+  // Aufwand fiel es bisher nur nicht auf, weil die Tests glatte Werte benutzten.
+  // Nachgewiesen durch `actual effort can be stored right after its definition was created`.
+  CustomPropertyClass.DOUBLE -> "double precision"
 }

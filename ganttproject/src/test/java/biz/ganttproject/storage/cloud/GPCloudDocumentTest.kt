@@ -82,6 +82,9 @@ class GPCloudDocumentTest {
 
   private fun prepareReadCall(doc: GPCloudDocument, responseBuilder: ()->TestResponse) {
     doc.httpClientFactory = { mockHttpClient }
+    // Ein absoluter Pfad darf nicht an den Testordner angehaengt werden: File(parent, child) haengt
+    // auch dann an, wenn child absolut ist -- unter Linux legal, unter Windows unmoeglich. Deshalb
+    // fiel dieser Test frueher nur unter Windows aus. resolve() gibt einen absoluten child zurueck.
     doc.offlineDocumentFactory = { path -> FileDocument(testMirrorFolder.resolve(path)) }
     doc.executor = MoreExecutors.newDirectExecutorService()
 
