@@ -2514,8 +2514,49 @@ mit Vorschau.
 `LOWEST("3")`, `LOW("0")`, `NORMAL("1")`, `HIGH("2")`, `HIGHEST("4")`. Wer danach sortiert, stellt
 die niedrigste Prioritaet zwischen HIGH und HIGHEST. Richtig ist `Priority.ordinal`.
 
-**Noch nicht gebaut:** Verdrahtung ins Projektmodell, Vorschau, Menuepunkt. In dieser Reihenfolge,
-und das Befuellen zuerst -- ohne Zuordnungen laeuft die Verteilung an Natalies Plan ins Leere.
+**Verdrahtung, Vorschau und die zwei Menuepunkte sind gebaut** (`LevellingAdapter.kt`,
+`LevellingActions.kt`, im Menue Ressourcen). Beide fragen vorher, beide sind EIN
+Rueckgaengig-Schritt.
+
+**Die Verdrahtung hat vier Fehler ans Licht gebracht, die keine Rechnung finden konnte.**
+Alle vier sahen wie Rechenfehler aus und lagen in der Verbindung zum Modell:
+
+1. **Quadratischer Aufwand.** Jedes `commit()` stoesst den Planer erneut ueber den ganzen
+   Abhaengigkeitsgraphen an. Gemessen: nach 767 Sekunden und 2 GB war das Programm nicht fertig.
+   Behoben, indem der Planer waehrend des Schreibens abgeschaltet wird -- dasselbe Muster benutzt
+   das Original bei Sammeloperationen (`TaskActions.kt:207`). Danach 50 Sekunden.
+2. **Gedehnte Vorgaenge.** `setStart` allein verschiebt nur den Anfang; GanttProject dehnt den
+   Vorgang dadurch. Gemessen: fuenf Vorgaenge mit 3 Tagen Dauer hatten danach 25, 286, 545, 803 und
+   1060. `setDuration` hilft nicht -- `MutatorImpl.commit()` wendet sie nur `ifChanged` an, und die
+   Dauer soll ja gleich bleiben. Das **Ende** ist der Wert, der sich aendert.
+3. **Verknuepfungen auf Gruppen** ("nach Abschluss von Kapitel 3") fielen still weg: die Verteilung
+   rechnet nur mit Blaettern. Jetzt wird eine Gruppe auf alle Blaetter darunter aufgeloest.
+4. **Meilensteine waren ausgeschlossen** -- und damit ihre Verknuepfungen. 23 der 28 Meilensteine in
+   Natalies Plan haben Nachfolger. Der Planer setzte sie hinterher durch und schob einen Vorgang von
+   2027 nach 2056. Jetzt zaehlen sie mit, mit **Auslastung 0**: sie ordnen, ohne Kapazitaet zu
+   kosten. Beim Schreiben bekommen sie kein Ende gesetzt, sonst waeren sie keine Meilensteine mehr.
+
+**Und genau dieses Muster ist Natalies Wartevorgang.** Neue Eigenschaft `wait_only`, Spalte
+"Warten": ein Vorgang, der Zeit braucht, aber keine Arbeit ist. Auslastung 0, das Befuellen laesst
+ihn in Ruhe.
+
+**Gemessene Reihe an Natalies Plan** (2891 belegte Tage, eine Person, 162 Zuordnungen), gezaehlt als
+Tage mit mehr als 100 % aus der gespeicherten Datei:
+
+| Stand | ueberlastete Tage | Spitze |
+|---|---|---|
+| nach dem Befuellen, vor der Verteilung | 2309 | 1000 % |
+| Verteilung, Vorgaenge gedehnt (Fehler 2) | 1204 | 600 % |
+| nach Fehler 2 und 3 | 959 | 600 % |
+| nach Fehler 4 | **noch nicht am Programm gemessen** | |
+
+**Warum die letzte Zeile offen ist, und was stattdessen gemessen wurde:** das Fenster des
+Testbaus gehoert `javaw.exe`, und die Freigabe dafuer ist abgelehnt -- ich sehe es nur als graue
+Flaeche und kann den Bestaetigungsknopf nicht druecken. Gemessen wurde deshalb die *Rechnung*, ueber
+einen Pruefstand, der die echte `.gan`-Datei liest (`PlanProbeTest.kt`, nicht eingecheckt): **ohne
+Meilensteine fehlten der Rechnung 40 Verknuepfungen bei 35 Vorgaengen, mit Meilensteinen keine
+einzige.** Genau diese fehlenden Verknuepfungen setzt der Planer hinterher durch, und daraus
+entstanden die 959 Tage. Dass die Zahl damit auf 0 geht, ist eine **Erwartung**, keine Messung.
 
 ### Offen aus dieser Sitzung
 
