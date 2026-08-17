@@ -2377,6 +2377,60 @@ geschrieben. Ein hart abgeschossenes Programm beweist nichts ueber sein Speicher
 Wann er verschwand, ist nicht mehr feststellbar; mit dem Stub konnte ohnehin nie etwas gespeichert
 werden.
 
+### Passwoerter liegen nicht mehr im Klartext (DPAPI)
+
+`GPCloudStorageOptions` schrieb das WebDAV-Passwort unveraendert in `~/.ganttproject`, sobald
+"Passwort speichern" gesetzt war. Natalie hat den Haken deshalb abgelehnt und stattdessen bei jedem
+Start neu getippt -- Sicherheit, die Muehe kostet, wird irgendwann abgeschaltet.
+
+`SecretStore` verschluesselt jetzt mit dem Windows-Anmeldekonto (DPAPI, `Crypt32Util`). Der Wert in
+der Datei traegt das Kennzeichen `dpapi:` und ist auf einem anderen Rechner wertlos.
+
+**Was das nicht ist:** ein Tresor. Wer als dieser Benutzer Programme ausfuehren kann, kann auch
+entschluesseln. Es beseitigt genau die Klasse von Fehlern, um die es ging: Passwoerter in
+Sicherungen, Datenspeichern und ueber die Schulter.
+
+**Vor dem Bauen gemessen, nicht geschaetzt.** `jna-platform` kommt nur mittelbar ueber `appdirs`
+herein, der Kern `jna` ist dort ausgeschlossen -- ausgeliefert werden zwei Staende (5.13 als
+Eclipse-Buendel, 5.16 als Platform-Jar). Ob DPAPI in dieser Mischung laeuft, war offen.
+`tools/dpapiprobe` gegen den ausgelieferten Klassenpfad: Rundlauf in Ordnung, 246 Byte Chiffre,
+kein Klartext. Erst danach gebaut.
+
+**Am laufenden Programm belegt, beide Richtungen:**
+
+```
+DpapiProbe  https://beispiel.ungueltig/dav  probenutzer  dpapi:AQAAANCMnd8BFdER...
+Klartext in der Datei? False
+```
+
+Nach dem Neustart ging der Verbindungsversuch OHNE Passwortabfrage direkt an den Server -- das
+gespeicherte Passwort war also entschluesselt geladen worden.
+
+**Ausdruecklich kein Rueckfall auf Klartext.** Liefert `protect()` null (kein Windows, DPAPI nicht
+verfuegbar), wird NICHT gespeichert. Ein stiller Rueckfall auf "unsicher, aber bequem" waere genau
+der Fehler, den dieser Fork an mehreren Stellen schon gefunden hat. Fuer einen Beitrag ans Original
+braeuchte es zusaetzlich libsecret und Keychain.
+
+Altbestand bleibt lesbar: ein Wert ohne Kennzeichen wird unveraendert uebernommen und beim
+naechsten Speichern verschluesselt.
+
+### Korrektur: "I/O problems when accessing <Servername>" sagt nichts ueber die Adresse
+
+Ich hatte aus dieser Meldung geschlossen, Natalies Servereintrag habe keine Adresse, weil der Name
+dort stehe, wo der Rechnername hingehoere. **Falsch.** `WebdavLoadService.java:52` setzt den
+Servernamen absichtlich als Anzeigenamen in die WebDavUri:
+
+```java
+return new WebDavUri(myServer.getName(), host, myPath);
+```
+
+Die Meldung sieht bei einem korrekt eingetragenen Server genauso aus -- am Bildschirm gesehen, mit
+`DpapiProbe` und gueltiger Adresse. Belastbar war allein der Blick in die Einstellungsdatei. Die
+Schlussfolgerung stimmte, eines der beiden Argumente nicht.
+
+Daraus die Verbesserung: der Dialog zeigt jetzt die UNTERSTE Ursache ("Der angegebene Host ist
+unbekannt (beispiel.ungueltig)") statt der obersten, die nur den Anzeigenamen nennt.
+
 ### Offen aus dieser Sitzung
 
 - **Startmeldung "Failed to parse document".** Beim Start oeffnet GanttProject das zuletzt

@@ -179,7 +179,11 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
         // fuehren aber zu voellig verschiedenen naechsten Schritten.
         val cause = myLoadService.exception
         GPLogger.log(cause ?: RuntimeException("WebdavService failed, aber ohne Ausnahme"))
-        dialogUi.error("WebdavService failed!", cause?.message ?: "", cause)
+        // Die UNTERSTE Ursache zeigen, nicht die oberste. Am Bildschirm gesehen: oben steht
+        // "I/O problems when accessing <Servername>" -- das nennt weder Rechner noch Grund und
+        // ist fuer den Benutzer wertlos. Unten steht "Der angegebene Host ist unbekannt
+        // (beispiel.ungueltig)", und damit kann er etwas anfangen.
+        dialogUi.error("WebdavService failed!", describeCause(cause), cause)
       }
       onCancelled = EventHandler {
         showMaskPane.accept(false)
@@ -189,6 +193,25 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
     }
     showMaskPane.accept(true)
   }
+}
+
+/**
+ * [Fork-Aenderung] Die unterste Ursache einer Ausnahmekette als Text.
+ *
+ * Die oberste Meldung ist hier regelmaessig die nichtssagende: "I/O problems when accessing
+ * <Servername>". Der Servername steht dort, weil `WebdavLoadService` ihn absichtlich als
+ * Anzeigenamen in die WebDavUri setzt -- er sagt also nichts ueber Rechner oder Adresse. Erst die
+ * unterste Ursache nennt, was wirklich los war: unbekannter Rechner, abgelehnte Anmeldung,
+ * Zeitueberschreitung.
+ */
+private fun describeCause(failure: Throwable?): String {
+  var current = failure ?: return ""
+  while (true) {
+    val next = current.cause ?: break
+    if (next === current) break
+    current = next
+  }
+  return current.message ?: current.javaClass.simpleName
 }
 
 /**
