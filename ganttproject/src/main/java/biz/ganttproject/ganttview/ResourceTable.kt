@@ -44,6 +44,9 @@ import net.sourceforge.ganttproject.ResourceDefaultColumn
 import net.sourceforge.ganttproject.action.resource.ResourceActionSet
 import net.sourceforge.ganttproject.chart.export.TreeTableApi
 import net.sourceforge.ganttproject.resource.*
+// [Fork-Aenderung] Der Toggl-Token haengt am Namen bzw. der E-Mail der Ressource.
+import net.sourceforge.ganttproject.timetracking.ASK_IN_A_DIALOG
+import net.sourceforge.ganttproject.timetracking.keepingTokenReachable
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.task.ResourceAssignment
 import net.sourceforge.ganttproject.undo.GPUndoManager
@@ -463,9 +466,14 @@ class ResourceTableModel(private val areChangesIgnored: ()->Boolean)
     }
     if (node is ResourceNode) {
       when (property) {
-        ResourceDefaultColumn.NAME -> node.resource.name = "$value"
+        // [Fork-Aenderung] Name und E-Mail bilden den Schluessel der Toggl-Token-Ablage. Werden
+        // sie hier geaendert, muss der Token mitwandern -- der Ressourcendialog tut das bereits,
+        // diese Tabelle geht aber an ihm vorbei. Siehe keepingTokenReachable.
+        ResourceDefaultColumn.NAME ->
+          node.resource.keepingTokenReachable(ASK_IN_A_DIALOG) { node.resource.name = "$value" }
         ResourceDefaultColumn.PHONE -> node.resource.phone = "$value"
-        ResourceDefaultColumn.EMAIL -> node.resource.mail = "$value"
+        ResourceDefaultColumn.EMAIL ->
+          node.resource.keepingTokenReachable(ASK_IN_A_DIALOG) { node.resource.mail = "$value" }
         ResourceDefaultColumn.ROLE -> node.resource.role = value as Role
         ResourceDefaultColumn.STANDARD_RATE -> (value as? Double)?.let { node.resource.standardPayRate = BigDecimal.valueOf(it) }
         else -> {}
