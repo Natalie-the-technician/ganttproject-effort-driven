@@ -95,7 +95,8 @@ class BackfillAction(
       proposal.effortHours.size, proposal.assignTo.size, resource.name, hoursPerDay,
       skipped[BackfillSkip.CONTAINER] ?: 0,
       skipped[BackfillSkip.MILESTONE] ?: 0,
-      skipped[BackfillSkip.ALREADY_HAS_EFFORT] ?: 0)
+      skipped[BackfillSkip.ALREADY_HAS_EFFORT] ?: 0,
+      skipped[BackfillSkip.WAIT_ONLY] ?: 0)
     ask.ask(message) { confirmed ->
       if (!confirmed) {
         return@ask

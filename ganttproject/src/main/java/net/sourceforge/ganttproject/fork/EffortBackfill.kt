@@ -54,6 +54,8 @@ data class BackfillTask(
   val isContainer: Boolean = false,
   /** Meilenstein: Dauer null, es gibt nichts zu leisten. */
   val isMilestone: Boolean = false,
+  /** Reine Wartezeit: dauert, kostet aber keine Arbeit. */
+  val isWaitOnly: Boolean = false,
   /** Bereits eingetragener Aufwand. Wird nie ueberschrieben. */
   val existingEffortHours: Double? = null,
   /** Anzahl vorhandener Zuordnungen. */
@@ -64,6 +66,7 @@ data class BackfillTask(
 enum class BackfillSkip {
   CONTAINER,          // Gruppe: Dauer wird abgeleitet
   MILESTONE,          // Meilenstein: nichts zu leisten
+  WAIT_ONLY,          // reine Wartezeit: dauert, ist aber keine Arbeit
   ALREADY_HAS_EFFORT, // schon gepflegt, bleibt unangetastet
   NO_DURATION         // Dauer 0 oder kleiner: es gibt nichts abzuleiten
 }
@@ -100,6 +103,7 @@ fun proposeBackfill(
     val reason = when {
       task.isContainer -> BackfillSkip.CONTAINER
       task.isMilestone -> BackfillSkip.MILESTONE
+      task.isWaitOnly -> BackfillSkip.WAIT_ONLY
       task.existingEffortHours != null -> BackfillSkip.ALREADY_HAS_EFFORT
       task.durationDays <= 0 -> BackfillSkip.NO_DURATION
       else -> null
@@ -111,7 +115,7 @@ fun proposeBackfill(
     }
     // Zuordnen auch dort, wo der Aufwand schon gepflegt ist: ohne Zuordnung kennt die
     // Kapazitaetsverteilung den Vorgang nicht, und der Aufwand allein bewirkt nichts.
-    val zuordnen = !task.isContainer && !task.isMilestone &&
+    val zuordnen = !task.isContainer && !task.isMilestone && !task.isWaitOnly &&
       (task.assignmentCount == 0 || !alreadyAssignedKeepsIts)
     if (zuordnen) {
       assign.add(task.id)

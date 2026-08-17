@@ -52,6 +52,28 @@ import java.util.Date
 /** Der Haken „Termin fest". [Fork-Aenderung] */
 const val TASK_DATE_FIXED = "date_fixed"
 
+/**
+ * Der Haken „Warten". [Fork-Aenderung]
+ *
+ * Ein Wartevorgang kostet KEINE Arbeitszeit, bestimmt aber die Reihenfolge: die Bearbeitung beim
+ * Amt, eine Lieferfrist, ein Bescheid. Ohne diese Unterscheidung belegt jede Wartezeit die Person,
+ * als saesse sie die ganze Zeit daran -- in Natalies Plan sind das 12 Vorgaenge mit zusammen 1092
+ * Tagen. Ihr Vorschlag, und er trifft genau den Punkt.
+ */
+const val TASK_WAIT_ONLY = "wait_only"
+
+fun findOrCreateWaitOnly(manager: CustomPropertyManager): CustomPropertyDefinition =
+  manager.findEffortDefinition(TASK_WAIT_ONLY)
+    ?: manager.createDefinition(TASK_WAIT_ONLY, CustomPropertyClass.BOOLEAN.iD,
+                                forkText("fork.column.waitOnly"), null)
+
+/** Ist der Vorgang reine Wartezeit? */
+fun Task.isWaitOnly(manager: CustomPropertyManager): Boolean {
+  val def = manager.findEffortDefinition(TASK_WAIT_ONLY) ?: return false
+  val raw = this.customValues.getValue(def) ?: return false
+  return raw as? Boolean ?: raw.toString().equals("true", ignoreCase = true)
+}
+
 fun findOrCreateDateFixed(manager: CustomPropertyManager): CustomPropertyDefinition =
   manager.findEffortDefinition(TASK_DATE_FIXED)
     ?: manager.createDefinition(TASK_DATE_FIXED, CustomPropertyClass.BOOLEAN.iD,
@@ -108,8 +130,16 @@ fun collectLevelTasks(
   val leavesUnder = mutableMapOf<String, List<String>>()
   fun collectLeaves(task: Task): List<String> {
     val nested = hierarchy.getNestedTasks(task)
+    // MEILENSTEINE ZAEHLEN MIT, obwohl sie keine Arbeit sind.
+    //
+    // AM RECHNER GEMESSEN, als sie hier ausgeschlossen waren: 46 von 162 Vorgaengen wurden nach
+    // dem Ausgleich vom Planer wieder verschoben, einer von 2027 nach 2056. Seine Vorgaenger waren
+    // zwei Meilensteine -- die Verknuepfung fehlte in der Rechnung und wurde hinterher durchgesetzt.
+    // 23 der 28 Meilensteine in Natalies Plan haben Nachfolger.
+    //
+    // Sie kommen mit Auslastung 0 herein: sie ordnen, ohne Kapazitaet zu kosten.
     val leaves = if (nested.isEmpty()) {
-      if (task.isMilestone) emptyList() else listOf(task.taskID.toString())
+      listOf(task.taskID.toString())
     } else {
       nested.flatMap { collectLeaves(it) }
     }
@@ -123,9 +153,7 @@ fun collectLevelTasks(
   fun walk(task: Task) {
     val nested = hierarchy.getNestedTasks(task)
     if (nested.isEmpty()) {
-      if (!task.isMilestone) {
-        result.add(task.toLevelTask(order++, taskProperties, resourceProperties, leavesUnder))
-      }
+      result.add(task.toLevelTask(order++, taskProperties, resourceProperties, leavesUnder))
     } else {
       nested.forEach { walk(it) }
     }
@@ -141,7 +169,13 @@ private fun Task.toLevelTask(
   // Die Auslastung aus den Zuordnungen. Ohne Zuordnung gilt 100 %: der Vorgang belegt den Tag,
   // auch wenn niemand eingetragen ist. Ihn als kostenlos zu behandeln waere die gefaehrlichere
   // Annahme -- er verschwaende Kapazitaet, die es nicht gibt.
-  val load = this.assignments.sumOf { it.load.toDouble() }.toInt().let { if (it <= 0) 100 else it }
+  // Meilensteine und Wartezeiten kosten keine Arbeitszeit. Alles andere belegt den Tag voll, auch
+  // ohne Zuordnung: einen unzugeordneten Vorgang als kostenlos zu behandeln waere die
+  // gefaehrlichere Annahme -- er verbraucht Zeit, die der Plan dann nicht kennt.
+  val load = when {
+    this.isMilestone || this.isWaitOnly(taskProperties) -> 0
+    else -> this.assignments.sumOf { it.load.toDouble() }.toInt().let { if (it <= 0) 100 else it }
+  }
   val available = this.availableHoursPerDay(resourceProperties)
   val effort = this.effortHours(taskProperties)
   val duration = if (effort != null && available > 0.0) {
@@ -222,8 +256,12 @@ fun applyLevellingAsSingleEdit(
         // Dauer nur ueber `myDurationChange.ifChanged` an. Die Dauer soll aber gleich BLEIBEN --
         // der Aufruf ist damit keine Aenderung und wird uebersprungen. Das Ende ist der Wert, der
         // sich tatsaechlich aendert.
-        mutator.setEnd(CalendarFactory.createGanttCalendar(
-          endAfterWorkingDays(newStart, keepDays, isWorkingDay).toLegacyDate()))
+        // Meilensteine haben keine Dauer -- ein Ende zu setzen wuerde aus ihnen einen Vorgang
+        // machen. Sie werden nur verschoben.
+        if (!task.isMilestone) {
+          mutator.setEnd(CalendarFactory.createGanttCalendar(
+            endAfterWorkingDays(newStart, keepDays, isWorkingDay).toLegacyDate()))
+        }
         // DER START ALLEIN UEBERLEBT DEN PLANER NICHT. SchedulerImpl legt jeden Vorgang so frueh,
         // wie die Abhaengigkeiten es zulassen, und laeuft bei jedem Oeffnen und jeder Aenderung.
         // Ein verteilter Termin, der nur als Start gesetzt ist, wird beim naechsten Lauf
@@ -262,6 +300,7 @@ fun collectBackfillTasks(
       durationDays = task.duration.length,
       isContainer = nested.isNotEmpty(),
       isMilestone = task.isMilestone,
+      isWaitOnly = task.isWaitOnly(taskProperties),
       existingEffortHours = task.effortHours(taskProperties),
       assignmentCount = task.assignments.size))
     nested.forEach { walk(it) }
