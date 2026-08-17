@@ -31,6 +31,10 @@ import net.sourceforge.ganttproject.timetracking.ImportPeriodDialogKt;
 import net.sourceforge.ganttproject.timetracking.TaskChoiceDialogKt;
 import net.sourceforge.ganttproject.timetracking.TogglConnectionAction;
 import net.sourceforge.ganttproject.timetracking.TogglImportAction;
+// [Fork-Aenderung] Kapazitaetsverteilung.
+import net.sourceforge.ganttproject.fork.AskBeforeWriting;
+import net.sourceforge.ganttproject.fork.BackfillAction;
+import net.sourceforge.ganttproject.fork.LevellingAction;
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions;
 import biz.ganttproject.storage.cloud.GPCloudStatusBar;
 import com.beust.jcommander.Parameter;
@@ -193,6 +197,36 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
             }),
         ImportPeriodDialogKt.getASK_FOR_THE_PERIOD(),
         TaskChoiceDialogKt.getASK_FOR_THE_TASKS()));
+
+    // [Fork-Aenderung] Kapazitaetsverteilung. Steht im Ressourcen-Menue, weil beides an den
+    // Ressourcen haengt: Aufwand pro Tag und wer wann kann.
+    //
+    // BEIDE FRAGEN VOR DEM SCHREIBEN, und beide sind EIN Rueckgaengig-Schritt. Die Verteilung
+    // kann bei einem gewachsenen Plan zwei Drittel aller Vorgaenge verschieben -- das ungefragt
+    // zu tun waere genau die stille Aenderung, die dieser Fork mehrfach gefunden hat.
+    AskBeforeWriting askBeforeWriting = (message, answer) -> getUIFacade().showOptionDialog(
+        JOptionPane.QUESTION_MESSAGE,
+        message,
+        new Action[] {
+            OkAction.create("ok", () -> { answer.invoke(true); return Unit.INSTANCE; }),
+            CancelAction.create("cancel", () -> { answer.invoke(false); return Unit.INSTANCE; })
+        });
+    mHuman.add(new BackfillAction(
+        getTaskManager(),
+        getHumanResourceManager(),
+        getProject().getTaskCustomColumnManager(),
+        getHumanResourceManager().getCustomPropertyManager(),
+        getProjectDatabase(),
+        getUndoManager(),
+        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
+        askBeforeWriting));
+    mHuman.add(new LevellingAction(
+        getTaskManager(),
+        getProject().getTaskCustomColumnManager(),
+        getHumanResourceManager().getCustomPropertyManager(),
+        getUndoManager(),
+        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
+        askBeforeWriting));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
     bar.add(mHuman);
