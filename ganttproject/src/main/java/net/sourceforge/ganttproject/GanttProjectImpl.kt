@@ -48,6 +48,7 @@ import net.sourceforge.ganttproject.resource.OverwritingMerger
 import net.sourceforge.ganttproject.roles.RoleManager
 import net.sourceforge.ganttproject.storage.LazyProjectDatabaseProxy
 // [Fork-Aenderung] Neuer Import fuer den Ausloeser der Dauerberechnung.
+import net.sourceforge.ganttproject.fork.findOrCreateRecurrence
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenTrigger
 import net.sourceforge.ganttproject.storage.ProjectDatabase
@@ -131,6 +132,9 @@ open class GanttProjectImpl(
   fun ensureCapacityColumns() {
     EffortDrivenProperties.findOrCreateResourceHours(humanResourceManager.customPropertyManager)
     EffortDrivenProperties.findOrCreateResourceSchedule(humanResourceManager.customPropertyManager)
+    // Die Spalte "Wiederholung" gehoert dazu: eine Regel, deren Feld man nicht sieht, kann
+    // niemand eintragen -- und ohne Eintrag meldet der Menuepunkt nur, dass es nichts zu tun gibt.
+    findOrCreateRecurrence(taskManager.customPropertyManager)
   }
 
   override fun setModified() {

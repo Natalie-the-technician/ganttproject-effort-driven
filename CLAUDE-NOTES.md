@@ -2633,6 +2633,37 @@ waere falsch.
 Die Verteilung hatte **einen** Topf. Zwei Personen haetten nicht gleichzeitig arbeiten koennen.
 Jetzt ein Topf je Person, Vorgaenge ohne Zuordnung teilen sich einen gemeinsamen.
 
+### Serienvorgaenge
+
+Neue Vorgangsspalte "Wiederholung", Format `monatlich; bis 2027-12-31` oder
+`woechentlich; alle 2; Anzahl 10`. Menuepunkt "Serienvorgaenge anlegen …" unter Ressourcen.
+
+**Der Entwurf mit R1-R5 war nicht mehr auffindbar** -- er stand in einer Nachricht, die vor der
+Zusammenfassung lag, und keine der drei Mitschriften enthaelt ihn noch. Gebaut wurde deshalb nach
+den Regeln, die dieser Fork ohnehin durchhaelt. Die Entscheidungen stehen im Klassenkommentar von
+`Recurrence.kt` und hier, damit Natalie sie korrigieren kann:
+
+1. **Eine Begrenzung ist Pflicht** (`bis` oder `Anzahl`, nie beides). Ohne Ende muesste eine Zahl
+   erfunden werden, die nirgends steht.
+2. **Ein Termin auf einem freien Tag rueckt VOR, nicht zurueck.** Zurueck koennte hinter den
+   vorigen Termin derselben Serie rutschen; vor kann das nicht.
+3. **`Anzahl` meint wirkliche Vorgaenge**, nicht Rohtermine. Meine erste Fassung zaehlte
+   Rohtermine, und "Anzahl 3" ab Freitag ergab zwei Vorgaenge.
+4. **Die Grenze `bis` gilt fuer den Termin VOR dem Verschieben**, sonst haenge das Ende einer
+   Serie davon ab, ob der letzte Termin zufaellig auf einen Feiertag faellt.
+5. **Wiederholungen haengen NEBEN dem Ausgangsvorgang**, nicht darunter: darunter machte ihn zur
+   Gruppe, und eine Gruppe leitet ihre Termine aus den Kindern ab -- der Ausgangsvorgang verlore
+   seine eigene Dauer.
+6. **Ein zweiter Aufruf legt nichts doppelt an.** Jede Wiederholung traegt "Kennung@Termin"; eine
+   erweiterte Serie legt genau die fehlenden Termine nach.
+7. **Bei einem Fehler in einer Regel wird GAR NICHTS angelegt**, auch nicht fuer die lesbaren
+   Serien -- sonst waere nach dem Beheben unklar, was schon existiert.
+
+Wiederholungen erben Name, Dauer, Aufwand, Farbe, Prioritaet und Zuordnungen; sie tragen selbst
+KEINE Regel, sonst gaebe es Wiederholungen von Wiederholungen. 14 Tests auf der Rechnung, 8 am
+echten Modell (mit echter H2-Datenbank, weil `onCustomColumnChange` genau die Stelle ist, an der
+in Sitzung 3 das Schreiben scheiterte).
+
 ### Zwei Fallen fuer die naechste Sitzung
 
 - **Dieser Fork hat ZWEI Testmodule**: `ganttproject` und `ganttproject-tester`. Wer nur eines

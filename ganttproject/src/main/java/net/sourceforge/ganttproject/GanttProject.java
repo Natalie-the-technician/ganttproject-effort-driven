@@ -35,6 +35,7 @@ import net.sourceforge.ganttproject.timetracking.TogglImportAction;
 import net.sourceforge.ganttproject.fork.AskBeforeWriting;
 import net.sourceforge.ganttproject.fork.BackfillAction;
 import net.sourceforge.ganttproject.fork.LevellingAction;
+import net.sourceforge.ganttproject.fork.RecurrenceAction;
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions;
 import biz.ganttproject.storage.cloud.GPCloudStatusBar;
 import com.beust.jcommander.Parameter;
@@ -225,6 +226,16 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         getHumanResourceManager(),
         getProject().getTaskCustomColumnManager(),
         getHumanResourceManager().getCustomPropertyManager(),
+        getUndoManager(),
+        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
+        askBeforeWriting));
+
+    // [Fork-Aenderung] Serienvorgaenge: aus einem Vorgang mit Wiederholung werden viele. Fragt
+    // vorher, legt nichts doppelt an und ist EIN Rueckgaengig-Schritt.
+    mHuman.add(new RecurrenceAction(
+        getTaskManager(),
+        getProject().getTaskCustomColumnManager(),
+        getProjectDatabase(),
         getUndoManager(),
         (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
