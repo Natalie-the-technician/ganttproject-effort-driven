@@ -144,6 +144,36 @@ class CalculatedPropertyTest {
 
   }
 
+  /**
+   * [Fork-Aenderung] Eine Dezimalspalte muss ihre Nachkommastellen behalten.
+   *
+   * FEHLER IM ORIGINAL: die Spiegeltabelle legte DOUBLE-Spalten als `numeric` an. In H2 hat
+   * NUMERIC ohne Angabe die Nachkommastellen 0, jeder Dezimalwert wurde beim Schreiben also auf
+   * eine ganze Zahl gerundet -- 12,5 kam als 13 zurueck. Nichts warf dabei etwas: die Zahl war
+   * nur still falsch.
+   *
+   * Bewusst ueber eine GEWOEHNLICHE benutzerdefinierte Spalte statt ueber eine eigene Spalte
+   * dieses Forks: der Fehler steckt im Original und betrifft jede Dezimalspalte, die ein Benutzer
+   * anlegt. Beim geplanten Aufwand fiel er bisher nur nicht auf, weil die Tests glatte Werte
+   * benutzten.
+   */
+  @Test
+  fun `a decimal custom property keeps its fraction in the database`() {
+    val genau = customPropertyManager.createDefinition(CustomPropertyClass.DOUBLE, "genau")
+    rebuildTaskDataTable(dataSource, customPropertyManager)
+
+    val task = taskManager.newTaskBuilder().withName("task1").withStartDate(Date()).build()
+    task.customValues.setValue(genau, 12.5)
+    projectDatabase.insertTask(task)
+
+    val dsl = DSL.using(dataSource, SQLDialect.H2)
+    val gespeichert = dsl.select(DSL.field(DSL.name(genau.id), Double::class.java))
+      .from(Task.TASK).fetchOne()!!.value1()
+
+    assertEquals(12.5, gespeichert,
+      "die Nachkommastellen gingen beim Schreiben verloren -- die Spalte rundet auf ganze Zahlen")
+  }
+
   @Test
   fun `column used in a generated column can't be dropped`() {
     customPropertyManager.createDefinition(CustomPropertyClass.INTEGER, "bar").also {

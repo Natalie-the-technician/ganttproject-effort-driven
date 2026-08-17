@@ -139,6 +139,35 @@ class ProjectDatabaseTest {
     //assertEquals(tasks[0], dsl.selectFrom(TASK).fetch()[0])
   }
 
+  /**
+   * [Fork-Aenderung] Eine Datumsspalte muss ihren Wert in die Spiegeltabelle bringen.
+   *
+   * FEHLER IM ORIGINAL: `buildInsertTaskQuery` reichte den Wert unveraendert an jOOQ weiter.
+   * GanttProject legt ein Datum aber als `GregorianCalendar` ab, und jOOQ meldet dafuer
+   * "Type class java.util.GregorianCalendar is not supported in dialect DEFAULT". Damit war JEDE
+   * Datumsspalte unbrauchbar, sobald sie einen Wert bekam -- das Schreiben des Vorgangs brach ab.
+   *
+   * Bewusst ueber eine GEWOEHNLICHE benutzerdefinierte Spalte: der Fehler steckt im Original und
+   * trifft jede Datumsspalte, die ein Benutzer anlegt.
+   */
+  @Test
+  fun `a date custom property reaches the database`() {
+    projectDatabase.init()
+    val faellig = taskManager.customPropertyManager
+      .createDefinition(CustomPropertyClass.DATE, "faellig")
+    rebuildTaskDataTable(dataSource, taskManager.customPropertyManager)
+
+    val task = taskManager.newTaskBuilder().withId(3).withUid("datumsuid").build()
+    task.customValues.setValue(faellig, CalendarFactory.createGanttCalendar(2026, 10, 4))
+
+    projectDatabase.insertTask(task)
+
+    val gespeichert = dsl.select(DSL.field(DSL.name(faellig.id), LocalDate::class.java))
+      .from(Task.TASK).fetchOne()!!.value1()
+    assertEquals(LocalDate.of(2026, 11, 4), gespeichert,
+      "der Datumswert kam nicht in der Spiegeltabelle an")
+  }
+
   @Test
   fun `test insert task same uid throws`() {
     val task1 = taskManager.newTaskBuilder().withId(1).withUid("uid").build()
