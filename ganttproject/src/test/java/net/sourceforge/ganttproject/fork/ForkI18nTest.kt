@@ -44,11 +44,11 @@ import java.util.Locale
  *
  * That claim needs the built artifact, so it is checked there instead.
  *
- * WHERE THE OTHER CHECKS LIVE. Every check that asserts a CONCRETE key sits on the branch that
- * introduces that key — there is nothing for it to assert here. This class therefore holds only
- * what is true of an empty bundle.
+ * WHERE THE CHECKS LIVE. Every check that asserts a CONCRETE key sits on the branch that
+ * introduces that key. fork-base carries only what is true of an empty bundle; this branch adds
+ * the six below, because its keys arrive with it.
  *
- *  effort-planning (its keys: fork.effort.*, fork.column.*, fork.levelling.*, fork.estimate.*)
+ *  added here (keys: fork.effort.*, fork.column.*, fork.levelling.*, fork.estimate.*)
  *    - german texts come from the german file
  *    - english texts come from the default file
  *    - an untranslated language falls back to english
@@ -56,7 +56,7 @@ import java.util.Locale
  *    - every german key has an english counterpart
  *    - a translated column name does not stop the column being found
  *
- *  toggl-import (its keys: fork.toggl.*, fork.split.*)
+ *  still further down, on toggl-import (keys: fork.toggl.*, fork.split.*)
  *    - german toggl texts come from the german file
  *    - umlauts survive being read from the file
  *    - a rejected split explains itself with its numbers   (placeholder substitution)
@@ -66,10 +66,9 @@ import java.util.Locale
  *    - button labels are short enough not to be cut off
  *    - the dialog text still names what each choice costs
  *
- * TWO OF THEM CANNOT BE ASSERTED HERE AT ALL, and it is worth being plain about it: the fallback
- * to English and the placeholder substitution both need at least one defined key. What is left of
- * them on this branch is structural — `the locale chain is walked without throwing` shows that the
- * chain runs and ends at the English default bundle, but not that English answers with a text.
+ * The fallback to English becomes assertable exactly here, with the first defined key — on
+ * fork-base it could only be shown structurally. The placeholder substitution still cannot: the
+ * one message of this fork that carries arguments belongs to toggl-import.
  */
 class ForkI18nTest {
 
@@ -125,4 +124,87 @@ class ForkI18nTest {
         "an undefined key must stay undefined in $locale instead of failing")
     }
   }
+
+  private val german = Locale.GERMANY
+  private val english = Locale.US
+
+  @Test
+  fun `german texts come from the german file`() {
+    assertEquals("Ist-Stunden", ForkI18n.textOrNull("fork.effort.actualHours", german))
+  }
+
+  @Test
+  fun `english texts come from the default file`() {
+    assertEquals("Actual hours", ForkI18n.textOrNull("fork.effort.actualHours", english))
+  }
+
+  /**
+   * A language this fork has not been translated into must fall back to English rather than show
+   * the key. There is no French file, and there is not meant to be one.
+   *
+   * This is the check fork-base cannot carry: with an empty bundle there is no text for English to
+   * answer with, so only the branch that defines a key can assert the fallback.
+   */
+  @Test
+  fun `an untranslated language falls back to english`() {
+    assertEquals("Actual hours", ForkI18n.textOrNull("fork.effort.actualHours", Locale.FRANCE))
+  }
+
+  /**
+   * The stock loader only ever looks for `lang_COUNTRY`. A plain `de` — which is what a German
+   * system without a region set reports — would find nothing there. Here it must work.
+   */
+  @Test
+  fun `a language without a country still finds the translation`() {
+    assertEquals("Ist-Stunden", ForkI18n.textOrNull("fork.effort.actualHours", Locale("de")))
+  }
+
+  /**
+   * Every key this fork's interface asks for must exist in the English file. Without this, adding
+   * a German label and forgetting the English one produces a bare key on any non-German system —
+   * invisible to anyone developing in German.
+   */
+  @Test
+  fun `every german key has an english counterpart`() {
+    val germanKeys = keysOf("/language/fork/i18n_de.properties")
+    val englishKeys = keysOf("/language/fork/i18n.properties")
+    val missing = germanKeys - englishKeys
+
+    // Guard: if the files could not be read, both sets are empty and the check above is vacuous.
+    assertNotNull(germanKeys.firstOrNull(), "the german file was not read, so this test proves nothing")
+    assertEquals(emptySet<String>(), missing,
+      "these keys exist in german only and would show as bare keys elsewhere")
+  }
+
+  /**
+   * The display name of a custom property is its COLUMN HEADER, so it is translated. The id is
+   * not, and everything looks the property up by that id.
+   *
+   * The danger this guards against: translating the id along with the name. A project saved in
+   * German would then carry a column the English build cannot find, the effort would read as
+   * absent, and every task would silently fall back to the default duration. Nothing would throw.
+   */
+  @Test
+  fun `a translated column name does not stop the column being found`() {
+    val manager = biz.ganttproject.customproperty.CustomColumnsManager()
+    val created = net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
+      .findOrCreateTaskEffort(manager)
+
+    // The id is the technical key and must stay as it is, in every language.
+    assertEquals("effort_hours", created.id)
+
+    // Asked again, the SAME definition must come back -- not a second column beside the first.
+    val foundAgain = net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
+      .findOrCreateTaskEffort(manager)
+    assertEquals(created.id, foundAgain.id)
+    assertEquals(1, manager.definitions.count { it.id == "effort_hours" },
+      "the column was created a second time instead of being found")
+  }
+
+  private fun keysOf(path: String): Set<String> =
+    java.util.Properties().also { properties ->
+      ForkI18n::class.java.getResourceAsStream(path)?.use {
+        it.reader(Charsets.UTF_8).use(properties::load)
+      }
+    }.stringPropertyNames()
 }
