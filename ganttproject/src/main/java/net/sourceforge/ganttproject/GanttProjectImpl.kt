@@ -52,6 +52,7 @@ import net.sourceforge.ganttproject.fork.findOrCreateDateFixed
 import net.sourceforge.ganttproject.fork.findOrCreateDeadline
 import net.sourceforge.ganttproject.fork.findOrCreateOriginalEffort
 import net.sourceforge.ganttproject.fork.findOrCreateRecurrence
+import net.sourceforge.ganttproject.fork.findOrCreateRecurrenceOf
 import net.sourceforge.ganttproject.fork.findOrCreateUtilisation
 import net.sourceforge.ganttproject.fork.findOrCreateWaitOnly
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
@@ -146,6 +147,10 @@ open class GanttProjectImpl(
     // fand immer nichts. Dieselbe Fehlerfamilie wie die toten Menuepunkte aus Sitzung 8: gebaut,
     // nicht erreichbar, und von aussen nicht von "funktioniert nicht" zu unterscheiden.
     findOrCreateRecurrence(vorgaenge)
+    // [Fork-Aenderung] recurrence_of gehoert zur selben Funktion wie recurrence und fehlte hier.
+    // Es entstand bisher erst beim ersten Serienvorgang (RecurrenceAdapter). Gleiche Bauart,
+    // gleiche Idempotenz: erst suchen, nur bei Nichtfinden anlegen.
+    findOrCreateRecurrenceOf(vorgaenge)
     findOrCreateDeadline(vorgaenge)
     findOrCreateWaitOnly(vorgaenge)
     findOrCreateDateFixed(vorgaenge)
