@@ -18,8 +18,17 @@ import net.sourceforge.ganttproject.fork.SecretStore
  * Benutzerkonto laeuft. Beim WebDAV-Passwort war Verschluesselung ausdrueckliche Bedingung; der
  * Token ist dasselbe Geheimnis in derselben Datei.
  *
- * Ohne Windows gibt es kein DPAPI und nichts zu pruefen. Die Tests melden das, statt gruen zu
- * sein und nichts gemessen zu haben.
+ * OHNE WINDOWS PRUEFT KEINE DIESER VIER METHODEN ETWAS -- und sie sagen es nicht.
+ *
+ * `SecretStore.isAvailable` ist nur unter Windows wahr; es liest `os.name`. Jede Methode hier
+ * beginnt mit `if (!SecretStore.isAvailable) return`, kehrt unter Linux und macOS also vor der
+ * ersten Zusicherung zurueck. JUnit wertet eine Methode, die ohne Fehler zurueckkommt, als
+ * BESTANDEN -- nicht als uebersprungen. Der Testlauf meldet dort vier gruene Tests, gemessen
+ * wurde nichts.
+ *
+ * Das ist beim Lesen der Zahlen wichtig: eine Linux-Grundlinie von 711 gruenen Tests enthaelt
+ * vier, die zur Verschluesselung keine Aussage tragen. Wer sie dort fuer belegt haelt, irrt --
+ * belegt ist sie nur auf einem Windows-Lauf.
  */
 class TokenEncryptionTest : TestCase() {
 
