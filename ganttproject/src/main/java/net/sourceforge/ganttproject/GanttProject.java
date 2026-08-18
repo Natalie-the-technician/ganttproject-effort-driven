@@ -577,10 +577,6 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
    */
   public void newProject() {
     getProjectUIFacade().createProject(getProject());
-    // [Fork-Aenderung] Auch ein neues Projekt bekommt die beiden Spalten der Tagesleistung --
-    // sonst haette nur ein geoeffnetes Projekt sie, und wer neu anfaengt, plant unbemerkt mit den
-    // vorgegebenen acht Stunden.
-    getProjectImpl().ensureCapacityColumns();
   }
 
   @Override
