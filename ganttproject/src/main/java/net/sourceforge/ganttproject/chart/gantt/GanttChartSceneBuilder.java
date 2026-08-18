@@ -231,18 +231,45 @@ public class GanttChartSceneBuilder {
           Date startDate = taskBaseline.getStart().getTime();
           TimeDuration duration = input.createLength(taskBaseline.getDuration());
           Date endDate = input.getCalendar().shiftDate(startDate, duration);
-          if (endDate.equals(t.getEnd().getTime())) {
+          // [Fork-Aenderung] ---- Anfang ----
+          //
+          // DAS ORIGINAL VERGLEICHT ENDDATEN, die Beschriftung im Basisplan-Dialog spricht aber
+          // von der DAUER ("Vorgang dauert laenger"). Beides faellt auseinander, sobald ein
+          // Vorgang nur verschoben wird: gleiche Dauer, spaeteres Ende -- und er wird rot
+          // eingefaerbt, als brauchte er laenger.
+          //
+          // DIE REGEL, festgelegt am 17.08.2026: rot wird ein Balken, wenn der Vorgang LAENGER
+          // braucht; eine andere Farbe, wenn er gleich lang oder kuerzer braucht; nicht rot, wenn
+          // er nur woanders liegt. Der Grund ist nicht Geschmack: in diesem Fork
+          // VERSCHIEBT die Kapazitaetsverteilung sehr viele Vorgaenge, ohne ihre Dauer zu
+          // aendern. Nach der alten Regel waere danach fast alles rot -- und eine Farbe, die
+          // immer leuchtet, sagt nichts mehr.
+          //
+          // Der zweite Unterschied: das Original zeichnet GAR KEINEN Basisplanbalken, wenn die
+          // Enddaten gleich sind. Ein Vorgang, der frueher anfaengt und genauso endet, also
+          // laenger dauert, blieb damit unsichtbar. Gezeichnet wird jetzt, sobald sich Anfang
+          // ODER Dauer geaendert hat.
+          int baselineDays = taskBaseline.getDuration();
+          int currentDays = t.getDuration().getLength();
+          // Gleiches Ende UND gleiche Dauer heisst: der Vorgang liegt unveraendert. Ueber das
+          // Ende verglichen und nicht ueber den Anfang, weil ITaskSceneTask keinen Anfang
+          // herausgibt -- bei gleicher Dauer ist das dieselbe Aussage.
+          boolean sameEnd = endDate.equals(t.getEnd().getTime());
+          if (sameEnd && baselineDays == currentDays) {
             return;
           }
           List<String> styles = new ArrayList<String>();
           if (t.isMilestone()) {
             styles.add("milestone");
           }
-          if (endDate.compareTo(t.getEnd().getTime()) < 0) {
-            styles.add("later");
-          } else {
-            styles.add("earlier");
+          if (currentDays > baselineDays) {
+            styles.add("later");    // rot: braucht laenger
+          } else if (currentDays < baselineDays) {
+            styles.add("earlier");  // gruen: geht schneller
           }
+          // Gleiche Dauer: keine der beiden Farben. Der Balken bleibt neutral und zeigt nur, dass
+          // der Vorgang woanders liegt -- das ist eine Verschiebung, keine Abweichung im Aufwand.
+          // [Fork-Aenderung] ---- Ende ----
           List<ITaskActivity<ITaskSceneTask>> baselineActivities = new ArrayList<ITaskActivity<ITaskSceneTask>>();
           if (t.isMilestone()) {
             baselineActivities.add(
