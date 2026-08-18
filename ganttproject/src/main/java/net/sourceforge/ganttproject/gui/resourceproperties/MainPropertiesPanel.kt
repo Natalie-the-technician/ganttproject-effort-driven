@@ -27,16 +27,24 @@ import biz.ganttproject.core.option.ObservableDouble
 import biz.ganttproject.core.option.ObservableMoney
 import biz.ganttproject.core.option.ObservableString
 import javafx.collections.FXCollections
+import javafx.event.EventHandler
 import javafx.geometry.Insets
+import javafx.scene.Node
+import javafx.scene.control.Hyperlink
+import javafx.scene.control.Label
 import javafx.scene.layout.Background
 import javafx.scene.layout.BackgroundFill
 import javafx.scene.layout.CornerRadii
+import javafx.scene.layout.GridPane
 import javafx.scene.layout.StackPane
+import javafx.scene.layout.VBox
 import javafx.util.StringConverter
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RoleManager
 // [Fork-Aenderung] Neue Importe fuer den Toggl-Token.
+import biz.ganttproject.lib.fx.openInBrowser
+import java.awt.Desktop
 import net.sourceforge.ganttproject.fork.forkText
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions
 import net.sourceforge.ganttproject.timetracking.ASK_IN_A_DIALOG
@@ -99,8 +107,46 @@ class MainPropertiesPanel(private val resource: HumanResource) {
         labelText = TOGGL_TOKEN_LABEL
       }
     }
+    appendTogglTokenHint(pane.node)
     onRequestFocus = pane::requestFocus
     children.add(pane.node)
+  }
+
+  /**
+   * [Fork-Aenderung] Haengt den Hinweis unter das Token-Feld.
+   *
+   * Nachtraeglich ins Raster gehaengt, nicht ueber die DSL des Property-Blatts: die kennt nur
+   * Zeilen aus Eigenschaft plus Editor, eine Zeile aus einem freien Knoten gibt es dort nicht. Sie
+   * dafuer zu erweitern hiesse, Originalcode umzubauen — dafuer ist ein Hinweis zu wenig.
+   *
+   * Spalte 1 ist die Spalte der Eingabefelder, der Hinweis steht damit unter dem Feld und nicht
+   * unter den Beschriftungen. Die Zeile ist die naechste freie; das Token-Feld ist die letzte Zeile
+   * des Blatts, weil der Abschnitt Zeiterfassung oben als letzter aufgebaut wird.
+   */
+  private fun appendTogglTokenHint(paneNode: Node) {
+    val grid = paneNode as? GridPane ?: return
+    val nextRow = (grid.children.mapNotNull(GridPane::getRowIndex).maxOrNull() ?: 0) + 1
+    grid.add(togglTokenHint(), 1, nextRow)
+  }
+
+  /**
+   * [Fork-Aenderung] Der Hinweis selbst: ein Satz, wo der Token herkommt, darunter der Verweis auf
+   * den Hilfeartikel.
+   *
+   * Ohne Browser bleibt reiner Text mit sichtbarer URL stehen — ein Verweis, der nichts tut, waere
+   * schlimmer als keiner, und abgetippt werden kann die Adresse immer noch.
+   */
+  private fun togglTokenHint(): Node = VBox(2.0).also { box ->
+    box.children.add(Label(TOGGL_TOKEN_HINT).asHint())
+    box.children.add(
+      if (canBrowse()) {
+        Hyperlink(TOGGL_TOKEN_LINK).also { link ->
+          link.onAction = EventHandler { openInBrowser(TOGGL_TOKEN_HELP_URL) }
+        }
+      } else {
+        Label("$TOGGL_TOKEN_LINK $TOGGL_TOKEN_HELP_URL").asHint()
+      }
+    )
   }
 
   fun requestFocus() = onRequestFocus()
@@ -158,6 +204,44 @@ class MainPropertiesPanel(private val resource: HumanResource) {
 // beschrieben werden kann; siehe ForkI18n.kt.
 private val TOGGL_SECTION_LABEL get() = forkText("fork.toggl.section")
 private val TOGGL_TOKEN_LABEL get() = forkText("fork.toggl.token")
+private val TOGGL_TOKEN_HINT get() = forkText("fork.toggl.token.hint")
+private val TOGGL_TOKEN_LINK get() = forkText("fork.toggl.token.link")
+
+/**
+ * [Fork-Aenderung] Der Hilfeartikel, nicht die Profilseite selbst.
+ *
+ * Bewusst keine Deep-Link-Adresse: die Profilseite kann Toggl umbauen, der Hilfeartikel ueberdauert
+ * das eher. Die Adresse steht als Konstante im Code und NICHT in den Sprachdateien — sie ist in
+ * jeder Sprache dieselbe, und ein uebersetzter Verweis waere ein Verweis, den niemand pflegt.
+ */
+private const val TOGGL_TOKEN_HELP_URL = "https://support.toggl.com/where-is-my-api-key-located"
+
+/**
+ * [Fork-Aenderung] Breite, auf die der Hinweis umbricht.
+ *
+ * Ohne Deckel setzt das Raster die Spalte auf die Breite des ungebrochenen Satzes und zieht den
+ * Dialog in die Laenge; erst eine begrenzte Maximalbreite laesst `isWrapText` ueberhaupt umbrechen.
+ */
+private const val HINT_WIDTH = 420.0
+
+private fun Label.asHint(): Label = also {
+  it.isWrapText = true
+  it.maxWidth = HINT_WIDTH
+}
+
+/**
+ * [Fork-Aenderung] Gibt es einen Browser, den wir aufrufen koennen?
+ *
+ * NICHT ueber isBrowseSupported() in biz/ganttproject/lib/fx/Desktop.kt:39 — das ruft
+ * Desktop.getDesktop() ohne vorherige isDesktopSupported()-Pruefung auf und wirft dann eine
+ * UnsupportedOperationException, statt false zu liefern. Fehler des Originals; hier wird er nur
+ * umgangen, nicht behoben.
+ */
+private fun canBrowse(): Boolean = try {
+  Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)
+} catch (e: Exception) {
+  false
+}
 
 private val roleStringConverter = object : StringConverter<Role>() {
   override fun toString(role: Role): String  = role.name
