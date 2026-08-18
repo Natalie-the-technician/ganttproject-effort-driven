@@ -5,8 +5,7 @@ It adds effort-driven scheduling: instead of entering how many days a task takes
 enter how many hours of work it needs, and the duration follows from who is assigned
 and how much time they actually have.
 
-Everything upstream does still works. Projects saved here open in the original, and
-projects from the original open here.
+Everything upstream does still works. Projects saved here open in the original.
 
 ---
 
@@ -31,9 +30,9 @@ project, to find out where estimates are systematically off.
 recorded hours can equally be typed in by hand, and the estimate quality report works
 either way.
 
-**Fixes to the original.** Twenty defects found while building the above, in areas
-ranging from WebDAV storage to dialog rendering. These live in separate branches (see
-below) and are being reported upstream individually.
+**Fixes to the original.** Defects found while building the above, in areas ranging
+from WebDAV storage to dialog rendering. These live in separate branches (see below)
+and are being reported upstream individually.
 
 ---
 
@@ -94,25 +93,35 @@ The pass runs before the scheduler, so that the scheduler can propagate the new 
 
 ## Custom properties
 
-The fork creates these on first use. They are stored in the project file like any
-other custom column, so a project remains readable in the original GanttProject —
-the columns simply appear as ordinary user-defined columns there.
+Eleven properties in total, stored in the project file like any other custom column.
+A project therefore remains readable in the original GanttProject — the columns simply
+appear as ordinary user-defined columns there.
 
-| ID | On | Type |
-|---|---|---|
-| `effort_hours` | Task | Double |
-| `effort_actual_hours` | Task | Double |
-| `effort_original_hours` | Task | Double |
-| `deadline` | Task | Date |
-| `wait_only` | Task | Boolean |
-| `date_fixed` | Task | Boolean |
-| `recurrence` | Task | Text |
-| `recurrence_of` | Task | Text |
-| `hours_per_day` | Resource | Double |
-| `hours_schedule` | Resource | Text |
-| `utilisation_percent` | Resource | Double |
+| ID | On | Type | Created |
+|---|---|---|---|
+| `effort_hours` | Task | Double | on first value |
+| `effort_actual_hours` | Task | Double | on first value |
+| `effort_original_hours` | Task | Double | on open / new |
+| `deadline` | Task | Date | on open / new |
+| `wait_only` | Task | Boolean | on open / new |
+| `date_fixed` | Task | Boolean | on open / new |
+| `recurrence` | Task | Text | on open / new |
+| `recurrence_of` | Task | Text | on open / new |
+| `hours_per_day` | Resource | Double | on open / new |
+| `hours_schedule` | Resource | Text | on open / new |
+| `utilisation_percent` | Resource | Integer | on open / new |
+
+Nine are created when a project is opened or created. `effort_hours` and
+`effort_actual_hours` are created only when a value is actually entered, so that
+projects which do not use the feature do not silently gain a column. The effort fields
+sit in the task properties dialog and are there regardless.
 
 All default to null. `DEFAULT_HOURS_PER_DAY` is 8.0.
+
+**`utilisation_percent` is an integer, and clamped.** Values outside 1–100 fall back
+to 100 without a message. A resource entered at 0 % is therefore treated as fully
+available, and 120 % silently becomes 100 %. Fractional utilisation such as 62.5 %
+cannot be entered.
 
 ---
 
@@ -139,19 +148,48 @@ everything.
 
 ## Status and limits
 
-The full branch carries 717 automated tests, all green. Note what that number
-does and does not cover: the six UI fixes in `misc-fixes` have no automated
-test and never had one — they were verified on screen. Two of them (baseline
-colouring, application not exiting) are reproduced and fixed on both Windows
-and Linux; the other four were only observed on Windows.
+`main` carries 717 automated tests, all green. Note what that number does and does not
+cover: the six UI fixes in `misc-fixes` have no automated test and never had one —
+they were verified on screen. Two of them (baseline colouring, application not
+exiting) are reproduced and fixed on both Windows and Linux; the other four were
+observed on Windows.
 
 Written and used for real planning, and every feature has been exercised. It has not
 been in long-term use, and it has been used by one person on one kind of plan. Take
-the following as specific rather than as a general disclaimer:
+the following as specific rather than as a general disclaimer.
 
 **It writes to your project file.** Opening a project creates the custom properties
 above, and entering an effort rewrites the task's duration. **Make a copy before
 trying it on anything you care about.**
+
+**Opening a fork project in the original reports an error** as soon as any task has a
+value in the `deadline` column:
+
+```
+Error when opening a project document
+The document was loaded successfully, but something went wrong when updating
+calculated properties and filters.
+The reported error is: Type class java.util.GregorianCalendar is not supported
+in dialect DEFAULT
+```
+
+The project still loads, and tasks, values and columns survive intact — a file
+comparison after a round trip through the original showed two column widths as the
+only difference. What is lost is calculated properties and filters for that session.
+This is a defect in the original, not in the fork, and has been reported upstream.
+
+**The baseline legend describes the wrong thing.** The three lines in the baseline
+dialog come from the original and talk about a task's *end* ("Task remains on
+schedule", "Task completes earlier than before"). After this fork's colour fix the
+colours follow the *duration*, and grey means "moved, same duration" — unchanged tasks
+get no bar at all. The legend text lives in the original's options framework and
+cannot be overridden from the fork's own texts; this was tested, not assumed.
+
+**Dialogs may open with a black button bar.** Reopening the same dialog — the new
+project wizard, for instance — sometimes leaves the button strip unpainted until the
+window is moved. The content area is fixed in this fork; the button bar is not. The
+cause is in the original and is not yet understood: the background colour is assigned
+on every dialog build, and the strip stays black anyway.
 
 **Token storage only protects you on Windows.** The Toggl token is encrypted with
 Windows DPAPI. On other systems it is not stored at all — deliberately, rather than
@@ -164,7 +202,10 @@ documented in the class comment; it is worth knowing before you read the numbers
 
 **Baselines only record id, start, duration and milestone flag.** They cannot answer
 "did this take more work than planned" — that is what the estimate quality report is
-for.
+for. Note also that saving a second baseline does not replace the first: running the
+levelling twice and saying yes to "save a baseline first" both times leaves you with
+two baselines of the *already levelled* state and no record of what it looked like
+before.
 
 **Recurring tasks need exactly one limit** — an end date or a repetition count, never
 both.
