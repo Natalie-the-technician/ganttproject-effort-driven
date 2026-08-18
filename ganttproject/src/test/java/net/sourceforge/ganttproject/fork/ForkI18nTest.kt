@@ -53,6 +53,7 @@ import java.util.Locale
  *    - english texts come from the default file
  *    - an untranslated language falls back to english
  *    - a language without a country still finds the translation
+ *    - umlauts survive being read from the file   (over fork.levelling.run)
  *    - every german key has an english counterpart
  *    - a translated column name does not stop the column being found
  *
@@ -157,6 +158,19 @@ class ForkI18nTest {
   @Test
   fun `a language without a country still finds the translation`() {
     assertEquals("Ist-Stunden", ForkI18n.textOrNull("fork.effort.actualHours", Locale("de")))
+  }
+
+  /**
+   * `Properties.load(InputStream)` assumes ISO-8859-1. Read that way, the German file yields
+   * "KapazitÃ¤t" — text that is wrong but still looks like text, so it would go unnoticed until it
+   * reached a screenshot. Hence an explicit assertion on a word with an umlaut.
+   *
+   * This branch ships a German file of its own, so it needs its own umlaut probe: the one on
+   * toggl-import asserts a key that does not exist here.
+   */
+  @Test
+  fun `umlauts survive being read from the file`() {
+    assertEquals("Kapazität verteilen …", ForkI18n.textOrNull("fork.levelling.run", german))
   }
 
   /**
