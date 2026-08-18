@@ -25,3 +25,8 @@ with `git submodule update` from the repository root.
 You can build and run the core part of GanttProject, with no export/import features, using `gradle run`.
 
 If you want to build the complete app, use `gradle runapp` or `gradle distbin && cd ganttproject-builder/dist-bin && ./ganttproject` (on Linux and macOS)
+
+## This fork
+
+This is a fork adding effort-driven scheduling, capacity levelling and recurring
+tasks. See [FORK.md](FORK.md).
