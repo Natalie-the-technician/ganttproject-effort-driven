@@ -301,6 +301,32 @@ class ProjectUIFacadeImpl(
 
           project.activeCalendar.importCalendar(projectData.calendar, ImportCalendarOption(ImportCalendarOption.Values.REPLACE))
           projectImpl.fireProjectCreated()
+          // [Fork-Aenderung] Die Spalten dieses Forks im neuen Projekt anlegen.
+          //
+          // WAS: ensureCapacityColumns() traegt die benutzerdefinierten Spalten ein, die der Fork
+          // braucht -- Tagesleistung, Auslastung, "Fertig bis", "Warten", "Termin fest",
+          // Wiederholung. Ohne sie ist die aufwandsgetriebene Planung fuer ein neu angelegtes
+          // Projekt unerreichbar: was man nicht sieht, kann man nicht eintragen.
+          //
+          // WARUM HIER UND NICHT FRUEHER, und das ist der Punkt: der Aufruf muss NACH
+          // fireProjectCreated() stehen, also nach ALLEN Listenern. Einer von ihnen
+          // (ProjectEventListenerImpl.projectCreated) verwirft die Spiegeldatenbank und baut sie
+          // neu auf. Wer diese Zeile davor schiebt -- oder sie in einen eigenen Listener verlegt,
+          // dessen Platz in der Registrierungsreihenfolge niemand festlegt --, legt die Spalten
+          // gegen einen Spiegel an, der gleich danach ersetzt wird. onCustomColumnChange verwirft
+          // sie dann stillschweigend, und zwar ohne Fehlermeldung. Genau diese Fehlerfamilie
+          // beschreibt der Kommentar in ProjectEventListenerImpl.
+          //
+          // WARUM VOR isModified: das Anlegen der Spalten ist eine Modellaenderung. Stuende der
+          // Aufruf danach, gaelte ein frisch angelegtes Projekt sofort als ungespeichert.
+          //
+          // WARUM NICHT IN newProject(): dort lief der Aufruf synchron direkt nach
+          // createProject() -- also am noch offenen, alten Projekt, das der Rueckruf hier gleich
+          // schliesst und dessen Manager er zuruecksetzt. Der Aufruf war damit wirkungslos, und
+          // bei ABBRUCH des Assistenten veraenderte er das offene Projekt trotzdem: der Barrier
+          // aus createNewProject wird ausschliesslich in onOkPressed aufgeloest, dieser Rueckruf
+          // laeuft bei Abbruch also gar nicht, die alte Zeile aber schon.
+          projectImpl.ensureCapacityColumns()
           // A new project just got created, so it is not yet modified
           projectImpl.isModified = false
           undoManager.die()
