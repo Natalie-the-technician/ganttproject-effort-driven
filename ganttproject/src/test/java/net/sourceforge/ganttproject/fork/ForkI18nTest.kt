@@ -44,24 +44,32 @@ import java.util.Locale
  *
  * That claim needs the built artifact, so it is checked there instead.
  *
- * REMOVED ON THIS BRANCH, because every one of them asserts a CONCRETE key and no key exists here.
- * They live on the branch that introduces the keys they check:
- *  - german texts come from the german file            (fork.effort.actualHours, fork.toggl.section)
- *  - english texts come from the default file          (fork.effort.actualHours)
- *  - an untranslated language falls back to english    (fork.effort.actualHours)
- *  - a language without a country finds the translation(fork.effort.actualHours)
- *  - umlauts survive being read from the file          (fork.toggl.checkConnection)
- *  - every german key has an english counterpart       (vacuous with an empty bundle: both key
- *                                                       sets are empty, and its own guard against
- *                                                       exactly that would fail here)
- *  - a translated column name does not stop the column being found (effort_hours)
- *  - a rejected split explains itself with its numbers (placeholder substitution — needs a key
- *                                                       that carries arguments)
- *  - no english exception text reaches the connection check message
- *  - the successful check names the person and the count
- *  - unreadable entries are mentioned in the message
- *  - button labels are short enough not to be cut off  (fork.toggl.collision.*)
- *  - the dialog text still names what each choice costs(fork.toggl.collision.choice)
+ * WHERE THE OTHER CHECKS LIVE. Every check that asserts a CONCRETE key sits on the branch that
+ * introduces that key — there is nothing for it to assert here. This class therefore holds only
+ * what is true of an empty bundle.
+ *
+ *  effort-planning (its keys: fork.effort.*, fork.column.*, fork.levelling.*, fork.estimate.*)
+ *    - german texts come from the german file
+ *    - english texts come from the default file
+ *    - an untranslated language falls back to english
+ *    - a language without a country still finds the translation
+ *    - every german key has an english counterpart
+ *    - a translated column name does not stop the column being found
+ *
+ *  toggl-import (its keys: fork.toggl.*, fork.split.*)
+ *    - german toggl texts come from the german file
+ *    - umlauts survive being read from the file
+ *    - a rejected split explains itself with its numbers   (placeholder substitution)
+ *    - no english exception text reaches the connection check message
+ *    - the successful check names the person and the count
+ *    - unreadable entries are mentioned in the message
+ *    - button labels are short enough not to be cut off
+ *    - the dialog text still names what each choice costs
+ *
+ * TWO OF THEM CANNOT BE ASSERTED HERE AT ALL, and it is worth being plain about it: the fallback
+ * to English and the placeholder substitution both need at least one defined key. What is left of
+ * them on this branch is structural — `the locale chain is walked without throwing` shows that the
+ * chain runs and ends at the English default bundle, but not that English answers with a text.
  */
 class ForkI18nTest {
 
