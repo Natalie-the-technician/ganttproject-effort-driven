@@ -38,6 +38,41 @@ public interface WebDavResource {
       super(message, cause);
     }
   }
+  /**
+   * [Fork-Aenderung] Jemand anderes hat die Datei seit dem Lesen geaendert.
+   *
+   * Eigene Klasse und kein allgemeiner Fehler, weil der Aufrufer hier etwas anderes tun muss als
+   * bei einem Netzproblem: Es ist nichts kaputt, es gibt eine zweite Fassung. Der Mensch braucht
+   * die Wahl zwischen "unter anderem Namen speichern" und "trotzdem ueberschreiben" -- und die
+   * kann er nur bekommen, wenn dieser Fall unterscheidbar oben ankommt.
+   */
+  class WebDavConflictException extends WebDavException {
+    public WebDavConflictException(String message) {
+      super(message);
+    }
+    public WebDavConflictException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
+  /**
+   * [Fork-Aenderung] Der Server kann keine Versionspruefung beantworten: er liefert ausschliesslich
+   * schwache ETags, und gegen einen schwachen Tag laesst sich kein If-Match bilden.
+   *
+   * Muss von {@link WebDavConflictException} unterscheidbar sein, weil die Ursache eine voellig
+   * andere ist. Beim Konflikt hat jemand die Datei geaendert; hier hat niemand etwas getan, der
+   * Server kann die Frage nur nicht beantworten. Wer dem Benutzer hier "jemand anderes hat
+   * geaendert" anzeigt, schickt ihn auf die Suche nach einem Kollegen, den es nicht gibt.
+   *
+   * Der Fall ist nicht theoretisch: RFC 9110 VERLANGT einen schwachen Validator, sobald die
+   * Repraesentation unterwegs veraendert wird -- mod_deflate, nginx mit gzip, jeder komprimierende
+   * Proxy, jedes CDN. Dann wird der Tag nie stark.
+   */
+  class WebDavVersioningUnavailableException extends WebDavException {
+    public WebDavVersioningUnavailableException(String message) {
+      super(message);
+    }
+  }
+
   class WebDavRuntimeException extends RuntimeException {
     public WebDavRuntimeException(String message) {
       super(message);
