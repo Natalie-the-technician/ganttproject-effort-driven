@@ -67,6 +67,8 @@ import java.util.Locale
  *    - no english exception text reaches the connection check message
  *    - the successful check names the person and the count
  *    - unreadable entries are mentioned in the message
+ *    - the token field explains where the token comes from   (also an umlaut probe)
+ *    - the help address is not carried in the translation files
  *    - button labels are short enough not to be cut off
  *    - the dialog text still names what each choice costs
  *
@@ -340,6 +342,46 @@ class ForkI18nTest {
   }
 
   /**
+   * The hint at the token field has to say WHERE the token comes from, in both languages. Without
+   * it the field is a blank box asking for a secret, which is the state this hint was added to end.
+   *
+   * The German text carries an umlaut of its own, so a decoding fault in this line shows up here
+   * rather than in a screenshot.
+   */
+  @Test
+  fun `the token field explains where the token comes from`() {
+    assertEquals(
+      "Persönliches Toggl-API-Token einfügen. Es steht unten auf deiner Toggl-Profilseite.",
+      ForkI18n.textOrNull("fork.toggl.token.hint", german))
+    assertEquals(
+      "Paste your personal Toggl API token. You find it at the bottom of your Toggl profile page.",
+      ForkI18n.textOrNull("fork.toggl.token.hint", english))
+
+    listOf(german, english).forEach { locale ->
+      val link = ForkI18n.textOrNull("fork.toggl.token.link", locale)
+      assertNotNull(link, "the link has no label in $locale")
+    }
+  }
+
+  /**
+   * The address of the help article is a CONSTANT in MainPropertiesPanel.kt, deliberately not a
+   * translated text: it is the same in every language, and a copy per language is a copy nobody
+   * updates when Toggl moves the page.
+   *
+   * Asserted over the files rather than over the keys, because the mistake this guards against is
+   * someone pasting the address into a translation as the visible link text.
+   */
+  @Test
+  fun `the help address is not carried in the translation files`() {
+    listOf("/language/fork/i18n.properties", "/language/fork/i18n_de.properties").forEach { path ->
+      val values = valuesOf(path)
+      assertNotNull(values.firstOrNull(), "$path was not read, so this test proves nothing")
+      assertTrue(values.none { it.contains("toggl.com") },
+        "$path carries the help address; it belongs in the code, as a constant")
+    }
+  }
+
+  /**
    * Whatever the buttons no longer say has to be said in the dialog text instead, otherwise
    * shortening them quietly removed the very information the dialog exists for.
    */
@@ -352,6 +394,13 @@ class ForkI18nTest {
     assertTrue(text.contains("Bisherigen behalten"), "the second choice is not explained: $text")
     assertTrue(text.contains("verwirft"), "the text does not say that something is discarded: $text")
   }
+
+  private fun valuesOf(path: String): List<String> =
+    java.util.Properties().also { properties ->
+      ForkI18n::class.java.getResourceAsStream(path)?.use {
+        it.reader(Charsets.UTF_8).use(properties::load)
+      }
+    }.let { properties -> properties.stringPropertyNames().map { properties.getProperty(it) } }
 
   private fun keysOf(path: String): Set<String> =
     java.util.Properties().also { properties ->
