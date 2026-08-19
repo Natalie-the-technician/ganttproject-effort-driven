@@ -178,20 +178,22 @@ comparison after a round trip through the original showed two column widths as t
 only difference. What is lost is calculated properties and filters for that session.
 This is a defect in the original, not in the fork, and has been reported upstream.
 
-**The task properties dialog saves nothing while a fork column is empty.** Pressing Ok
-raises "Something went wrong" and the entire save is abandoned — name, allocations,
-effort and dependencies alike, not just the column that failed. The cause is in the
-original: `PropertyTypeEncoder` decodes an empty date or number to `null`, and
-`CustomColumnsValues.addCustomProperty` then unwraps that with `!!`. This was
-reproduced by hand on the original `e523bedc6` — adding a custom task column of type
-date, leaving it empty and pressing Ok produces the identical stack trace — so it is
-not something the fork changed. What the fork changes is how often you meet it: it
-ships six custom task columns, and `deadline` plus the three effort columns are
-exactly the types that fail, so the first Ok in a fresh project hits it. Until this is
-fixed, **enter effort through the task table columns rather than through the dialog**.
-That path works and recalculates the duration correctly — this was measured, not
-assumed. Giving every empty date and number column a value also makes the dialog save
-again.
+**The task properties dialog drops allocations and effort while a fork column is
+empty.** Pressing Ok raises "Something went wrong", and everything from the custom
+columns onwards is abandoned — the column values, the predecessors, and the whole
+Resources tab including effort. What you changed on the General tab does survive: the
+controller saves the panels in order, and that one runs before the failure. The cause
+is in the original: `PropertyTypeEncoder` decodes an empty date or number to `null`,
+and `CustomColumnsValues.addCustomProperty` then unwraps that with `!!`. It was
+reproduced by hand on the original `e523bedc6` — add a custom task column of type date,
+leave it empty, press Ok — with an identical stack trace, so it is not something the
+fork changed. What the fork changes is how often you meet it: it ships six custom task
+columns, and `deadline` plus the three effort columns are exactly the types that fail,
+so the first Ok in a fresh project hits it. Until this is fixed, **enter effort through
+the task table columns rather than through the dialog**. That path works and
+recalculates the duration correctly — measured, not assumed. Giving every empty date
+and number column a value on the task itself also makes the dialog save again; setting
+a *default* on the column definition does not, which was likewise tested.
 
 **The baseline legend describes the wrong thing.** The three lines in the baseline
 dialog come from the original and talk about a task's *end* ("Task remains on
