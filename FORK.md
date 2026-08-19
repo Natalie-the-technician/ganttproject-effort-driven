@@ -195,6 +195,15 @@ recalculates the duration correctly — measured, not assumed. Giving every empt
 and number column a value on the task itself also makes the dialog save again; setting
 a *default* on the column definition does not, which was likewise tested.
 
+**Enter effort in the effort fields, not in the custom columns tab.** The dialog
+offers `Aufwand (Std.)` and `Ist-Aufwand (Std.)` in two places: this fork's own
+*Effort* section on the *Resources* tab, and the generic custom-columns tab. Only
+the first one sticks. The controller commits the resources panel *after* the custom
+columns, so an empty effort field there overwrites whatever the custom columns tab
+just wrote — measured on a task where `deadline` and `effort_original_hours` from
+that tab survived and `effort_hours` did not. The task table columns work as well
+and are the safest route while the dialog is affected by the defect above.
+
 **The baseline legend describes the wrong thing.** The three lines in the baseline
 dialog come from the original and talk about a task's *end* ("Task remains on
 schedule", "Task completes earlier than before"). After this fork's colour fix the
