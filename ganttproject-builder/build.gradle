@@ -76,10 +76,54 @@ task distBin(dependsOn: [
     }
 }
 
+// [Fork-Aenderung] Kurz-Commit fuer den Paketnamen.
+//
+// 3.4.3394 ist die Versionszaehlung des ORIGINALS; dieser Fork fuehrt keine eigene. Der Commit ist
+// damit das Einzige, was den Stand eines Pakets eindeutig benennt.
+//
+// Faellt git aus (Bau aus einem Tarball, kein git im Pfad), bleibt "nocommit" stehen, statt den Bau
+// abzubrechen. Ueber ProcessBuilder statt ueber die Gradle-exec-API, weil der Name schon zur
+// Konfigurationszeit feststehen muss.
+def forkCommit = {
+    try {
+        def proc = new ProcessBuilder('git', 'rev-parse', '--short=8', 'HEAD')
+                .directory(rootProject.projectDir).redirectErrorStream(true).start()
+        def text = proc.inputStream.text.trim()
+        return (proc.waitFor() == 0 && text ==~ /[0-9a-f]{8}/) ? text : 'nocommit'
+    } catch (Exception ignored) {
+        return 'nocommit'
+    }
+}()
+
 tasks.register('distZip', Zip) {
-    archiveFileName = "ganttproject-${version}.zip"
+    // [Fork-Aenderung] Name nach dem Schema dieses Forks statt "ganttproject-<version>.zip".
+    //
+    // Sonst muss jeder Bau von Hand umbenannt werden, und irgendwann vergisst es jemand -- dann
+    // haengt an einem Release ein Paket, dem man weder den Fork noch den Stand ansieht.
+    archiveFileName = "ganttproject-effort-driven-${version}-generic-${forkCommit}.zip"
     destinationDirectory = rootProject.layout.buildDirectory.dir("distributions")
     from 'dist-bin'
+    // [Fork-Aenderung] Protokolldateien gehoeren nicht ins Paket.
+    //
+    // logback.xml schreibt <file>${log_path:-ganttproject.log}</file>, also ins ARBEITS-
+    // VERZEICHNIS. Wer aus dist-bin startet (ganttproject.bat, runApp), legt die Datei damit
+    // genau dort ab, und distZip kopiert dist-bin vollstaendig -- die Datei landet im Archiv.
+    // Einmal passiert; sie war leer, haette aber Pfade und Projektnamen enthalten koennen.
+    // Die Falle schaerft sich bei jedem Start neu, deshalb der Stern statt nur ganttproject.log.
+    exclude '*.log'
+    // [Fork-Aenderung] Die eingecheckte ganttproject.exe gehoert NICHT ins generische Zip.
+    //
+    // Sie ist 32-Bit -- PE-Machine 0x014c (i386), nachgemessen am Kopf der Datei -- und laedt die
+    // JVM im eigenen Prozess. Eine 64-Bit-JRE kann sie damit nicht laden. Beim Doppelklick
+    // passiert deshalb NICHTS: kein Fenster, keine Meldung, weil <errTitle> in
+    // ganttproject-launch4j.xml leer ist. Genau diese Datei klickt ein Windows-Nutzer aber als
+    // Erstes an. Eine fehlende Datei ist besser als eine stumme; der Weg im generischen Paket ist
+    // ganttproject.bat.
+    //
+    // NUR hier ausgeschlossen, nicht aus distBin entfernt: ganttproject.nsi.tpl (Installer) und
+    // ganttproject-launch4j.xml verweisen weiterhin auf sie. Beide Bauwege sind in diesem Fork
+    // auskommentiert und nicht benutzbar, sollen aber nicht stillschweigend kaputtgehen.
+    exclude 'ganttproject.exe'
 }
 tasks.distZip.dependsOn distBin
 
