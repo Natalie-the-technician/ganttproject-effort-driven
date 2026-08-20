@@ -178,6 +178,13 @@ comparison after a round trip through the original showed two column widths as t
 only difference. What is lost is calculated properties and filters for that session.
 This is a defect in the original, not in the fork, and has been reported upstream.
 
+Possibly worse than a dialog, and marked uncertain because it was seen once: after
+that error appeared, the original's window stopped accepting input altogether — the
+Project menu did not open, double-clicking a task opened no dialog, and dragging a
+bar moved nothing. The project was fully loaded and drawn. Whether this follows from
+the error or is unrelated was not established. If you meet it, restart before
+concluding anything about the file.
+
 **The task properties dialog drops allocations and effort while a fork column is
 empty.** Pressing Ok raises "Something went wrong", and everything from the custom
 columns onwards is abandoned — the column values, the predecessors, and the whole
@@ -204,6 +211,17 @@ just wrote — measured on a task where `deadline` and `effort_original_hours` f
 that tab survived and `effort_hours` did not. The task table columns work as well
 and are the safest route while the dialog is affected by the defect above.
 
+**Importing does not create this fork's columns.** They are created in two places
+only: when a project file is opened, and by *Project > New*. None of the import paths
+goes through either. What the imports for `.gan`, CSV and MS Project do — and pasting
+from the clipboard with them — is carry the column *definitions* over from the source
+project, so a file that already has the columns keeps them. A source without them
+leaves you with a project that has none, and effort has nowhere to go until you add
+them by hand through *Manage columns*. The text importer is worse still: it writes
+straight into the target project without a buffer, so nothing is carried at all. The
+calendar importer creates no tasks and is unaffected. Read in the code, not measured
+on screen.
+
 **The baseline legend describes the wrong thing.** The three lines in the baseline
 dialog come from the original and talk about a task's *end* ("Task remains on
 schedule", "Task completes earlier than before"). After this fork's colour fix the
@@ -221,10 +239,14 @@ on every dialog build, and the strip stays black anyway.
 Windows DPAPI. On other systems it is not stored at all — deliberately, rather than
 falling back to plain text — so you will be asked for it again each session.
 
-**The token encryption tests do not test anything off Windows.** All four methods
-return early when DPAPI is unavailable, and JUnit counts that as passing, not as
-skipped. A green test run on Linux includes four tests that measured nothing. This is
-documented in the class comment; it is worth knowing before you read the numbers.
+**The token encryption tests measure nothing off Windows — and now say so.** All four
+methods used to return early when DPAPI is unavailable, and JUnit counts an early
+return as passing, not as skipped: a green run on Linux contained four tests that had
+measured nothing. They now start with `assumeTrue`, so such a run reports them as
+skipped instead. Two things follow. A Linux baseline is four tests smaller than a
+Windows one, and that difference is exactly these. And the encryption itself is still
+only ever proven by a Windows run. Note that the switch itself has not been verified
+off Windows — on Windows the assumption always holds, so it never fires there.
 
 **Baselines only record id, start, duration and milestone flag.** They cannot answer
 "did this take more work than planned" — that is what the estimate quality report is
