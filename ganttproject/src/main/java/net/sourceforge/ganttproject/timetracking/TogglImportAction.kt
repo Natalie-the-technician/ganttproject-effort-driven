@@ -164,11 +164,29 @@ class TogglImportAction @JvmOverloads constructor(
     val reported = selection.copy(
       withoutNumber = selection.withoutNumber.filterNot { it.id in assignedByHand })
 
-    val changes = planTaskImport(
-      assignments, projectImportLedger(tasks, taskProperties), taskProperties)
+    // [Fork-Aenderung] Diagnose an der Entscheidungsstelle.
+    //
+    // "Es gibt nichts Neues zu uebernehmen" ist die einzige Meldung fuer ZWEI voellig
+    // verschiedene Lagen: alles war schon importiert -- oder es kam gar keine Zuordnung an. Am
+    // 20.08.2026 am echten Plan aufgefallen: sechs von Hand zugeordnete Eintraege, danach diese
+    // Meldung. Ohne diese Zeilen ist von aussen nicht zu unterscheiden, welcher Fall vorliegt.
+    val ledger = projectImportLedger(tasks, taskProperties)
+    val automatisch = selection.assignments.count { taskById.containsKey(it.second) }
+    GPLogger.log(
+      "Toggl import: $automatisch automatisch zugeordnet, ${manual.size} von Hand gewaehlt," +
+      " zusammen ${assignments.size} wirksam; Merkzettel kennt ${ledger.size} Eintraege")
+
+    val changes = planTaskImport(assignments, ledger, taskProperties)
     val toWrite = changes.filterNot { it.isEmpty }
 
     if (toWrite.isEmpty()) {
+      // Je Eintrag sagen, WARUM nichts uebrig blieb. Ohne das steht der Mensch vor einer Meldung,
+      // die das Gegenteil dessen behauptet, was er gerade getan hat.
+      assignments.forEach { (entry, task) ->
+        GPLogger.log(
+          "Toggl import: nichts zu tun fuer Eintrag ${entry.id} (${entry.hours} h)" +
+          " auf Vorgang ${task.taskID} -- Merkzettel: ${ledger[entry.id] ?: "unbekannt"}")
+      }
       // Nothing to write is a normal outcome, not a failure: it means everything was imported
       // before. Saying so beats a silent no-op that looks like the menu item is broken.
       showMessage.show(false, nothingToWriteMessage(reported))
