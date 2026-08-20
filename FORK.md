@@ -239,14 +239,22 @@ on every dialog build, and the strip stays black anyway.
 Windows DPAPI. On other systems it is not stored at all — deliberately, rather than
 falling back to plain text — so you will be asked for it again each session.
 
-**The token encryption tests measure nothing off Windows — and now say so.** All four
-methods used to return early when DPAPI is unavailable, and JUnit counts an early
-return as passing, not as skipped: a green run on Linux contained four tests that had
-measured nothing. They now start with `assumeTrue`, so such a run reports them as
-skipped instead. Two things follow. A Linux baseline is four tests smaller than a
-Windows one, and that difference is exactly these. And the encryption itself is still
-only ever proven by a Windows run. Note that the switch itself has not been verified
-off Windows — on Windows the assumption always holds, so it never fires there.
+**The token encryption tests measure nothing off Windows.** All four methods return
+early when DPAPI is unavailable, and JUnit counts an early return as passing, not as
+skipped: a green run on Linux contains four tests that measured nothing. The number is
+therefore the same on both platforms — what differs is what is behind it. The
+encryption itself is only ever proven by a Windows run.
+
+**`assumeTrue` was tried here and reverted.** Between 19 and 20 August 2026 the four
+methods started with `assumeTrue` instead, so that a run off Windows would count them
+as skipped rather than passed. Measured on a Linux VM on 20 August 2026, it does the
+opposite: `tests=4 failures=4 errors=0 skipped=0` — four red tests, and `BUILD FAILED`
+on every non-Windows machine. The class extends `junit.framework.TestCase`, so the
+vintage engine runs it through `JUnit38ClassRunner`, which reports any thrown exception
+as an error; the special handling for `AssumptionViolatedException` lives in the JUnit 4
+runner, which a JUnit 3 `TestCase` never reaches. On Windows the assumption never fires,
+which is why the change went out unverified. Counting these four as skipped would mean
+rewriting the class as a JUnit 4 or Jupiter test — until then the early return stays.
 
 **Baselines only record id, start, duration and milestone flag.** They cannot answer
 "did this take more work than planned" — that is what the estimate quality report is

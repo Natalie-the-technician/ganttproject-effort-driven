@@ -10,7 +10,6 @@ package net.sourceforge.ganttproject.timetracking
 
 import junit.framework.TestCase
 import net.sourceforge.ganttproject.fork.SecretStore
-import org.junit.Assume.assumeTrue
 
 /**
  * Der Toggl-Token in der Einstellungsdatei: verschluesselt, nicht nur kodiert.
@@ -19,43 +18,52 @@ import org.junit.Assume.assumeTrue
  * Benutzerkonto laeuft. Beim WebDAV-Passwort war Verschluesselung ausdrueckliche Bedingung; der
  * Token ist dasselbe Geheimnis in derselben Datei.
  *
- * OHNE WINDOWS PRUEFT KEINE DIESER VIER METHODEN ETWAS -- und seit dem 20.08.2026 sagen sie es.
+ * OHNE WINDOWS PRUEFT KEINE DIESER VIER METHODEN ETWAS.
  *
- * `SecretStore.isAvailable` ist nur unter Windows wahr; es liest `os.name`. Vorher begann jede
- * Methode mit `if (!SecretStore.isAvailable) return` und kehrte unter Linux und macOS vor der
- * ersten Zusicherung zurueck. JUnit wertet eine Methode, die ohne Fehler zurueckkommt, als
- * BESTANDEN -- nicht als uebersprungen; der Lauf meldete dort vier gruene Tests, gemessen wurde
- * nichts. Jetzt steht `assumeTrue` davor, und der Lauf zaehlt sie als UEBERSPRUNGEN.
+ * `SecretStore.isAvailable` liest `os.name` und ist nur unter Windows wahr. Jede Methode kehrt
+ * darum auf jedem anderen System vor der ersten Zusicherung zurueck. JUnit wertet eine Methode,
+ * die ohne Fehler zurueckkommt, als BESTANDEN -- ein Linux-Lauf meldet hier also vier gruene
+ * Tests, und keiner davon hat etwas gemessen. Belegt ist die Verschluesselung nach wie vor nur
+ * durch einen Windows-Lauf.
  *
- * Das bleibt beim Lesen der Zahlen wichtig, nur andersherum: eine Linux-Grundlinie enthaelt vier
- * Tests weniger als eine Windows-Grundlinie, und der Unterschied ist genau dieser. Belegt ist die
- * Verschluesselung nach wie vor nur auf einem Windows-Lauf.
+ * WARUM NICHT `assumeTrue` -- gemessen, nicht vermutet:
  *
- * NICHT NACHGEMESSEN: dass die vier unter Linux tatsaechlich als uebersprungen gezaehlt werden.
- * Auf einem Windows-Rechner ist `isAvailable` wahr, die Annahme greift also nie -- die Umstellung
- * laesst sich hier nicht pruefen. Das gehoert auf einen Linux-Lauf.
+ * Vom 19. bis zum 20.08.2026 stand hier `assumeTrue(GRUND, SecretStore.isAvailable)` statt des
+ * fruehen `return`, damit der Lauf die vier als UEBERSPRUNGEN zaehlt statt als bestanden. Das
+ * funktioniert nicht. Nachgemessen auf einer Linux-VM am 20.08.2026, Zahlen aus dem JUnit-XML:
+ *
+ *     tests=4  failures=4  errors=0  skipped=0
+ *     org.junit.AssumptionViolatedException: DPAPI gibt es nur unter Windows; ...
+ *
+ * Vier ROTE Tests, nicht vier uebersprungene -- und damit `BUILD FAILED` bei jedem Volllauf
+ * ausserhalb von Windows. Der Grund steckt in der Vererbung: diese Klasse erbt von
+ * `junit.framework.TestCase` und wird deshalb ueber die Vintage-Engine von
+ * `JUnit38ClassRunner` ausgefuehrt. Der reicht jede geworfene Ausnahme ueber
+ * `TestResult.addError` als Fehler weiter; die Sonderbehandlung fuer die
+ * `AssumptionViolatedException` sitzt im JUnit-4-Runner, den eine JUnit-3-`TestCase` nie
+ * erreicht. Auf einem Windows-Rechner faellt das nie auf, weil `isAvailable` dort wahr ist und
+ * die Annahme gar nicht erst greift -- genau deshalb ging die Umstellung ungeprueft hinaus.
+ *
+ * Der Kommentar, der bis zum 20.08.2026 hier stand, behauptete das Gegenteil: die Vintage-Engine
+ * melde die Annahme als uebersprungen. Das war eine Annahme ueber die Annahme, keine Messung,
+ * und sie ist falsch.
+ *
+ * Wer die vier wirklich als uebersprungen gezaehlt haben will, muss die Klasse von `TestCase`
+ * loesen und sie als JUnit-4- oder Jupiter-Test mit `@Test` schreiben. Solange sie eine
+ * JUnit-3-`TestCase` ist, bleibt der fruehe `return`: vier falsch-gruene Tests sind ein
+ * Buchhaltungsfehler, vier rote sind ein kaputter Bau auf jeder Nicht-Windows-Maschine.
+ *
+ * FUERS LESEN DER ZAHLEN: eine Linux-Grundlinie ist genauso gross wie eine Windows-Grundlinie,
+ * diese vier eingerechnet. Der Unterschied steckt nicht in der Zahl, sondern darin, was
+ * dahinter gemessen wurde -- unter Linux naemlich nichts.
  */
-/**
- * [Fork-Aenderung] Der Grund fuers Ueberspringen, damit er im Bericht steht und nicht nur hier.
- *
- * `assumeTrue` statt `return`: eine Methode, die ohne Zusicherung zurueckkommt, zaehlt JUnit als
- * BESTANDEN. Vier gruene Tests, die nichts gemessen haben, stehen in derselben Zahl wie die
- * echten -- genau das, wovor der Kommentar oben warnt. Uebersprungen zaehlt getrennt.
- *
- * `org.junit.Assume` und nicht `org.junit.jupiter.api.Assumptions`: diese Klasse erbt von
- * `junit.framework.TestCase`, laeuft also ueber die Vintage-Engine. Deren Runner kennt die
- * AssumptionViolatedException und meldet sie als uebersprungen; die Jupiter-Fassung wuerde hier
- * nicht greifen.
- */
-private const val GRUND = "DPAPI gibt es nur unter Windows; hier wird nichts geprueft."
-
 class TokenEncryptionTest : TestCase() {
 
   private val geheim = "1234567890abcdef1234567890abcdef"
   private val key = "mail=natalie@example.invalid"
 
   fun testTheTokenIsNotReadableInTheFile() {
-    assumeTrue(GRUND, SecretStore.isAvailable)
+    if (!SecretStore.isAvailable) return
     val text = encodeTokenMap(mapOf(key to geheim))
     assertFalse("der Token darf im gespeicherten Text nicht auftauchen: $text",
       text.contains(geheim))
@@ -63,7 +71,7 @@ class TokenEncryptionTest : TestCase() {
   }
 
   fun testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite() {
-    assumeTrue(GRUND, SecretStore.isAvailable)
+    if (!SecretStore.isAvailable) return
     // So sah die Datei vor dieser Aenderung aus: nur URL-kodiert.
     val alt = "mail%3Dnatalie%40example.invalid:$geheim"
     assertEquals("wer schon einen Token hatte, darf ihn nicht verlieren",
@@ -81,7 +89,7 @@ class TokenEncryptionTest : TestCase() {
    * fest, damit niemand die Eigenschaft spaeter fuer einen Fehler haelt und "repariert".
    */
   fun testTheSameTokenYieldsDifferentCiphertext() {
-    assumeTrue(GRUND, SecretStore.isAvailable)
+    if (!SecretStore.isAvailable) return
     val einmal = encodeTokenMap(mapOf(key to geheim))
     val nochmal = encodeTokenMap(mapOf(key to geheim))
     assertFalse("gleicher Chiffretext hiesse: gleiche Geheimnisse sind erkennbar",
@@ -91,7 +99,7 @@ class TokenEncryptionTest : TestCase() {
 
   /** Zwei gleiche Token duerfen keine Kollisionsfrage ausloesen. */
   fun testTheSameTokenIsNoCollision() {
-    assumeTrue(GRUND, SecretStore.isAvailable)
+    if (!SecretStore.isAvailable) return
     val gespeichert = encodeTokenMap(mapOf(key to geheim, "name=Natalie" to geheim))
     val ergebnis = tokenKeyChange(gespeichert, "name=Natalie", key)
     assertFalse("derselbe Token unter beiden Schluesseln ist keine Kollision, war aber $ergebnis",
