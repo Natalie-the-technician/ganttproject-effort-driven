@@ -33,6 +33,7 @@ import net.sourceforge.ganttproject.timetracking.TogglConnectionAction;
 import net.sourceforge.ganttproject.timetracking.TogglImportAction;
 // [Fork-Aenderung] Kapazitaetsverteilung.
 import net.sourceforge.ganttproject.fork.AskBeforeWriting;
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.fork.BackfillAction;
 import net.sourceforge.ganttproject.fork.LevellingAction;
 import net.sourceforge.ganttproject.fork.EstimateQualityAction;
@@ -170,14 +171,32 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     // Text in die Vorlagen <kanal>.channel.itemTitle/itemBody ein -- und fuer den Kanal RSS gibt es
     // diese Vorlagen nicht. Der Kasten haette dann "rss.channel.itemBody" angezeigt und unsere
     // Meldung stillschweigend verschluckt, weil MessageFormat ohne {0} das Argument verwirft.
-    ConnectionCheckMessageSink togglMessages = (isProblem, message) -> {
-      var manager = getUIFacade().getNotificationManager();
-      manager.addNotifications(List.of(manager.createNotification(
-          isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS,
-          TogglConnectionAction.getNotificationTitle(),
-          "<p>" + message.replace("\n", "<br>") + "</p>",
-          null)));
-    };
+    // [Fork-Aenderung] Die Ueberschrift kommt jetzt vom Aufrufer, nicht mehr fest von Toggl.
+    //
+    // Vorher teilten sich ALLE Aktionen dieses Forks denselben Kasten -- und damit den Titel
+    // "Toggl-Verbindung". Am Bildschirm gesehen: die Meldung "Es ist keine Wiederholung
+    // eingetragen" erschien unter dieser Ueberschrift. Wer sie liest, sucht den Fehler bei einer
+    // Verbindung, die mit der Sache nichts zu tun hat.
+    //
+    // Ein Supplier und keine Zeichenkette, aus demselben Grund, aus dem notificationTitle ein
+    // Getter ist: die Sprache kann sich waehrend des Laufs aendern, ein hier festgehaltener Text
+    // bliebe in der Sprache des Programmstarts stehen.
+    java.util.function.Function<java.util.function.Supplier<String>, ConnectionCheckMessageSink> messageSink =
+        title -> (isProblem, message) -> {
+          var manager = getUIFacade().getNotificationManager();
+          manager.addNotifications(List.of(manager.createNotification(
+              isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS,
+              title.get(),
+              "<p>" + message.replace("\n", "<br>") + "</p>",
+              null)));
+        };
+    ConnectionCheckMessageSink togglMessages =
+        messageSink.apply(TogglConnectionAction::getNotificationTitle);
+    // Aufwand ableiten und Kapazitaet verteilen gehoeren zusammen und teilen sich die Ueberschrift.
+    ConnectionCheckMessageSink capacityMessages =
+        messageSink.apply(() -> ForkI18nKt.forkText("fork.capacity.title"));
+    ConnectionCheckMessageSink recurrenceMessages =
+        messageSink.apply(() -> ForkI18nKt.forkText("fork.recurrence.title"));
     mHuman.add(new TogglConnectionAction(getHumanResourceManager(), togglMessages));
 
     // [Fork-Aenderung] Import der Toggl-Zeiten. Vor dem Schreiben wird gefragt: die Vorschau nennt
@@ -220,7 +239,7 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         getHumanResourceManager().getCustomPropertyManager(),
         getProjectDatabase(),
         getUndoManager(),
-        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
+        (isProblem, message) -> { capacityMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
     mHuman.add(new LevellingAction(
         getTaskManager(),
@@ -233,7 +252,7 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         // waere nach dem ersten Oeffnen einer Datei verwaist -- am Rechner gemessen.
         () -> (java.util.List<net.sourceforge.ganttproject.GanttPreviousState>) getBaselines(),
         java.time.LocalDate::now,
-        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
+        (isProblem, message) -> { capacityMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
 
     // [Fork-Aenderung] Auswertung der Schaetzguete. Schreibt NICHTS und fragt deshalb auch nicht.
@@ -261,7 +280,7 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         getProject().getTaskCustomColumnManager(),
         getProjectDatabase(),
         getUndoManager(),
-        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
+        (isProblem, message) -> { recurrenceMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
