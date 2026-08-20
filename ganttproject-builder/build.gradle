@@ -127,6 +127,28 @@ tasks.register('distZip', Zip) {
 }
 tasks.distZip.dependsOn distBin
 
+// [Fork-Aenderung] Das Windows-Paket als Archiv, statt es von Hand zu packen.
+//
+// distApp erzeugt nur das VERZEICHNIS dist-app/GanttProject. Bis hierher wurde daraus von Hand
+// ein Zip gemacht -- zweimal nachweislich, in zwei Sitzungen, und beide Male ohne dass es im
+// Bauskript stand. Ein Bauweg, der einen Handgriff braucht, ist keiner: der Dateiname war nicht
+// garantiert, der Kurz-Commit im Namen erst recht nicht, und niemand konnte das Paket
+// nachbauen.
+//
+// Dasselbe Namensschema und derselbe Log-Ausschluss wie beim generischen Zip. Die 32-Bit-exe
+// muss hier nicht ausgeschlossen werden -- distApp nimmt sie schon nicht in den Zwischenstand
+// auf (siehe exclude weiter unten im distApp-Task).
+tasks.register('distWin64Zip', Zip) {
+    // Als Zeichenkette und nicht als Verweis: distApp wird weiter unten in dieser Datei
+    // definiert, hier oben gibt es die Eigenschaft noch nicht. Gradle bricht sonst schon beim
+    // Auswerten ab -- "Could not get unknown property 'distApp'".
+    dependsOn 'distApp'
+    archiveFileName = "ganttproject-effort-driven-${version}-win64-${forkCommit}.zip"
+    destinationDirectory = rootProject.layout.buildDirectory.dir("distributions")
+    from 'dist-app'
+    exclude '*.log'
+}
+
 // [fork change] Builds the bundled Java runtime so that ganttproject.exe starts.
 //
 // WHY THIS IS NECESSARY: ganttproject-launch4j.xml points at a runtime under .\runtime\. It was
