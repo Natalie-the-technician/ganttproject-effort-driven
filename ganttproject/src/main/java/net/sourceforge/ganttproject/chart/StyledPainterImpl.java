@@ -206,15 +206,7 @@ public class StyledPainterImpl implements Painter {
       @Override
       public void paint(Rectangle next) {
         Graphics g = myGraphics;
-        final Color c;
-        if (next.hasStyle("earlier")) {
-          c = myConfig.getEarlierPreviousTaskColor();
-        } else if (next.hasStyle("later")) {
-          c = myConfig.getLaterPreviousTaskColor();
-        } else {
-          c = myConfig.getPreviousTaskColor();
-        }
-        g.setColor(c);
+        g.setColor(getComparisonBandColor(next));
 
         if (next.hasStyle("milestone")) {
           int middleX = (next.getWidth() <= next.getHeight()) ? next.getRightX() - next.getWidth() / 2 : next.getLeftX()
@@ -280,6 +272,24 @@ public class StyledPainterImpl implements Painter {
   public void prePaint() {
     myGraphics.setStroke(defaultStroke);
     myGraphics.setFont(myConfig.getChartFont());
+  }
+
+  /**
+   * Die Farbe des Vergleichsbandes unter dem Vorgangsbalken.
+   *
+   * [Fork-Aenderung] Herausgezogen aus dem Rechteck-Maler, weil sie jetzt an zwei Stellen
+   * gebraucht wird: fuer das Band eines gewoehnlichen Vorgangs und fuer die Raute eines
+   * Meilensteins. Die Raute nimmt einen anderen Weg durch den Maler, siehe
+   * {@link #paint(Canvas.Rhombus)}.
+   */
+  private Color getComparisonBandColor(Canvas.Shape shape) {
+    if (shape.hasStyle("earlier")) {
+      return myConfig.getEarlierPreviousTaskColor();
+    }
+    if (shape.hasStyle("later")) {
+      return myConfig.getLaterPreviousTaskColor();
+    }
+    return myConfig.getPreviousTaskColor();
   }
 
   @Override
@@ -348,6 +358,34 @@ public class StyledPainterImpl implements Painter {
 
   @Override
   public void paint(Canvas.Rhombus rhombus) {
+    // [Fork-Aenderung] ---- Anfang ----
+    //
+    // EIN MEILENSTEIN IST EINE RAUTE UND KEIN RECHTECK. TaskActivitySceneBuilder erzeugt fuer
+    // ihn eine Canvas.Rhombus, und die landete bisher ungeprueft beim PolygonRenderer -- der
+    // schaut nie in myStyle2painter. Das Vergleichsband eines Meilensteins wurde deshalb in der
+    // FARBE DES VORGANGS gemalt statt in einer der drei Vergleichsfarben, und der
+    // milestone-Zweig im Bandmaler weiter oben war toter Code: er kann nie ein Rechteck
+    // bekommen.
+    //
+    // Gemessen am 20.08.2026 an einem echten Plan: die Raute eines verschobenen Meilensteins
+    // kam als srgb(255,51,51) heraus -- das ist die Vorgangsfarbe, keine der Vergleichsfarben
+    // (192,192,192 / 229,50,50 / 50,229,50). 27 Rauten waren betroffen, 20 davon sahen rot aus,
+    // ohne dass eine einzige eine Rotfaerbung des Vergleichs gewesen waere.
+    //
+    // Das ist ein Fehler DES ORIGINALS, nicht dieses Forks: auf e523bedc6 steht dieselbe
+    // Rauten-Erzeugung und derselbe Weg durch den Maler.
+    //
+    // [Fork-Aenderung] ---- Ende ----
+    // ACHTUNG, hier war schon ein Fehlversuch: `setStyle` und `addStyle` fuellen in
+    // Canvas.Shape ZWEI VERSCHIEDENE Felder. `hasStyle` sieht nur, was `addStyle` abgelegt hat;
+    // der Hauptstil aus `setStyle` steht in `getStyle()`. Eine Abfrage ueber
+    // hasStyle("previousStateTask") ist deshalb immer falsch.
+    if ("previousStateTask".equals(rhombus.getStyle())) {
+      Graphics g = myGraphics;
+      g.setColor(getComparisonBandColor(rhombus));
+      g.fillPolygon(rhombus.getPointsX(), rhombus.getPointsY(), rhombus.getPointCount());
+      return;
+    }
     myPolygonRenderer.render(rhombus);
   }
 }

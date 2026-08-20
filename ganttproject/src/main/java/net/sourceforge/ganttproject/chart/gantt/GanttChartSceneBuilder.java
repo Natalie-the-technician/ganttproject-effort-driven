@@ -30,6 +30,9 @@ import biz.ganttproject.core.time.TimeDuration;
 import biz.ganttproject.core.time.TimeUnit;
 import biz.ganttproject.customproperty.CustomPropertyManager;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
+import net.sourceforge.ganttproject.fork.ChartComparison;
+import net.sourceforge.ganttproject.fork.ChartComparisonKt;
+import net.sourceforge.ganttproject.fork.Vergleichsbefund;
 import net.sourceforge.ganttproject.gui.options.OptionsPageBuilder;
 import net.sourceforge.ganttproject.task.*;
 
@@ -56,6 +59,19 @@ public class GanttChartSceneBuilder {
     List<ITaskSceneTask> getVisibleTaskSceneTasks();
     List<ITaskSceneTask> getTasksInDocumentOrder();
     List<GanttPreviousStateTask> getBaseline();
+
+    /** [Fork-Aenderung] Was das Band unter dem Balken vergleicht. Siehe {@link ChartComparison}. */
+    ChartComparison getComparison();
+
+    /**
+     * [Fork-Aenderung] Die urspruengliche Aufwandsschaetzung des Vorgangs in Stunden, oder null.
+     * Ueber die Zeilennummer statt ueber den Vorgang, weil ITaskSceneTask bewusst nichts von
+     * Sonderspalten weiss.
+     */
+    Double getOriginalEffortHours(int rowId);
+
+    /** [Fork-Aenderung] Die erfassten Ist-Stunden des Vorgangs, oder null. */
+    Double getActualEffortHours(int rowId);
     TaskActivitySceneBuilder.ChartApi getChartApi(TaskLabelSceneBuilder<ITaskSceneTask> labelsRenderer);
     GPCalendarCalc getCalendar();
     Date getStartDate();
@@ -207,7 +223,7 @@ public class GanttChartSceneBuilder {
         }
       }
       renderLabels(boundPolygons);
-      renderBaseline(t, rowNum, defaultUnitOffsets);
+      renderComparisonBand(t, rowNum, defaultUnitOffsets);
       rowNum++;
       Canvas.Line nextLine = getPrimitiveContainer().createLine(0, rowNum * getRowHeight(),
           input.getWidth(), rowNum * getRowHeight());
@@ -219,82 +235,127 @@ public class GanttChartSceneBuilder {
     return myChartApi.getRowHeight();
   }
 
+  /**
+   * [Fork-Aenderung] Zeichnet das Band unter dem Vorgangsbalken -- je nach gewaehlter Ansicht
+   * den Basisplanvergleich (Termin) oder den Aufwandsvergleich. Siehe {@link ChartComparison}
+   * fuer die Begruendung, warum es zwei sind und nicht eine.
+   */
+  private void renderComparisonBand(ITaskSceneTask t, int rowNum, OffsetList defaultUnitOffsets) {
+    if (input.getComparison() == ChartComparison.AUFWAND) {
+      renderEffortBand(t, rowNum, defaultUnitOffsets);
+    } else {
+      renderBaseline(t, rowNum, defaultUnitOffsets);
+    }
+  }
+
+  /**
+   * [Fork-Aenderung] Das Aufwandsband: erfasste Ist-Stunden gegen die urspruengliche Schaetzung.
+   *
+   * Es braucht KEINEN Basisplan -- beide Zahlen stehen am Vorgang selbst. Das Band liegt deshalb
+   * genau unter dem Vorgangsbalken und ist genauso lang wie er; die Aussage steckt allein in der
+   * Farbe. Eine eigene Laenge waere eine zweite Aussage und wuerde nur verwirren: wie lange ein
+   * Vorgang im Kalender dauert, hat mit den gebrauchten Stunden nichts zu tun -- genau das ist
+   * die Trennung, wegen der es diese Ansicht gibt.
+   */
+  private void renderEffortBand(ITaskSceneTask t, int rowNum, OffsetList defaultUnitOffsets) {
+    Vergleichsbefund befund = ChartComparisonKt.aufwandVergleich(
+        input.getOriginalEffortHours(t.getRowId()),
+        input.getActualEffortHours(t.getRowId()));
+    if (befund == Vergleichsbefund.KEIN_BAND) {
+      return;
+    }
+    List<ITaskActivity<ITaskSceneTask>> activities = t.getActivities();
+    if (activities.isEmpty()) {
+      return;
+    }
+    paintBand(rowNum, defaultUnitOffsets, mySplitter.split(activities, Integer.MAX_VALUE),
+        befund, t.isMilestone());
+  }
+
+  /**
+   * Das Terminband: das Ende von heute gegen das Ende im Basisplan.
+   *
+   * [Fork-Aenderung] ---- Anfang ----
+   *
+   * DIESE METHODE HATTE ZWISCHENZEITLICH EINE ANDERE REGEL. Vom 17.08. bis zum 20.08.2026
+   * verglich sie die DAUERN statt der Enddaten, weil die Beschriftung im Basisplan-Dialog von
+   * der Dauer spricht und ein bloss verschobener Vorgang sonst rot wurde.
+   *
+   * WARUM DAS ZURUECKGENOMMEN IST, gemessen am 20.08.2026: in diesem Fork ist die Dauer eines
+   * Vorgangs keine Eingabe, sondern ein Rechenergebnis aus Aufwand und Tagesleistung. An einem
+   * echten Plan wurde die Tagesleistung von 8 auf 1,8 Stunden gesetzt -- 163 von 163 Vorgaengen
+   * mit Aufwand wurden dadurch um den Faktor 4,44 laenger, 194 von 276 Zeilen wurden rot, und
+   * kein einziger Aufwand hatte sich um eine Stunde geaendert. Ein Dauervergleich beantwortet
+   * also weder "liege ich im Zeitplan" noch "habe ich mich verschaetzt".
+   *
+   * Beide Fragen haben jetzt ihre eigene Ansicht. HIER gilt wieder die Regel des Originals --
+   * das Ende --, und damit stimmt auch die Beschriftung im Dialog wieder, die vom Fertigwerden
+   * spricht.
+   *
+   * Was bleibt: gezeichnet wird, sobald das Ende ein anderes ist. Gleiches Ende heisst
+   * planmaessig und laesst die Zeile leer.
+   *
+   * [Fork-Aenderung] ---- Ende ----
+   */
   private void renderBaseline(ITaskSceneTask t, int rowNum, OffsetList defaultUnitOffsets) {
     TaskActivitiesSceneAlgorithm alg = new TaskActivitiesSceneAlgorithm(
       input.getCalendar(),
       (Date s, Date e) -> input.createLength(t.getDuration().getTimeUnit(), s, e)
     );
     List<GanttPreviousStateTask> baseline = input.getBaseline();
-    if (baseline != null) {
-      for (GanttPreviousStateTask taskBaseline : baseline) {
-        if (taskBaseline.getId() == t.getRowId()) {
-          Date startDate = taskBaseline.getStart().getTime();
-          TimeDuration duration = input.createLength(taskBaseline.getDuration());
-          Date endDate = input.getCalendar().shiftDate(startDate, duration);
-          // [Fork-Aenderung] ---- Anfang ----
-          //
-          // DAS ORIGINAL VERGLEICHT ENDDATEN, die Beschriftung im Basisplan-Dialog spricht aber
-          // von der DAUER ("Vorgang dauert laenger"). Beides faellt auseinander, sobald ein
-          // Vorgang nur verschoben wird: gleiche Dauer, spaeteres Ende -- und er wird rot
-          // eingefaerbt, als brauchte er laenger.
-          //
-          // DIE REGEL, festgelegt am 17.08.2026: rot wird ein Balken, wenn der Vorgang LAENGER
-          // braucht; eine andere Farbe, wenn er gleich lang oder kuerzer braucht; nicht rot, wenn
-          // er nur woanders liegt. Der Grund ist nicht Geschmack: in diesem Fork
-          // VERSCHIEBT die Kapazitaetsverteilung sehr viele Vorgaenge, ohne ihre Dauer zu
-          // aendern. Nach der alten Regel waere danach fast alles rot -- und eine Farbe, die
-          // immer leuchtet, sagt nichts mehr.
-          //
-          // Der zweite Unterschied: das Original zeichnet GAR KEINEN Basisplanbalken, wenn die
-          // Enddaten gleich sind. Ein Vorgang, der frueher anfaengt und genauso endet, also
-          // laenger dauert, blieb damit unsichtbar. Gezeichnet wird jetzt, sobald sich Anfang
-          // ODER Dauer geaendert hat.
-          int baselineDays = taskBaseline.getDuration();
-          int currentDays = t.getDuration().getLength();
-          // Gleiches Ende UND gleiche Dauer heisst: der Vorgang liegt unveraendert. Ueber das
-          // Ende verglichen und nicht ueber den Anfang, weil ITaskSceneTask keinen Anfang
-          // herausgibt -- bei gleicher Dauer ist das dieselbe Aussage.
-          boolean sameEnd = endDate.equals(t.getEnd().getTime());
-          if (sameEnd && baselineDays == currentDays) {
-            return;
-          }
-          List<String> styles = new ArrayList<String>();
-          if (t.isMilestone()) {
-            styles.add("milestone");
-          }
-          if (currentDays > baselineDays) {
-            styles.add("later");    // rot: braucht laenger
-          } else if (currentDays < baselineDays) {
-            styles.add("earlier");  // gruen: geht schneller
-          }
-          // Gleiche Dauer: keine der beiden Farben. Der Balken bleibt neutral und zeigt nur, dass
-          // der Vorgang woanders liegt -- das ist eine Verschiebung, keine Abweichung im Aufwand.
-          // [Fork-Aenderung] ---- Ende ----
-          List<ITaskActivity<ITaskSceneTask>> baselineActivities = new ArrayList<ITaskActivity<ITaskSceneTask>>();
-          if (t.isMilestone()) {
-            baselineActivities.add(
-              new TaskSceneMilestoneActivity(t, startDate, endDate, input.createLength(1))
-            );
-          } else {
-            alg.recalculateActivities(t, baselineActivities, startDate, endDate);
-          }
-          List<Polygon> baselineRectangles = myBaselineActivityRenderer.renderActivities(rowNum, baselineActivities,
-              defaultUnitOffsets);
-          for (int i = 0; i < baselineRectangles.size(); i++) {
-            Polygon r = baselineRectangles.get(i);
-            r.setStyle("previousStateTask");
-            for (String s : styles) {
-              r.addStyle(s);
-            }
-            if (i == 0) {
-              r.addStyle("start");
-            }
-            if (i == baselineRectangles.size() - 1) {
-              r.addStyle("end");
-            }
-          }
-          return;
-        }
+    if (baseline == null) {
+      return;
+    }
+    for (GanttPreviousStateTask taskBaseline : baseline) {
+      if (taskBaseline.getId() != t.getRowId()) {
+        continue;
+      }
+      Date startDate = taskBaseline.getStart().getTime();
+      TimeDuration duration = input.createLength(taskBaseline.getDuration());
+      Date endDate = input.getCalendar().shiftDate(startDate, duration);
+      Vergleichsbefund befund = ChartComparisonKt.terminVergleich(endDate, t.getEnd().getTime());
+      if (befund == Vergleichsbefund.KEIN_BAND) {
+        return;
+      }
+      List<ITaskActivity<ITaskSceneTask>> baselineActivities = new ArrayList<ITaskActivity<ITaskSceneTask>>();
+      if (t.isMilestone()) {
+        baselineActivities.add(
+          new TaskSceneMilestoneActivity(t, startDate, endDate, input.createLength(1))
+        );
+      } else {
+        alg.recalculateActivities(t, baselineActivities, startDate, endDate);
+      }
+      paintBand(rowNum, defaultUnitOffsets, baselineActivities, befund, t.isMilestone());
+      return;
+    }
+  }
+
+  /**
+   * [Fork-Aenderung] Gemeinsames Malen der beiden Baender. Vorher stand dieser Block nur einmal
+   * im Basisplanzweig; er ist herausgezogen, damit die Aufwandsansicht nicht dieselbe Stilkette
+   * ein zweites Mal beschreiben muss -- zwei Kopien waeren zwei Gelegenheiten, sie
+   * auseinanderlaufen zu lassen.
+   */
+  private void paintBand(int rowNum, OffsetList defaultUnitOffsets,
+                         List<ITaskActivity<ITaskSceneTask>> activities,
+                         Vergleichsbefund befund, boolean isMilestone) {
+    List<Polygon> bandRectangles = myBaselineActivityRenderer.renderActivities(rowNum, activities,
+        defaultUnitOffsets);
+    String farbstil = ChartComparisonKt.stilName(befund);
+    for (int i = 0; i < bandRectangles.size(); i++) {
+      Polygon r = bandRectangles.get(i);
+      r.setStyle("previousStateTask");
+      if (isMilestone) {
+        r.addStyle("milestone");
+      }
+      if (farbstil != null) {
+        r.addStyle(farbstil);
+      }
+      if (i == 0) {
+        r.addStyle("start");
+      }
+      if (i == bandRectangles.size() - 1) {
+        r.addStyle("end");
       }
     }
   }

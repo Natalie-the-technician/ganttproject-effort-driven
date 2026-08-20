@@ -32,6 +32,9 @@ import biz.ganttproject.core.time.TimeUnit;
 import biz.ganttproject.customproperty.CustomPropertyManager;
 import com.google.common.collect.ImmutableList;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
+import net.sourceforge.ganttproject.fork.ChartComparison;
+import net.sourceforge.ganttproject.fork.LevellingAdapterKt;
+import net.sourceforge.ganttproject.task.algorithm.EffortDrivenDurationAlgorithmKt;
 import net.sourceforge.ganttproject.chart.gantt.*;
 import net.sourceforge.ganttproject.task.*;
 
@@ -121,6 +124,30 @@ public class TaskRendererImpl2 extends ChartRendererBase {
     }
 
     @Override
+    public ChartComparison getComparison() {
+      return myModel.getComparison();
+    }
+
+    /**
+     * [Fork-Aenderung] Die Aufwandszahlen holt der Renderer hier, nicht im Szenenbauer: nur hier
+     * gibt es den echten Vorgang und die Spaltenverwaltung. Ein Vorgang, den es nicht mehr gibt,
+     * liefert null -- der Aufwandsvergleich zeichnet dann nichts.
+     */
+    @Override
+    public Double getOriginalEffortHours(int rowId) {
+      Task task = myModel.getTaskManager().getTask(rowId);
+      return task == null ? null
+        : LevellingAdapterKt.originalEffortHours(task, myModel.getTaskManager().getCustomPropertyManager());
+    }
+
+    @Override
+    public Double getActualEffortHours(int rowId) {
+      Task task = myModel.getTaskManager().getTask(rowId);
+      return task == null ? null
+        : EffortDrivenDurationAlgorithmKt.actualEffortHours(task, myModel.getTaskManager().getCustomPropertyManager());
+    }
+
+    @Override
     public TaskActivitySceneBuilder.ChartApi getChartApi(TaskLabelSceneBuilder<ITaskSceneTask> labelsRenderer) {
       return new TaskActivitySceneChartApi(myModel) {
         @Override
@@ -189,7 +216,9 @@ public class TaskRendererImpl2 extends ChartRendererBase {
 
   public int calculateRowHeight() {
     int rowHeight = chartRenderer.myLabelsRenderer.calculateRowHeight();
-    if (myModel.getBaseline() != null) {
+    // [Fork-Aenderung] Die Aufwandsansicht braucht denselben Platz fuer ihr Band, obwohl sie
+    // ohne Basisplan auskommt. Ohne diese Zeile zeichnet sie in die Zeile darunter.
+    if (myModel.getBaseline() != null || myModel.getComparison() == ChartComparison.AUFWAND) {
       rowHeight = rowHeight + 8;
     }
     return rowHeight;

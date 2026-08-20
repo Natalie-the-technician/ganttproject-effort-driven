@@ -34,6 +34,7 @@ import net.sourceforge.ganttproject.chart.gantt.GanttChartController;
 import net.sourceforge.ganttproject.chart.item.CalendarChartItem;
 import net.sourceforge.ganttproject.chart.item.ChartItem;
 import net.sourceforge.ganttproject.document.Document;
+import net.sourceforge.ganttproject.fork.ChartComparison;
 import net.sourceforge.ganttproject.gui.UIConfiguration;
 import net.sourceforge.ganttproject.gui.zoom.ZoomManager;
 import net.sourceforge.ganttproject.language.GanttLanguage;
@@ -242,6 +243,23 @@ public class GanttGraphicArea extends ChartComponentBase implements GanttChart, 
   @Override
   public GanttPreviousState getBaseline() {
     return myBaseline;
+  }
+
+  @Override
+  public ChartComparison getComparison() {
+    return myChartModel.getComparison();
+  }
+
+  /**
+   * [Fork-Aenderung] Wie {@link #setBaseline}: die neue Zeilenhoehe muss an die Tabelle
+   * durchgereicht werden, sonst zeichnet das Aufwandsband in die Zeile darunter.
+   */
+  @Override
+  public void setComparison(ChartComparison comparison) {
+    int rowHeight = myChartModel.setComparison(comparison);
+    taskTableChartConnector.getRowHeight().setValue(Math.max(
+        rowHeight + 0.0, taskTableChartConnector.getMinRowHeight().getValue()
+    ));
   }
 
   @Override
