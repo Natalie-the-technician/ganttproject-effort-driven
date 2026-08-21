@@ -145,17 +145,17 @@ class CalculatedPropertyTest {
   }
 
   /**
-   * [Fork-Aenderung] Eine Dezimalspalte muss ihre Nachkommastellen behalten.
+   * [fork change] A decimal column has to keep its decimal places.
    *
-   * FEHLER IM ORIGINAL: die Spiegeltabelle legte DOUBLE-Spalten als `numeric` an. In H2 hat
-   * NUMERIC ohne Angabe die Nachkommastellen 0, jeder Dezimalwert wurde beim Schreiben also auf
-   * eine ganze Zahl gerundet -- 12,5 kam als 13 zurueck. Nichts warf dabei etwas: die Zahl war
-   * nur still falsch.
+   * BUG IN THE ORIGINAL: the mirror table created DOUBLE columns as `numeric`. In H2, NUMERIC
+   * without a specification has a scale of 0, so every decimal value was rounded to a whole
+   * number on write -- 12.5 came back as 13. Nothing threw anything in the process: the number
+   * was just quietly wrong.
    *
-   * Bewusst ueber eine GEWOEHNLICHE benutzerdefinierte Spalte statt ueber eine eigene Spalte
-   * dieses Forks: der Fehler steckt im Original und betrifft jede Dezimalspalte, die ein Benutzer
-   * anlegt. Beim geplanten Aufwand fiel er bisher nur nicht auf, weil die Tests glatte Werte
-   * benutzten.
+   * Deliberately through an ORDINARY user-defined column instead of through a column of this
+   * fork's own: the bug is in the original and affects every decimal column a user creates. With
+   * the planned effort it simply had not been noticed so far, because the tests used round
+   * values.
    */
   @Test
   fun `a decimal custom property keeps its fraction in the database`() {

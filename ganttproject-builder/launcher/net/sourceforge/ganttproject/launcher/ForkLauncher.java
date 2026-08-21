@@ -7,27 +7,27 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+ * NEW FILE IN THIS FORK — not present in the original GanttProject.
  *
- * Hauptklasse des jpackage-Starters. Bringt die eclipsito-Argumente selbst mit und haengt an, was
- * von aussen kam.
+ * Main class of the jpackage launcher. Carries the eclipsito arguments itself and appends whatever
+ * came from outside.
  *
- * WARUM ES SIE GIBT: jpackage schreibt die Argumente aus {@code --arguments} als {@code
- * [ArgOptions]} in die .cfg, benutzt sie aber NUR ALS VORGABE. Sobald der Starter mit Argumenten
- * aufgerufen wird -- und beim Doppelklick auf eine .gan uebergibt Windows genau eines, den
- * Dateipfad -- werden die Vorgaben vollstaendig ERSETZT. eclipsito bekommt dann nur noch einen
- * Dateinamen, ohne {@code --app} und ohne {@code --version-dirs}, bricht ab, und der Starter meldet
- * pauschal "Failed to launch JVM".
+ * WHY IT EXISTS: jpackage writes the arguments from {@code --arguments} into the .cfg as {@code
+ * [ArgOptions]}, but uses them ONLY AS A DEFAULT. As soon as the launcher is called with arguments
+ * -- and on a double click on a .gan Windows passes exactly one, the file path -- the defaults are
+ * REPLACED completely. eclipsito then only gets a file name, without {@code --app} and without
+ * {@code --version-dirs}, aborts, and the launcher reports a blanket
+ * "Failed to launch JVM".
  *
- * AM RECHNER GEMESSEN, nicht vermutet:
+ * MEASURED ON THE MACHINE, not guessed:
  * <pre>
- *   Arbeitsverzeichnis Programmordner, ohne Argument -> Protokoll geschrieben, JVM lief
- *   Arbeitsverzeichnis C:\,             ohne Argument -> Protokoll geschrieben, JVM lief
- *   Arbeitsverzeichnis C:\,             MIT .gan      -> kein Protokoll, "Failed to launch JVM"
- *   Arbeitsverzeichnis C:\,  volle Argumentliste + .gan -> Protokoll geschrieben, JVM lief
+ *   Working directory program folder, without argument -> log written, JVM ran
+ *   Working directory C:\,             without argument -> log written, JVM ran
+ *   Working directory C:\,             WITH .gan       -> no log, "Failed to launch JVM"
+ *   Working directory C:\,  full argument list + .gan -> log written, JVM ran
  * </pre>
- * Die naheliegende Vermutung -- das Arbeitsverzeichnis -- ist damit widerlegt: es ist egal. Es
- * liegt allein am uebergebenen Argument.
+ * The obvious suspicion -- the working directory -- is thereby refuted: it makes no difference. It
+ * is due solely to the argument passed in.
  */
 public class ForkLauncher {
 
@@ -37,15 +37,15 @@ public class ForkLauncher {
   public static void main(String[] args) throws Exception {
     List<String> full = new ArrayList<>(Arrays.asList(
         "--verbosity", "1",
-        // Absolut, nicht relativ: eclipsito loest einen relativen Pfad gegen das
-        // ARBEITSVERZEICHNIS auf, und das ist beim Doppelklick der Ordner der .gan-Datei.
+        // Absolute, not relative: eclipsito resolves a relative path against the
+        // WORKING DIRECTORY, and on a double click that is the folder of the .gan file.
         "--version-dirs", new File(appDir(), "plugins") + ";~/.ganttproject.d/updates",
         "--app", APP_MAIN,
-        // Bei einem Fenster-Programm gibt es keine Konsole. Ohne das Protokoll ist jeder
-        // Fehlstart eine Blackbox -- diese Fehlersuche haette ohne es nicht stattfinden koennen.
+        // A windowed program has no console. Without the log every failed start is a black
+        // box -- this investigation could not have taken place without it.
         "-log", "true"));
-    // Alles, was von aussen kam, ans Ende: eclipsito reicht die Argumente hinter --app an die
-    // Anwendung durch, und dort ist der Dateipfad der .gan-Datei erwartet.
+    // Everything that came from outside goes at the end: eclipsito passes the arguments after
+    // --app through to the application, and there the path of the .gan file is expected.
     full.addAll(Arrays.asList(args));
 
     Class.forName(ECLIPSITO_MAIN)
@@ -54,22 +54,22 @@ public class ForkLauncher {
   }
 
   /**
-   * Der app-Ordner des Starters.
+   * The app folder of the launcher.
    *
-   * Zuerst ueber den Ort dieser Klasse selbst -- sie liegt im app-Ordner, der als Klassenpfadwurzel
-   * eingetragen ist. Das ist unabhaengig davon, wo das Programm gestartet wurde, und genau darauf
-   * kommt es hier an.
+   * First via the location of this class itself -- it sits in the app folder, which is registered
+   * as a classpath root. That is independent of where the program was started from, and that is
+   * exactly what matters here.
    *
-   * Ersatzweise ueber {@code jpackage.app-path}, den Pfad der .exe: app-Ordner ist deren
-   * Nachbarordner "app". Ein Ersatzweg ist noetig, weil die erste Frage null liefern kann, wenn die
-   * Klasse anders geladen wurde -- und ohne app-Ordner findet eclipsito keine Plugins und tut
-   * stumm gar nichts.
+   * As a fallback via {@code jpackage.app-path}, the path of the .exe: the app folder is its
+   * sibling folder "app". A fallback is needed because the first question can return null if the
+   * class was loaded differently -- and without the app folder eclipsito finds no plugins and does
+   * nothing at all, silently.
    */
   private static File appDir() {
     try {
       URI location = ForkLauncher.class.getProtectionDomain().getCodeSource().getLocation().toURI();
       File file = new File(location);
-      // Als Verzeichnis auf dem Klassenpfad ist das direkt der app-Ordner, als Jar dessen Ordner.
+      // As a directory on the classpath this is the app folder itself, as a jar it is its folder.
       return file.isDirectory() ? file : file.getParentFile();
     } catch (Exception e) {
       String exe = System.getProperty("jpackage.app-path");
