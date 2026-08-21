@@ -140,15 +140,15 @@ class ProjectDatabaseTest {
   }
 
   /**
-   * [Fork-Aenderung] Eine Datumsspalte muss ihren Wert in die Spiegeltabelle bringen.
+   * [fork change] A date column has to get its value into the mirror table.
    *
-   * FEHLER IM ORIGINAL: `buildInsertTaskQuery` reichte den Wert unveraendert an jOOQ weiter.
-   * GanttProject legt ein Datum aber als `GregorianCalendar` ab, und jOOQ meldet dafuer
-   * "Type class java.util.GregorianCalendar is not supported in dialect DEFAULT". Damit war JEDE
-   * Datumsspalte unbrauchbar, sobald sie einen Wert bekam -- das Schreiben des Vorgangs brach ab.
+   * BUG IN THE ORIGINAL: `buildInsertTaskQuery` passed the value on to jOOQ unchanged. But
+   * GanttProject stores a date as a `GregorianCalendar`, and for that jOOQ reports
+   * "Type class java.util.GregorianCalendar is not supported in dialect DEFAULT". With that EVERY
+   * date column was unusable as soon as it got a value -- writing the Task aborted.
    *
-   * Bewusst ueber eine GEWOEHNLICHE benutzerdefinierte Spalte: der Fehler steckt im Original und
-   * trifft jede Datumsspalte, die ein Benutzer anlegt.
+   * Deliberately through an ORDINARY user-defined column: the bug is in the original and hits
+   * every date column a user creates.
    */
   @Test
   fun `a date custom property reaches the database`() {

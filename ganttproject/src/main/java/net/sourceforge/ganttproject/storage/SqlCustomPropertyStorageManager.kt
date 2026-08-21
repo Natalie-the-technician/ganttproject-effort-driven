@@ -88,9 +88,9 @@ fun generateSqlValueLiteral(def: CustomPropertyDefinition, value: Any?): String 
   value?.let {
     when (def.propertyClass) {
       CustomPropertyClass.TEXT -> "'${value}'"
-      // [Fork-Aenderung] Ein Datum als "$value" ergaebe die toString-Ausgabe eines
-      // GregorianCalendar ("java.util.GregorianCalendar[time=...]") und damit kaputtes SQL.
-      // Geschrieben wird ISO, das versteht H2 und es ist ausserdem richtig sortierbar.
+      // [fork change] A date as "$value" would give the toString output of a GregorianCalendar
+      // ("java.util.GregorianCalendar[time=...]") and therefore broken SQL. ISO is written
+      // instead, which H2 understands and which also sorts correctly.
       CustomPropertyClass.DATE -> when (value) {
         is java.util.GregorianCalendar -> "'%04d-%02d-%02d'".format(
           value.get(java.util.Calendar.YEAR), value.get(java.util.Calendar.MONTH) + 1,
@@ -115,10 +115,10 @@ private fun CustomPropertyClass.asSqlType() = when (this) {
   CustomPropertyClass.INTEGER -> "integer"
   CustomPropertyClass.DATE -> "date"
   CustomPropertyClass.BOOLEAN -> "boolean"
-  // [Fork-Aenderung] War "numeric". In H2 hat NUMERIC ohne Angabe die Nachkommastellen NULL, die
-  // Spiegeltabelle rundete also jede Dezimalzahl auf eine ganze: 12,5 Stunden wurden zu 13.
-  // Betrifft JEDE benutzerdefinierte Dezimalspalte, nicht nur die Zeiterfassung - beim geplanten
-  // Aufwand fiel es bisher nur nicht auf, weil die Tests glatte Werte benutzten.
-  // Nachgewiesen durch `actual effort can be stored right after its definition was created`.
+  // [fork change] Was "numeric". In H2, NUMERIC without a specification has a scale of NULL, so
+  // the mirror table rounded every decimal number to a whole one: 12.5 hours became 13.
+  // Affects EVERY user-defined decimal column, not only the time tracking - with the planned
+  // effort it simply had not been noticed so far, because the tests used round values.
+  // Demonstrated by `actual effort can be stored right after its definition was created`.
   CustomPropertyClass.DOUBLE -> "double precision"
 }

@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -25,45 +25,45 @@ import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 /**
- * Verschluesselt gespeicherte Geheimnisse mit dem Windows-Anmeldekonto (DPAPI).
+ * Encrypts stored secrets with the Windows login account (DPAPI).
  *
- * WOZU: `GPCloudStorageOptions` legte das WebDAV-Passwort im KLARTEXT in `~/.ganttproject` ab,
- * sobald "Passwort speichern" gesetzt war. Jedes Programm, das unter demselben Benutzer laeuft,
- * konnte es lesen, und es wanderte in jede Sicherung dieser Datei. Der Haken wurde deshalb nicht
- * gesetzt und das Passwort dafuer bei jedem Start neu getippt.
+ * WHAT FOR: `GPCloudStorageOptions` stored the WebDAV password in PLAIN TEXT in `~/.ganttproject`
+ * as soon as "save password" was set. Every program running under the same user could read it, and
+ * it went into every backup of that file. The checkbox was therefore left unset and the password
+ * typed anew on every start.
  *
- * DPAPI bindet den Chiffretext an das Windows-Konto: eine kopierte Datei ist anderswo wertlos.
- * Das ist kein Tresor -- wer als dieser Benutzer Programme ausfuehren kann, kann auch
- * entschluesseln. Es beseitigt genau die Klasse von Fehlern, um die es hier geht: Passwoerter, die
- * in Sicherungen, Datenspeichern und ueber die Schulter geschaut sichtbar sind.
+ * DPAPI ties the ciphertext to the Windows account: a copied file is worthless elsewhere. This is
+ * no vault -- whoever can run programs as this user can decrypt as well. It removes exactly the
+ * class of mistakes at issue here: passwords that are visible in backups, in data stores, and over
+ * the shoulder.
  *
- * GEMESSEN, nicht angenommen: `jna-platform` kommt nur mittelbar ueber `appdirs` herein, der Kern
- * `jna` liegt in einer anderen Fassung daneben (5.16 gegen 5.13). Ob DPAPI in dieser Mischung
- * ueberhaupt laeuft, war offen und wurde mit `tools/dpapiprobe` am ausgelieferten Klassenpfad
- * geprueft: Rundlauf in Ordnung, 246 Byte Chiffre, kein Klartext im Ergebnis.
+ * MEASURED, not assumed: `jna-platform` only comes in indirectly via `appdirs`, the core `jna`
+ * sits beside it in a different version (5.16 against 5.13). Whether DPAPI runs at all in this
+ * mixture was open and was checked with `tools/dpapiprobe` against the shipped classpath: round
+ * trip in order, 246 bytes of ciphertext, no plain text in the result.
  *
- * WAS AUF ANDEREN SYSTEMEN PASSIERT: nichts. [protect] liefert dort null, und der Aufrufer
- * speichert dann NICHT. Lieber weiter bei jedem Start fragen als heimlich Klartext schreiben --
- * ein Rueckfall auf "unsicher, aber bequem" waere genau der stille Fehler, den dieser Fork an
- * mehreren Stellen bereits gefunden hat. Fuer einen Beitrag an das Original braeuchte es hier
- * zusaetzlich libsecret (Linux) und Keychain (macOS).
+ * WHAT HAPPENS ON OTHER SYSTEMS: nothing. [protect] returns null there, and the caller then does
+ * NOT store. Better to keep asking on every start than to write plain text in secret -- a fallback
+ * to "insecure but convenient" would be exactly the quiet mistake this fork has already found in
+ * several places. For a contribution to the original this would additionally need libsecret
+ * (Linux) and Keychain (macOS).
  */
 object SecretStore {
 
   /**
-   * Kennzeichen vor dem Chiffretext. Base64 enthaelt weder Tabulator noch Zeilenumbruch, das
-   * Speicherformat der Serverliste (durch Tabulatoren getrennt, eine Zeile je Server) bleibt also
-   * unberuehrt.
+   * Marker in front of the ciphertext. Base64 contains neither a tab nor a line break, so the
+   * storage format of the server list (separated by tabs, one line per server) remains
+   * untouched.
    */
   private const val MARKER = "dpapi:"
 
   val isAvailable: Boolean = System.getProperty("os.name", "").startsWith("Windows")
 
   /**
-   * @return den gekennzeichneten Chiffretext, oder null wenn nicht verschluesselt werden kann.
-   * Null heisst ausdruecklich "nicht speichern" und nicht "im Klartext speichern".
+   * @return the marked ciphertext, or null if encryption is not possible. Null explicitly means
+   * "do not store" and not "store in plain text".
    */
-  /** Ob dieser gespeicherte Wert bereits verschluesselt ist. */
+  /** Whether this stored value is already encrypted. */
   fun isProtected(stored: String): Boolean = stored.startsWith(MARKER)
 
   fun protect(plain: String): String? {
@@ -75,23 +75,22 @@ object SecretStore {
         plain.toByteArray(StandardCharsets.UTF_8))
       MARKER + Base64.getEncoder().encodeToString(cipher)
     } catch (e: Throwable) {
-      // Auch Error: eine fehlende Bibliothek darf das Speichern der Einstellungen nicht abbrechen.
+      // Error too: a missing library must not abort the saving of the settings.
       GPLogger.log(e)
       null
     }
   }
 
   /**
-   * @return das Geheimnis im Klartext.
+   * @return the secret in plain text.
    *
-   * Ein Wert OHNE Kennzeichen wird unveraendert zurueckgegeben: so bleiben Eintraege lesbar, die
-   * vor dieser Aenderung im Klartext geschrieben wurden. Beim naechsten Speichern werden sie
-   * verschluesselt.
+   * A value WITHOUT a marker is returned unchanged: that way entries stay readable which were
+   * written in plain text before this change. At the next save they get encrypted.
    *
-   * Schlaegt das Entschluesseln fehl, wird der Wert ebenfalls unveraendert zurueckgegeben statt
-   * eine Ausnahme zu werfen. Der seltene Fall, dass ein altes Klartextpasswort zufaellig mit
-   * "dpapi:" beginnt, faellt damit auf das richtige Verhalten zurueck -- und ein auf einem anderen
-   * Rechner verschluesselter Wert fuehrt zu einer abgelehnten Anmeldung, nicht zu einem Absturz.
+   * If decryption fails, the value is likewise returned unchanged instead of throwing an
+   * exception. The rare case of an old plain-text password that happens to start with "dpapi:"
+   * thereby falls back to the right behaviour -- and a value encrypted on a different machine
+   * leads to a rejected login, not to a crash.
    */
   fun reveal(stored: String): String {
     if (!stored.startsWith(MARKER)) {

@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -23,45 +23,45 @@ package net.sourceforge.ganttproject.fork
 import junit.framework.TestCase
 
 /**
- * Die Ablage fuer Geheimnisse.
+ * The store for secrets.
  *
- * Der Rundlauf laeuft nur unter Windows, weil DPAPI dort liegt. Die Faelle, die NICHT vom
- * Betriebssystem abhaengen -- Altbestand im Klartext, unbrauchbarer Chiffretext -- laufen ueberall
- * und sind die wichtigeren: an ihnen haengt, ob ein vorhandenes Passwort nach der Umstellung noch
- * lesbar ist.
+ * The round trip only runs under Windows, because that is where DPAPI lives. The cases that do NOT
+ * depend on the operating system -- legacy plain text, unusable ciphertext -- run everywhere and
+ * are the more important ones: on them hangs whether an existing password is still readable after
+ * the change.
  */
 class SecretStoreTest : TestCase() {
 
   /**
-   * Ein Wert ohne Kennzeichen ist Altbestand und muss unveraendert zurueckkommen. Ginge das
-   * verloren, waeren nach der Umstellung alle gespeicherten Passwoerter unbrauchbar -- und zwar
-   * still, denn ein falsches Passwort sieht aus wie ein Serverproblem.
+   * A value without a marker is legacy data and has to come back unchanged. If that were lost,
+   * all stored passwords would be unusable after the change -- and quietly so, because a wrong
+   * password looks like a server problem.
    */
   fun testPlainTextFromBeforeStaysReadable() {
     assertEquals("geheim123", SecretStore.reveal("geheim123"))
     assertEquals("", SecretStore.reveal(""))
-    // Auch etwas, das zufaellig nach Base64 aussieht, aber kein Kennzeichen traegt.
+    // Also something that happens to look like Base64 but carries no marker.
     assertEquals("AAECAwQ=", SecretStore.reveal("AAECAwQ="))
   }
 
   /**
-   * Ein gekennzeichneter, aber unbrauchbarer Wert darf nicht werfen. Er kann von einem anderen
-   * Rechner stammen; dann ist die Folge eine abgelehnte Anmeldung, kein Absturz beim Start.
+   * A marked but unusable value must not throw. It can come from a different machine; the
+   * consequence is then a rejected login, not a crash at startup.
    */
   fun testUndecryptableValueDoesNotThrow() {
     val broken = "dpapi:###keinbase64###"
     assertEquals(broken, SecretStore.reveal(broken))
   }
 
-  /** Leeres Geheimnis wird nie gespeichert -- es gaebe nichts zu schuetzen. */
+  /** An empty secret is never stored -- there would be nothing to protect. */
   fun testEmptySecretIsNeverStored() {
     assertNull(SecretStore.protect(""))
   }
 
   /**
-   * Der eigentliche Zweck: was gespeichert wird, enthaelt das Passwort nicht mehr, und es kommt
-   * unveraendert zurueck. Beide Haelften zusammen -- nur "kommt zurueck" wuerde auch eine Ablage
-   * bestehen, die gar nichts verschluesselt.
+   * The actual purpose: what gets stored no longer contains the password, and it comes back
+   * unchanged. Both halves together -- "comes back" alone would also be passed by a store that
+   * encrypts nothing at all.
    */
   fun testRoundTripOnWindows() {
     if (!SecretStore.isAvailable) {

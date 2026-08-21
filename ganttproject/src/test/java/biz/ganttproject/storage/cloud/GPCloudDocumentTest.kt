@@ -59,17 +59,17 @@ class GPCloudDocumentTest {
   private lateinit var testMirrorFolder: File
 
   /**
-   * [Fork-Aenderung] Ein ABSOLUTER Pfad wird nicht an den Testordner angehaengt.
+   * [fork change] An ABSOLUTE path is not appended to the test folder.
    *
-   * `File(parent, child)` haengt auch dann an, wenn `child` absolut ist. Unter Linux entsteht
-   * daraus ein legaler Pfad ("/tmp/xyz/tmp/abc"), unter Windows ein unmoeglicher
-   * ("C:\Temp\123\C:\Users\..."), und `mkdirs()` scheitert mit
-   * "Failed to create parent directories to file". Der Test setzt weiter unten
-   * `offlineMirror = mirrorFile.absolutePath` -- genau so ein absoluter Pfad.
+   * `File(parent, child)` appends even when `child` is absolute. Under Linux that produces a
+   * legal path ("/tmp/xyz/tmp/abc"), under Windows an impossible one
+   * ("C:\Temp\123\C:\Users\..."), and `mkdirs()` fails with
+   * "Failed to create parent directories to file". Further down the test sets
+   * `offlineMirror = mirrorFile.absolutePath` -- exactly such an absolute path.
    *
-   * Deshalb faellt dieser Test seit jeher NUR unter Windows aus. Er hat nichts mit diesem Fork zu
-   * tun; er stand nur in jedem Testlauf als roter Punkt und musste jedes Mal von Hand eingeordnet
-   * werden.
+   * That is why this test has always failed ONLY under Windows. It has nothing to do with this
+   * fork; it merely stood in every test run as a red dot and had to be classified by hand every
+   * time.
    */
   private fun mirrorFile(path: String): File =
     File(path).let { if (it.isAbsolute) it else File(testMirrorFolder, path) }
