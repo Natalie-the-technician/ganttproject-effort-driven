@@ -26,6 +26,11 @@ number of repetitions — generated as real tasks in the plan rather than as a n
 **Estimate quality.** Compare planned effort against recorded effort across the
 project, to find out where estimates are systematically off.
 
+**Two comparison views on the chart.** The band under a task bar answers either "am I
+on schedule" (against a baseline) or "did this take more hours than I thought"
+(against the original estimate). One button switches between them. Two views rather
+than one, because in this fork a duration is a computed value — see below.
+
 **Toggl import.** Pull tracked time from Toggl and attribute it to tasks. Optional;
 recorded hours can equally be typed in by hand, and the estimate quality report works
 either way.
@@ -91,6 +96,48 @@ The pass runs before the scheduler, so that the scheduler can propagate the new 
 
 ---
 
+## Two comparison views
+
+A derived duration has a consequence that is easy to miss: **changing a person's hours
+per day changes every date in the plan, without any of the work having changed.**
+Measured on a real plan on 20 August 2026 — capacity set from 8.0 to 1.8 hours a day,
+and 163 of 163 tasks carrying an effort grew by the factor 8.0/1.8 = 4.44. A baseline
+taken before that point then coloured 194 of 276 rows red. Correctly computed, and
+saying nothing: it compared two capacity assumptions, not two plans.
+
+So the band under the task bar answers one of two questions, and you choose which:
+
+| View | Compares | Needs a baseline |
+|---|---|---|
+| **Dates** | end date now against end date in the baseline | yes |
+| **Effort** | recorded hours against the *original* estimate | no |
+
+```
+Dates                                Effort
+  same end          → no band          no original estimate  → no band
+  ends later        → red              estimate, nothing recorded → grey
+  ends earlier      → green            recorded == original  → no band
+                                       recorded >  original  → red
+                                       recorded <  original  → green
+```
+
+The toggle sits in the chart toolbar next to *Baselines…* and is labelled with the
+view currently shown, not the one it leads to. Dates is the default, so a project that
+knows nothing about the effort columns behaves exactly like the original.
+
+**The effort view needs no baseline** because both of its numbers are already on the
+task: `effort_actual_hours` and `effort_original_hours`. The latter is written once and
+never touched again, which makes it a better anchor than a baseline — it survives
+saving a second baseline. Grey there means "nothing booked yet", which is deliberately
+not the same as "on target".
+
+**The dates view compares end dates**, which is the original's rule. Between 17 and 20
+August 2026 this fork compared *durations* instead, to stop a merely-shifted task from
+turning red. That was one display trying to answer both questions; the measurement
+above is why it was withdrawn. Each question now has its own view.
+
+---
+
 ## Custom properties
 
 Eleven properties in total, stored in the project file like any other custom column.
@@ -148,11 +195,18 @@ everything.
 
 ## Status and limits
 
-`main` carries 717 automated tests, all green. Note what that number does and does not
-cover: the six UI fixes in `misc-fixes` have no automated test and never had one —
-they were verified on screen. Two of them (baseline colouring, application not
-exiting) are reproduced and fixed on both Windows and Linux; the other four were
-observed on Windows.
+732 automated tests, all green — measured on a Linux VM on 20 August 2026. The figure
+of 717 that stood here was already out of date before the comparison views were added;
+the count on `main` at that point was 719.
+
+Note what that number does and does not cover: the six UI fixes in `misc-fixes` have no
+automated test and never had one — they were verified on screen. One of them (the
+application not exiting) is reproduced and fixed on both Windows and Linux; the other
+four were observed on Windows. The sixth, the baseline colouring, **has since been
+replaced** by the two comparison views described above, and those do have tests.
+
+The comparison views themselves were checked on screen as well as in tests: ten cases
+across both views, each colour read out of the screenshot rather than judged by eye.
 
 Written and used for real planning, and every feature has been exercised. It has not
 been in long-term use, and it has been used by one person on one kind of plan. Take
@@ -222,12 +276,13 @@ straight into the target project without a buffer, so nothing is carried at all.
 calendar importer creates no tasks and is unaffected. Read in the code, not measured
 on screen.
 
-**The baseline legend describes the wrong thing.** The three lines in the baseline
-dialog come from the original and talk about a task's *end* ("Task remains on
-schedule", "Task completes earlier than before"). After this fork's colour fix the
-colours follow the *duration*, and grey means "moved, same duration" — unchanged tasks
-get no bar at all. The legend text lives in the original's options framework and
-cannot be overridden from the fork's own texts; this was tested, not assumed.
+**The baseline legend only fits one of the two views.** The three lines in the
+baseline dialog come from the original and talk about a task's *end* ("Task remains on
+schedule", "Task completes earlier than before"). In the dates view that is now exactly
+right. In the effort view it is not: there the colours are about hours, not about
+finishing. What the toggle in the toolbar shows is the authority on which view you are
+looking at. The legend text lives in the original's options framework and cannot be
+overridden from the fork's own texts; this was tested, not assumed.
 
 **Dialogs may open with a black button bar.** Reopening the same dialog — the new
 project wizard, for instance — sometimes leaves the button strip unpainted until the
@@ -257,8 +312,10 @@ which is why the change went out unverified. Counting these four as skipped woul
 rewriting the class as a JUnit 4 or Jupiter test — until then the early return stays.
 
 **Baselines only record id, start, duration and milestone flag.** They cannot answer
-"did this take more work than planned" — that is what the estimate quality report is
-for. Note also that saving a second baseline does not replace the first: running the
+"did this take more work than planned" — that is what the estimate quality report and
+the chart's effort view are for; both read the effort columns on the task instead. A
+task created *after* a baseline has no entry in it and therefore draws no band at all,
+which looks exactly like a task that has not moved. Note also that saving a second baseline does not replace the first: running the
 levelling twice and saying yes to "save a baseline first" both times leaves you with
 two baselines of the *already levelled* state and no record of what it looked like
 before.
