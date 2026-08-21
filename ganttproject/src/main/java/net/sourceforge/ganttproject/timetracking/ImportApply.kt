@@ -21,10 +21,12 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject.timetracking
 
 import biz.ganttproject.customproperty.CustomPropertyManager
+import net.sourceforge.ganttproject.GPLogger
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.task.algorithm.actualEffortHours
+import net.sourceforge.ganttproject.task.algorithm.findEffortDefinition
 import net.sourceforge.ganttproject.task.algorithm.effortHours
 
 /**
@@ -170,10 +172,49 @@ fun applyTaskImport(
     change.task.createMutator().also { it.setCustomProperties(values) }.commit()
   }
 
+  // [Fork-Aenderung] Die Kontrolle liest den ROHWERT, nicht actualEffortHours.
+  //
+  // Jene Funktion liefert fuer 0.0 bewusst null -- fuer die Anzeige richtig, fuer eine
+  // Erfolgskontrolle falsch: ein korrekt geschriebener Nullwert waere hier als Schreibfehler
+  // gezaehlt worden. Null ist ein gueltiger Ist-Aufwand, etwa wenn ein Eintrag zurueckgenommen
+  // wird.
   val failed = toWrite.filter { change ->
-    val stored = change.task.actualEffortHours(taskProperties)
-    stored == null || kotlin.math.abs(stored - change.newActualHours) > SPLIT_TOLERANCE_HOURS
+    val stored = change.task.storedActualHours(taskProperties)
+    val abweichung = stored == null || kotlin.math.abs(stored - change.newActualHours) > SPLIT_TOLERANCE_HOURS
+    // [Fork-Aenderung] Ins Protokoll, und zwar JEDER Fall.
+    //
+    // Die Meldung am Bildschirm sagt "Einzelheiten stehen im Protokoll" -- bis hierher stand
+    // dort nichts, weil dieser Pfad keine einzige Zeile schrieb. Wer einen Fehlschlag sah,
+    // konnte weder erkennen, welcher Vorgang betroffen war, noch mit welchen Zahlen. Am
+    // 20.08.2026 an einem echten Plan aufgefallen: 0 geschrieben, 2 fehlgeschlagen, Protokoll
+    // leer.
+    if (abweichung) {
+      GPLogger.log(
+        "Toggl import: Schreiben fehlgeschlagen fuer Vorgang ${change.task.taskID}" +
+        " \"${change.task.name}\" -- erwartet ${change.newActualHours} h," +
+        " zurueckgelesen ${stored ?: "nichts"}"
+      )
+    } else {
+      GPLogger.log(
+        "Toggl import: Vorgang ${change.task.taskID} geschrieben, ${change.newActualHours} h"
+      )
+    }
+    abweichung
   }.map { it.task }
 
   return ImportWriteResult(toWrite.map { it.task } - failed.toSet(), failed)
+}
+
+/**
+ * [Fork-Aenderung] Liest den gespeicherten Ist-Aufwand ROH, ohne die Null-Sonderbehandlung.
+ *
+ * `actualEffortHours` gibt fuer 0.0 null zurueck, damit die Anzeige einen leeren Wert von einer
+ * gemessenen Null unterscheiden kann. Fuer die Kontrolle nach dem Schreiben ist genau das falsch:
+ * dort heisst null "der Wert kam nicht an", und eine geschriebene Null waere faelschlich als
+ * Schreibfehler gezaehlt worden.
+ */
+private fun Task.storedActualHours(manager: CustomPropertyManager): Double? {
+  val def = manager.findEffortDefinition(EffortDrivenProperties.TASK_EFFORT_ACTUAL_HOURS) ?: return null
+  val raw = this.customValues.getValue(def) ?: return null
+  return (raw as? Number)?.toDouble() ?: raw.toString().toDoubleOrNull()
 }
