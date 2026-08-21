@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -25,97 +25,97 @@ import java.time.ZoneId
 import java.util.Date
 
 /**
- * Die beiden Vergleichsregeln des Bandes unter dem Vorgangsbalken.
+ * The two comparison rules for the band underneath a task bar.
  *
- * Die Zahlen im Aufwandsteil sind KEINE ausgedachten: sie stammen aus dem Plan, an dem der
- * Befund vom 20.08.2026 gemessen wurde — Tagesleistung 1,8 Stunden gegen die Vorgabe von 8,
- * Faktor 4,44. Genau dieser Fall darf im Aufwandsvergleich NICHT mehr rot werden, denn der
- * Aufwand hat sich dabei um keine Stunde geaendert.
+ * The numbers in the effort part are NOT made up: they come from the plan on which the finding of
+ * 20 August 2026 was measured — 1.8 hours a day against the default of 8, a factor of 4.44.
+ * Exactly that case must NOT turn red in the effort comparison, because no effort changed by so
+ * much as an hour.
  */
 class ChartComparisonTest {
 
-  private fun tag(iso: String): Date =
+  private fun day(iso: String): Date =
     Date.from(LocalDate.parse(iso).atStartOfDay(ZoneId.systemDefault()).toInstant())
 
-  // ---- Termin: Ende gegen Ende ------------------------------------------------------------
+  // ---- Dates: end against end -------------------------------------------------------------
 
   @Test
-  fun `gleiches Ende heisst planmaessig und zeichnet nichts`() {
-    assertEquals(Vergleichsbefund.KEIN_BAND, terminVergleich(tag("2026-08-15"), tag("2026-08-15")))
+  fun `the same end date means on schedule and draws nothing`() {
+    assertEquals(ComparisonResult.NO_BAND, compareDates(day("2026-08-15"), day("2026-08-15")))
   }
 
   @Test
-  fun `spaeteres Ende ist eine Verspaetung`() {
-    assertEquals(Vergleichsbefund.MEHR, terminVergleich(tag("2026-08-15"), tag("2026-08-22")))
+  fun `a later end date is a delay`() {
+    assertEquals(ComparisonResult.MORE, compareDates(day("2026-08-15"), day("2026-08-22")))
   }
 
   @Test
-  fun `frueheres Ende ist ein Vorsprung`() {
-    assertEquals(Vergleichsbefund.WENIGER, terminVergleich(tag("2026-08-15"), tag("2026-08-08")))
+  fun `an earlier end date is a head start`() {
+    assertEquals(ComparisonResult.LESS, compareDates(day("2026-08-15"), day("2026-08-08")))
   }
 
   @Test
-  fun `nur verschoben zaehlt als Verspaetung, denn das Ende ist ein anderes`() {
-    // Die Regel vom 17.08.2026 haette hier "gleiche Dauer, also neutral" gesagt. Das war der
-    // Versuch, mit einer Anzeige zwei Fragen zu beantworten. Fuer "liege ich im Zeitplan" ist
-    // ein um eine Woche spaeteres Ende eine Verspaetung, ganz gleich wie lang der Vorgang ist.
-    assertEquals(Vergleichsbefund.MEHR, terminVergleich(tag("2026-08-07"), tag("2026-08-14")))
+  fun `merely shifted counts as a delay, because the end date is a different one`() {
+    // The rule of 17 August 2026 would have said "same duration, so neutral" here. That was the
+    // attempt to answer two questions with one display. For "am I on schedule", an end date a
+    // week later is a delay, no matter how long the task is.
+    assertEquals(ComparisonResult.MORE, compareDates(day("2026-08-07"), day("2026-08-14")))
   }
 
-  // ---- Aufwand: Ist-Stunden gegen die urspruengliche Schaetzung ----------------------------
+  // ---- Effort: recorded hours against the original estimate --------------------------------
 
   @Test
-  fun `ohne urspruengliche Schaetzung gibt es keinen Massstab`() {
-    assertEquals(Vergleichsbefund.KEIN_BAND, aufwandVergleich(null, 12.0))
-    assertEquals(Vergleichsbefund.KEIN_BAND, aufwandVergleich(0.0, 12.0))
-  }
-
-  @Test
-  fun `Schaetzung ohne erfasste Zeit ist neutral, nicht planmaessig`() {
-    assertEquals(Vergleichsbefund.NEUTRAL, aufwandVergleich(8.0, null))
-    assertEquals(Vergleichsbefund.NEUTRAL, aufwandVergleich(8.0, 0.0))
+  fun `without an original estimate there is no yardstick`() {
+    assertEquals(ComparisonResult.NO_BAND, compareEffort(null, 12.0))
+    assertEquals(ComparisonResult.NO_BAND, compareEffort(0.0, 12.0))
   }
 
   @Test
-  fun `mehr Stunden gebraucht`() {
-    assertEquals(Vergleichsbefund.MEHR, aufwandVergleich(9.0, 15.0))
+  fun `an estimate with nothing recorded is neutral, not on schedule`() {
+    assertEquals(ComparisonResult.NEUTRAL, compareEffort(8.0, null))
+    assertEquals(ComparisonResult.NEUTRAL, compareEffort(8.0, 0.0))
   }
 
   @Test
-  fun `weniger Stunden gebraucht`() {
-    assertEquals(Vergleichsbefund.WENIGER, aufwandVergleich(24.0, 0.368))
+  fun `more hours spent`() {
+    assertEquals(ComparisonResult.MORE, compareEffort(9.0, 15.0))
   }
 
   @Test
-  fun `gleich viele Stunden zeichnen nichts`() {
-    assertEquals(Vergleichsbefund.KEIN_BAND, aufwandVergleich(16.0, 16.0))
+  fun `fewer hours spent`() {
+    assertEquals(ComparisonResult.LESS, compareEffort(24.0, 0.368))
   }
 
   @Test
-  fun `eine halbe Minute Unterschied ist kein Unterschied`() {
-    assertEquals(Vergleichsbefund.KEIN_BAND, aufwandVergleich(16.0, 16.0 + 0.5 / 60.0))
+  fun `the same number of hours draws nothing`() {
+    assertEquals(ComparisonResult.NO_BAND, compareEffort(16.0, 16.0))
   }
 
   @Test
-  fun `zwei Minuten Unterschied sind einer`() {
-    assertEquals(Vergleichsbefund.MEHR, aufwandVergleich(16.0, 16.0 + 2.0 / 60.0))
+  fun `half a minute of difference is no difference`() {
+    assertEquals(ComparisonResult.NO_BAND, compareEffort(16.0, 16.0 + 0.5 / 60.0))
   }
 
   @Test
-  fun `die Kapazitaetsverteilung faerbt den Aufwandsvergleich nicht`() {
-    // Der gemessene Fall: Aufwand 24 Stunden, Dauer wechselt von 3 auf 14 Tage, weil die
-    // Tagesleistung von 8 auf 1,8 Stunden gesetzt wurde. Erfasst sind 24 Stunden.
-    // Die Dauer hat sich vervierfacht, der Aufwand nicht — also kein Band.
-    assertEquals(Vergleichsbefund.KEIN_BAND, aufwandVergleich(24.0, 24.0))
+  fun `two minutes of difference are one`() {
+    assertEquals(ComparisonResult.MORE, compareEffort(16.0, 16.0 + 2.0 / 60.0))
   }
 
-  // ---- Stilnamen --------------------------------------------------------------------------
+  @Test
+  fun `capacity levelling does not colour the effort comparison`() {
+    // The measured case: effort 24 hours, duration going from 3 to 14 days because the daily
+    // availability was set from 8 to 1.8 hours. 24 hours are recorded.
+    // The duration quadrupled, the effort did not — so no band.
+    assertEquals(ComparisonResult.NO_BAND, compareEffort(24.0, 24.0))
+  }
+
+  // ---- Style names ------------------------------------------------------------------------
 
   @Test
-  fun `die Stilnamen sind die des Originals`() {
-    assertEquals("later", Vergleichsbefund.MEHR.stilName())
-    assertEquals("earlier", Vergleichsbefund.WENIGER.stilName())
-    assertNull(Vergleichsbefund.NEUTRAL.stilName())
-    assertNull(Vergleichsbefund.KEIN_BAND.stilName())
+  fun `the style names are the original's`() {
+    assertEquals("later", ComparisonResult.MORE.styleName())
+    assertEquals("earlier", ComparisonResult.LESS.styleName())
+    assertNull(ComparisonResult.NEUTRAL.styleName())
+    assertNull(ComparisonResult.NO_BAND.styleName())
   }
 }
