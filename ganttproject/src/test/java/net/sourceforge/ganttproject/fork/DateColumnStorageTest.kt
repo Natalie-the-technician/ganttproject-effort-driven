@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 Licensed under the GNU General Public License, version 3 or later.
@@ -24,15 +24,15 @@ import java.time.LocalDate
 import java.util.Locale
 
 /**
- * Eine Spalte vom Typ DATUM mit einem Wert -- und die Spiegel-Datenbank.
+ * A column of type DATE with a value -- and the mirror database.
  *
- * AM BILDSCHIRM GEFUNDEN, 17.08.2026: sobald die Spalte "Fertig bis" ihren ersten Wert bekam,
- * meldete das Programm "Type class java.util.GregorianCalendar is not supported in dialect
- * DEFAULT". jOOQ kennt GregorianCalendar nicht -- und damit war JEDE Datums-Spalte mit einem Wert
- * unbrauchbar, auch eine von Hand angelegte. Der Fehler steckt im Original, ist aber erst
- * aufgefallen, seit dieser Fork eine Datums-Spalte anlegt.
+ * FOUND ON SCREEN, 17.08.2026: as soon as the "Finish by" column got its first value, the program
+ * reported "Type class java.util.GregorianCalendar is not supported in dialect DEFAULT". jOOQ
+ * does not know GregorianCalendar -- and with that EVERY date column holding a value was
+ * unusable, including one created by hand. The bug is in the original but only came to notice
+ * once this fork started creating a date column.
  *
- * Der Test geht ueber die ECHTE H2-Datenbank. Mit einer Attrappe waere er gruen und wertlos.
+ * The test goes through the REAL H2 database. With a mock it would be green and worthless.
  */
 class DateColumnStorageTest {
 
@@ -70,19 +70,18 @@ class DateColumnStorageTest {
       it.setTaskUpdateBuilderFactory { task -> db.createTaskUpdateBuilder(task) }
     }.build()
     val props = taskManager.customPropertyManager
-    // ERST die Spalte anlegen, DANN die Datenbank abgleichen -- in dieser Reihenfolge. Mein
-    // erster Anlauf legte eine andere Spalte an und glich ab, bevor setDeadline die richtige
-    // erzeugte: "Column deadline not found". Dieselbe Falle wie in Sitzung 3.
+    // Create the column FIRST, THEN reconcile the database -- in that order. The first attempt
+    // created a different column and reconciled before setDeadline produced the right one:
+    // "Column deadline not found". The same trap as in session 3.
     findOrCreateDeadline(props)
     db.onCustomColumnChange(props)
 
     val task = taskManager.newTaskBuilder().withName("mit Frist").build()
     task.setDeadline(props, LocalDate.of(2026, 8, 31))
-    // Das ist der Weg, auf dem der Fehler auftrat: der Vorgang wandert in die Spiegeltabelle.
+    // This is the path on which the bug occurred: the Task travels into the mirror table.
     db.insertTask(task)
 
-    // Gelesen wird ueber dieselbe Spalte -- kommt der Wert wieder heraus, hat das Schreiben
-    // funktioniert.
+    // Reading goes through the same column -- if the value comes back out, the write worked.
     val gelesen = dataSource.connection.use { conn ->
       conn.createStatement().executeQuery("""SELECT "deadline" FROM Task WHERE name='mit Frist'""")
         .let { rs -> if (rs.next()) rs.getString(1) else null }
@@ -93,8 +92,8 @@ class DateColumnStorageTest {
 
   @Test
   fun `das modell liest die frist unveraendert zurueck`() {
-    // Gegenprobe auf der Modellseite: der Umweg ueber die Datenbank darf den Wert nicht
-    // verschieben -- die Zeitzonenfalle aus LegacyDates.kt lauert genau hier.
+    // Counter-check on the model side: the detour through the database must not shift the value
+    // -- the time zone trap from LegacyDates.kt lurks exactly here.
     val taskManager = TestSetupHelper.newTaskManagerBuilder().build()
     val props = taskManager.customPropertyManager
     val task = taskManager.newTaskBuilder().withName("t").build()

@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -25,49 +25,49 @@ import java.util.Date
 import java.util.GregorianCalendar
 
 /**
- * Umrechnung zwischen [LocalDate] und den [Date]-Werten des Projektmodells.
+ * Conversion between [LocalDate] and the [Date] values of the project model.
  *
- * **`ZoneId.systemDefault()` DARF HIER NICHT VERWENDET WERDEN.** Der Grund ist eine Eigenart des
- * Originals, und sie kostet einen Tag:
+ * **`ZoneId.systemDefault()` MUST NOT BE USED HERE.** The reason is a quirk of the original, and
+ * it costs a day:
  *
- * `GanttLanguage.setLocale` ersetzt beim Start die Standard-Zeitzone der JVM --
- * `TimeZone.getTimeZone("UTC")`, dann `setRawOffset(oertlicher Versatz)`. Die Kennung bleibt dabei
- * "UTC", der Versatz ist aber der oertliche. Die alte `TimeZone`-Schnittstelle liefert daraufhin
- * den verbogenen Versatz, `java.time` dagegen loest die Kennung "UTC" auf und liefert **null**.
+ * `GanttLanguage.setLocale` replaces the JVM's default time zone at startup --
+ * `TimeZone.getTimeZone("UTC")`, then `setRawOffset(local offset)`. The id thereby stays "UTC",
+ * but the offset is the local one. The old `TimeZone` interface then returns the bent offset,
+ * whereas `java.time` resolves the id "UTC" and returns **null**.
  *
- * AM RECHNER GEMESSEN (`ZeitzoneProbeTest`), Sprache Deutsch, Sommerzeit:
+ * MEASURED ON THE MACHINE (`ZeitzoneProbeTest`), language German, summer time:
  *
- *     TimeZone.getDefault():  Kennung "UTC", Versatz  2 h
- *     ZoneId.systemDefault(): UTC,           Versatz  0 h
- *     Mitternacht des 4.11.2026 laut GanttProject: 1793743200000
- *     Mitternacht des 4.11.2026 laut java.time:    1793750400000   (2 h spaeter)
- *     das GanttProject-Datum als LocalDate gelesen: 2026-11-03     (ein Tag zu FRUEH)
+ *     TimeZone.getDefault():  id "UTC",      offset  2 h
+ *     ZoneId.systemDefault(): UTC,           offset  0 h
+ *     midnight of 4.11.2026 according to GanttProject: 1793743200000
+ *     midnight of 4.11.2026 according to java.time:    1793750400000   (2 h later)
+ *     the GanttProject date read as a LocalDate:       2026-11-03      (one day too EARLY)
  *
- * WAS DAS ANGERICHTET HAT, bevor diese Datei entstand: die Kapazitaetsverteilung fand die
- * Feiertage des Projekts nicht (`myOneOffEvents` ist nach dem genauen Zeitpunkt geschluesselt, und
- * der lag zwei Stunden daneben). Sie rechnete Feiertage als Arbeitstage und schrieb daraufhin zu
- * frueh liegende Enden. Im Plan verloren dadurch vier Vorgaenge Dauer -- 11 Tage wurden
- * 8, 26 wurden 16. Am Aufwand gemessen fehlten 24 bzw. 80 Stunden Arbeit, die der Plan vorher
- * kannte. Kein Test der reinen Rechnung konnte das finden: sie rechnete richtig, sie bekam falsche
- * Kalenderauskuenfte.
+ * WHAT THAT CAUSED before this file came into being: capacity levelling did not find the
+ * project's holidays (`myOneOffEvents` is keyed by the exact instant, and that was two hours
+ * out). It computed holidays as working days and thereupon wrote ends that lay too early. In the
+ * plan four Tasks lost duration through this -- 11 days became 8, 26 became 16. Measured against
+ * the effort, 24 and 80 hours of work respectively were missing that the plan had known before.
+ * No test of the pure calculation could find that: it computed correctly, it was given wrong
+ * calendar answers.
  *
- * WARUM `GregorianCalendar` und nicht ein `ZoneOffset` aus `rawOffset`: GanttProject faltet die
- * Sommerzeit in den festen Versatz hinein. Wer selbst rechnet, muss diese Faltung nachbauen und
- * liegt daneben, sobald sie fehlt (etwa in Tests ohne gesetzte Sprache). `GregorianCalendar` nimmt
- * genau den Weg, den auch `CalendarFactory` nimmt, und ist damit in beiden Faellen richtig.
+ * WHY `GregorianCalendar` and not a `ZoneOffset` from `rawOffset`: GanttProject folds summer time
+ * into the fixed offset. Anyone computing it themselves has to rebuild that folding and is wrong
+ * as soon as it is missing (in tests without a language set, for instance). `GregorianCalendar`
+ * takes exactly the path that `CalendarFactory` takes too, and is therefore right in both cases.
  *
- * Das Original hat fuer denselben Zweck `DateParser.toJavaDate`/`toLocalDate` und `GanttCalendar
- * .toLocalDate`; sie gehen ueber eine ISO-Zeichenkette und sind damit ebenfalls richtig. Sie
- * benutzen aber ein GETEILTES, nicht abgesichertes `SimpleDateFormat` (`DateParser.java:287`) --
- * bei der Verteilung laufen diese Umrechnungen tausendfach, und `SimpleDateFormat` ist nicht
- * threadsicher. Der Weg hier braucht keinen geteilten Zustand.
+ * For the same purpose the original has `DateParser.toJavaDate`/`toLocalDate` and `GanttCalendar
+ * .toLocalDate`; they go through an ISO string and are therefore correct as well. But they use a
+ * SHARED, unguarded `SimpleDateFormat` (`DateParser.java:287`) -- during levelling these
+ * conversions run thousands of times, and `SimpleDateFormat` is not thread-safe. The path here
+ * needs no shared state.
  */
 
-/** Mitternacht dieses Tages, in der Zeitrechnung des Projektmodells. */
+/** Midnight of this day, in the time reckoning of the project model. */
 fun LocalDate.toModelDate(): Date =
   GregorianCalendar(this.year, this.monthValue - 1, this.dayOfMonth).time
 
-/** Der Kalendertag, auf den dieser Zeitpunkt im Projektmodell faellt. */
+/** The calendar day this instant falls on in the project model. */
 fun Date.toModelLocalDate(): LocalDate {
   val calendar = GregorianCalendar()
   calendar.time = this

@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -28,12 +28,12 @@ import net.sourceforge.ganttproject.task.algorithm.effortHours
 import java.awt.event.ActionEvent
 
 /**
- * Der Menuepunkt "Aufwand: geschaetzt gegen gebraucht".
+ * The "effort: estimated against needed" menu item.
  *
- * Er SCHREIBT NICHTS. Das ist der Unterschied zu den anderen drei Hilfsmitteln und der Grund,
- * warum er nicht vorher fragt: er liest, rechnet und zeigt. Wer eine Zahl daraufhin aendern will,
- * tut das selbst -- eine Auswertung, die auch gleich korrigiert, nimmt einem die Entscheidung ab,
- * um die es hier gerade geht.
+ * It WRITES NOTHING. That is the difference from the other three tools and the reason why it does
+ * not ask beforehand: it reads, computes and shows. Whoever then wants to change a number does so
+ * themselves -- an evaluation that also corrects straight away takes away the very decision that
+ * is at stake here.
  */
 class EstimateQualityAction(
   private val taskManager: TaskManager,
@@ -45,7 +45,7 @@ class EstimateQualityAction(
 
   override fun actionPerformed(event: ActionEvent?) {
     val hierarchy = taskManager.taskHierarchy
-    // Nur Blaetter: eine Gruppe traegt keinen eigenen Aufwand, sie wuerde doppelt zaehlen.
+    // Leaves only: a group carries no effort of its own, it would count twice.
     val blaetter = taskManager.tasks.filter { hierarchy.getNestedTasks(it).isEmpty() }
 
     val rows = blaetter.mapNotNull { task ->
@@ -97,9 +97,9 @@ class EstimateQualityAction(
       }
     }
 
-    // Die Hochrechnung ist der Punkt der ganzen Auswertung: sie uebertraegt die gemessene
-    // Schaetzguete auf das, was noch kommt. Ausdruecklich als Hochrechnung benannt -- es ist
-    // keine Messung, sondern der gemessene Faktor auf ungetane Arbeit angewandt.
+    // The extrapolation is the point of the whole evaluation: it carries the measured estimating
+    // quality over to what is still to come. Explicitly named as an extrapolation -- it is not a
+    // measurement but the measured factor applied to work not yet done.
     if (bericht.remainingPlannedHours > 0.0) {
       text.appendLine().appendLine().append(forkText("fork.estimate.forecast",
         bericht.remainingPlannedHours, bericht.remainingExpectedHours,

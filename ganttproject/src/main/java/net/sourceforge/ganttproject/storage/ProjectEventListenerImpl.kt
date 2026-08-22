@@ -119,9 +119,9 @@ internal class ProjectEventListenerImpl(
     }
   }
 
-  // Diese Methode fehlte im Original: nach "Projekt -> Neu" blieb die Sperre aus [projectClosed]
-  // dauerhaft zu, und LazyProjectDatabaseProxy.onCustomColumnChange verwarf danach JEDE
-  // Spaltenaenderung still -- betroffen war jede so angelegte benutzerdefinierte Spalte.
+  // This method was missing in the original: after "Project -> New" the lock from [projectClosed]
+  // stayed shut for good, and LazyProjectDatabaseProxy.onCustomColumnChange silently discarded
+  // EVERY column change -- every custom column created that way was affected.
   override fun projectCreated() = withLogger({ "Failed to initialize the database for a new project" }) {
     projectDatabase.shutdown()
     initProjectDatabase()

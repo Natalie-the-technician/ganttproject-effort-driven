@@ -47,7 +47,7 @@ import net.sourceforge.ganttproject.resource.HumanResourceMerger
 import net.sourceforge.ganttproject.resource.OverwritingMerger
 import net.sourceforge.ganttproject.roles.RoleManager
 import net.sourceforge.ganttproject.storage.LazyProjectDatabaseProxy
-// [Fork-Aenderung] Neuer Import fuer den Ausloeser der Dauerberechnung.
+// [fork change] New import for the trigger of the duration calculation.
 import net.sourceforge.ganttproject.fork.findOrCreateDateFixed
 import net.sourceforge.ganttproject.fork.findOrCreateDeadline
 import net.sourceforge.ganttproject.fork.findOrCreateOriginalEffort
@@ -110,30 +110,30 @@ open class GanttProjectImpl(
 
   init {
     myCalendar.addListener { setModified() }
-    // [Fork-Aenderung] Diese Zeile ist neu, im Original nicht vorhanden. Ohne sie laeuft die
-    // Dauerberechnung nie an — sie ist der einzige Punkt, an dem das Feature eingeschaltet wird.
+    // [fork change] This line is new, not present in the original. Without it the duration
+    // calculation never starts — it is the only point at which the feature is switched on.
     // Effort-driven scheduling: recalculate durations when the resources change. Registered here,
     // in the UI-free project class, so that it also works headless (import, command line, tests).
     humanResourceManager.addView(EffortDrivenTrigger(this.taskManager))
   }
 
   /**
-   * [Fork-Aenderung] Legt die beiden Spalten der Tagesleistung an, falls es sie noch nicht gibt.
+   * [fork change] Creates the two daily-rate columns in case they do not exist yet.
    *
-   * WARUM UEBERHAUPT: bisher entstand die Spalte "Stunden pro Tag" nur, wenn jemand sie von Hand
-   * im Spaltenverwalter anlegte -- wer das nicht wusste, plante stillschweigend mit den
-   * vorgegebenen acht Stunden weiter. Beim "Stundenplan" waere das noch schlimmer: eine
-   * Eigenschaft, die man nicht sieht, kann man auch nicht eintragen.
+   * WHY AT ALL: until now the "Hours per day" column only came into being when somebody created
+   * it by hand in the column manager -- anyone who did not know that went on planning silently
+   * with the default of eight hours. With the "Hours schedule" that would be worse still: a
+   * property one cannot see is a property one cannot fill in either.
    *
-   * WARUM NICHT IM KONSTRUKTOR, und das ist am Rechner gemessen: dort angelegt, scheitert
-   * anschliessend das LADEN jeder Datei, die dieselbe Spalte enthaelt --
-   * "Column with ID=hours_per_day is already registered", und zwar als
-   * `DocumentException: Failed to parse document` fuer die GANZE Datei. Gefunden hat es
-   * `GanttChartSelectionTest` im Modul ganttproject-tester, weil die Zwischenablage denselben Weg
-   * geht: speichern und sofort wieder lesen.
+   * WHY NOT IN THE CONSTRUCTOR, and that is measured on the machine: created there, LOADING then
+   * fails for every file that contains the same column --
+   * "Column with ID=hours_per_day is already registered", and as a
+   * `DocumentException: Failed to parse document` for the WHOLE file. It was found by
+   * `GanttChartSelectionTest` in the ganttproject-tester module, because the clipboard takes the
+   * same path: save and read straight back.
    *
-   * Hier aufgerufen wird nach dem Laden, wenn die Spalten aus der Datei bereits eingetragen sind.
-   * findOrCreate ist dann ein Nullvorgang.
+   * The call here happens after loading, when the columns from the file are already entered.
+   * findOrCreate is then a no-op.
    */
   fun ensureCapacityColumns() {
     val ressourcen = humanResourceManager.customPropertyManager
@@ -141,15 +141,15 @@ open class GanttProjectImpl(
     EffortDrivenProperties.findOrCreateResourceHours(ressourcen)
     EffortDrivenProperties.findOrCreateResourceSchedule(ressourcen)
     findOrCreateUtilisation(ressourcen)
-    // ALLE Spalten dieses Forks, und zwar vollzaehlig. AM 17.08.2026 GEMESSEN: vier davon --
-    // "Fertig bis", "Auslastung", "Warten", "Termin fest" -- wurden NIRGENDS angelegt. Sie
-    // existierten im Code, waren aber fuer niemanden ausfuellbar; die Verteilung las sie brav und
-    // fand immer nichts. Dieselbe Fehlerfamilie wie die toten Menuepunkte aus Sitzung 8: gebaut,
-    // nicht erreichbar, und von aussen nicht von "funktioniert nicht" zu unterscheiden.
+    // ALL of this fork's columns, and all of them at that. MEASURED ON 17.08.2026: four of them
+    // -- "Finish by", "Utilisation (%)", "Waiting", "Date fixed" -- were created NOWHERE. They
+    // existed in the code but could not be filled in by anybody; levelling read them dutifully
+    // and always found nothing. The same family of bug as the dead menu items from session 8:
+    // built, not reachable, and from the outside indistinguishable from "does not work".
     findOrCreateRecurrence(vorgaenge)
-    // [Fork-Aenderung] recurrence_of gehoert zur selben Funktion wie recurrence und fehlte hier.
-    // Es entstand bisher erst beim ersten Serienvorgang (RecurrenceAdapter). Gleiche Bauart,
-    // gleiche Idempotenz: erst suchen, nur bei Nichtfinden anlegen.
+    // [fork change] recurrence_of belongs to the same feature as recurrence and was missing here.
+    // Until now it only came into being at the first recurring Task (RecurrenceAdapter). Same
+    // construction, same idempotence: search first, create only when nothing is found.
     findOrCreateRecurrenceOf(vorgaenge)
     findOrCreateDeadline(vorgaenge)
     findOrCreateWaitOnly(vorgaenge)
