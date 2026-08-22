@@ -185,12 +185,12 @@ class LocalStorage(
 
     val listViewHint = SimpleStringProperty(i18n.formatText("${myMode.name.lowercase()}.listViewHint"))
 
-    // [Fork-Aenderung] NICHT den rohen Pfad des Dokuments nehmen.
+    // [fork change] Do NOT take the raw path of the document.
     //
-    // Bei einem WebDAV-Dokument ist `filePath` eine ADRESSE ("https://server/pfad/plan.gan").
-    // Unter Windows ergibt `Paths.get` daraus einen unmoeglichen Pfad -- die Brotkrumen zeigten
-    // die halbe URL, das Feld eine rote Fehlermeldung. Am Bildschirm gesehen, nachdem ein
-    // Schreibkonflikt "Speichern unter" anbot: das Angebot fuehrte in eine Sackgasse.
+    // For a WebDAV document `filePath` is an ADDRESS ("https://server/pfad/plan.gan"). Under
+    // Windows `Paths.get` makes an impossible path out of that -- the breadcrumbs showed half
+    // the URL, the field a red error message. Seen on screen after a write conflict offered
+    // "Speichern unter": the offer led into a dead end.
     val filePath = localBreadcrumbPath(
       currentDocument.filePath, currentDocument.fileName, getDefaultLocalFolder())
     this.paneElements = builder.apply {
@@ -256,15 +256,15 @@ class LocalStorage(
 private val i18n = RootLocalizer.createWithRootKey("storageService.local", BROWSE_PANE_LOCALIZER)
 
 /**
- * [Fork-Aenderung] Der Pfad, mit dem die oertliche Ablage aufmacht.
+ * [fork change] The path the local storage opens with.
  *
- * Fuer ein oertliches Dokument sein eigener Pfad, fuer alles andere -- WebDAV, Cloud -- der
- * Standardordner mit dem Dateinamen. Eine ADRESSE als Pfad zu setzen ergibt unter Windows einen
- * unmoeglichen Pfad und im Feld eine rote Fehlermeldung.
+ * For a local document its own path, for everything else -- WebDAV, cloud -- the default folder
+ * together with the file name. Setting an ADDRESS as a path yields an impossible path under
+ * Windows and a red error message in the field.
  *
- * NIMMT ZEICHENKETTEN, KEIN DOKUMENT: so ist die Regel ohne JavaFX UND ohne Attrappe pruefbar --
- * das Modul hat kein Mockito, und ein `Document` von Hand nachzubauen waere mehr Testgeruest als
- * Test.
+ * TAKES STRINGS, NOT A DOCUMENT: that way the rule is checkable without JavaFX AND without a
+ * mock -- the module has no Mockito, and building a `Document` by hand would be more test
+ * scaffolding than test.
  */
 internal fun localBreadcrumbPath(
   rawPath: String?, fileName: String?, defaultFolder: File
@@ -272,8 +272,8 @@ internal fun localBreadcrumbPath(
   val roh = rawPath
   if (!roh.isNullOrBlank()) {
     val alsPfad = runCatching { Paths.get(roh) }.getOrNull()
-    // Nur absolute, oertliche Pfade uebernehmen. "https://..." liefert je nach Betriebssystem
-    // entweder eine Ausnahme oder einen relativen Unsinnspfad -- beides waere hier falsch.
+    // Only take absolute, local paths. "https://..." yields, depending on the operating system,
+    // either an exception or a relative nonsense path -- both would be wrong here.
     if (alsPfad != null && alsPfad.isAbsolute && !roh.contains("://")) {
       return alsPfad
     }

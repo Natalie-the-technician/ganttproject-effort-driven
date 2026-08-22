@@ -43,7 +43,7 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
                         private val myMode: StorageDialogBuilder.Mode,
                         private val myOpenDocument: (Document) -> Unit,
                         private val myDialogUi: StorageDialogBuilder.DialogUi,
-                        /** [Fork-Aenderung] Sperrdauer in Minuten; negativ heisst "nicht sperren". */
+                        /** [fork change] lock timeout in minutes; negative means "do not lock". */
                         private val myLockTimeout: Int) {
   private lateinit var path: Path
   private val myLoadService: WebdavLoadService = WebdavLoadService(myServer)
@@ -167,22 +167,22 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
       }
       onFailed = EventHandler {
         showMaskPane.accept(false)
-        // [Fork-Aenderung] Den Grund nennen, statt ihn wegzuwerfen.
+        // [fork change] Name the reason instead of throwing it away.
         //
-        // FEHLER IM ORIGINAL: hier stand dialogUi.error("WebdavService failed!", "", null). Die
-        // Ausnahme des Dienstes wurde weder angezeigt noch protokolliert -- der Benutzer bekam
-        // einen roten Kasten mit leerem Text, und im Protokoll stand nichts. Am Bildschirm
-        // beobachtet: der Server war nicht erreichbar, und es war nicht feststellbar, ob es an
-        // Passwort, Adresse, Zertifikat oder Netz lag.
+        // BUG IN THE ORIGINAL: dialogUi.error("WebdavService failed!", "", null) stood here. The
+        // service's exception was neither shown nor logged -- the user got a red box with empty
+        // text, and the log said nothing. Observed on screen: the server was unreachable, and
+        // there was no way to tell whether it was down to the password, the address, the
+        // certificate or the network.
         //
-        // Falsches Passwort und unerreichbarer Server sehen fuer den Benutzer sonst gleich aus,
-        // fuehren aber zu voellig verschiedenen naechsten Schritten.
+        // A wrong password and an unreachable server otherwise look the same to the user, but
+        // lead to completely different next steps.
         val cause = myLoadService.exception
         GPLogger.log(cause ?: RuntimeException("WebdavService failed, aber ohne Ausnahme"))
-        // Die UNTERSTE Ursache zeigen, nicht die oberste. Am Bildschirm gesehen: oben steht
-        // "I/O problems when accessing <Servername>" -- das nennt weder Rechner noch Grund und
-        // ist fuer den Benutzer wertlos. Unten steht "Der angegebene Host ist unbekannt
-        // (beispiel.ungueltig)", und damit kann er etwas anfangen.
+        // Show the BOTTOM cause, not the top one. Seen on screen: at the top stands
+        // "I/O problems when accessing <Servername>" -- that names neither host nor reason and
+        // is worthless to the user. At the bottom stands "Der angegebene Host ist unbekannt
+        // (beispiel.ungueltig)", and that is something they can act on.
         dialogUi.error("WebdavService failed!", describeCause(cause), cause)
       }
       onCancelled = EventHandler {
@@ -196,13 +196,12 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
 }
 
 /**
- * [Fork-Aenderung] Die unterste Ursache einer Ausnahmekette als Text.
+ * [fork change] The bottom cause of an exception chain as text.
  *
- * Die oberste Meldung ist hier regelmaessig die nichtssagende: "I/O problems when accessing
- * <Servername>". Der Servername steht dort, weil `WebdavLoadService` ihn absichtlich als
- * Anzeigenamen in die WebDavUri setzt -- er sagt also nichts ueber Rechner oder Adresse. Erst die
- * unterste Ursache nennt, was wirklich los war: unbekannter Rechner, abgelehnte Anmeldung,
- * Zeitueberschreitung.
+ * The topmost message here is regularly the uninformative one: "I/O problems when accessing
+ * <Servername>". The server name stands there because `WebdavLoadService` deliberately puts it
+ * into the WebDavUri as a display name -- so it says nothing about host or address. Only the
+ * bottom cause names what was really going on: unknown host, rejected login, timeout.
  */
 private fun describeCause(failure: Throwable?): String {
   var current = failure ?: return ""
@@ -261,9 +260,9 @@ private data class State(
 
 private fun createDocument(server: WebDavServerDescriptor, resource: WebDavResource,
                            lockTimeout: Int): Document {
-  // [Fork-Aenderung] Hier stand fest HttpDocument.NO_LOCK. Das ist der Weg, den ein Mensch
-  // tatsaechlich benutzt -- die Ablage-Auswahl -- und darueber geoeffnete Projekte wurden deshalb
-  // NIE gesperrt, egal was in den Einstellungen stand. Am Server nachgewiesen: ein Schreibversuch
-  // von aussen lieferte 204 statt 423, obwohl das Projekt offen war.
+  // [fork change] A fixed HttpDocument.NO_LOCK stood here. This is the path a person actually
+  // uses -- the storage chooser -- and projects opened through it were therefore NEVER locked,
+  // no matter what the settings said. Demonstrated against the server: a write attempt from
+  // outside returned 204 instead of 423, although the project was open.
   return HttpDocument(resource, server.username, server.password, lockTimeout)
 }

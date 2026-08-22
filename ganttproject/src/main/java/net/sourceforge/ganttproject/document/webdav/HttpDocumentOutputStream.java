@@ -22,7 +22,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
 import net.sourceforge.ganttproject.document.webdav.WebDavResource.WebDavException;
-// [Fork-Aenderung] Ein Schreibkonflikt wird als Versionskonflikt gemeldet, nicht als IO-Fehler.
+// [fork change] A write conflict is reported as a version conflict, not as an IO error.
 import biz.ganttproject.storage.VersionMismatchException;
 
 
@@ -49,18 +49,18 @@ class HttpDocumentOutputStream extends ByteArrayOutputStream {
     try {
       wr.write(toByteArray());
     } catch (WebDavResource.WebDavConflictException e) {
-      // [Fork-Aenderung] Ein Konflikt ist kein Ein-/Ausgabefehler. Als IOException verpackt
-      // erschiene er als "irgendetwas ging schief", und die Speicherlogik koennte dem Menschen
-      // nicht die Wahl anbieten, die es hier gibt: als Kopie speichern statt zu ueberschreiben.
+      // [fork change] A conflict is not an input/output error. Wrapped as an IOException it
+      // would appear as "something went wrong", and the saving logic could not offer the choice
+      // that exists here: save as a copy instead of overwriting.
       //
-      // canOverwrite=false, weil der Weg zum erzwungenen Schreiben fuer WebDAV bewusst noch nicht
-      // gebaut ist -- siehe ProjectUIFacadeImpl.saveProjectTrySave. Lieber gar kein Knopf als
-      // einer, der nichts tut.
+      // canOverwrite=false, because the path to forced writing has deliberately not been built
+      // for WebDAV yet -- see ProjectUIFacadeImpl.saveProjectTrySave. Better no button at all
+      // than one that does nothing.
       throw new VersionMismatchException(false);
     } catch (WebDavResource.WebDavVersioningUnavailableException e) {
-      // [Fork-Aenderung] Andere Ursache, andere Meldung. Hier hat NIEMAND die Datei geaendert --
-      // der Server kann die Frage nur nicht beantworten. Wuerde das als Konflikt durchgereicht,
-      // suchte der Benutzer nach einem Kollegen, den es nicht gibt.
+      // [fork change] Different cause, different message. Here NOBODY changed the file -- the
+      // server merely cannot answer the question. Were this passed on as a conflict, the user
+      // would go looking for a colleague who does not exist.
       throw new VersionMismatchException(false, true);
     } catch (WebDavException e) {
       throw new IOException(e);

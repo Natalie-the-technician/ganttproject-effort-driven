@@ -47,7 +47,7 @@ import net.sourceforge.ganttproject.document.ProxyDocument
 import net.sourceforge.ganttproject.document.webdav.WebDavStorageImpl
 import net.sourceforge.ganttproject.gui.projectopen.OpenOnlineDocumentChoice
 import net.sourceforge.ganttproject.gui.projectopen.showForkDialog
-// [Fork-Aenderung] eigener Konflikttext ausserhalb der Cloud.
+// [fork change] a conflict text of its own outside the cloud.
 import net.sourceforge.ganttproject.fork.ForkLocalizer
 import net.sourceforge.ganttproject.gui.projectopen.showOfflineIsAheadDialog
 import net.sourceforge.ganttproject.gui.projectopen.signinDialog
@@ -401,28 +401,28 @@ class ProjectSaveFlow(
     } catch (e: VersionMismatchException) {
       done(success = false)
       val onlineDoc = document.asOnlineDocument()
-      // [Fork-Aenderung] Der Dialog erscheint auch OHNE Cloud-Dokument.
+      // [fork change] The dialog also appears WITHOUT a cloud document.
       //
-      // FEHLER IM ORIGINAL: Hier stand `if (onlineDoc != null) { … }` ohne else. Ein
-      // Versionskonflikt bei einem Dokument, das keine GanttProject-Cloud-Datei ist — etwa auf
-      // einem WebDAV-Server — wurde damit stillschweigend verschluckt: kein Dialog, keine
-      // Meldung, und das Speichern galt als erledigt, obwohl nichts geschrieben wurde.
+      // BUG IN THE ORIGINAL: `if (onlineDoc != null) { … }` stood here without an else. A
+      // version conflict on a document that is not a GanttProject cloud file — on a WebDAV
+      // server, say — was thereby swallowed silently: no dialog, no message, and saving counted
+      // as done although nothing had been written.
       //
-      // "Überschreiben" bleibt an das Cloud-Dokument gebunden, weil nur dieses write(force=true)
-      // kennt. Für WebDAV wird der Knopf deshalb gar nicht erst angeboten — ein Knopf, der nichts
-      // tut, wäre schlimmer als keiner.
+      // "Overwrite" stays tied to the cloud document, because only that one knows
+      // write(force=true). For WebDAV the button is therefore not offered at all — a button that
+      // does nothing would be worse than none.
       run {
         OptionPaneBuilder<VersionMismatchChoice>().also {
-          // [Fork-Aenderung] Ohne Cloud-Dokument ein eigener Text.
+          // [fork change] A text of its own when there is no cloud document.
           //
-          // "cloud.versionMismatch" ist fuer die GanttProject-Cloud geschrieben und erklaert den
-          // Konflikt mit "Version aus dem Projektverlauf". Auf einem WebDAV-Server stimmt das
-          // nicht: dort hat schlicht jemand anders die Datei geaendert. Am Bildschirm beobachtet --
-          // der Dialog nannte einen Grund, den es in diesem Fall gar nicht gab, und ein
-          // falscher Grund fuehrt zur falschen Entscheidung.
+          // "cloud.versionMismatch" is written for the GanttProject cloud and explains the
+          // conflict with "a version from the project history". On a WebDAV server that is not
+          // true: there somebody else has simply changed the file. Observed on screen -- the
+          // dialog named a reason that did not exist in this case, and a wrong reason leads to
+          // a wrong decision.
           it.i18n = when {
-            // Niemand hat geaendert -- der Server kann die Frage nicht beantworten. Eigener Text,
-            // sonst sucht der Benutzer einen Kollegen, den es nicht gibt.
+            // Nobody changed anything -- the server cannot answer the question. A text of its
+            // own, otherwise the user goes looking for a colleague who does not exist.
             e.versioningUnavailable -> noVersioningLocalizer
             onlineDoc != null ->
               RootLocalizer.createWithRootKey(rootKey = "cloud.versionMismatch", baseLocalizer = RootLocalizer)
@@ -445,9 +445,9 @@ class ProjectSaveFlow(
             SwingUtilities.invokeLater {
               when (choice) {
                 VersionMismatchChoice.OVERWRITE -> {
-                  // Nur erreichbar, wenn der Knopf angeboten wurde -- und das setzt onlineDoc
-                  // voraus. Der sichere Zugriff haelt die Bedingung im Code fest, statt sie nur
-                  // in der Knopfliste zu haben.
+                  // Only reachable when the button was offered -- and that presupposes
+                  // onlineDoc. The safe access pins the condition down in the code instead of
+                  // having it only in the button list.
                   onlineDoc?.write(force = true)
                 }
                 VersionMismatchChoice.MAKE_COPY -> {
@@ -485,25 +485,26 @@ class ProjectSaveFlow(
 private val DOCUMENT_LOGGER = GPLogger.create("Document.Info")
 
 /**
- * [Fork-Aenderung] Texte fuer einen Schreibkonflikt ausserhalb der GanttProject-Cloud.
+ * [fork change] Texts for a write conflict outside the GanttProject cloud.
  *
- * Stellt `fork.webdav.versionMismatch.` vor den Schluessel und faellt sonst auf den globalen
- * Schluessel zurueck. Der Rueckfall ist noetig, weil die Knopfbeschriftungen
- * (`document.option.makeCopy`) global liegen und hier nicht doppelt gepflegt werden sollen.
+ * Puts `fork.webdav.versionMismatch.` in front of the key and otherwise falls back to the global
+ * key. The fallback is needed because the button labels (`document.option.makeCopy`) live
+ * globally and should not be maintained twice here.
  */
 private val foreignChangeLocalizer = forkPrefixedLocalizer("fork.webdav.versionMismatch.")
 
 /**
- * [Fork-Aenderung] Texte fuer "der Server kann keine Versionspruefung beantworten".
+ * [fork change] Texts for "the server cannot answer a version check".
  *
- * Eigener Text, weil hier NIEMAND die Datei geaendert hat. Der Konflikttext waere schlicht falsch.
+ * A text of its own, because NOBODY changed the file here. The conflict text would simply be
+ * wrong.
  */
 private val noVersioningLocalizer = forkPrefixedLocalizer("fork.webdav.noVersioning.")
 
 /**
- * Stellt [prefix] vor den Schluessel und faellt sonst auf den globalen Schluessel zurueck. Der
- * Rueckfall ist noetig, weil die Knopfbeschriftungen (`document.option.makeCopy`) global liegen und
- * hier nicht doppelt gepflegt werden sollen.
+ * Puts [prefix] in front of the key and otherwise falls back to the global key. The fallback is
+ * needed because the button labels (`document.option.makeCopy`) live globally and should not be
+ * maintained twice here.
  */
 private fun forkPrefixedLocalizer(prefix: String) = object : Localizer {
   override fun create(key: String): LocalizedString = LocalizedString(key, this)

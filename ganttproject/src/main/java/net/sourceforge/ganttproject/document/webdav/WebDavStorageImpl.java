@@ -37,7 +37,7 @@ import com.google.common.base.Objects;
 import net.sourceforge.ganttproject.GPLogger;
 import net.sourceforge.ganttproject.IGanttProject;
 import net.sourceforge.ganttproject.ProjectEventListener;
-// [Fork-Aenderung] fuer D1: Sperre beim Oeffnen nehmen und bei Fehlschlag warnen.
+// [fork change] for D1: take the lock when opening and warn on failure.
 import biz.ganttproject.app.BarrierEntrance;
 import biz.ganttproject.app.Barrier;
 import net.sourceforge.ganttproject.gui.NotificationChannel;
@@ -64,14 +64,14 @@ public class WebDavStorageImpl implements DocumentStorageUi {
   private final StringOption myLegacyLastWebDAVDocument = new DefaultStringOption("last-webdav-document", "");
   private final StringOption myLastWebDavDocumentOption = new DefaultStringOption("lastDocument", null);
   /**
-   * [Fork-Aenderung] Voreinstellung von -1 auf 120 Minuten.
+   * [fork change] Default changed from -1 to 120 minutes.
    *
-   * -1 bedeutet "nie sperren", und {@link HttpDocument#acquireLock()} meldete dabei trotzdem
-   * Erfolg. Eine Schutzfunktion, die im Auslieferungszustand aus ist UND das verschweigt, ist
-   * schlimmer als gar keine: sie erzeugt Vertrauen, das nicht gedeckt ist.
+   * -1 means "never lock", and {@link HttpDocument#acquireLock()} nevertheless reported success.
+   * A protective feature that is off as shipped AND keeps quiet about it is worse than none at
+   * all: it creates trust that is not backed by anything.
    *
-   * 120 Minuten: lang genug fuer eine Arbeitssitzung, kurz genug, dass eine nach einem Absturz
-   * vergessene Sperre von selbst verfaellt und niemanden dauerhaft aussperrt.
+   * 120 minutes: long enough for a working session, short enough that a lock forgotten after a
+   * crash expires by itself and does not lock anybody out permanently.
    */
   private final IntegerOption myWebDavLockTimeoutOption = new DefaultIntegerOption("webdav.lockTimeout", 120);
   private final BooleanOption myReleaseLockOption = new DefaultBooleanOption("lockRelease", true);
@@ -87,16 +87,16 @@ public class WebDavStorageImpl implements DocumentStorageUi {
     myUiFacade = uiFacade;
     project.addProjectEventListener(new ProjectEventListener.Stub() {
       /**
-       * [Fork-Aenderung] Die Sperre wird jetzt tatsaechlich genommen.
+       * [fork change] The lock is now actually taken.
        *
-       * FEHLER IM ORIGINAL: {@code acquireLock()} rief im ganzen Programm NIEMAND auf — nur
-       * {@code releaseLock()} unten wurde benutzt. Freigegeben wurde also, was nie genommen war.
-       * Zusammen mit der Sperrdauer, die das Dokument nie erreichte, hiess das: GanttProject lief
-       * gegen einen sperrfaehigen Server und sperrte nie, ohne Meldung und ohne Logzeile.
+       * BUG IN THE ORIGINAL: NOBODY in the whole program called {@code acquireLock()} — only
+       * {@code releaseLock()} below was used. So what was released had never been taken. Together
+       * with the lock timeout that never reached the document this meant: GanttProject ran
+       * against a lock-capable server and never locked, without a message and without a log line.
        *
-       * Schlaegt die Sperre fehl, wird gewarnt und trotzdem geoeffnet. Lesen bleibt damit moeglich,
-       * und das versehentliche Ueberschreiben faengt seit D3 ohnehin If-Match ab. Oeffnen zu
-       * verweigern wuerde eine nach einem Absturz vergessene Sperre zur Aussperrung machen.
+       * If the lock fails, a warning is shown and the file is opened anyway. Reading thereby
+       * stays possible, and accidental overwriting is caught by If-Match since D3 in any case.
+       * Refusing to open would turn a lock forgotten after a crash into a lockout.
        */
       @Override
       public void projectOpened(BarrierEntrance barrierRegistry, Barrier<IGanttProject> barrier) {

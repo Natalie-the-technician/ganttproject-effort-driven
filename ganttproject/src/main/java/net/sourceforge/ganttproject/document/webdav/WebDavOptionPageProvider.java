@@ -12,7 +12,7 @@ import net.sourceforge.ganttproject.gui.EditableList;
 import net.sourceforge.ganttproject.gui.options.OptionPageProviderBase;
 import net.sourceforge.ganttproject.gui.options.OptionsPageBuilder;
 import net.sourceforge.ganttproject.language.GanttLanguage;
-// [Fork-Aenderung] Hinweistext zur Sperrdauer.
+// [fork change] hint text for the lock timeout.
 import net.sourceforge.ganttproject.fork.ForkI18nKt;
 
 import javax.swing.*;
@@ -29,18 +29,17 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
   }
 
   /**
-   * [Fork-Aenderung] Die Gruppen dieser Seite, damit "Uebernehmen" sie auch uebernimmt.
+   * [fork change] The groups of this page, so that "Uebernehmen" actually applies them.
    *
-   * FEHLER IM ORIGINAL: hier stand `return new GPOptionGroup[0];` mit dem Kommentar
-   * "TODO Auto-generated method stub". {@link OptionPageProviderBase#commit()} laeuft ueber genau
-   * diese Liste -- war sie leer, wurde NICHTS uebernommen: weder Adresse noch Benutzername,
-   * Passwort oder Sperrdauer. Ein neu angelegter Server blieb ohne Adresse zurueck, und der
-   * naechste Verbindungsversuch scheiterte mit "I/O problems when accessing <Servername>" -- der
-   * Name stand dort, wo der Rechnername haette stehen sollen. Genau so am Bildschirm gesehen.
+   * BUG IN THE ORIGINAL: `return new GPOptionGroup[0];` stood here with the comment
+   * "TODO Auto-generated method stub". {@link OptionPageProviderBase#commit()} runs over exactly
+   * this list -- if it was empty, NOTHING was applied: neither address nor user name, password
+   * or lock timeout. A newly created server was left without an address, and the next connection
+   * attempt failed with "I/O problems when accessing <Servername>" -- the name stood where the
+   * host name should have been. Seen on screen exactly like that.
    *
-   * Die Felder werden erst in {@link #buildPageComponent()} gefuellt. Bis dahin eine leere Liste
-   * zurueckzugeben ist richtig und kein Rueckfall: vor dem Aufbau der Seite gibt es nichts zu
-   * uebernehmen.
+   * The fields are only filled in {@link #buildPageComponent()}. Returning an empty list until
+   * then is correct and not a fallback: before the page is built there is nothing to apply.
    */
   @Override
   public GPOptionGroup[] getOptionGroups() {
@@ -144,7 +143,7 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     });
 
     GPOptionGroup optionGroup = new GPOptionGroup("webdav.server", urlOption, usernameOption, passwordOption, savePasswordOption);
-    // [Fork-Aenderung] merken, damit getOptionGroups() sie liefert und "Uebernehmen" wirkt.
+    // [fork change] remember them, so getOptionGroups() returns them and "Uebernehmen" works.
     myServerOptions = optionGroup;
 
     serverList.getTableAndActions().addSelectionListener(new SelectionListener<WebDavServerDescriptor>() {
@@ -173,14 +172,14 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     lockingGroup.setI18Nkey(builder.getI18N().getCanonicalOptionLabelKey(webdavStorage.getWebDavLockTimeoutOption()), "webdav.lockTimeout.label");
     lockingGroup.setI18Nkey(builder.getI18N().getCanonicalOptionLabelKey(webdavStorage.getWebDavReleaseLockOption()), "option.webdav.lock.releaseOnProjectClose.label");
     myLockingOptions = lockingGroup;
-    // [Fork-Aenderung] D2: benennen, was eine negative Sperrdauer abschaltet.
+    // [fork change] D2: name what a negative lock timeout switches off.
     //
-    // "Timeout (Minuten)" sagt nicht, dass ein Wert unter 0 "nie sperren" bedeutet -- und
-    // HttpDocument.acquireLock() meldet dabei Erfolg, ohne etwas zu tun. Wer den Wert einmal
-    // negativ gesetzt hat, arbeitet seither ohne Sperre, und nichts auf dieser Seite sagt es ihm.
+    // "Timeout (Minuten)" does not say that a value below 0 means "never lock" -- and
+    // HttpDocument.acquireLock() reports success while doing nothing. Whoever once set the value
+    // negative has been working without a lock ever since, and nothing on this page says so.
     //
-    // Der Hinweis nennt auch, was dann NOCH schuetzt. Ohne diesen Halbsatz liest sich die Zeile
-    // wie "du bist ungeschuetzt", und das waere seit D3 schlicht falsch.
+    // The hint also names what STILL protects in that case. Without that half-sentence the line
+    // reads like "you are unprotected", and since D3 that would simply be wrong.
     JPanel lockingPanel = new JPanel(new BorderLayout());
     final JComponent lockingOptions = builder.buildPlanePage(new GPOptionGroup[] {lockingGroup});
     lockingPanel.add(lockingOptions, BorderLayout.CENTER);
@@ -193,27 +192,28 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     JComponent serverDetails = builder.buildPlanePage(new GPOptionGroup[] {optionGroup});
     serverDetails.setPreferredSize(new Dimension(300, 300));
 
-    // [Fork-Aenderung] Geteilte Flaeche statt BorderLayout WEST/CENTER.
+    // [fork change] A split area instead of BorderLayout WEST/CENTER.
     //
-    // FEHLER IM ORIGINAL: BorderLayout gibt WEST seine volle Wunschbreite und der Mitte nur den
-    // Rest -- auch wenn der negativ ist. Am Bildschirm gemessen, mit der eingebauten Diagnose:
+    // BUG IN THE ORIGINAL: BorderLayout gives WEST its full preferred width and the centre only
+    // the remainder -- even when that is negative. Measured on screen with the built-in
+    // diagnostic:
     //
-    //   Seite          breite= 591
-    //   Serverliste    x=  5  breite= 656   (ragt 70 px hinaus)
-    //   Serverdetails  x=661  breite= -75   (negativ, also nicht vorhanden)
+    //   page           width= 591
+    //   server list    x=  5  width= 656   (sticks out by 70 px)
+    //   server details x=661  width= -75   (negative, so not present)
     //
-    // Damit liessen sich Server anlegen, aber Adresse, Benutzer und Passwort nie sehen oder
-    // aendern. Genau das hiess "die Servereinstellung ist kaputt".
+    // Servers could thereby be created, but address, user and password never seen or changed.
+    // That is precisely what "the server settings are broken" meant.
     //
-    // JSplitPane statt fester Pixelwerte: es teilt, was da ist, und gibt keiner Seite eine
-    // negative Breite. Reicht der Platz nicht, kann der Mensch den Trenner ziehen -- eine
-    // hartkodierte Breite waere bei anderer Schriftgroesse oder Bildschirmskalierung wieder falsch.
+    // JSplitPane instead of fixed pixel values: it divides what is there and gives neither side
+    // a negative width. If the space is not enough, the divider can be dragged -- a hard-coded
+    // width would be wrong again at a different font size or screen scaling.
     JSplitPane result = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, serversPanel, serverDetails);
     result.setResizeWeight(0.5);
     result.setBorder(BorderFactory.createEmptyBorder());
-    // KEIN setDividerLocation(double) hier. Der Anteil wird gegen die AKTUELLE Groesse gerechnet,
-    // und die ist zu diesem Zeitpunkt noch null -- der Trenner landet dann am Rand und eine Seite
-    // bekommt die Breite 0. resizeWeight allein teilt beim ersten Anordnen richtig auf.
+    // NO setDividerLocation(double) here. The proportion is computed against the CURRENT size,
+    // and at this point that is still zero -- the divider then lands at the edge and one side
+    // gets width 0. resizeWeight alone divides correctly on the first layout.
     final JComponent page = OptionPageProviderBase.wrapContentComponent(result, getCanonicalPageTitle(), null);
 
     return page;

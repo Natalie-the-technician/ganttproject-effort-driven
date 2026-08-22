@@ -61,12 +61,12 @@ public class HttpDocument extends AbstractURLDocument {
   }
 
   /**
-   * [Fork-Aenderung] Wie oben, aber mit Sperrdauer.
+   * [fork change] As above, but with a lock timeout.
    *
-   * FEHLER IM ORIGINAL: Die Ueberladung darueber setzte fest {@code -1}, und sie ist der Weg, ueber
-   * den GanttProject WebDAV-Dokumente ueberhaupt oeffnet. Die Einstellung {@code webdav.lockTimeout}
-   * erreichte das Dokument damit nie — sie ging nur an den Oeffnen-Dialog. Wer sie auf 120 stellte,
-   * aenderte nichts, ohne dass es irgendwo aufgefallen waere.
+   * BUG IN THE ORIGINAL: the overload above set a fixed {@code -1}, and it is the path through
+   * which GanttProject opens WebDAV documents at all. The setting {@code webdav.lockTimeout}
+   * therefore never reached the document — it only went to the open dialog. Setting it to 120
+   * changed nothing, without that being noticeable anywhere.
    */
   public HttpDocument(String url, String username, String password, StringOption proxyOption, int lockTimeout)
       throws IOException, WebDavException {
@@ -146,17 +146,17 @@ public class HttpDocument extends AbstractURLDocument {
       return true;
     }
     if (myTimeout < 0) {
-      // [Fork-Aenderung] D2: sagen, dass hier nicht gesperrt wird.
+      // [fork change] D2: say that nothing is being locked here.
       //
-      // Der Rueckgabewert bleibt true -- der Aufrufer soll nicht warnen, denn niemand hat versagt:
-      // die Einstellung steht auf "nie sperren". Aber "Erfolg" zu melden, ohne etwas getan zu
-      // haben, war bisher vollkommen stumm. Wer die Sperrdauer irgendwann einmal negativ gesetzt
-      // hat, arbeitet seither ohne Sperre und findet dafuer nirgends einen Beleg.
+      // The return value stays true -- the caller should not warn, because nobody failed: the
+      // setting says "never lock". But reporting "success" without having done anything was
+      // completely silent up to now. Whoever once set the lock timeout negative has been working
+      // without a lock ever since and finds no evidence of it anywhere.
       //
-      // Die Uebergabe verlangte diese Beschriftung am Knopf "ohne Sperre oeffnen". Den gibt es
-      // nicht mehr: sein Dialog haengt an CloudProjectActionBase, und diese Klasse hat im ganzen
-      // Repo keine Ableitung und keinen weiteren Verweis -- toter Code. Erreichbar ist die Wahl
-      // heute nur ueber diese Einstellung, also gehoert der Hinweis hierher.
+      // The handover asked for this label on the "open without lock" button. That button no
+      // longer exists: its dialog hangs off CloudProjectActionBase, and that class has no
+      // subclass and no further reference in the whole repository -- dead code. Today the choice
+      // is reachable only through this setting, so the hint belongs here.
       GPLogger.log("WebDAV: keine Sperre fuer " + getFileName()
           + " -- die Sperrdauer steht auf \"nie sperren\". Gegen versehentliches Ueberschreiben"
           + " schuetzt weiterhin If-Match beim Speichern.");

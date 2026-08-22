@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -91,7 +91,7 @@ const val WEAK_ETAG_RETRY_MILLIS = 1100L
  * session onwards, this is the normal path.
  * @param pause waits between the two questions. A parameter so that tests need not really sleep.
  */
-// @JvmOverloads: MiltonResourceImpl ist Java und sieht Kotlins Vorgabewerte sonst nicht.
+// @JvmOverloads: MiltonResourceImpl is Java and would not otherwise see Kotlin's defaults.
 @JvmOverloads
 fun resolveIfMatch(
   remembered: String?,

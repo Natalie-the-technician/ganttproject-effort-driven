@@ -194,13 +194,13 @@ interface LockableDocument {
 
 class NetworkUnavailableException(cause: Exception) : RuntimeException(cause)
 /**
- * [Fork-Aenderung] [versioningUnavailable] unterscheidet zwei Faelle, die sonst gleich aussehen und
- * fuer den Benutzer nichts miteinander zu tun haben:
+ * [fork change] [versioningUnavailable] distinguishes two cases that otherwise look the same and
+ * have nothing to do with each other from the user's point of view:
  *
- * - false: jemand hat die Datei geaendert. Ein echter Konflikt.
- * - true: der Server kann keine Versionspruefung beantworten (nur schwache ETags). Niemand hat
- *   etwas getan; die Frage ist unbeantwortbar. Wer hier "jemand anderes hat geaendert" anzeigt,
- *   schickt den Benutzer auf die Suche nach einem Kollegen, den es nicht gibt.
+ * - false: somebody has changed the file. A genuine conflict.
+ * - true: the server cannot answer a version check (weak ETags only). Nobody has done anything;
+ *   the question is unanswerable. Showing "somebody else has changed it" here sends the user
+ *   looking for a colleague who does not exist.
  */
 class VersionMismatchException @JvmOverloads constructor(
   val canOverwrite: Boolean = true,
