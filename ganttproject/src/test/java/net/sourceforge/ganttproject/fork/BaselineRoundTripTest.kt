@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 Licensed under the GNU General Public License, version 3 or later.
@@ -21,18 +21,17 @@ import java.time.LocalDate
 import java.util.Locale
 
 /**
- * Haelt ein Basisplan das, was er verspricht?
+ * Does a baseline keep what it promises?
  *
- * NATALIES FRAGE, am 17.08.2026: "Teste danach ob das mit dem basisplan so klappt auch mit der
- * klassischen gant ansicht."
+ * A QUESTION RAISED ON 17.08.2026: test afterwards whether the baseline works in the classic
+ * Gantt view as well.
  *
- * Was hier geprueft wird, ist die Haelfte, die ohne Bildschirm messbar ist: dass der Basisplan
- * ueberhaupt in die Projektdatei kommt und dass er die richtigen Termine haelt -- naemlich die
- * VOR dem Verteilen. Ein Basisplan, der nach dem Verschieben aufgenommen wird, sieht genauso aus
- * und ist wertlos.
+ * What is checked here is the half that is measurable without a screen: that the baseline gets
+ * into the project file at all and that it holds the right dates -- namely the ones from BEFORE
+ * levelling. A baseline recorded after the moving looks exactly the same and is worthless.
  *
- * Was hier NICHT geprueft wird und auch nicht geprueft werden kann: ob das Diagramm den zweiten
- * Balken zeichnet. Das ist Bildschirm.
+ * What is NOT checked here and cannot be checked: whether the chart draws the second bar. That is
+ * a matter for the screen.
  */
 class BaselineRoundTripTest {
 
@@ -61,9 +60,9 @@ class BaselineRoundTripTest {
       .withName("Vorgang").withStartDate(LocalDate.of(2026, 8, 17).toModelDate())
       .withDuration(project.taskManager.createLength(5)).build()
 
-    // init() und saveFile() gehoeren dazu: ein Basisplan haelt seine Vorgaenge in einer
-    // Temporaerdatei, nicht im Speicher. Ohne sie ist er in der Liste sichtbar, im Diagramm
-    // unsichtbar und beim Speichern eine Ausnahme.
+    // init() and saveFile() are part of it: a baseline holds its Tasks in a temporary file, not
+    // in memory. Without them it is visible in the list, invisible in the chart and an exception
+    // when saving.
     project.baselines.add(
       GanttPreviousState("Vor der Verteilung 2026-08-17",
         GanttPreviousState.createTasks(project.taskManager)).also {
@@ -76,17 +75,18 @@ class BaselineRoundTripTest {
     assertTrue(xml.contains("Vor der Verteilung 2026-08-17"), "der Name fehlt")
     assertTrue(xml.contains("2026-08-17"), "der gesicherte Termin fehlt")
     assertEquals(1, project.baselines.size)
-    // Gegenprobe: ohne Basisplan steht das Wort auch nicht in der Datei -- sonst haette der Test
-    // oben nur bewiesen, dass GanttProject immer etwas mit "previous" schreibt.
+    // Counter-check: without a baseline the word does not appear in the file either -- otherwise
+    // the test above would only have proved that GanttProject always writes something with
+    // "previous".
     val ohne = saveToXml(GanttProjectImpl())
     assertTrue(!ohne.contains("Vor der Verteilung"), "Gegenprobe: der Name darf nicht erscheinen")
   }
 
   @Test
   fun `der basisplan haelt die termine VOR dem verschieben fest`() {
-    // Das ist der Punkt, an dem die Reihenfolge im Programm zaehlt: erst sichern, dann verteilen.
-    // Andersherum haelt der Basisplan die schon verschobenen Termine -- er saehe richtig aus und
-    // waere wertlos.
+    // This is the point at which the order in the program counts: save first, then level. The
+    // other way round the baseline holds the dates that have already been moved -- it would look
+    // right and be worthless.
     val project = GanttProjectImpl()
     val tm = project.taskManager
     val task = tm.newTaskBuilder().withName("Vorgang")
@@ -98,15 +98,15 @@ class BaselineRoundTripTest {
       it.saveFile()
     })
 
-    // Jetzt verschieben, wie es die Verteilung tut.
+    // Now move, the way levelling does.
     val mutator = task.createMutator()
     mutator.setStart(CalendarFactory.createGanttCalendar(
       LocalDate.of(2026, 9, 21).toModelDate()))
     mutator.commit()
 
-    // load() liest die Temporaerdatei -- genau der Weg, den der Speicherer (HistorySaver:45) und
-    // das Diagramm (GanttGraphicArea:237) gehen. Ein Test gegen das Feld im Speicher haette die
-    // fehlenden init()/saveFile() nicht bemerkt.
+    // load() reads the temporary file -- exactly the path the saver (HistorySaver:45) and the
+    // chart (GanttGraphicArea:237) take. A test against the field in memory would not have
+    // noticed the missing init()/saveFile().
     val gesichert = project.baselines[0].load().first { it.id == task.taskID }
     assertEquals(LocalDate.of(2026, 8, 17), gesichert.start.time.toModelLocalDate(),
       "der Basisplan haelt den August, nicht den September")

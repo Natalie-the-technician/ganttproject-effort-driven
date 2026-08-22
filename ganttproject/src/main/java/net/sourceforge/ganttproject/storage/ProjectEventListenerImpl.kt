@@ -113,22 +113,22 @@ internal class ProjectEventListenerImpl(
   }
 
   /**
-   * [Fork-Aenderung] Diese Methode fehlte im Original — das ist die Ursache eines still
-   * verschluckten Datenverlusts.
+   * [fork change] This method was missing in the original — that is the cause of a silently
+   * swallowed loss of data.
    *
-   * `ProjectUIFacadeImpl.createProject` ruft beim Anlegen eines neuen Projekts erst
-   * `project.close()` (das setzt ueber [projectClosed] `isProjectOpen = false`) und danach
-   * `fireProjectCreated()`. Da `projectCreated` bisher nicht behandelt wurde, blieb die Sperre
-   * dauerhaft zu: `LazyProjectDatabaseProxy.onCustomColumnChange` verwarf ab dann JEDE
-   * Spaltenaenderung stillschweigend, ohne Fehler. Die Spiegeltabelle bekam keine Spalte, und
-   * jeder Schreibvorgang auf eine benutzerdefinierte Eigenschaft scheiterte mit
-   * `Column "..." not found`. Weil `MutatorImpl.commit()` Datenbankfehler nur protokolliert,
-   * lief die Anwendung scheinbar weiter — bis gar kein Vorgang mehr anlegbar war.
+   * When a new project is created, `ProjectUIFacadeImpl.createProject` first calls
+   * `project.close()` (which sets `isProjectOpen = false` through [projectClosed]) and then
+   * `fireProjectCreated()`. Since `projectCreated` was not handled until now, the lock stayed
+   * shut for good: from then on `LazyProjectDatabaseProxy.onCustomColumnChange` discarded EVERY
+   * column change silently, without an error. The mirror table got no column, and every write of
+   * a custom property failed with `Column "..." not found`. Because `MutatorImpl.commit()` only
+   * logs database errors, the application seemingly carried on — until no Task could be created
+   * at all any more.
    *
-   * Betrifft nicht nur die aufwandsgetriebene Planung: JEDE benutzerdefinierte Spalte, die nach
-   * "Projekt -> Neu" angelegt wird, war davon betroffen.
+   * Affects more than effort-driven planning: EVERY custom column created after
+   * "Projekt -> Neu" was affected by it.
    *
-   * Vorgehen wie in [projectRestoring]: die Spiegeldatenbank verwerfen und frisch aufbauen.
+   * Same approach as in [projectRestoring]: discard the mirror database and build it anew.
    */
   override fun projectCreated() = withLogger({ "Failed to initialize the database for a new project" }) {
     projectDatabase.shutdown()

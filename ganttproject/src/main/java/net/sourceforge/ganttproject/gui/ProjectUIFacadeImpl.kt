@@ -299,31 +299,31 @@ class ProjectUIFacadeImpl(
 
           project.activeCalendar.importCalendar(projectData.calendar, ImportCalendarOption(ImportCalendarOption.Values.REPLACE))
           projectImpl.fireProjectCreated()
-          // [Fork-Aenderung] Die Spalten dieses Forks im neuen Projekt anlegen.
+          // [fork change] Create this fork's columns in the new project.
           //
-          // WAS: ensureCapacityColumns() traegt die benutzerdefinierten Spalten ein, die der Fork
-          // braucht -- Tagesleistung, Auslastung, "Fertig bis", "Warten", "Termin fest",
-          // Wiederholung. Ohne sie ist die aufwandsgetriebene Planung fuer ein neu angelegtes
-          // Projekt unerreichbar: was man nicht sieht, kann man nicht eintragen.
+          // WHAT: ensureCapacityColumns() enters the custom columns the fork needs -- daily rate,
+          // utilisation, "Finish by", "Waiting", "Date fixed", recurrence. Without them
+          // effort-driven planning is unreachable for a newly created project: what one cannot
+          // see, one cannot fill in.
           //
-          // WARUM HIER UND NICHT FRUEHER, und das ist der Punkt: der Aufruf muss NACH
-          // fireProjectCreated() stehen, also nach ALLEN Listenern. Einer von ihnen
-          // (ProjectEventListenerImpl.projectCreated) verwirft die Spiegeldatenbank und baut sie
-          // neu auf. Wer diese Zeile davor schiebt -- oder sie in einen eigenen Listener verlegt,
-          // dessen Platz in der Registrierungsreihenfolge niemand festlegt --, legt die Spalten
-          // gegen einen Spiegel an, der gleich danach ersetzt wird. onCustomColumnChange verwirft
-          // sie dann stillschweigend, und zwar ohne Fehlermeldung. Genau diese Fehlerfamilie
-          // beschreibt der Kommentar in ProjectEventListenerImpl.
+          // WHY HERE AND NOT EARLIER, and this is the point: the call has to stand AFTER
+          // fireProjectCreated(), that is, after ALL listeners. One of them
+          // (ProjectEventListenerImpl.projectCreated) discards the mirror database and builds it
+          // anew. Moving this line in front of it -- or into a listener of its own, whose place
+          // in the registration order nobody fixes -- creates the columns against a mirror that
+          // is replaced immediately afterwards. onCustomColumnChange then discards them
+          // silently, and without an error message at that. That is exactly the family of bug the
+          // comment in ProjectEventListenerImpl describes.
           //
-          // WARUM VOR isModified: das Anlegen der Spalten ist eine Modellaenderung. Stuende der
-          // Aufruf danach, gaelte ein frisch angelegtes Projekt sofort als ungespeichert.
+          // WHY BEFORE isModified: creating the columns is a change to the model. If the call
+          // stood after it, a freshly created project would count as unsaved at once.
           //
-          // WARUM NICHT IN newProject(): dort lief der Aufruf synchron direkt nach
-          // createProject() -- also am noch offenen, alten Projekt, das der Rueckruf hier gleich
-          // schliesst und dessen Manager er zuruecksetzt. Der Aufruf war damit wirkungslos, und
-          // bei ABBRUCH des Assistenten veraenderte er das offene Projekt trotzdem: der Barrier
-          // aus createNewProject wird ausschliesslich in onOkPressed aufgeloest, dieser Rueckruf
-          // laeuft bei Abbruch also gar nicht, die alte Zeile aber schon.
+          // WHY NOT IN newProject(): there the call ran synchronously straight after
+          // createProject() -- that is, against the still open, old project, which this callback
+          // closes right afterwards and whose managers it resets. The call was thereby without
+          // effect, and on CANCELLING the wizard it changed the open project regardless: the
+          // barrier from createNewProject is resolved exclusively in onOkPressed, so on a cancel
+          // this callback does not run at all, but the old line did.
           projectImpl.ensureCapacityColumns()
           // A new project just got created, so it is not yet modified
           projectImpl.isModified = false

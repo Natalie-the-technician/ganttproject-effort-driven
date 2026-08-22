@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -21,70 +21,70 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject.fork
 
 /**
- * Geschaetzt gegen gebraucht: wie gut die eigenen Schaetzungen sind.
+ * Estimated against needed: how good one's own estimates are.
  *
- * NATALIES EIGENE BESCHREIBUNG DES ZWECKS, am 17.08.2026, und sie bestimmt den ganzen Aufbau:
+ * THE DESCRIPTION OF THE PURPOSE GIVEN ON 17.08.2026, and it determines the whole structure:
  *
- *   "Nur wenn etwas mehr Aufwand ist als geplant soll man es sehen. Wenn ich zum Beispiel 15 statt
- *    9 Stunden brauche, ist ja egal, über welchen Zeitraum die Stunden verteilt waren."
+ *   "One should only see it when something takes more effort than planned. If I need 15 hours
+ *    instead of 9, for instance, it does not matter over what period the hours were spread."
  *
- * DARAUS FOLGT DREIERLEI:
+ * THREE THINGS FOLLOW FROM THAT:
  *
- * 1. **Verglichen werden STUNDEN, nicht Termine.** Ein Termin-Basisplan zeigt in der Zukunft vor
- *    allem eines: dass sich alles verschoben hat, sobald sich die Tagesleistung aendert. Das ist
- *    keine Abweichung, sondern Neuplanung. Die Abweichung sind die Stunden.
- * 2. **Der Zeitraum ist gleichgueltig.** Ob die 15 Stunden an einem Tag oder ueber drei Wochen
- *    anfielen, aendert an der Schaetzung nichts. Diese Rechnung kennt deshalb kein Datum.
- * 3. **Verglichen wird gegen die URSPRUENGLICHE Schaetzung.** Wer eine Schaetzung nachtraeglich
- *    korrigiert, vergleicht sonst gegen die korrigierte und lernt nichts mehr -- die Abweichung
- *    verschwindet in dem Moment, in dem man sie bemerkt. Dafuer gibt es die Spalte
- *    "Aufwand urspruenglich", die genau einmal gesetzt und danach nie wieder angefasst wird.
+ * 1. **HOURS are compared, not dates.** In the future a date baseline shows one thing above all:
+ *    that everything has shifted as soon as the daily rate changes. That is not a deviation but
+ *    replanning. The deviation is the hours.
+ * 2. **The period does not matter.** Whether the 15 hours accrued on one day or over three weeks
+ *    changes nothing about the estimate. This calculation therefore knows no date.
+ * 3. **The comparison is against the ORIGINAL estimate.** Anyone who corrects an estimate
+ *    afterwards otherwise compares against the corrected one and learns nothing more -- the
+ *    deviation disappears at the moment it is noticed. That is what the "Original effort (h)"
+ *    column is for, which is set exactly once and never touched again afterwards.
  *
- * Reine Rechnung, keine GanttProject-Typen.
+ * Pure calculation, no GanttProject types.
  */
 
-/** Ein Vorgang, so wie die Auswertung ihn sieht. */
+/** A Task as the evaluation sees it. */
 data class EstimateRow(
   val id: String,
   val name: String,
-  /** Die urspruengliche Schaetzung in Stunden. */
+  /** The original estimate in hours. */
   val originalHours: Double,
-  /** Tatsaechlich erfasste Stunden. */
+  /** Hours actually recorded. */
   val actualHours: Double,
-  /** Fertigstellung in Prozent. Nur abgeschlossene Vorgaenge sagen etwas ueber die Schaetzung. */
+  /** Completion in per cent. Only finished Tasks say anything about the estimate. */
   val completionPercent: Int
 ) {
   val isFinished: Boolean get() = completionPercent >= 100
-  /** Wie viel mehr gebraucht wurde. 1,0 heisst: genau getroffen. */
+  /** How much more was needed. 1.0 means: hit exactly. */
   val factor: Double get() = if (originalHours > 0.0) actualHours / originalHours else 0.0
   val extraHours: Double get() = actualHours - originalHours
 }
 
 data class EstimateReport(
-  /** Abgeschlossene Vorgaenge mit Schaetzung UND erfassten Stunden -- die Grundlage. */
+  /** Finished Tasks with an estimate AND recorded hours -- the basis. */
   val finished: List<EstimateRow>,
-  /** Abgeschlossene, die mehr gebraucht haben als geschaetzt, absteigend nach Mehraufwand. */
+  /** Finished ones that needed more than estimated, descending by extra effort. */
   val overruns: List<EstimateRow>,
-  /** Angefangene, die JETZT SCHON ueber der Schaetzung liegen -- eine Warnung, kein Urteil. */
+  /** Begun ones that are ALREADY over the estimate -- a warning, not a verdict. */
   val runningOver: List<EstimateRow>,
-  /** Summe geschaetzt / Summe gebraucht ueber die abgeschlossenen. */
+  /** Sum estimated / sum needed over the finished ones. */
   val overallFactor: Double,
-  /** Noch offener Aufwand laut Plan, in Stunden. */
+  /** Effort still outstanding according to the plan, in hours. */
   val remainingPlannedHours: Double
 ) {
   val hasBasis: Boolean get() = finished.isNotEmpty()
-  /** Der offene Aufwand, hochgerechnet mit dem gemessenen Faktor. */
+  /** The outstanding effort, extrapolated with the measured factor. */
   val remainingExpectedHours: Double get() = remainingPlannedHours * overallFactor
 }
 
 /**
- * @param rows alle Vorgaenge mit urspruenglicher Schaetzung.
- * @param remainingPlannedHours geplanter Aufwand aller noch nicht abgeschlossenen Vorgaenge.
+ * @param rows all Tasks with an original estimate.
+ * @param remainingPlannedHours planned effort of all Tasks not yet finished.
  *
- * DER GESAMTFAKTOR WIRD AUS SUMMEN GEBILDET, nicht als Mittelwert der Einzelfaktoren. Sonst zaehlt
- * ein Vorgang mit einer halben Stunde genauso viel wie einer mit vierzig -- und ein einziger
- * kleiner Ausreisser ("20 Minuten geschaetzt, 2 Stunden gebraucht", Faktor 6) verdreht das ganze
- * Bild. Summen gewichten mit dem, worum es geht: Arbeitszeit.
+ * THE OVERALL FACTOR IS FORMED FROM SUMS, not as the mean of the individual factors. Otherwise a
+ * Task of half an hour counts as much as one of forty -- and a single small outlier ("20 minutes
+ * estimated, 2 hours needed", factor 6) distorts the whole picture. Sums weight by what the
+ * matter is about: working time.
  */
 fun buildEstimateReport(
   rows: List<EstimateRow>,
