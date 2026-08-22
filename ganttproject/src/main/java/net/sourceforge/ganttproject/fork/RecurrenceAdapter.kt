@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -34,32 +34,30 @@ import net.sourceforge.ganttproject.undo.GPUndoManager
 import java.time.LocalDate
 
 /**
- * Serienvorgaenge im Projektmodell: aus einem Vorgang mit Wiederholung werden viele.
+ * Recurring Tasks in the project model: one Task with a recurrence becomes many.
  *
- * DREI EIGENSCHAFTEN, die dieses Hilfsmittel brauchbar statt gefaehrlich machen:
+ * THREE PROPERTIES that make this tool usable rather than dangerous:
  *
- * 1. **Es ist wiederholbar.** Jede angelegte Wiederholung traegt die Kennung ihres
- *    Ausgangsvorgangs UND ihren Termin. Ein zweiter Aufruf legt deshalb nichts doppelt an --
- *    weder nach einer Planaenderung noch nach einem Abbruch mittendrin. Ein Hilfsmittel, das beim
- *    zweiten Klick 40 Doppelvorgaenge erzeugt, benutzt man genau einmal.
- * 2. **Es fasst Vorhandenes nicht an.** Weder den Ausgangsvorgang noch bereits angelegte
- *    Wiederholungen: wer eine davon verschoben oder abgehakt hat, behaelt das.
- * 3. **Es haengt die Wiederholungen NEBEN den Ausgangsvorgang**, in dieselbe Gruppe. Sie unter
- *    den Ausgangsvorgang zu haengen wuerde ihn zu einer Gruppe machen -- und eine Gruppe leitet
- *    ihre Termine aus den Kindern ab, womit der urspruengliche Vorgang seine eigene Dauer
- *    verloere.
+ * 1. **It is repeatable.** Every occurrence created carries the id of its source Task AND its
+ *    date. A second call therefore creates nothing twice -- neither after a change to the plan nor
+ *    after an abort halfway through. A tool that produces 40 duplicate Tasks on the second click
+ *    gets used exactly once.
+ * 2. **It does not touch what already exists.** Neither the source Task nor occurrences already
+ *    created: whoever has moved or ticked one of them off keeps that.
+ * 3. **It hangs the occurrences NEXT TO the source Task**, in the same group. Hanging them under
+ *    the source Task would turn it into a group -- and a group derives its dates from its
+ *    children, whereby the original Task would lose its own duration.
  */
 
-/** Die Wiederholungsregel als Text. [Fork-Aenderung] */
+/** The recurrence rule as text. [fork change] */
 const val TASK_RECURRENCE = "recurrence"
 
 /**
- * Kennzeichen einer angelegten Wiederholung: "Kennung des Ausgangsvorgangs @ Termin".
+ * Marker of a created occurrence: "id of the source Task @ date".
  *
- * WARUM AUCH DER TERMIN darin steht und nicht nur die Kennung: ohne ihn liesse sich nicht
- * erkennen, WELCHER Termin schon existiert. Nach einer Aenderung der Regel -- aus "bis 2027" wird
- * "bis 2030" -- muessen die fehlenden Termine nachgelegt werden, ohne die vorhandenen zu
- * verdoppeln.
+ * WHY THE DATE IS IN IT as well and not only the id: without it there would be no way to tell
+ * WHICH date already exists. After a change to the rule -- "bis 2027" becomes "bis 2030" -- the
+ * missing dates have to be added without duplicating the ones that are there.
  */
 const val TASK_RECURRENCE_OF = "recurrence_of"
 
@@ -73,55 +71,54 @@ fun findOrCreateRecurrenceOf(manager: CustomPropertyManager): CustomPropertyDefi
     ?: manager.createDefinition(TASK_RECURRENCE_OF, CustomPropertyClass.TEXT.iD,
                                 forkText("fork.column.recurrenceOf"), null)
 
-/** Der eingetragene Wiederholungstext, oder null. */
+/** The recurrence text that is entered, or null. */
 fun Task.recurrenceText(manager: CustomPropertyManager): String? {
   val def = manager.findEffortDefinition(TASK_RECURRENCE) ?: return null
   return this.customValues.getValue(def)?.toString()?.takeIf { it.isNotBlank() }
 }
 
-/** Das Kennzeichen einer angelegten Wiederholung, oder null. */
+/** The marker of a created occurrence, or null. */
 fun Task.recurrenceOf(manager: CustomPropertyManager): String? {
   val def = manager.findEffortDefinition(TASK_RECURRENCE_OF) ?: return null
   return this.customValues.getValue(def)?.toString()?.takeIf { it.isNotBlank() }
 }
 
 /**
- * Ist dieser Vorgang die Sammelgruppe einer Serie?
+ * Is this Task the collecting group of a series?
  *
- * NOETIG, WEIL BEIDE DASSELBE FELD BENUTZEN: die Gruppe und ihre Termine tragen ihr Kennzeichen in
- * derselben Spalte. Wer nur auf "Kennzeichen vorhanden" prueft, haelt die Gruppe fuer einen Termin
- * -- und liest dann ihre ABGELEITETE Dauer als die eines Vorgangs. Genau das haben vier eigene
- * Tests sofort gemeldet (26 Tage statt 3).
+ * NECESSARY BECAUSE BOTH USE THE SAME FIELD: the group and its dates carry their marker in the
+ * same column. Checking only for "marker present" mistakes the group for a date -- and then reads
+ * its DERIVED duration as that of a Task. Four tests of our own reported exactly that at once
+ * (26 days instead of 3).
  */
 fun Task.isRecurrenceGroup(manager: CustomPropertyManager): Boolean =
   this.recurrenceOf(manager)?.endsWith("@Serie") == true
 
-/** Das Kennzeichen, wenn dieser Vorgang ein einzelner Serientermin ist (nicht die Gruppe). */
+/** The marker, when this Task is a single occurrence of a series (not the group). */
 fun Task.recurrenceOccurrenceOf(manager: CustomPropertyManager): String? =
   this.recurrenceOf(manager)?.takeIf { !it.endsWith("@Serie") }
 
-/** Wie eine angelegte Wiederholung gekennzeichnet wird. */
+/** How a created occurrence is marked. */
 fun recurrenceMark(sourceTaskId: Int, date: LocalDate): String = "$sourceTaskId@$date"
 
 /**
- * Kennzeichen der Sammelgruppe einer Serie.
+ * Marker of the collecting group of a series.
  *
- * WOZU EINE GRUPPE: ohne sie steht jeder Termin als eigene Zeile mit demselben Text in der
- * Tabelle -- bei monatlich ueber zwei Jahre 24 gleichnamige Zeilen. Die Anforderung dazu, am
- * 17.08.2026 festgehalten: nebeneinander angelegt, mit nur einem Text links.
+ * WHAT A GROUP IS FOR: without it every date stands as its own row with the same text in the
+ * table -- monthly over two years gives 24 rows of the same name. The requirement for it,
+ * recorded on 17.08.2026: created side by side, with only one text on the left.
  *
- * Ein einziger Balkenstrang in EINER Zeile geht nicht: die Balken eines Vorgangs entstehen
- * ausschliesslich aus dem Kalender (`TaskActivitiesAlgorithm.recalculateActivities` fragt
- * `calendar.getActivities(start, end)`), ein Vorgang mit eigenen Luecken ist im Modell nicht
- * vorgesehen. Eine Gruppe leistet dasselbe fuer das Auge: zugeklappt eine Zeile, aufgeklappt alle
- * Termine.
+ * A single strand of bars in ONE row is not possible: the bars of a Task arise exclusively from
+ * the calendar (`TaskActivitiesAlgorithm.recalculateActivities` asks
+ * `calendar.getActivities(start, end)`), a Task with gaps of its own is not provided for in the
+ * model. A group achieves the same thing for the eye: collapsed one row, expanded all the dates.
  *
- * Das Kennzeichen macht den zweiten Lauf eindeutig -- er findet die Gruppe wieder, statt eine
- * zweite anzulegen.
+ * The marker makes the second run unambiguous -- it finds the group again instead of creating a
+ * second one.
  */
 fun recurrenceGroupMark(sourceTaskId: Int): String = "$sourceTaskId@Serie"
 
-/** Ein Termin, der angelegt werden soll. */
+/** A date that is to be created. */
 data class PlannedOccurrence(
   val sourceTaskId: Int,
   val sourceName: String,
@@ -129,24 +126,24 @@ data class PlannedOccurrence(
   val mark: String
 )
 
-/** Was beim Anlegen herauskommt, BEVOR etwas geschrieben wird. */
+/** What creating would yield, BEFORE anything is written. */
 data class RecurrencePlan(
   val occurrences: List<PlannedOccurrence>,
-  /** Serien mit unlesbarer Regel: Vorgangsname -> Fehler. */
+  /** Series with an unreadable rule: Task name -> error. */
   val errors: Map<String, List<String>>,
-  /** Serien, die an der Obergrenze abgeschnitten wurden. */
+  /** Series that were truncated at the upper bound. */
   val truncated: List<String>,
-  /** Anzahl der Serien, die etwas beizutragen haben. */
+  /** Number of series that have something to contribute. */
   val seriesCount: Int
 ) {
   val hasErrors: Boolean get() = errors.isNotEmpty()
 }
 
 /**
- * Sammelt, was anzulegen waere. Schreibt nichts.
+ * Collects what would have to be created. Writes nothing.
  *
- * Bereits vorhandene Wiederholungen werden ueber ihr Kennzeichen erkannt -- deshalb ist ein
- * zweiter Aufruf folgenlos.
+ * Occurrences that already exist are recognised by their marker -- which is why a second call has
+ * no consequences.
  */
 fun planRecurrences(
   taskManager: TaskManager,
@@ -172,7 +169,7 @@ fun planRecurrences(
     if (isTruncated(gelesen.rule, start, isWorkingDay)) {
       truncated.add(task.name ?: task.taskID.toString())
     }
-    // Der erste Termin IST der Ausgangsvorgang -- er wird nicht noch einmal angelegt.
+    // The first date IS the source Task -- it is not created a second time.
     val fehlend = termine.drop(1)
       .map { PlannedOccurrence(task.taskID, task.name.orEmpty(), it, recurrenceMark(task.taskID, it)) }
       .filter { it.mark !in vorhanden }
@@ -185,9 +182,9 @@ fun planRecurrences(
 }
 
 /**
- * Legt die geplanten Wiederholungen an, als EIN Rueckgaengig-Schritt.
+ * Creates the planned occurrences, as ONE undo step.
  *
- * @return die Zahl der angelegten Vorgaenge.
+ * @return the number of Tasks created.
  */
 fun applyRecurrencesAsSingleEdit(
   plan: RecurrencePlan,
@@ -202,19 +199,19 @@ fun applyRecurrencesAsSingleEdit(
   }
   val markDef = findOrCreateRecurrenceOf(taskProperties)
   val effortDef = EffortDrivenProperties.findOrCreateTaskEffort(taskProperties)
-  // Ohne diesen Aufruf gibt es die Definition ohne Datenbankspalte, und jedes Schreiben scheitert.
-  // In Sitzung 3 genau so passiert.
+  // Without this call the definition exists without a database column, and every write fails.
+  // Happened exactly like that in session 3.
   projectDatabase.onCustomColumnChange(taskProperties)
 
   var angelegt = 0
   undoManager.undoableEdit(editName) {
-    // Wie bei der Verteilung ruht der Planer waehrend des Schreibens: jeder neue Vorgang wuerde
-    // ihn sonst ueber den ganzen Abhaengigkeitsgraphen laufen lassen.
+    // As with levelling, the scheduler rests while writing: otherwise every new Task would send
+    // it running over the whole dependency graph.
     val scheduler = taskManager.algorithmCollection.scheduler
     val wasEnabled = scheduler.isEnabled
     scheduler.isEnabled = false
     try {
-      // Je Serie eine Sammelgruppe: zugeklappt eine Zeile statt zwoelf gleichnamiger.
+      // One collecting group per series: collapsed, one row instead of twelve of the same name.
       val gruppen = mutableMapOf<Int, net.sourceforge.ganttproject.task.Task>()
       plan.occurrences.map { it.sourceTaskId }.distinct().forEach { quellId ->
         val quelle = taskManager.getTask(quellId) ?: return@forEach
@@ -225,7 +222,7 @@ fun applyRecurrencesAsSingleEdit(
           gruppen[quellId] = vorhandene
           return@forEach
         }
-        // Die Gruppe entsteht dort, wo der Ausgangsvorgang stand -- die Gliederung bleibt.
+        // The group comes into being where the source Task stood -- the outline is preserved.
         val gruppe = taskManager.newTaskBuilder()
           .withName(quelle.name)
           .withStartDate(quelle.start.time)
@@ -233,9 +230,8 @@ fun applyRecurrencesAsSingleEdit(
           .withParent(taskManager.taskHierarchy.getContainer(quelle))
           .build()
         gruppe.customValues.setValue(markDef, recurrenceGroupMark(quellId))
-        // Der Ausgangsvorgang zieht mit hinein: alle Termine der Serie stehen zusammen.
-        // ERST DIE GRUPPE, DANN DER UMZUG -- ein Vorgang, der in sich selbst zoege, verschwaende
-        // seine Termine.
+        // The source Task moves in as well: all the dates of the series stand together.
+        // THE GROUP FIRST, THEN THE MOVE -- a Task that moved into itself would lose its dates.
         taskManager.taskHierarchy.move(quelle, gruppe)
         gruppen[quellId] = gruppe
       }
@@ -251,38 +247,38 @@ fun applyRecurrencesAsSingleEdit(
           .withPriority(quelle.priority)
           .build()
         neu.customValues.setValue(markDef, termin.mark)
-        // Aufwand und Zuordnung mitnehmen: ohne beides kennt die Kapazitaetsverteilung die
-        // Wiederholung nicht, und der ganze Zweck -- die wiederkehrende Arbeit sichtbar zu
-        // machen -- waere verfehlt.
+        // Take effort and assignment along: without both, capacity levelling does not know the
+        // occurrence, and the whole purpose -- making the recurring work visible -- would be
+        // missed.
         quelle.effortHours(taskProperties)?.let { neu.customValues.setValue(effortDef, it) }
         quelle.assignments.forEach { zuordnung ->
           zuordnung.resource?.let { person ->
             neu.assignmentCollection.addAssignment(person).load = zuordnung.load
           }
         }
-        // TERMINBINDUNG UND ART MITNEHMEN. Eine Nachfrage am 17.08.2026 hat die Luecke
-        // aufgedeckt: eine Umsatzsteuervoranmeldung ist zum 10. faellig, nicht "irgendwann im
-        // Monat". Ohne diese Zeilen haette die Kapazitaetsverteilung sie auf den naechsten freien
-        // Tag geschoben -- und die Serie waere wertlos geworden.
+        // TAKE THE DATE BINDING AND THE KIND ALONG. A question raised on 17.08.2026 uncovered
+        // the gap: an advance VAT return is due by the 10th, not "some time in the month".
+        // Without these lines capacity levelling would have pushed it to the next free day --
+        // and the series would have become worthless.
         //
-        // Was der Ausgangsvorgang traegt, tragen seine Wiederholungen auch:
+        // What the source Task carries, its occurrences carry too:
         if (quelle.isDateFixed(taskProperties)) {
           neu.customValues.setValue(findOrCreateDateFixed(taskProperties), true)
         }
         if (quelle.isWaitOnly(taskProperties)) {
           neu.customValues.setValue(findOrCreateWaitOnly(taskProperties), true)
         }
-        // DIE FRIST WANDERT MIT, mit demselben Abstand zum Anfang. Sie einfach zu kopieren waere
-        // falsch: dann haetten alle zwoelf Monatsvorgaenge dieselbe Frist im Januar. Der ABSTAND
-        // ist das, was sich wiederholt -- "drei Tage nach Beginn" bleibt in jedem Monat gleich.
+        // THE DEADLINE MOVES ALONG, at the same distance from the start. Simply copying it would
+        // be wrong: then all twelve monthly Tasks would have the same deadline in January. The
+        // DISTANCE is what repeats -- "three days after the start" stays the same in every month.
         val quellStart = quelle.start?.time?.toModelLocalDate()
         val quellFrist = quelle.deadlineDate(taskProperties)
         if (quellStart != null && quellFrist != null) {
           val abstand = java.time.temporal.ChronoUnit.DAYS.between(quellStart, quellFrist)
           neu.setDeadline(taskProperties, termin.date.plusDays(abstand))
         }
-        // Die Wiederholung selbst traegt KEINE Wiederholungsregel -- sonst erzeugte die naechste
-        // Ausfuehrung Wiederholungen von Wiederholungen.
+        // The occurrence itself carries NO recurrence rule -- otherwise the next run would
+        // produce occurrences of occurrences.
         angelegt++
       }
     } finally {
@@ -293,6 +289,6 @@ fun applyRecurrencesAsSingleEdit(
   return angelegt
 }
 
-/** Nur fuer die Vorschau: ein Datum, wie GanttProject es anzeigt. */
+/** For the preview only: a date as GanttProject displays it. */
 internal fun LocalDate.forDisplay(): String =
   CalendarFactory.createGanttCalendar(this.toModelDate()).toString()
