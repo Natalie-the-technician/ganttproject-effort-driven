@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -28,14 +28,14 @@ import net.sourceforge.ganttproject.undo.GPUndoManager
 import java.awt.event.ActionEvent
 
 /**
- * Der Menuepunkt "Serienvorgaenge anlegen …".
+ * The "create recurring Tasks …" menu item.
  *
- * Wie die beiden anderen Hilfsmittel dieses Forks: er FRAGT vorher, die Vorschau nennt auch, was
- * NICHT passiert, und alles ist EIN Rueckgaengig-Schritt.
+ * Like the fork's two other tools: it ASKS beforehand, the preview also names what does NOT
+ * happen, and everything is ONE undo step.
  *
- * BEI EINEM FEHLER IN EINER REGEL WIRD GAR NICHTS ANGELEGT, auch nicht fuer die lesbaren Serien.
- * Das ist Absicht: haette der Lauf die Haelfte angelegt, waere nach dem Beheben des Tippfehlers
- * nicht mehr zu erkennen, was schon existiert -- und ein zweiter Lauf muesste raten.
+ * IF ONE RULE CONTAINS AN ERROR, NOTHING AT ALL IS CREATED, not even for the series that can be
+ * read. That is deliberate: had the run created half of them, it would no longer be possible after
+ * fixing the typo to tell what already exists -- and a second run would have to guess.
  */
 class RecurrenceAction(
   private val taskManager: TaskManager,
@@ -49,9 +49,9 @@ class RecurrenceAction(
   override fun getLocalizedName(): String = forkText("fork.recurrence.run")
 
   override fun actionPerformed(event: ActionEvent?) {
-    // Die Spalte anlegen, falls es sie noch nicht gibt: eine Eigenschaft, die man nicht sieht,
-    // kann man auch nicht eintragen. Hier und nicht beim Start des Programms -- eine Spalte, die
-    // im Konstruktor entsteht, macht jede Datei unladbar, die dieselbe Spalte enthaelt.
+    // Create the column if it does not exist yet: a property one cannot see is a property one
+    // cannot fill in either. Here and not at program startup -- a column that comes into being in
+    // the constructor makes every file unloadable that contains the same column.
     findOrCreateRecurrence(taskProperties)
     projectDatabase.onCustomColumnChange(taskProperties)
 
@@ -68,9 +68,9 @@ class RecurrenceAction(
       return
     }
     if (plan.seriesCount == 0) {
-      // Zwei verschiedene Faelle, zwei verschiedene Meldungen: "es steht nichts drin" und "es
-      // steht etwas drin, ist aber schon angelegt" fuehlen sich am Bildschirm gleich an und
-      // haben voellig verschiedene naechste Schritte.
+      // Two different cases, two different messages: "there is nothing in it" and "there is
+      // something in it, but it has already been created" feel the same on screen and have
+      // completely different next steps.
       val gibtEsRegeln = taskManager.tasks.any { it.recurrenceText(taskProperties) != null }
       report(false, forkText(
         if (gibtEsRegeln) "fork.recurrence.nothingNew" else "fork.recurrence.none"))

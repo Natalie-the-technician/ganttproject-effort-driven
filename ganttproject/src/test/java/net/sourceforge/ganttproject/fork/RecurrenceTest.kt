@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 Licensed under the GNU General Public License, version 3 or later.
@@ -25,7 +25,7 @@ class RecurrenceTest {
 
   private fun regel(text: String) = RecurrenceRule.parse(text)
 
-  // ---- Lesen ----------------------------------------------------------------------------
+  // ---- Parsing --------------------------------------------------------------------------
 
   @Test
   fun `ein leeres feld ist kein fehler`() {
@@ -53,7 +53,7 @@ class RecurrenceTest {
 
   @Test
   fun `ohne begrenzung wird abgelehnt`() {
-    // Die Entscheidung aus dem Klassenkommentar: eine Serie ohne Ende muesste eine Zahl erfinden.
+    // The decision from the class comment: a series without an end would have to invent a number.
     val ergebnis = regel("monatlich")
     assertNull(ergebnis.rule, "unbrauchbar, nicht halb brauchbar")
     assertEquals(1, ergebnis.errors.size)
@@ -84,7 +84,7 @@ class RecurrenceTest {
     }
   }
 
-  // ---- Termine --------------------------------------------------------------------------
+  // ---- Dates ----------------------------------------------------------------------------
 
   @Test
   fun `der erste termin ist immer dabei`() {
@@ -105,8 +105,8 @@ class RecurrenceTest {
 
   @Test
   fun `ein termin auf einem freien tag rueckt vor, nicht zurueck`() {
-    // Samstag, 22.8.2026 -> Montag, 24.8. Zurueck waere Freitag, der 21., und damit vor dem
-    // vorigen Termin der Serie: die Reihenfolge waere kaputt.
+    // Saturday, 22.8.2026 -> Monday, 24.8. Moving back would be Friday the 21st, and therefore
+    // before the previous date of the series: the order would be broken.
     val samstag = LocalDate.of(2026, 8, 22)
     val termine = occurrences(regel("taeglich; alle 7; Anzahl 2").rule!!, samstag, montagBisFreitag)
     assertEquals(LocalDate.of(2026, 8, 24), termine[0])
@@ -115,9 +115,9 @@ class RecurrenceTest {
 
   @Test
   fun `zwei termine auf demselben arbeitstag zaehlen einmal`() {
-    // Taeglich ab Freitag bis Sonntag: die rohen Termine sind Fr, Sa, So -- Sa und So ruecken
-    // beide auf denselben Montag vor. Zwei Vorgaenge am selben Montag mit demselben Namen waeren
-    // keine Serie, sondern Doppelarbeit.
+    // Daily from Friday to Sunday: the raw dates are Fri, Sat, Sun -- Sat and Sun both move
+    // forward onto the same Monday. Two Tasks on the same Monday with the same name would not be
+    // a series but duplicated work.
     val freitag = LocalDate.of(2026, 8, 21)
     val termine = occurrences(regel("taeglich; bis 2026-08-23").rule!!, freitag, montagBisFreitag)
     assertEquals(listOf(LocalDate.of(2026, 8, 21), LocalDate.of(2026, 8, 24)), termine)
@@ -125,8 +125,8 @@ class RecurrenceTest {
 
   @Test
   fun `Anzahl meint wirkliche vorgaenge, nicht rohtermine`() {
-    // MEINE ERSTE FASSUNG ZAEHLTE ROHTERMINE: "Anzahl 3" ab Freitag ergab nur zwei Vorgaenge,
-    // weil Samstag und Sonntag auf denselben Montag fielen. Wer 3 eintraegt, will 3 Vorgaenge.
+    // THE FIRST VERSION COUNTED RAW DATES: "Anzahl 3" from Friday yielded only two Tasks,
+    // because Saturday and Sunday fell on the same Monday. Whoever enters 3 wants 3 Tasks.
     val freitag = LocalDate.of(2026, 8, 21)
     val termine = occurrences(regel("taeglich; Anzahl 3").rule!!, freitag, montagBisFreitag)
     assertEquals(3, termine.size)
@@ -136,12 +136,12 @@ class RecurrenceTest {
 
   @Test
   fun `bis gilt fuer den termin vor dem verschieben`() {
-    // Der 31.12.2027 ist ein Freitag; der Termin davor faellt auf den 30.11. (Dienstag).
-    // Waere die Grenze erst nach dem Verschieben geprueft, haenge das Ende einer Serie davon ab,
-    // ob der letzte Termin zufaellig auf einen Feiertag faellt.
+    // 31.12.2027 is a Friday; the date before it falls on 30.11. (Tuesday). If the limit were
+    // checked only after the moving, the end of a series would depend on whether the last date
+    // happens to fall on a holiday.
     val termine = occurrences(regel("monatlich; bis 2027-12-31").rule!!,
       LocalDate.of(2027, 10, 31), montagBisFreitag)
-    // 31.10. (So -> 1.11.), 30.11., 31.12. -- drei Termine.
+    // 31.10. (Sun -> 1.11.), 30.11., 31.12. -- three dates.
     assertEquals(3, termine.size)
     assertEquals(LocalDate.of(2027, 11, 1), termine[0])
     assertEquals(LocalDate.of(2027, 12, 31), termine.last())
@@ -157,15 +157,15 @@ class RecurrenceTest {
 
   @Test
   fun `eine begrenzung vor dem ersten termin ergibt nur diesen einen`() {
-    // Gegenprobe zur Obergrenze: die Serie darf auch sehr kurz sein.
+    // Counter-check to the upper bound: the series may also be very short.
     val termine = occurrences(regel("monatlich; bis 2026-08-17").rule!!, montag, montagBisFreitag)
     assertEquals(listOf(montag), termine)
   }
 
   @Test
   fun `jaehrlich trifft den 29 februar nicht daneben`() {
-    // java.time legt den 29.2. im Nicht-Schaltjahr auf den 28.2. -- geprueft, damit niemand
-    // spaeter eine eigene Datumsrechnung einbaut, die hier danebengreift.
+    // java.time places 29.2. in a non-leap year on 28.2. -- checked so that nobody later builds
+    // in a date calculation of their own that gets this wrong.
     val termine = occurrences(regel("jaehrlich; Anzahl 2").rule!!,
       LocalDate.of(2028, 2, 29), montagBisFreitag)
     assertEquals(LocalDate.of(2029, 2, 28), termine[1])
@@ -173,10 +173,10 @@ class RecurrenceTest {
 }
 
 /**
- * Die Schaetzguete-Auswertung: geschaetzt gegen gebraucht.
+ * The estimating-quality evaluation: estimated against needed.
  *
- * Die Regel, die den Aufbau bestimmt: verglichen werden STUNDEN gegen die URSPRUENGLICHE
- * Schaetzung, und der Zeitraum, ueber den sie anfielen, ist gleichgueltig.
+ * The rule that determines the structure: HOURS are compared against the ORIGINAL estimate, and
+ * the period over which they accrued does not matter.
  */
 class EstimateQualityTest {
   private fun row(id: String, geschaetzt: Double, gebraucht: Double, fertig: Int) =
@@ -184,13 +184,13 @@ class EstimateQualityTest {
 
   @Test
   fun `der gesamtfaktor kommt aus summen, nicht aus mittelwerten`() {
-    // Ein kleiner Ausreisser (20 Minuten geschaetzt, 2 Stunden gebraucht: Faktor 6) darf das Bild
-    // nicht verdrehen. Aus Summen: (0.33 + 40) / (0.33 + 2 ... ) -- gerechnet unten.
+    // A small outlier (20 minutes estimated, 2 hours needed: factor 6) must not distort the
+    // picture. From sums: (0.33 + 40) / (0.33 + 2 ... ) -- computed below.
     val bericht = buildEstimateReport(listOf(
       row("gross", 40.0, 44.0, 100),
       row("klein", 0.33, 2.0, 100)), remainingPlannedHours = 0.0)
-    // Summen: geschaetzt 40,33, gebraucht 46,0 -> 1,14. Der Mittelwert der Einzelfaktoren waere
-    // (1,1 + 6,06) / 2 = 3,58 und damit voellig irrefuehrend.
+    // Sums: estimated 40.33, needed 46.0 -> 1.14. The mean of the individual factors would be
+    // (1.1 + 6.06) / 2 = 3.58 and therefore completely misleading.
     assertEquals(1.14, bericht.overallFactor, 0.01)
   }
 
@@ -205,8 +205,8 @@ class EstimateQualityTest {
 
   @Test
   fun `laufende ueber der schaetzung werden getrennt gemeldet`() {
-    // Sie sind eine Warnung, kein Urteil: der Vorgang kann noch teurer werden, aber die
-    // Schaetzung ist noch nicht widerlegt -- er ist ja nicht fertig.
+    // They are a warning, not a verdict: the Task can still become more expensive, but the
+    // estimate has not been refuted yet -- it is not finished, after all.
     val bericht = buildEstimateReport(listOf(
       row("laeuft", 9.0, 15.0, 50)), remainingPlannedHours = 0.0)
     assertEquals(0, bericht.finished.size, "kein Urteil ueber die Schaetzguete")
@@ -230,7 +230,7 @@ class EstimateQualityTest {
 
   @Test
   fun `genau getroffen ist kein ueberzug`() {
-    // Gegenprobe: sonst stuende jeder Vorgang in der Liste der Ueberschreitungen.
+    // Counter-check: otherwise every Task would stand in the list of overruns.
     val bericht = buildEstimateReport(listOf(row("a", 8.0, 8.0, 100)), 0.0)
     assertTrue(bericht.overruns.isEmpty())
     assertEquals(1.0, bericht.overallFactor, 0.001)

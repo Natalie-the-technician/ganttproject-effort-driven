@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -25,42 +25,43 @@ import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
 
 /**
- * Serienvorgaenge: "das passiert jeden Monat wieder".
+ * Recurring Tasks: "this happens again every month".
  *
- * WOZU: Der Plan enthaelt Arbeit, die sich wiederholt -- Umsatzsteuervoranmeldung,
- * Jahresabschluss, wiederkehrende Berichte. Bisher steht so etwas entweder gar nicht im Plan
- * (dann fehlt die Kapazitaet dafuer, und die Verteilung rechnet zu optimistisch) oder es wurde von
- * Hand vervielfaeltigt (dann stimmt es beim ersten Umplanen nicht mehr).
+ * WHAT FOR: the plan contains work that repeats -- advance VAT return, annual accounts, recurring
+ * reports. Until now such a thing either does not appear in the plan at all (then the capacity for
+ * it is missing, and levelling computes too optimistically) or it was duplicated by hand (then it
+ * stops being right at the first replanning).
  *
- * Reine Rechnung, keine GanttProject-Typen -- pruefbar ohne laufendes Programm.
+ * Pure calculation, no GanttProject types -- checkable without a running program.
  *
- * FORMAT, so wie es in der Spalte "Wiederholung" steht:
+ * FORMAT, as it stands in the "Recurrence" column. The keywords are the ones the parser accepts
+ * and are therefore given verbatim:
  *
  *     monatlich; bis 2027-12-31
  *     woechentlich; alle 2; Anzahl 10
  *     jaehrlich; bis 2030-01-01
  *
- * Erlaubt sind `taeglich`, `woechentlich`, `monatlich`, `jaehrlich` (auch `daily`, `weekly`,
- * `monthly`, `yearly`), dazu `alle N` und genau eine Begrenzung: `bis JJJJ-MM-TT` oder `Anzahl N`.
+ * Allowed are `taeglich`, `woechentlich`, `monatlich`, `jaehrlich` (also `daily`, `weekly`,
+ * `monthly`, `yearly`), plus `alle N` and exactly one limit: `bis YYYY-MM-DD` or `Anzahl N`.
  *
- * ZWEI ENTSCHEIDUNGEN, die man auch anders treffen koennte -- deshalb stehen sie hier:
+ * TWO DECISIONS that could also have been taken differently -- which is why they stand here:
  *
- * 1. **Eine Begrenzung ist Pflicht.** Eine Serie ohne Ende waere in einem Plan mit Enddatum eine
- *    stille Falle: irgendeine Zahl muesste erfunden werden, und die stuende nirgends. Fehlt die
- *    Begrenzung, wird der Eintrag abgelehnt und gemeldet.
- * 2. **Faellt ein Termin auf einen freien Tag, rueckt er VOR, nicht zurueck.** Zurueck koennte
- *    hinter den vorigen Termin derselben Serie rutschen oder vor den Anfang; vor kann das nicht.
- *    Die Reihenfolge der Serie bleibt damit in jedem Fall erhalten.
+ * 1. **A limit is mandatory.** A series without an end would be a quiet trap in a plan that has an
+ *    end date: some number would have to be invented, and it would be written down nowhere. If the
+ *    limit is missing, the entry is rejected and reported.
+ * 2. **If a date falls on a non-working day, it moves FORWARD, not back.** Moving back could slip
+ *    behind the previous date of the same series or before its beginning; moving forward cannot.
+ *    The order of the series is thereby preserved in every case.
  */
 enum class RecurrenceUnit { TAG, WOCHE, MONAT, JAHR }
 
 data class RecurrenceRule(
   val unit: RecurrenceUnit,
-  /** Abstand in Einheiten. `alle 2` bei WOCHE heisst: jede zweite Woche. */
+  /** Interval in units. `alle 2` with WEEK means: every second week. */
   val interval: Int,
-  /** Letzter Tag, an dem ein Termin noch liegen darf. Genau eines von beiden ist gesetzt. */
+  /** Last day on which a date may still lie. Exactly one of the two is set. */
   val until: LocalDate? = null,
-  /** Anzahl der Termine EINSCHLIESSLICH des ersten. */
+  /** Number of dates INCLUDING the first one. */
   val count: Int? = null
 ) {
   override fun toString(): String {
@@ -76,7 +77,7 @@ data class RecurrenceRule(
   }
 
   companion object {
-    /** Mehr Termine erzeugt keine Serie. Darueber ist es ein Vertipper in der Begrenzung. */
+    /** No series produces more dates than this. Beyond it, the limit holds a typo. */
     const val MAX_OCCURRENCES = 500
 
     fun parse(text: String?): RecurrenceParseResult {
@@ -148,34 +149,34 @@ data class RecurrenceRule(
 }
 
 /**
- * Ergebnis des Lesens.
+ * Result of parsing.
  *
- * `rule == null` heisst: unbrauchbar. Anders als beim Stundenplan gibt es hier keinen
- * "halb brauchbaren" Rest -- eine Serie mit unklarer Einheit oder ohne Ende hat keine sinnvolle
- * Teilbedeutung. Ein leeres Feld ist kein Fehler: der Vorgang wiederholt sich einfach nicht.
+ * `rule == null` means: unusable. Unlike with the hours schedule there is no "half usable"
+ * remainder here -- a series with an unclear unit or without an end has no meaningful partial
+ * meaning. An empty field is not an error: the Task simply does not repeat.
  */
 data class RecurrenceParseResult(val rule: RecurrenceRule?, val errors: List<String>) {
   val hasErrors: Boolean get() = errors.isNotEmpty()
 }
 
 /**
- * Die Termine der Serie, beginnend beim [first].
+ * The dates of the series, starting at [first].
  *
- * Der erste Termin ist IMMER dabei -- er ist der Vorgang, der schon im Plan steht. Die Aufrufer
- * legen deshalb nur die Termine ab dem zweiten an.
+ * The first date is ALWAYS included -- it is the Task that already stands in the plan. The callers
+ * therefore create only the dates from the second one on.
  *
- * @param isWorkingDay faellt ein Termin auf einen freien Tag, rueckt er auf den naechsten
- * Arbeitstag VOR. Siehe Entscheidung 2 im Klassenkommentar.
+ * @param isWorkingDay if a date falls on a non-working day, it moves FORWARD to the next working
+ * day. See decision 2 in the class comment.
  */
 fun occurrences(
   rule: RecurrenceRule,
   first: LocalDate,
   isWorkingDay: (LocalDate) -> Boolean
 ): List<LocalDate> {
-  // Ein SATZ, keine Liste: zwei rohe Termine koennen auf denselben Arbeitstag vorruecken (etwa
-  // taeglich ueber ein Wochenende). Wuerden die Doppelten mitgezaehlt, waere die Obergrenze
-  // erreicht, bevor sie erreicht ist -- gemessen: "taeglich bis 2099" lieferte 357 Termine und
-  // meldete sich nicht als abgeschnitten.
+  // A SET, not a list: two raw dates can move forward onto the same working day (daily over a
+  // weekend, for instance). If the duplicates were counted, the upper bound would be reached
+  // before it is reached -- measured: "taeglich bis 2099" delivered 357 dates and did not report
+  // itself as truncated.
   val result = linkedSetOf<LocalDate>()
   var index = 0
   while (result.size < RecurrenceRule.MAX_OCCURRENCES) {
@@ -185,8 +186,8 @@ fun occurrences(
       RecurrenceUnit.MONAT -> first.plusMonths((index.toLong() * rule.interval))
       RecurrenceUnit.JAHR -> first.plusYears((index.toLong() * rule.interval))
     }
-    // Die Begrenzung gilt fuer den ROHEN Termin, nicht fuer den verschobenen: sonst haenge das
-    // Ende einer Serie davon ab, ob der letzte Termin zufaellig auf einen Feiertag faellt.
+    // The limit applies to the RAW date, not to the moved one: otherwise the end of a series
+    // would depend on whether the last date happens to fall on a holiday.
     if (rule.until != null && roh.isAfter(rule.until)) {
       break
     }
@@ -196,17 +197,17 @@ fun occurrences(
       break
     }
   }
-  // Zwei Vorgaenge am selben Tag mit demselben Namen waeren keine Serie, sondern Doppelarbeit --
-  // der Kalender sagt hier, wie viele Termine wirklich moeglich sind.
+  // Two Tasks on the same day with the same name would not be a series but duplicated work --
+  // here the calendar says how many dates are really possible.
   return result.toList()
 }
 
-/** Wie viele Termine eine Regel ab [first] ergibt, ohne die Liste zu bauen. */
+/** How many dates a rule yields from [first] on, without building the list. */
 fun occurrenceCount(
   rule: RecurrenceRule, first: LocalDate, isWorkingDay: (LocalDate) -> Boolean
 ): Int = occurrences(rule, first, isWorkingDay).size
 
-/** Ob die Serie an der Obergrenze abgeschnitten wurde -- dann stimmt die Begrenzung nicht. */
+/** Whether the series was truncated at the upper bound -- then the limit is wrong. */
 fun isTruncated(
   rule: RecurrenceRule, first: LocalDate, isWorkingDay: (LocalDate) -> Boolean
 ): Boolean = occurrences(rule, first, isWorkingDay).size >= RecurrenceRule.MAX_OCCURRENCES
@@ -220,6 +221,6 @@ private fun nextWorkingDay(from: LocalDate, isWorkingDay: (LocalDate) -> Boolean
   return day
 }
 
-/** Nur fuer die Anzeige: der Abstand in Tagen zwischen erstem und letztem Termin. */
+/** For display only: the distance in days between the first and the last date. */
 internal fun spanInDays(dates: List<LocalDate>): Long =
   if (dates.size < 2) 0 else ChronoUnit.DAYS.between(dates.first(), dates.last())

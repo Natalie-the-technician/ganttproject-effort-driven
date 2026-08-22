@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 Licensed under the GNU General Public License, version 3 or later.
@@ -33,13 +33,13 @@ import java.time.LocalDate
 import java.util.Locale
 
 /**
- * Serienvorgaenge im ECHTEN Projektmodell.
+ * Recurring Tasks in the REAL project model.
  *
- * WOZU NEBEN [RecurrenceTest]: die Terminrechnung ist dort geprueft. Was hier geprueft wird, ist
- * das, was in dieser Sitzung schon zweimal schiefging und keine reine Rechnung finden kann -- das
- * Zusammenspiel mit Mutator, Planer, Kalender und Eigenschaftsverwaltung. Insbesondere die
- * Zusage "ein zweiter Aufruf legt nichts doppelt an": genau die entscheidet, ob man das
- * Hilfsmittel mehr als einmal benutzen kann.
+ * WHY THIS EXISTS ALONGSIDE [RecurrenceTest]: the date calculation is checked there. What is
+ * checked here is what went wrong twice already in this session and what no pure calculation can
+ * find -- the interplay with mutator, scheduler, calendar and property management. In particular
+ * the promise "a second call creates nothing twice": that is what decides whether the tool can be
+ * used more than once.
  */
 class RecurrenceModelTest {
 
@@ -69,10 +69,10 @@ class RecurrenceModelTest {
     override fun addUndoableEditTxnFactory(factory: UndoableEditTxnFactory) = Unit
   }
 
-  // Eine ECHTE Datenbank, keine Attrappe: `onCustomColumnChange` ist genau die Stelle, an der in
-  // Sitzung 3 das Schreiben scheiterte ("Column effort_hours not found"). Eine Attrappe haette
-  // das nicht gefunden. Jeder Test bekommt seine eigene, sonst ueberlebt eine Spalte aus dem
-  // vorigen Test und die Pruefung ist wertlos.
+  // A REAL database, not a mock: `onCustomColumnChange` is exactly the place where writing
+  // failed in session 3 ("Column effort_hours not found"). A mock would not have found that.
+  // Every test gets its own, otherwise a column survives from the previous test and the check is
+  // worthless.
   private lateinit var dataSource: JdbcDataSource
   private lateinit var db: ProjectDatabase
 
@@ -116,15 +116,15 @@ class RecurrenceModelTest {
 
     val angelegt = applyRecurrencesAsSingleEdit(plan, tm, props, db, RunOnlyUndoManager(), "Test")
     assertEquals(3, angelegt)
-    // 3 Wiederholungen + Ausgangsvorgang + die SAMMELGRUPPE, die denselben Namen traegt.
+    // 3 occurrences + the source Task + the COLLECTING GROUP, which carries the same name.
     assertEquals(5, tm.tasks.count { it.name == "Umsatzsteuervoranmeldung" })
     assertEquals(1, tm.tasks.count { it.isRecurrenceGroup(props) })
   }
 
   @Test
   fun `ein zweiter aufruf legt nichts doppelt an`() {
-    // DIE ENTSCHEIDENDE ZUSAGE. Ein Hilfsmittel, das beim zweiten Klick alles verdoppelt,
-    // benutzt man genau einmal -- und traut sich danach nie wieder.
+    // THE DECISIVE PROMISE. A tool that duplicates everything on the second click gets used
+    // exactly once -- and after that one never dares again.
     val tm = taskManager()
     val props = tm.customPropertyManager
     tm.task("Bericht", montag, 1).setRecurrence(props, "woechentlich; Anzahl 5")
@@ -149,7 +149,7 @@ class RecurrenceModelTest {
       RunOnlyUndoManager(), "Test")
     assertEquals(4, tm.tasks.count { it.name == "Bericht" }, "drei Termine plus Sammelgruppe")
 
-    // Aus 3 werden 6: es duerfen genau die drei fehlenden dazukommen.
+    // 3 become 6: exactly the three missing ones may be added.
     quelle.setRecurrence(props, "woechentlich; Anzahl 6")
     val plan = planRecurrences(tm, props)
     assertEquals(3, plan.occurrences.size)
@@ -171,8 +171,8 @@ class RecurrenceModelTest {
     applyRecurrencesAsSingleEdit(planRecurrences(tm, props), tm, props, db,
       RunOnlyUndoManager(), "Test")
 
-    // recurrenceOccurrenceOf, NICHT recurrenceOf: sonst faellt hier die Sammelgruppe herein, und
-    // ihre Dauer ist abgeleitet (26 Tage statt 3).
+    // recurrenceOccurrenceOf, NOT recurrenceOf: otherwise the collecting group falls in here,
+    // and its duration is derived (26 days instead of 3).
     val kopie = tm.tasks.first { it.recurrenceOccurrenceOf(props) != null }
     assertEquals(3, kopie.duration.length, "die Dauer des Ausgangsvorgangs")
     assertEquals(24.0, kopie.customValues.getValue(effortDef), "und sein Aufwand")
@@ -181,8 +181,8 @@ class RecurrenceModelTest {
 
   @Test
   fun `die wiederholung traegt selbst keine regel`() {
-    // Sonst erzeugte der naechste Lauf Wiederholungen von Wiederholungen -- und der uebernaechste
-    // Wiederholungen davon.
+    // Otherwise the next run would produce occurrences of occurrences -- and the one after that
+    // occurrences of those.
     val tm = taskManager()
     val props = tm.customPropertyManager
     tm.task("Bericht", montag, 1).setRecurrence(props, "woechentlich; Anzahl 3")
@@ -196,8 +196,8 @@ class RecurrenceModelTest {
 
   @Test
   fun `der ausgangsvorgang wird nicht zur gruppe`() {
-    // Wuerden die Wiederholungen UNTER den Ausgangsvorgang gehaengt, leitete er seine Termine aus
-    // ihnen ab und verlore seine eigene Dauer.
+    // If the occurrences were hung UNDER the source Task, it would derive its dates from them
+    // and lose its own duration.
     val tm = taskManager()
     val props = tm.customPropertyManager
     val quelle = tm.task("Bericht", montag, 2)
@@ -220,8 +220,8 @@ class RecurrenceModelTest {
     val plan = planRecurrences(tm, props)
     assertTrue(plan.hasErrors)
     assertEquals(listOf("Kaputt"), plan.errors.keys.toList())
-    // Die Aktion legt bei Fehlern nichts an; hier wird nachgewiesen, dass der Fehler ueberhaupt
-    // bis zum Aufrufer kommt, statt still uebersprungen zu werden.
+    // On errors the action creates nothing; what is demonstrated here is that the error reaches
+    // the caller at all, instead of being skipped silently.
     assertTrue(plan.occurrences.any { it.sourceName == "Gut" },
       "die lesbare Serie ist geplant -- die Aktion fuehrt sie wegen des Fehlers trotzdem nicht aus")
   }
@@ -238,18 +238,18 @@ class RecurrenceModelTest {
 }
 
 /**
- * Die Spalten dieses Forks muessen ENTSTEHEN, sonst kann sie niemand ausfuellen.
+ * The fork's columns have to COME INTO BEING, otherwise nobody can fill them in.
  *
- * AM 17.08.2026 GEMESSEN: vier von ihnen -- "Fertig bis", "Auslastung", "Warten", "Termin fest" --
- * wurden nirgends angelegt. Sie existierten im Code, die Verteilung las sie brav und fand immer
- * nichts. Von aussen ist das nicht von "funktioniert nicht" zu unterscheiden.
+ * MEASURED ON 17.08.2026: four of them -- "Finish by", "Utilisation (%)", "Waiting", "Date fixed"
+ * -- were created nowhere. They existed in the code, levelling read them dutifully and always
+ * found nothing. From the outside that is indistinguishable from "does not work".
  *
- * Dieser Test ist die Wache dagegen. Er prueft die Kennungen, nicht die Anzeigenamen: die
- * Anzeigenamen sind uebersetzt, die Kennungen nicht.
+ * This test is the guard against it. It checks the ids, not the display names: the display names
+ * are translated, the ids are not.
  */
 class ForkColumnsExistTest {
   init {
-    // GanttProjectImpl baut einen Kalender; ohne diese Anmeldung stirbt schon der Konstruktor.
+    // GanttProjectImpl builds a calendar; without this registration even the constructor dies.
     object : CalendarFactory() {
       init {
         setLocaleApi(object : CalendarFactory.LocaleApi {
@@ -281,8 +281,8 @@ class ForkColumnsExistTest {
 
   @Test
   fun `ein zweiter aufruf legt nichts doppelt an`() {
-    // Genau das war der Grund, warum die Spalten NICHT im Konstruktor entstehen duerfen: eine
-    // zweite Anlage derselben Kennung sprengt beim Laden die ganze Datei.
+    // That was exactly the reason why the columns must NOT come into being in the constructor: a
+    // second creation of the same id blows up the whole file when loading.
     val project = net.sourceforge.ganttproject.GanttProjectImpl()
     project.ensureCapacityColumns()
     val vorher = project.taskCustomColumnManager.definitions.size
@@ -292,12 +292,13 @@ class ForkColumnsExistTest {
 }
 
 /**
- * Der urspruengliche Aufwand wird auch dann nachgezogen, wenn es sonst nichts zu befuellen gibt.
+ * The original effort is caught up even when there is nothing else to fill in.
  *
- * AM RECHNER GEMESSEN, am Plan: der Dialog sagte "bei 162 Vorgaengen wird der heutige
- * Aufwand als urspruenglicher festgehalten" -- geschrieben wurde nichts, weil
- * `applyBackfillAsSingleEdit` bei `changeCount == 0` vorher zurueckkam. Eine Zusage im Dialog, die
- * das Programm nicht einhaelt, ist schlimmer als eine fehlende Zusage.
+ * MEASURED ON THE MACHINE, against the plan: the dialog said "bei 162 Vorgaengen wird der heutige
+ * Aufwand als urspruenglicher festgehalten" (for 162 Tasks today's effort is recorded as the
+ * original one) -- nothing was written, because `applyBackfillAsSingleEdit` returned beforehand
+ * at `changeCount == 0`. A promise in a dialog that the program does not keep is worse than a
+ * missing promise.
  */
 class OriginalEffortBackfillTest {
   init {
@@ -326,8 +327,8 @@ class OriginalEffortBackfillTest {
     override fun addUndoableEditTxnFactory(factory: UndoableEditTxnFactory) = Unit
   }
 
-  // Eine ECHTE Datenbank statt GanttProjectImpl: dessen vorgegebener Datenbankvertreter wirft
-  // "Not supposed to be called", sobald eine Spalte angelegt wird.
+  // A REAL database instead of GanttProjectImpl: its default database stand-in throws
+  // "Not supposed to be called" as soon as a column is created.
   private lateinit var dataSource: JdbcDataSource
   private lateinit var db: ProjectDatabase
 
@@ -353,7 +354,7 @@ class OriginalEffortBackfillTest {
       .withDuration(tm.createLength(5)).build()
     task.customValues.setValue(EffortDrivenProperties.findOrCreateTaskEffort(props), 40.0)
 
-    // Genau die Lage aus dem Plan: alles hat Aufwand, es gibt nichts abzuleiten.
+    // Exactly the situation from the plan: everything has an effort, there is nothing to derive.
     val proposal = proposeBackfill(collectBackfillTasks(tm, props), 8.0)
     assertEquals(0, proposal.effortHours.size, "Aufbau: es gibt nichts abzuleiten")
     assertEquals(1, tasksMissingOriginalEffort(tm, props).size)
@@ -368,7 +369,7 @@ class OriginalEffortBackfillTest {
 
   @Test
   fun `ein zweiter lauf aendert den ursprung nicht`() {
-    // Der ganze Wert der Spalte haengt daran: sie darf sich NIE wieder aendern.
+    // The whole value of the column depends on it: it must NEVER change again.
     val builder = TestSetupHelper.newTaskManagerBuilder()
     val tm = builder.build()
     val props = tm.customPropertyManager
@@ -379,7 +380,7 @@ class OriginalEffortBackfillTest {
     applyBackfillAsSingleEdit(proposeBackfill(collectBackfillTasks(tm, props), 8.0), person, tm,
       props, db, RunOnly(), "Test")
 
-    // Schaetzung nachgebessert -- der Ursprung bleibt.
+    // The estimate has been improved -- the original stays.
     task.customValues.setValue(effortDef, 80.0)
     applyBackfillAsSingleEdit(proposeBackfill(collectBackfillTasks(tm, props), 8.0), person, tm,
       props, db, RunOnly(), "Test")
@@ -389,13 +390,13 @@ class OriginalEffortBackfillTest {
 }
 
 /**
- * Was eine Wiederholung vom Ausgangsvorgang erbt -- und warum das ueber Leben und Tod der Serie
- * entscheidet.
+ * What an occurrence inherits from the source Task -- and why that decides over life and death
+ * of the series.
  *
- * NATALIES FRAGE, 17.08.2026: "Funktionieren die Serientermine eigentlich?" Sie taten es, aber
- * nur halb: die erzeugten Vorgaenge trugen weder "Termin fest" noch eine Frist. Die
- * Kapazitaetsverteilung haette eine Umsatzsteuervoranmeldung vom 10. auf den naechsten freien Tag
- * geschoben -- und eine Steuerfrist, die verschoben wird, ist keine Frist mehr.
+ * A QUESTION RAISED ON 17.08.2026: do the recurring dates actually work? They did, but only half
+ * way: the Tasks produced carried neither "Date fixed" nor a deadline. Capacity levelling would
+ * have pushed an advance VAT return from the 10th to the next free day -- and a tax deadline that
+ * gets moved is no longer a deadline.
  */
 class RecurrenceInheritanceTest {
   init {
@@ -450,7 +451,7 @@ class RecurrenceInheritanceTest {
       .withStartDate(start.toModelDate()).withDuration(tm.createLength(1)).build()
     quelle.customValues.setValue(findOrCreateRecurrence(props), "monatlich; Anzahl 3")
     quelle.customValues.setValue(findOrCreateDateFixed(props), true)
-    // Frist: drei Tage nach Beginn. Dieser ABSTAND ist das, was sich wiederholt.
+    // Deadline: three days after the start. This DISTANCE is what repeats.
     quelle.setDeadline(props, start.plusDays(3))
 
     applyRecurrencesAsSingleEdit(planRecurrences(tm, props), tm, props, db, RunOnly(), "Test")
@@ -461,8 +462,8 @@ class RecurrenceInheritanceTest {
     kopien.forEach {
       assertTrue(it.isDateFixed(props), "ohne 'Termin fest' verschiebt die Verteilung die Frist")
     }
-    // Die Frist wandert MIT DEMSELBEN ABSTAND, sie wird nicht kopiert: sonst haetten alle
-    // Wiederholungen die Frist des ersten Monats.
+    // The deadline moves AT THE SAME DISTANCE, it is not copied: otherwise all the occurrences
+    // would have the deadline of the first month.
     kopien.forEach { kopie ->
       val kopieStart = kopie.start.time.toModelLocalDate()
       assertEquals(kopieStart.plusDays(3), kopie.deadlineDate(props),
@@ -472,8 +473,8 @@ class RecurrenceInheritanceTest {
 
   @Test
   fun `ohne festen termin bleibt die wiederholung beweglich`() {
-    // Gegenprobe: die Bindung wird geerbt, nicht erfunden. Ein Vorgang, der frei liegen darf,
-    // erzeugt frei liegende Wiederholungen -- sonst waere jede Serie kuenstlich festgenagelt.
+    // Counter-check: the binding is inherited, not invented. A Task that may lie freely produces
+    // freely lying occurrences -- otherwise every series would be artificially nailed down.
     val tm = TestSetupHelper.newTaskManagerBuilder()
       .withCalendar(biz.ganttproject.core.calendar.WeekendCalendarImpl()).build()
     val props = tm.customPropertyManager
@@ -492,11 +493,11 @@ class RecurrenceInheritanceTest {
 }
 
 /**
- * Die Sammelgruppe je Serie.
+ * The collecting group per series.
  *
- * NATALIES FRAGE, 17.08.2026: "Werden sie auch richtig angelegt, also nebeneinander mit nur einem
- * Text links?" Ein einziger Balkenstrang in EINER Zeile geht nicht -- die Balken eines Vorgangs
- * entstehen ausschliesslich aus dem Kalender. Eine Gruppe leistet dasselbe fuers Auge.
+ * A QUESTION RAISED ON 17.08.2026: are they created correctly, that is, side by side with only
+ * one text on the left? A single strand of bars in ONE row is not possible -- the bars of a Task
+ * arise exclusively from the calendar. A group achieves the same thing for the eye.
  */
 class RecurrenceGroupTest {
   init {
@@ -568,8 +569,8 @@ class RecurrenceGroupTest {
 
   @Test
   fun `der ausgangsvorgang behaelt seinen termin und seine dauer`() {
-    // Der Umzug in eine Gruppe darf ihn nicht antasten -- eine Gruppe LEITET ihre Termine ab,
-    // ihre Kinder behalten die eigenen.
+    // The move into a group must not touch it -- a group DERIVES its dates, its children keep
+    // their own.
     val (tm, props, quelle) = aufbau()
     applyRecurrencesAsSingleEdit(planRecurrences(tm, props), tm, props, db, RunOnly(), "Test")
 
