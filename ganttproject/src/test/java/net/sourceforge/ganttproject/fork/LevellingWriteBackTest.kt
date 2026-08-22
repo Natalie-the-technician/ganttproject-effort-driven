@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -37,16 +37,16 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Was das SCHREIBEN der verteilten Termine im echten Modell anrichtet.
+ * What WRITING the levelled dates does in the real model.
  *
- * WOZU DIESE DATEI EXISTIERT: die Verteilung selbst ist in `ResourceLevellingTest` geprueft, und
- * sie rechnete richtig. Trotzdem stand hinterher im Plan bei vier Vorgaengen eine
- * KUERZERE Dauer als vorher -- 11 Tage wurden 8, 26 wurden 16. Am Aufwand gemessen fehlten damit
- * 24 bzw. 80 Stunden Arbeit, die der Plan vorher kannte. Keine Rechnung findet das: der Fehler
- * entsteht erst im Zusammenspiel von Mutator, Planer und Kalender.
+ * WHY THIS FILE EXISTS: levelling itself is checked in `ResourceLevellingTest`, and it computed
+ * correctly. Nevertheless four Tasks afterwards carried a SHORTER duration in the plan than
+ * before -- 11 days became 8, 26 became 16. Measured against the effort, 24 and 80 hours of work
+ * respectively were missing that the plan had known before. No calculation finds that: the bug
+ * only arises in the interplay of mutator, scheduler and calendar.
  *
- * Genau dieses Zusammenspiel wird hier nachgebaut -- mit dem echten TaskManager und einem echten
- * Kalender mit Feiertagen, aber ohne laufendes Programm.
+ * That interplay is exactly what is rebuilt here -- with the real TaskManager and a real calendar
+ * with holidays, but without a running program.
  */
 class LevellingWriteBackTest {
 
@@ -62,7 +62,7 @@ class LevellingWriteBackTest {
     }
   }
 
-  /** Ein Rueckgaengig-Verwalter, der nur ausfuehrt. Mehr braucht die Messung nicht. */
+  /** An undo manager that only executes. The measurement needs no more than that. */
   private class RunOnlyUndoManager : GPUndoManager {
     override fun undoableEdit(localizedName: String, runnableEdit: Runnable) = runnableEdit.run()
     override fun canUndo() = false
@@ -77,7 +77,7 @@ class LevellingWriteBackTest {
     override fun addUndoableEditTxnFactory(factory: UndoableEditTxnFactory) = Unit
   }
 
-  /** Kalender mit dem Feiertagsblock aus dem Plan: 4. bis 7. November 2026. */
+  /** Calendar with the block of holidays from the plan: 4 to 7 November 2026. */
   private fun calendarWithHolidayBlock() = WeekendCalendarImpl().also { cal ->
     cal.publicHolidays = listOf(4, 5, 6, 7).map {
       CalendarEvent.newEvent(CalendarFactory.createGanttCalendar(2026, 10, it).time, false,
@@ -85,8 +85,8 @@ class LevellingWriteBackTest {
     }
   }
 
-  // toModelDate, nicht java.time: die Zeitzonenfalle aus LegacyDates.kt gilt auch hier. Mit
-  // java.time gelesen kam der Start dieses Tests einen Tag zu frueh heraus (2026-10-22).
+  // toModelDate, not java.time: the time zone trap from LegacyDates.kt applies here too. Read
+  // with java.time, the start of this test came out one day too early (2026-10-22).
   private fun LocalDate.toLegacy(): Date = this.toModelDate()
 
   private fun TaskManager.newTask(name: String, start: LocalDate, days: Int): Task =
@@ -96,11 +96,11 @@ class LevellingWriteBackTest {
   private val Task.startDate: LocalDate get() = this.start.time.toModelLocalDate()
 
   /**
-   * DER FALL AUS NATALIES PLAN, Vorgang 102: 11 Tage Dauer, verschoben auf einen Termin, von dem
-   * aus die Spanne in einen Feiertagsblock hineinreicht.
+   * THE CASE FROM THE PLAN THIS FORK WAS DEVELOPED AGAINST, Task 102: 11 days duration, moved to
+   * a date from which the span reaches into a block of holidays.
    *
-   * Die Dauer darf sich dabei NICHT aendern. Die Verteilung verschiebt Termine; sie darf keine
-   * Arbeit wegnehmen.
+   * The duration must NOT change in the process. Levelling moves dates; it must not take work
+   * away.
    */
   @Test
   fun `verschieben ueber einen feiertagsblock laesst die dauer unveraendert`() {
@@ -120,9 +120,9 @@ class LevellingWriteBackTest {
   }
 
   /**
-   * Gegenprobe ohne Feiertage: derselbe Ablauf muss dort ebenfalls die Dauer erhalten. Ohne diese
-   * Probe waere nicht zu erkennen, ob der obere Test die Feiertage trifft oder das Verschieben
-   * ueberhaupt.
+   * Counter-check without holidays: the same sequence has to preserve the duration there as
+   * well. Without this check there would be no way to tell whether the test above hits the
+   * holidays or the moving as such.
    */
   @Test
   fun `verschieben ohne feiertage laesst die dauer unveraendert`() {
@@ -138,18 +138,18 @@ class LevellingWriteBackTest {
 }
 
 /**
- * Die Umrechnung aus [LegacyDates] gegen die des Originals gestellt.
+ * The conversion from [LegacyDates] set against the original's.
  *
- * WOZU: der Fork rechnet Termine selbst um, statt `DateParser` zu benutzen (Begruendung dort).
- * Damit muss aber bewiesen sein, dass beide Wege dasselbe Ergebnis liefern -- sonst waere
- * derselbe Tag im Fork ein anderer als im Original.
+ * WHAT FOR: the fork converts dates itself instead of using `DateParser` (reasoning there). That
+ * makes it necessary to prove that both ways deliver the same result -- otherwise the same day
+ * would be a different one in the fork than in the original.
  */
 class LegacyDatesTest {
   @Test
   fun `umrechnung stimmt mit der des originals ueberein`() {
-    // Ausdruecklich MIT der Zeitzonen-Eigenart des laufenden Programms: erst die Sprache setzen.
+    // Explicitly WITH the time zone quirk of the running program: set the language first.
     net.sourceforge.ganttproject.language.GanttLanguage.getInstance().locale = Locale.GERMANY
-    // Sommerzeit, Winterzeit, Jahreswechsel, Schalttag und die Umstellungstage selbst.
+    // Summer time, winter time, turn of the year, leap day and the changeover days themselves.
     val tage = listOf(
       LocalDate.of(2026, 8, 17), LocalDate.of(2026, 11, 4), LocalDate.of(2026, 12, 31),
       LocalDate.of(2027, 1, 1), LocalDate.of(2028, 2, 29),

@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 Kapazitaetsverteilung (levelling). Siehe CLAUDE-NOTES.md, Abschnitt 3, Punkt 2.
 
 This file is part of GanttProject, an opensource project management tool.
@@ -24,117 +24,114 @@ package net.sourceforge.ganttproject.fork
 import java.time.LocalDate
 
 /**
- * Verteilt Vorgaenge so ueber die Zeit, dass eine Person nicht mehr als 100 % gleichzeitig
- * leisten muss.
+ * Spreads Tasks over time so that one person does not have to deliver more than 100 % at once.
  *
- * WARUM ES DAS BRAUCHT: GanttProject plant ausschliesslich nach Abhaengigkeiten und legt jeden
- * Vorgang so frueh, wie diese es zulassen. Ressourcen kommen im Planer nicht vor -- `SchedulerImpl`
- * erwaehnt sie kein einziges Mal. Zwanzig Vorgaenge derselben Person zur selben Zeit ueberlappen
- * einfach; das Ressourcendiagramm faerbt es rot, aufgeraeumt wird nichts. Auch die
- * aufwandsgetriebene Dauer dieses Forks aendert daran nichts: sie rechnet jeden Vorgang fuer sich.
+ * WHY THIS IS NEEDED: GanttProject schedules exclusively by dependencies and places every Task as
+ * early as those allow. Resources do not occur in the scheduler at all -- `SchedulerImpl` does not
+ * mention them a single time. Twenty Tasks of the same person at the same time simply overlap; the
+ * resource chart colours it red, nothing is tidied up. The effort-driven duration of this fork
+ * changes nothing about that either: it computes every Task on its own.
  *
- * KEINE GANTTPROJECT-TYPEN HIER, und das ist Absicht. Die Lehre aus Stufe 1 steht in den Notizen:
- * zwei Fehler steckten hinter 300 gruenen Tests, weil die Verdrahtung nicht pruefbar war. Diese
- * Datei rechnet mit `LocalDate` und einfachen Werten und laesst sich ohne laufendes Programm
- * pruefen. Der Kalender kommt als Funktion herein.
+ * NO GANTTPROJECT TYPES HERE, and that is deliberate. The lesson from stage 1 is in the notes: two
+ * bugs hid behind 300 green tests, because the wiring was not checkable. This file computes with
+ * `LocalDate` and plain values and can be checked without a running program. The calendar comes in
+ * as a function.
  *
- * ENTSCHEIDUNGEN, am 17.08.2026 getroffen und hier festgehalten, damit sie nicht
- * spaeter als Annahme gelesen werden:
- *  - Reihenfolge bei Gleichstand: erst Prioritaet, dann Reihenfolge im Plan.
- *  - Gleichzeitige Arbeit ist erlaubt, solange die Summe der Auslastungen 100 % nicht ueberschreitet.
- *  - Feste Termine bleiben stehen. Passen sie nicht, wird der Konflikt GEMELDET, nicht aufgeloest
- *    -- eine Frist stillschweigend zu verschieben, versteckt das Problem.
- *  - Meilensteine sind NICHT fest: sie tragen kein eigenes Datum, sondern folgen ihren
- *    Abhaengigkeiten. (Nachtraeglich eingewandt, und der Einwand ist richtig.)
+ * DECISIONS, taken on 17.08.2026 and recorded here so that they are not read later as
+ * assumptions:
+ *  - Order on a tie: priority first, then the order in the plan.
+ *  - Simultaneous work is allowed as long as the sum of the utilisations does not exceed 100 %.
+ *  - Fixed dates stay. If they do not fit, the conflict is REPORTED, not resolved -- moving a
+ *    deadline silently hides the problem.
+ *  - Milestones are NOT fixed: they carry no date of their own but follow their dependencies.
+ *    (Objected afterwards, and the objection is right.)
  */
 
-/** Ein Vorgang, so wie die Verteilung ihn braucht. */
+/** A Task in the form levelling needs it. */
 data class LevelTask(
   val id: String,
 
-  /** Reihenfolge im Plan, von oben nach unten. Entscheidet bei gleicher Prioritaet. */
+  /** Order in the plan, from top to bottom. Decides on equal priority. */
   val orderInPlan: Int,
 
   /**
-   * Groesser heisst wichtiger.
+   * Larger means more important.
    *
-   * ACHTUNG BEIM UMRECHNEN: Die in der Projektdatei gespeicherten Prioritaetswerte von
-   * GanttProject sind NICHT nach Wichtigkeit sortiert -- `LOWEST("3")`, `LOW("0")`,
-   * `NORMAL("1")`, `HIGH("2")`, `HIGHEST("4")`. Wer nach dieser Zahl sortiert, stellt die
-   * niedrigste Prioritaet zwischen HIGH und HIGHEST. Richtig ist die Reihenfolge im Enum
-   * (`Priority.ordinal`), und genau die gehoert hier herein.
+   * MIND THE CONVERSION: the priority values GanttProject stores in the project file are NOT
+   * ordered by importance -- `LOWEST("3")`, `LOW("0")`, `NORMAL("1")`, `HIGH("2")`,
+   * `HIGHEST("4")`. Sorting by that number puts the lowest priority between HIGH and HIGHEST.
+   * The right order is the one in the enum (`Priority.ordinal`), and that is what belongs in
+   * here.
    */
   val priority: Int,
 
-  /** Dauer in Arbeitstagen. Kommt bereits aus der aufwandsgetriebenen Rechnung. */
+  /** Duration in working days. Comes from the effort-driven calculation already. */
   val durationDays: Int,
 
-  /** Auslastung dieser Zuordnung in Prozent. 100 heisst: die Person ist voll gebunden. */
+  /** Utilisation of this assignment in per cent. 100 means: the person is fully committed. */
   val loadPercent: Int,
 
-  /** Vorgaenger, Ende-Anfang. */
+  /** Predecessors, finish-to-start. */
   val predecessors: List<String> = emptyList(),
 
-  /** „Termin fest": der Vorgang bleibt auf diesem Datum, auch wenn es eng wird. */
+  /** "Date fixed": the Task stays on this date, even when it gets tight. */
   val fixedStart: LocalDate? = null,
 
-  /** „Fruehester Beginn": nicht vor diesem Datum, spaeter aber schon. */
+  /** "Earliest begin": not before this date, but later is allowed. */
   val earliestStart: LocalDate? = null,
   /**
-   * Die Personen, deren Kapazitaet dieser Vorgang belegt.
+   * The people whose capacity this Task occupies.
    *
-   * WARUM DAS NOETIG IST: bis dahin hatte die Verteilung EINEN Kapazitaetstopf. Bei zwei Personen
-   * haette sie deren Arbeit hintereinander gelegt, als koennten sie nicht gleichzeitig arbeiten --
-   * still und plausibel aussehend. Dass im Pruefbetrieb nur eine Person plant, darf aber nicht
-   * der Grund sein, warum es richtig aussieht.
+   * WHY THIS IS NECESSARY: until then levelling had ONE capacity pool. With two people it would
+   * have laid their work one after another, as though they could not work at the same time --
+   * quietly and looking plausible. That only one person plans in trial use must not be the reason
+   * why it looks right.
    *
-   * Leer heisst: niemand ist zugeordnet. Diese Vorgaenge teilen sich einen gemeinsamen Topf --
-   * sie belegen Zeit, von der man nur nicht weiss, wessen.
+   * Empty means: nobody is assigned. These Tasks share a common pool -- they occupy time, only
+   * one does not know whose.
    */
   val resourceIds: List<String> = emptyList(),
   /**
-   * Fertige oder angefangene Arbeit: bleibt genau da, wo sie liegt.
+   * Finished or begun work: stays exactly where it lies.
    *
-   * WARUM DAS NOETIG IST: die Verteilung war ohne dieses Feld ein EINMALWERKZEUG. Beim zweiten
-   * Lauf haette sie auch abgehakte Vorgaenge neu gelegt und die Vergangenheit umgeschrieben.
-   * Eingefrorene Vorgaenge belegen ihre Kapazitaet weiterhin -- sonst plante die Verteilung
-   * angefangene Arbeit doppelt.
+   * WHY THIS IS NECESSARY: without this field levelling was a ONE-OFF TOOL. On the second run it
+   * would have re-laid Tasks already ticked off and rewritten the past. Frozen Tasks keep
+   * occupying their capacity -- otherwise levelling would plan begun work twice.
    *
-   * Der Termin, an dem sie liegen, steht in [fixedStart]: fuer eingefrorene Arbeit ist der
-   * heutige Termin per Definition der feste. Ein eigenes Feld waere eine zweite Wahrheit ueber
-   * denselben Sachverhalt.
+   * The date they lie on is in [fixedStart]: for frozen work today's date is by definition the
+   * fixed one. A field of its own would be a second truth about the same matter.
    */
   val frozen: Boolean = false,
   /**
-   * Spaetestes Ende. Wird NICHT erzwungen -- wer eine Frist erzwingt, verschiebt nur das Problem
-   * an eine Stelle, an der es niemand sieht. Ist sie nicht zu halten, wird sie gemeldet.
+   * Latest finish. Is NOT enforced -- enforcing a deadline only moves the problem to a place
+   * where nobody sees it. If it cannot be met, it is reported.
    */
   val deadline: LocalDate? = null
 )
 
 sealed interface LevelConflict {
   /**
-   * Ein fester Termin liegt vor dem fruehestmoeglichen. Der Termin wird gehalten -- gemeldet wird,
-   * dass er nicht sauber erreichbar ist.
+   * A fixed date lies before the earliest possible one. The date is kept -- what is reported is
+   * that it is not cleanly reachable.
    */
   data class FixedDateNotReachable(
     val id: String, val fixedStart: LocalDate, val earliestPossible: LocalDate) : LevelConflict
 
-  /** An diesem Tag verlangt die Summe der Vorgaenge mehr als 100 %. Entsteht nur durch feste Termine. */
+  /** On this day the sum of the Tasks demands more than 100 %. Arises only from fixed dates. */
   data class Overload(
     val day: LocalDate, val percent: Int, val ids: List<String>,
-    /** Wessen Kapazitaet ueberschritten ist. Leer: der Topf der nicht zugeordneten Vorgaenge. */
+    /** Whose capacity is exceeded. Empty: the pool of the unassigned Tasks. */
     val resourceId: String = ""
   ) : LevelConflict
 
-  /** Die Vorgaenge haengen im Kreis. Sie werden nicht verteilt. */
+  /** The Tasks hang in a cycle. They are not levelled. */
   data class Cycle(val ids: List<String>) : LevelConflict
 
   /**
-   * Eine Frist ist mit der vorhandenen Kapazitaet nicht zu halten.
+   * A deadline cannot be met with the capacity available.
    *
-   * @property missingDays um so viele Arbeitstage ist es zu spaet. Die Zahl steht dabei, weil
-   * "zu spaet" allein keine Entscheidung erlaubt: zwei Tage loest man anders als vier Monate.
+   * @property missingDays this many working days too late. The number is given because "too late"
+   * on its own allows no decision: two days are solved differently from four months.
    */
   data class DeadlineMissed(
     val id: String, val deadline: LocalDate, val actualEnd: LocalDate, val missingDays: Int
@@ -145,32 +142,33 @@ data class LevelResult(
   val starts: Map<String, LocalDate>,
   val conflicts: List<LevelConflict>,
   /**
-   * Die Dauer, mit der der Vorgang tatsaechlich gelegt wurde.
+   * The duration the Task was actually laid with.
    *
-   * Sie kann von [LevelTask.durationDays] ABWEICHEN, sobald die Tagesleistung zeitabhaengig ist:
-   * derselbe Aufwand braucht in einem Abschnitt mit vier Stunden mehr Tage als in einem mit acht.
-   * Wer die Termine zurueckschreibt, muss DIESE Dauer verwenden -- sonst stuende im Plan ein Ende,
-   * das zur gerechneten Belegung nicht passt.
+   * It can DIFFER from [LevelTask.durationDays] as soon as the daily rate is time-dependent: the
+   * same effort needs more days in a section of four hours than in one of eight. Whoever writes
+   * the dates back has to use THIS duration -- otherwise an end would stand in the plan that does
+   * not match the computed occupancy.
    */
   val durations: Map<String, Int> = emptyMap()
 )
 
 /**
- * @param projectStart frueheste Zeit ueberhaupt.
- * @param isWorkingDay der Kalender, als Funktion. So bleibt die Rechnung ohne Programm pruefbar,
- * und Feiertage kommen aus GanttProjects eigenem Kalender statt aus einer zweiten Wochenendlogik.
+ * @param projectStart the earliest time at all.
+ * @param isWorkingDay the calendar, as a function. That keeps the calculation checkable without
+ * the program, and holidays come from GanttProject's own calendar rather than from a second
+ * weekend logic.
  */
 /**
- * @param capacityOf wie viel eines Arbeitstages bei dieser Person verplant werden darf. 100
- * heisst: jeder Tag randvoll. Ein Plan, der jeden Tag zu 100 % verplant, geht bei der ersten
- * Stoerung kaputt -- dieser Plan reicht bis 2063, da ist jede Woche eine Stoerung.
+ * @param capacityOf how much of a working day may be planned for this person. 100 means: every
+ * day filled to the brim. A plan that fills every day to 100 % breaks at the first disturbance --
+ * this plan reaches to 2063, and there is a disturbance every week in it.
  *
- * Eine FUNKTION und keine Zahl, weil der Auslastungsgrad zur Person gehoert: wer den Hauptberuf
- * noch hat, plant anders als jemand in Vollzeit. Der Wert wirkt NUR auf die Suche nach einem
- * freien Fenster; feste Termine und eingefrorene Arbeit bleiben, wo sie sind.
+ * A FUNCTION and not a number, because the utilisation belongs to the person: somebody who still
+ * has their main job plans differently from somebody working full time. The value affects ONLY
+ * the search for a free window; fixed dates and frozen work stay where they are.
  */
-/** Obergrenze der Fenstersuche in Arbeitstagen -- rund 200 Jahre. Wer sie erreicht, hat keinen
- * Rundungsfehler, sondern eine Endlosschleife. */
+/** Upper bound of the window search in working days -- about 200 years. Reaching it means not a
+ * rounding error but an endless loop. */
 private const val MAX_SEARCH_DAYS = 50_000
 
 fun levelTasks(
@@ -188,16 +186,16 @@ fun levelTasks(
     return LevelResult(emptyMap(), listOf(LevelConflict.Cycle(tasks.map { it.id })))
   }
 
-  // Belegung je PERSON und Arbeitstag, in Prozent. Nur Tage, an denen etwas liegt, stehen darin.
-  // Der Schluessel "" ist der Topf der nicht zugeordneten Vorgaenge.
+  // Occupancy per PERSON and working day, in per cent. Only days on which something lies are in
+  // it. The key "" is the pool of the unassigned Tasks.
   val used = mutableMapOf<String, MutableMap<LocalDate, Int>>()
   val starts = mutableMapOf<String, LocalDate>()
   val durations = mutableMapOf<String, Int>()
   val ends = mutableMapOf<String, LocalDate>()
 
-  // ERST die eingefrorene Arbeit eintragen, und zwar vor allem anderen: sie belegt Kapazitaet,
-  // die fuer den Rest nicht mehr zur Verfuegung steht. Wuerde sie in der normalen Reihenfolge
-  // abgearbeitet, koennte ein beweglicher Vorgang sich vorher auf denselben Tag legen.
+  // Enter the frozen work FIRST, before anything else: it occupies capacity that is no longer
+  // available for the rest. If it were processed in the normal order, a movable Task could lay
+  // itself on the same day beforehand.
   tasks.filter { it.frozen }.forEach { task ->
     val liegtAuf = nextWorkingDay(task.fixedStart ?: projectStart, isWorkingDay)
     val days = workingDays(liegtAuf, durationAt(task, liegtAuf), isWorkingDay)
@@ -224,8 +222,8 @@ fun levelTasks(
 
     val days: List<LocalDate>
     if (task.fixedStart != null) {
-      // Termin halten, auch wenn er zu frueh liegt oder die Kapazitaet sprengt. Beides wird
-      // gemeldet -- das war die ausdrueckliche Entscheidung: eine Frist ist eine Frist.
+      // Keep the date, even when it lies too early or bursts the capacity. Both are reported --
+      // that was the explicit decision: a deadline is a deadline.
       val start = nextWorkingDay(task.fixedStart, isWorkingDay)
       if (start < earliest) {
         conflicts.add(LevelConflict.FixedDateNotReachable(id, start, earliest))
@@ -244,11 +242,11 @@ fun levelTasks(
     ends[id] = nextWorkingDay(days.last().plusDays(1), isWorkingDay)
   }
 
-  // Fristen: gemeldet, nicht erzwungen. Geprueft wird das ENDE, denn eine Frist ist ein Endtermin.
+  // Deadlines: reported, not enforced. What is checked is the END, because a deadline is an end date.
   tasks.forEach { task ->
     val frist = task.deadline ?: return@forEach
     val ende = ends[task.id] ?: return@forEach
-    // ends[] ist der erste Arbeitstag NACH dem Vorgang; der letzte Arbeitstag liegt davor.
+    // ends[] is the first working day AFTER the Task; the last working day lies before it.
     val letzterTag = generateSequence(ende.minusDays(1)) { it.minusDays(1) }
       .first { isWorkingDay(it) || it < projectStart }
     if (letzterTag.isAfter(frist)) {
@@ -266,7 +264,7 @@ fun levelTasks(
     }
   }
 
-  // Ueberlast kann nach dem Verteilen nur noch dort stehen, wo feste Termine sie erzwungen haben.
+  // After levelling, overload can only remain where fixed dates have forced it.
   used.toSortedMap().forEach { (pool, belegung) ->
     belegung.filterValues { it > capacityOf(pool) }.toSortedMap().forEach { (day, percent) ->
       val onThatDay = tasks.filter { t ->
@@ -281,15 +279,15 @@ fun levelTasks(
   return LevelResult(starts, conflicts, durations)
 }
 
-/** Die Kapazitaetstoepfe, die dieser Vorgang belegt. Ohne Zuordnung der gemeinsame Topf "". */
+/** The capacity pools this Task occupies. Without an assignment the common pool "". */
 internal val LevelTask.pools: List<String>
   get() = if (resourceIds.isEmpty()) listOf("") else resourceIds
 
 /**
- * Reihenfolge der Abarbeitung: nur Vorgaenge, deren Vorgaenger schon liegen, und unter diesen der
- * wichtigste, bei Gleichstand der im Plan obere.
+ * Processing order: only Tasks whose predecessors already lie, and among those the most
+ * important one, on a tie the one higher up in the plan.
  *
- * @return null, wenn die Abhaengigkeiten im Kreis laufen.
+ * @return null when the dependencies run in a cycle.
  */
 private fun topologicalOrder(tasks: List<LevelTask>): List<String>? {
   val open = tasks.associateBy { it.id }.toMutableMap()
@@ -298,7 +296,7 @@ private fun topologicalOrder(tasks: List<LevelTask>): List<String>? {
   while (open.isNotEmpty()) {
     val ready = open.values
       .filter { t -> t.predecessors.all { it in placed || it !in open } }
-      // Wichtigstes zuerst; bei Gleichstand das im Plan obere.
+      // Most important first; on a tie the one higher up in the plan.
       .sortedWith(compareByDescending<LevelTask> { it.priority }.thenBy { it.orderInPlan })
     val next = ready.firstOrNull() ?: return null
     result.add(next.id)
@@ -309,13 +307,13 @@ private fun topologicalOrder(tasks: List<LevelTask>): List<String>? {
 }
 
 /**
- * Der naechste Arbeitstag ab [from], einschliesslich.
+ * The next working day from [from] on, inclusive.
  *
- * MIT SCHRANKE, und die ist kein Zierrat: ein Kalender ohne einen einzigen Arbeitstag -- durch
- * einen Fehler in den Wochenendeinstellungen oder eine kaputte Feiertagsliste -- laesst diese
- * Schleife sonst ewig laufen. Am Rechner passiert: der Testlaeufer wurde vom Betriebssystem
- * abgeraeumt, ohne eine einzige Meldung. Eine Endlosschleife ist der teuerste Fehlerausgang, weil
- * man ihr nichts ansieht; lieber ein sichtbar falsches Datum als ein haengendes Programm.
+ * WITH A BOUND, and it is not ornament: a calendar without a single working day -- through an
+ * error in the weekend settings or a broken holiday list -- otherwise lets this loop run for
+ * ever. Happened on the machine: the test runner was cleared away by the operating system,
+ * without a single message. An endless loop is the most expensive failure mode, because nothing
+ * about it is visible; better a visibly wrong date than a hanging program.
  */
 private fun nextWorkingDay(from: LocalDate, isWorkingDay: (LocalDate) -> Boolean): LocalDate {
   var d = from
@@ -329,15 +327,15 @@ private fun nextWorkingDay(from: LocalDate, isWorkingDay: (LocalDate) -> Boolean
   return d
 }
 
-/** Die [count] Arbeitstage ab [start] einschliesslich. */
+/** The [count] working days from [start] on, inclusive. */
 private fun workingDays(
   start: LocalDate, count: Int, isWorkingDay: (LocalDate) -> Boolean): List<LocalDate> {
   val days = mutableListOf<LocalDate>()
   var d = nextWorkingDay(start, isWorkingDay)
   var schutz = 0
   while (days.size < maxOf(count, 1)) {
-    // Dieselbe Schranke wie oben, aus demselben Grund. Ohne Arbeitstage im Kalender wuerde diese
-    // Schleife nie fertig -- und zwar lautlos.
+    // The same bound as above, for the same reason. Without working days in the calendar this
+    // loop would never finish -- and silently at that.
     if (schutz++ > MAX_SEARCH_DAYS) {
       return if (days.isEmpty()) listOf(start) else days
     }
@@ -352,11 +350,11 @@ private fun workingDays(
 }
 
 /**
- * Das frueheste Fenster ab [earliest], in dem der Vorgang durchgehend Platz hat.
+ * The earliest window from [earliest] on in which the Task has room throughout.
  *
- * Es wird NICHT zerstueckelt: ein Vorgang laeuft an aufeinanderfolgenden Arbeitstagen. Eine
- * Unterbrechung waere zwar dichter gepackt, aber ein Plan, in dem eine Aufgabe dreimal fuer je
- * zwei Tage auftaucht, ist nicht mehr lesbar -- und lesbar zu bleiben ist der Zweck der Uebung.
+ * It is NOT broken into pieces: a Task runs on consecutive working days. An interruption would be
+ * packed more densely, but a plan in which one job appears three times for two days each is no
+ * longer readable -- and staying readable is the point of the exercise.
  */
 private fun findEarliestWindow(
   earliest: LocalDate,
@@ -370,28 +368,28 @@ private fun findEarliestWindow(
   var candidate = nextWorkingDay(earliest, isWorkingDay)
   var schutz = 0
   while (true) {
-    // ENDLOSSCHLEIFE VERHINDERN. AM RECHNER GEMESSEN: bei einem Auslastungsgrad von 80 % und
-    // einem Vorgang mit 100 % Last war die Bedingung "passt hier" an JEDEM Tag falsch -- auch an
-    // voellig leeren. Die Suche lief unbegrenzt weiter, die Verteilung kam nie zurueck, und am
-    // Bildschirm sah es aus, als tue der Menuepunkt nichts.
+    // PREVENT AN ENDLESS LOOP. MEASURED ON THE MACHINE: at a utilisation of 80 % and a Task with
+    // 100 % load the condition "fits here" was false on EVERY day -- even on completely empty
+    // ones. The search ran on without limit, levelling never came back, and on screen it looked
+    // as though the menu item did nothing.
     //
-    // Die Schranke ist die zweite Sicherung; die erste ist die Grenze unten, die einen Vorgang
-    // immer allein passen laesst. Beide zusammen, weil eine Endlosschleife der teuerste
-    // Fehlerausgang ist: kein Dialog, keine Meldung, nur ein Programm, das haengt.
+    // The bound is the second safeguard; the first is the limit below, which always lets a Task
+    // fit on its own. Both together, because an endless loop is the most expensive failure mode:
+    // no dialog, no message, only a program that hangs.
     if (schutz++ > MAX_SEARCH_DAYS) {
       return workingDays(nextWorkingDay(earliest, isWorkingDay), durationAt(task, earliest),
         isWorkingDay)
     }
-    // Die Dauer haengt vom Starttag ab, sobald die Tagesleistung zeitabhaengig ist -- sie muss
-    // deshalb FUER JEDEN KANDIDATEN neu gefragt werden, nicht einmal vorab.
+    // The duration depends on the starting day as soon as the daily rate is time-dependent -- it
+    // therefore has to be asked anew FOR EVERY CANDIDATE, not once in advance.
     val window = workingDays(candidate, durationAt(task, candidate), isWorkingDay)
-    // Ein Tag blockiert, sobald er fuer EINE der beteiligten Personen zu voll ist.
+    // A day blocks as soon as it is too full for ONE of the people involved.
     val blockedAt = window.firstOrNull { day ->
       task.pools.any { pool ->
-        // DIE GRENZE IST MINDESTENS DIE EIGENE LAST. Ein Vorgang, der fuer sich genommen mehr
-        // verlangt als der Auslastungsgrad hergibt (100 % Last bei 80 % Auslastung), passt sonst
-        // NIRGENDS -- und die Suche findet nie ein Fenster. Der Auslastungsgrad begrenzt, wie
-        // viel ANDERE Arbeit danebenpasst; er kann einen einzelnen Vorgang nicht verbieten.
+        // THE LIMIT IS AT LEAST THE TASK'S OWN LOAD. A Task that on its own demands more than
+        // the utilisation allows (100 % load at 80 % utilisation) otherwise fits NOWHERE -- and
+        // the search never finds a window. The utilisation limits how much OTHER work fits
+        // alongside; it cannot forbid a single Task.
         val grenze = maxOf(capacityOf(pool), loadPercent)
         (used[pool]?.get(day) ?: 0) + loadPercent > grenze
       }
@@ -399,7 +397,7 @@ private fun findEarliestWindow(
     if (blockedAt == null) {
       return window
     }
-    // Erst nach dem blockierenden Tag weitersuchen: alles davor faellt aus demselben Grund aus.
+    // Continue searching only after the blocking day: everything before it fails for the same reason.
     candidate = nextWorkingDay(blockedAt.plusDays(1), isWorkingDay)
   }
 }

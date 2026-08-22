@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -31,31 +31,30 @@ import java.awt.event.ActionEvent
 import java.time.LocalDate
 
 /**
- * Die beiden Menuepunkte der Kapazitaetsverteilung.
+ * The two menu items of capacity levelling.
  *
- * BEIDE FRAGEN VORHER. Das ist keine Hoeflichkeit: die Verteilung kann 167 von 226 Vorgaengen
- * verschieben, das Befuellen 226 anfassen. Beides ungefragt auszufuehren waere genau die stille
- * Aenderung, die dieser Fork an mehreren Stellen bereits gefunden hat. Und beides ist EIN
- * Rueckgaengig-Schritt.
+ * BOTH ASK BEFOREHAND. That is not politeness: levelling can move 167 of 226 Tasks, filling in can
+ * touch 226. Carrying out either unasked would be exactly the silent change this fork has already
+ * found in several places. And both are ONE undo step.
  *
- * Die Vorschau nennt auch, was NICHT passiert und warum -- uebersprungene Vorgaenge mit Grund,
- * Konflikte mit Datum. Eine Vorschau, die nur die Erfolgszahl zeigt, verschweigt das Wesentliche.
+ * The preview also names what does NOT happen and why -- skipped Tasks with a reason, conflicts
+ * with a date. A preview that shows only the success count keeps the essential part quiet.
  */
 
 /**
- * Was der Aufrufer anzeigen soll: Text, und ein Rueckruf mit der Antwort.
+ * What the caller is to display: text, and a callback with the answer.
  *
- * `fun interface` statt `typealias`, weil die Verdrahtung in `GanttProject.java` liegt: ein
- * Kotlin-typealias auf einen Funktionstyp ist aus Java nicht ansprechbar.
+ * `fun interface` instead of `typealias`, because the wiring lives in `GanttProject.java`: a
+ * Kotlin typealias on a function type cannot be addressed from Java.
  *
- * Der Rueckruf statt eines Rueckgabewerts ist ebenfalls kein Zierrat: `showOptionDialog` blockiert
- * nicht, die Antwort kommt also spaeter.
+ * The callback instead of a return value is not ornament either: `showOptionDialog` does not
+ * block, so the answer comes later.
  */
 fun interface AskBeforeWriting {
   fun ask(message: String, answer: (Boolean) -> Unit)
 }
 
-/** Aufwand aus der Dauer ableiten und alles einer Person zuordnen. */
+/** Derive the effort from the duration and assign everything to one person. */
 class BackfillAction(
   private val taskManager: TaskManager,
   private val resourceManager: HumanResourceManager,
@@ -67,8 +66,8 @@ class BackfillAction(
   private val ask: AskBeforeWriting
 ) : GPAction("levelling.backfill") {
 
-  // Die Beschriftung kommt aus dem Buendel dieses Forks: GPAction kennt nur die Schluessel des
-  // Originals und wuerde sonst den nackten Schluessel anzeigen.
+  // The label comes from this fork's bundle: GPAction knows only the original's keys and would
+  // otherwise display the bare key.
   override fun getLocalizedName(): String = forkText("fork.levelling.backfill")
 
   override fun actionPerformed(event: ActionEvent?) {
@@ -77,13 +76,13 @@ class BackfillAction(
       report(true, forkText("fork.levelling.noResource"))
       return
     }
-    // Bei genau einer Person ist die Zuordnung eindeutig. Bei mehreren wird nicht geraten.
+    // With exactly one person the assignment is unambiguous. With several, nothing is guessed.
     if (resources.size > 1) {
       report(true, forkText("fork.levelling.manyResources", resources.size))
       return
     }
-    // Ein fehlerhafter Stundenplan wuerde still auf die feste Stundenzahl zurueckfallen. Lieber
-    // gar nicht rechnen als plausibel falsch rechnen.
+    // A faulty hours schedule would fall back silently to the fixed number of hours. Better not
+    // to compute at all than to compute plausibly wrong.
     val probleme = capacityProblems(taskManager, taskProperties, resourceManager, resourceProperties)
     if (probleme.hasErrors) {
       val text = StringBuilder()
@@ -126,7 +125,7 @@ class BackfillAction(
   }
 }
 
-/** Die Vorgaenge so verteilen, dass niemand mehr als 100 % gleichzeitig leisten muss. */
+/** Spread the Tasks so that nobody has to deliver more than 100 % at once. */
 class LevellingAction(
   private val taskManager: TaskManager,
   private val resourceManager: HumanResourceManager,
@@ -134,15 +133,15 @@ class LevellingAction(
   private val resourceProperties: CustomPropertyManager,
   private val undoManager: GPUndoManager,
   /**
-   * Die Basisplaene des Projekts. Vor dem Verteilen wird angeboten, den heutigen Stand zu
-   * sichern -- ohne das sind die bisherigen Termine nach dem Speichern weg, und Rueckgaengig
-   * hilft nur, solange das Programm laeuft.
+   * The baselines of the project. Before levelling, saving the current state is offered --
+   * without that the existing dates are gone after saving, and undo only helps as long as the
+   * program is running.
    *
-   * EIN ZULIEFERER UND KEINE LISTE, und das ist am Rechner gemessen: `GanttProject` ERSETZT sein
-   * Feld `myPreviousStates` beim Schliessen eines Projekts durch eine neue ArrayList
-   * (`GanttProject.java:819`). Die Menuepunkte entstehen beim Start; wer die Liste dort einmal
-   * festhaelt, schreibt nach dem ersten Oeffnen einer Datei in eine Liste, die niemand mehr liest.
-   * Gemessen: der Basisplan wurde bestaetigt, gemeldet -- und stand nicht in der Datei.
+   * A SUPPLIER AND NOT A LIST, and that is measured on the machine: `GanttProject` REPLACES its
+   * field `myPreviousStates` with a new ArrayList when a project is closed
+   * (`GanttProject.java:819`). The menu items come into being at startup; capturing the list
+   * there once means writing, after the first file is opened, into a list nobody reads any more.
+   * Measured: the baseline was confirmed, reported -- and was not in the file.
    */
   private val baselines: () -> MutableList<GanttPreviousState>,
   private val today: () -> LocalDate = { LocalDate.now() },
@@ -153,8 +152,8 @@ class LevellingAction(
   override fun getLocalizedName(): String = forkText("fork.levelling.run")
 
   override fun actionPerformed(event: ActionEvent?) {
-    // Ein fehlerhafter Stundenplan wuerde still auf die feste Stundenzahl zurueckfallen. Lieber
-    // gar nicht rechnen als plausibel falsch rechnen.
+    // A faulty hours schedule would fall back silently to the fixed number of hours. Better not
+    // to compute at all than to compute plausibly wrong.
     val probleme = capacityProblems(taskManager, taskProperties, resourceManager, resourceProperties)
     if (probleme.hasErrors) {
       val text = StringBuilder()
@@ -166,9 +165,9 @@ class LevellingAction(
       report(true, text.toString())
       return
     }
-    // DIE FRAGE ZUR VERGANGENHEIT, und sie kommt VOR allem anderen -- die Antwort aendert die
-    // Rechnung, nicht nur das Schreiben. Gestellt wird sie nur, wenn es solche Vorgaenge gibt:
-    // eine Frage ohne Anlass ist eine Frage, die man wegklickt.
+    // THE QUESTION ABOUT THE PAST, and it comes BEFORE everything else -- the answer changes the
+    // calculation, not only the writing. It is asked only when such Tasks exist: a question
+    // without an occasion is a question that gets clicked away.
     val liegengeblieben = unstartedInThePast(taskManager, today())
     if (liegengeblieben.isEmpty()) {
       weiter(moveUnstartedPast = true, verschobeneAusDerVergangenheit = 0)
@@ -192,17 +191,17 @@ class LevellingAction(
       report(false, forkText("fork.levelling.noTasks"))
       return
     }
-    // toModelLocalDate, nicht java.time: siehe LegacyDates.kt.
+    // toModelLocalDate, not java.time: see LegacyDates.kt.
     val projectStart = taskManager.projectStart?.toModelLocalDate() ?: today()
-    // AB HEUTE, nicht ab Projektbeginn: unerledigte Arbeit in die Vergangenheit zu legen ergibt
-    // keinen Plan. Was schon angefangen ist, bleibt trotzdem liegen -- das regelt `frozen`.
+    // FROM TODAY, not from the project start: laying unfinished work into the past yields no
+    // plan. What has already been begun stays where it is regardless -- `frozen` handles that.
     val abWann = maxOf(projectStart, today())
     val auslastung = resourceManager.resources.associate {
       it.id.toString() to it.utilisationPercent(resourceProperties)
     }
-    // Die Packgrenze bleibt bei 100 %: der Auslastungsgrad wirkt auf die verfuegbaren STUNDEN
-    // (siehe availableHoursPerDay) und steckt damit bereits in den Dauern. Ihn hier ein zweites
-    // Mal anzuwenden hiesse, denselben Puffer zweimal abzuziehen.
+    // The packing limit stays at 100 %: the utilisation acts on the available HOURS (see
+    // availableHoursPerDay) and is therefore already contained in the durations. Applying it a
+    // second time here would mean subtracting the same buffer twice.
     val result = levelTasks(tasks, abWann, workingDayTest(taskManager.calendar),
       durationAtStart(taskManager, taskProperties, resourceProperties))
 
@@ -240,10 +239,10 @@ class LevellingAction(
     if (overloads.isNotEmpty()) {
       message.append("\n\n").append(forkText("fork.levelling.overload", overloads.size))
     }
-    // FRISTEN, EINGEFRORENE ARBEIT UND AUSLASTUNG GEHOEREN IN DIE VORSCHAU. Sie hatten einmal
-    // hier gestanden und sind bei einem spaeteren Umbau verlorengegangen -- am Bildschirm
-    // aufgefallen: die Rechnung kannte eine verpasste Frist, der Dialog schwieg darueber. Eine
-    // Vorschau, die den wichtigsten Befund verschweigt, ist schlimmer als keine.
+    // DEADLINES, FROZEN WORK AND UTILISATION BELONG IN THE PREVIEW. They had stood here once and
+    // were lost in a later rebuild -- noticed on screen: the calculation knew about a missed
+    // deadline, the dialog said nothing about it. A preview that keeps the most important finding
+    // quiet is worse than none.
     if (fristen.isNotEmpty()) {
       message.append("\n\n").append(forkText("fork.levelling.deadline", fristen.size))
       fristen.take(5).forEach {
@@ -266,8 +265,8 @@ class LevellingAction(
       if (!confirmed) {
         return@ask
       }
-      // ZUERST der Basisplan, DANN das Verteilen. Andersherum haelt er die schon verschobenen
-      // Termine fest und ist wertlos.
+      // The baseline FIRST, THEN the levelling. The other way round it records the dates that
+      // have already been moved and is worthless.
       val baselineText = StringBuilder(forkText("fork.baseline.ask"))
         .appendLine().appendLine().append(forkText("fork.baseline.what"))
         .appendLine().appendLine().append(forkText("fork.baseline.hint"))
@@ -276,20 +275,20 @@ class LevellingAction(
         if (sichern) {
           val name = forkText("fork.baseline.name", today().toString())
           val basisplan = GanttPreviousState(name, GanttPreviousState.createTasks(taskManager))
-          // init() UND saveFile() SIND PFLICHT, und das sieht man dem Konstruktor nicht an: ein
-          // Basisplan haelt seine Vorgaenge NICHT im Speicher, sondern in einer Temporaerdatei.
-          // `load()` -- was der Speicherer und das Diagramm aufrufen -- liest genau diese Datei.
-          // Ohne die beiden Aufrufe ist `myFile` null: der Basisplan waere in der Liste sichtbar,
-          // im Diagramm unsichtbar und beim Speichern eine Ausnahme. Am Code nachgesehen
-          // (GanttPreviousState.java:55/75/99), nachdem der erste Anlauf sie weggelassen hatte.
+          // init() AND saveFile() ARE MANDATORY, and the constructor does not show it: a
+          // baseline does NOT hold its Tasks in memory but in a temporary file. `load()` -- what
+          // the saver and the chart call -- reads exactly that file. Without the two calls
+          // `myFile` is null: the baseline would be visible in the list, invisible in the chart
+          // and an exception when saving. Looked up in the code
+          // (GanttPreviousState.java:55/75/99), after the first attempt had left them out.
           try {
             basisplan.init()
             basisplan.saveFile()
             baselines().add(basisplan)
             meldung.append(forkText("fork.baseline.done", name)).appendLine()
           } catch (e: java.io.IOException) {
-            // Kein Basisplan ist schlecht; ein halber waere schlimmer. Lieber melden und
-            // weitermachen -- die Verteilung selbst ist davon unberuehrt.
+            // No baseline is bad; half a one would be worse. Better to report and carry on --
+            // levelling itself is unaffected by it.
             net.sourceforge.ganttproject.GPLogger.log(e)
             meldung.append(forkText("fork.baseline.failed")).appendLine()
           }
