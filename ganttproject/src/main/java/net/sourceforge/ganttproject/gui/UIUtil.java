@@ -59,7 +59,7 @@ import javax.swing.text.html.HTMLEditorKit;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-// [Fork-Aenderung] fuer reportBrokenLayout.
+// [fork change] for reportBrokenLayout.
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.util.ArrayList;
@@ -393,20 +393,20 @@ public abstract class UIUtil {
   }
 
   /**
-   * [Fork-Aenderung] Meldet Teile einer Einstellungsseite, die unmoeglich sichtbar sein koennen.
+   * [fork change] Reports parts of a settings page that cannot possibly be visible.
    *
-   * WOZU: Auf der WebDAV-Seite hatten die Serverdetails eine Breite von MINUS 75. BorderLayout gibt
-   * WEST seine volle Wunschbreite und der Mitte nur den Rest -- auch wenn der negativ ist. Man
-   * konnte Server anlegen, aber Adresse, Benutzer und Passwort nie sehen. Nichts im Protokoll,
-   * keine Ausnahme; die Seite sah einfach halb leer aus, und niemand konnte sagen warum.
+   * WHAT FOR: on the WebDAV page the server details had a width of MINUS 75. BorderLayout gives
+   * WEST its full preferred width and the centre only the remainder -- even when that is
+   * negative. Servers could be created, but address, user and password never seen. Nothing in
+   * the log, no exception; the page simply looked half empty, and nobody could say why.
    *
-   * Diese Pruefung haengt an {@link #createTopAndCenter}, weil ALLE Einstellungsseiten dort
-   * durchlaufen -- die Alternative waere gewesen, jede Seite einzeln anzusehen und die naechste zu
-   * uebersehen.
+   * This check hangs off {@link #createTopAndCenter}, because ALL settings pages pass through
+   * there -- the alternative would have been to look at every page individually and to miss the
+   * next one.
    *
-   * Gemeldet wird nur, was zweifelsfrei kaputt ist: negative Groesse, oder ein Teil, der ueber den
-   * Rand der Seite hinausragt. Null Breite bleibt ungemeldet -- Fuellelemente haben die zu Recht.
-   * Eine Meldung, die auch im heilen Fall kommt, liest bald niemand mehr.
+   * Only what is broken beyond doubt is reported: negative size, or a part that sticks out past
+   * the edge of the page. Zero width stays unreported -- filler elements have it for good reason.
+   * A report that also comes in the healthy case is soon read by nobody.
    */
   private static void reportBrokenLayout(final JComponent page) {
     page.addComponentListener(new ComponentAdapter() {
@@ -418,7 +418,7 @@ public abstract class UIUtil {
           return;
         }
         alreadyChecked = true;
-        // Nach dem Ereignis, damit die Anordnung wirklich abgeschlossen ist.
+        // After the event, so that the layout really is complete.
         SwingUtilities.invokeLater(() -> {
           List<String> broken = new ArrayList<>();
           collectBroken(page, page, 0, 0, broken);
@@ -431,7 +431,7 @@ public abstract class UIUtil {
     });
   }
 
-  /** Ein Behaelter mit Kindern, der selbst keine Flaeche hat: sein Inhalt ist unerreichbar. */
+  /** A container with children that itself has no area: its content is unreachable. */
   private static boolean isEmptyContainer(Component c) {
     return (c.getWidth() == 0 || c.getHeight() == 0)
         && c instanceof Container
@@ -439,7 +439,7 @@ public abstract class UIUtil {
   }
 
   private static void collectBroken(Component c, JComponent page, int x, int y, List<String> out) {
-    // Innerhalb eines Rollbereichs ist ein zu grosser Inhalt der Normalfall, kein Fehler.
+    // Inside a scroll pane, content that is too large is the normal case, not an error.
     if (c instanceof JScrollPane) {
       return;
     }
@@ -450,11 +450,11 @@ public abstract class UIUtil {
       if (c.getWidth() < 0 || c.getHeight() < 0) {
         problem = "negative Groesse";
       } else if (isEmptyContainer(c)) {
-        // NACHTRAEGLICH ERGAENZT, weil die Pruefung ohne das einen echten Fehler durchgelassen hat:
-        // setDividerLocation(0.5) auf einer noch ungemessenen JSplitPane schiebt den Trenner an den
-        // Rand, eine Seite bekommt die Breite 0 -- nicht negativ, nicht hinausragend, also still.
-        // Ein Behaelter MIT Inhalt und OHNE Groesse ist immer ein Fehler; ein leeres Fuellelement
-        // mit Groesse 0 ist keiner. Deshalb wird auf Inhalt geprueft, nicht nur auf die Groesse.
+        // ADDED AFTERWARDS, because without it the check let a real bug through:
+        // setDividerLocation(0.5) on a JSplitPane that has not been measured yet pushes the
+        // divider to the edge, one side gets width 0 -- not negative, not sticking out, so
+        // silent. A container WITH content and WITHOUT size is always a bug; an empty filler
+        // element with size 0 is not. That is why content is checked, not only the size.
         problem = "Groesse 0, obwohl Inhalt vorhanden";
       } else if (right > page.getWidth() || bottom > page.getHeight()) {
         problem = "ragt hinaus";
@@ -462,7 +462,7 @@ public abstract class UIUtil {
       if (problem != null) {
         out.add(String.format("%n  %-28s x=%4d y=%4d breite=%5d hoehe=%5d  -- %s",
             c.getClass().getSimpleName(), x, y, c.getWidth(), c.getHeight(), problem));
-        // Kinder nicht zusaetzlich melden: sie erben den Fehler und ergaeben nur Rauschen.
+        // Do not additionally report children: they inherit the bug and would only be noise.
         return;
       }
     }

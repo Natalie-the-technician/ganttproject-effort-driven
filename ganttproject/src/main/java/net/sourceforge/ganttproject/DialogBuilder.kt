@@ -216,21 +216,22 @@ class DialogImplSwingInFx(content: JComponent, private val buttonActions: Array<
               }
               dlg.layout()
               dlg.scene.window.sizeToScene()
-              // [Fork-Aenderung] ---- Anfang ----
+              // [fork change] ---- start ----
               //
-              // DEN SWING-INHALT ZUM ZEICHNEN BRINGEN. AM BILDSCHIRM GEMESSEN: der
-              // Basisplan-Dialog erschien als SCHWARZE FLAECHE und zeichnete sich erst, wenn man
-              // ihn mit der Maus verschob. Ein Dialog, der leer aussieht, ist von einem kaputten
-              // nicht zu unterscheiden -- ich hielt ihn selbst zuerst fuer defekt.
+              // BRING THE SWING CONTENT TO PAINT. MEASURED ON SCREEN: the baseline dialog
+              // appeared as a BLACK AREA and only painted itself once it was dragged with the
+              // mouse. A dialog that looks empty is indistinguishable from a broken one -- it
+              // was at first taken for a defect.
               //
-              // Die Ursache liegt im SwingNode: sein Inhalt wird auf dem Swing-Faden gesetzt,
-              // waehrend das JavaFX-Fenster schon steht. Ohne einen Anstoss bleibt die Flaeche
-              // leer, bis eine Groessenaenderung sie neu zusammensetzt.
+              // The cause lies in the SwingNode: its content is set on the Swing thread while
+              // the JavaFX window is already up. Without a nudge the area stays empty until a
+              // resize reassembles it.
               //
-              // WARUM GENAU SO: drei Versuche vorher liefen ins Leere, weil sie im FALSCHEN
-              // Dialog sassen -- DialogBuilder.java baut einen reinen Swing-Dialog, benutzt wird
-              // aber dieser hier. Gemerkt habe ich es erst, als eine Probe (Titel aendern) nicht
-              // ansprang. Wer hier etwas aendert: erst pruefen, ob der Code ueberhaupt laeuft.
+              // WHY EXACTLY LIKE THIS: three earlier attempts came to nothing because they sat
+              // in the WRONG dialog -- DialogBuilder.java builds a pure Swing dialog, but the
+              // one that is used is this one here. That only became apparent when a probe
+              // (changing the title) did not take effect. Anyone changing something here:
+              // check first whether the code runs at all.
               SwingUtilities.invokeLater {
                 contentPane.invalidate()
                 contentPane.validate()
@@ -241,7 +242,7 @@ class DialogImplSwingInFx(content: JComponent, private val buttonActions: Array<
                   fenster.width -= 1.0
                 }
               }
-              // [Fork-Aenderung] ---- Ende ----
+              // [fork change] ---- end ----
             }
           }
         }
