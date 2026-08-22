@@ -5,7 +5,7 @@ import biz.ganttproject.core.option.EnumerationOption;
 import biz.ganttproject.core.option.GPAbstractOption;
 import biz.ganttproject.core.option.ListOption;
 import com.google.common.base.Strings;
-// [Fork-Aenderung] Passwoerter nicht mehr im Klartext ablegen.
+// [fork change] no longer store passwords in plain text.
 import net.sourceforge.ganttproject.fork.SecretStore;
 import com.google.common.collect.ImmutableSet;
 import javafx.collections.FXCollections;
@@ -110,15 +110,15 @@ public class GPCloudStorageOptions extends GPAbstractOption<WebDavServerDescript
     for (WebDavServerDescriptor server : myServers) {
       result.append("\n").append(server.getName()).append("\t").append(server.getRootUrl()).append("\t").append(server.getUsername());
       if (server.getSavePassword()) {
-        // [Fork-Aenderung] Verschluesselt statt im Klartext.
+        // [fork change] Encrypted instead of in plain text.
         //
-        // FEHLER IM ORIGINAL: hier stand das Passwort unveraendert in der Datei. Jedes Programm
-        // unter demselben Benutzer konnte es lesen, und es wanderte in jede Sicherung von
-        // ~/.ganttproject. Der Haken wurde deshalb nicht gesetzt und das Passwort stattdessen bei
-        // jedem Start neu getippt -- Sicherheit, die Muehe kostet, wird irgendwann abgeschaltet.
+        // BUG IN THE ORIGINAL: the password stood here unchanged in the file. Every program
+        // under the same user could read it, and it went into every backup of ~/.ganttproject.
+        // The checkbox was therefore left unset and the password typed anew on every start
+        // instead -- security that costs effort gets switched off sooner or later.
         //
-        // Liefert protect() null (kein Windows, oder DPAPI nicht verfuegbar), wird NICHT
-        // gespeichert. Lieber weiter fragen als stillschweigend Klartext schreiben.
+        // If protect() returns null (not Windows, or DPAPI unavailable), nothing is stored.
+        // Better to keep asking than to write plain text silently.
         String protectedPassword = SecretStore.INSTANCE.protect(server.getPassword());
         if (protectedPassword != null) {
           result.append("\t").append(protectedPassword);
@@ -144,9 +144,8 @@ public class GPCloudStorageOptions extends GPAbstractOption<WebDavServerDescript
           server.setUsername(parts[2]);
         }
         if (parts.length >= 4) {
-          // [Fork-Aenderung] Entschluesseln. Ein Wert ohne Kennzeichen stammt aus der Zeit vor
-          // dieser Aenderung und wird unveraendert uebernommen -- beim naechsten Speichern ist er
-          // verschluesselt.
+          // [fork change] Decrypt. A value without a marker dates from before this change and
+          // is taken over unchanged -- at the next save it will be encrypted.
           server.setPassword(SecretStore.INSTANCE.reveal(parts[3]));
           server.setSavePassword(true);
         }

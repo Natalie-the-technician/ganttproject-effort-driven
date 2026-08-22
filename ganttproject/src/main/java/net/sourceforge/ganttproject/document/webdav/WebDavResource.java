@@ -39,12 +39,12 @@ public interface WebDavResource {
     }
   }
   /**
-   * [Fork-Aenderung] Jemand anderes hat die Datei seit dem Lesen geaendert.
+   * [fork change] Somebody else has changed the file since it was read.
    *
-   * Eigene Klasse und kein allgemeiner Fehler, weil der Aufrufer hier etwas anderes tun muss als
-   * bei einem Netzproblem: Es ist nichts kaputt, es gibt eine zweite Fassung. Der Mensch braucht
-   * die Wahl zwischen "unter anderem Namen speichern" und "trotzdem ueberschreiben" -- und die
-   * kann er nur bekommen, wenn dieser Fall unterscheidbar oben ankommt.
+   * A class of its own and not a general error, because the caller has to do something different
+   * here than for a network problem: nothing is broken, there is a second version. The user
+   * needs the choice between "save under another name" and "overwrite anyway" -- and can only
+   * get it if this case arrives at the top distinguishably.
    */
   class WebDavConflictException extends WebDavException {
     public WebDavConflictException(String message) {
@@ -55,17 +55,17 @@ public interface WebDavResource {
     }
   }
   /**
-   * [Fork-Aenderung] Der Server kann keine Versionspruefung beantworten: er liefert ausschliesslich
-   * schwache ETags, und gegen einen schwachen Tag laesst sich kein If-Match bilden.
+   * [fork change] The server cannot answer a version check: it delivers weak ETags exclusively,
+   * and no If-Match can be formed against a weak tag.
    *
-   * Muss von {@link WebDavConflictException} unterscheidbar sein, weil die Ursache eine voellig
-   * andere ist. Beim Konflikt hat jemand die Datei geaendert; hier hat niemand etwas getan, der
-   * Server kann die Frage nur nicht beantworten. Wer dem Benutzer hier "jemand anderes hat
-   * geaendert" anzeigt, schickt ihn auf die Suche nach einem Kollegen, den es nicht gibt.
+   * Has to be distinguishable from {@link WebDavConflictException}, because the cause is a
+   * completely different one. In a conflict somebody has changed the file; here nobody has done
+   * anything, the server merely cannot answer the question. Showing the user "somebody else has
+   * changed it" here sends them looking for a colleague who does not exist.
    *
-   * Der Fall ist nicht theoretisch: RFC 9110 VERLANGT einen schwachen Validator, sobald die
-   * Repraesentation unterwegs veraendert wird -- mod_deflate, nginx mit gzip, jeder komprimierende
-   * Proxy, jedes CDN. Dann wird der Tag nie stark.
+   * The case is not theoretical: RFC 9110 REQUIRES a weak validator as soon as the
+   * representation is transformed in transit -- mod_deflate, nginx with gzip, any compressing
+   * proxy, any CDN. Then the tag never becomes strong.
    */
   class WebDavVersioningUnavailableException extends WebDavException {
     public WebDavVersioningUnavailableException(String message) {

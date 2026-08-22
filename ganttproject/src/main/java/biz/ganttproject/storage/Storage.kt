@@ -45,7 +45,7 @@ import javafx.stage.FileChooser
 import net.sourceforge.ganttproject.document.Document
 import net.sourceforge.ganttproject.document.DocumentManager
 import net.sourceforge.ganttproject.document.ReadOnlyProxyDocument
-// [Fork-Aenderung] fuer die Sperrdauer der WebDAV-Ablage.
+// [fork change] for the lock timeout of the WebDAV storage.
 import net.sourceforge.ganttproject.document.webdav.HttpDocument
 import net.sourceforge.ganttproject.document.webdav.WebDavStorageImpl
 import net.sourceforge.ganttproject.document.webdav.WebDavServerDescriptor
@@ -212,12 +212,12 @@ class StoragePane internal constructor(
         openDocument)
     val cloudStorage = GPCloudStorage(dialogUi, mode, currentDocument, openDocument, documentManager)
     storageUiList.addAll(listOf(localStorage, recentProjects, cloudStorage))
-    // [Fork-Aenderung] Die eingestellte Sperrdauer bis zur Ablage-Auswahl durchreichen.
+    // [fork change] Pass the configured lock timeout through to the storage chooser.
     //
-    // Vorher setzte WebdavBrowserPane fest NO_LOCK. Da dies der Weg ist, den ein Mensch
-    // tatsaechlich benutzt, wurde ueber WebDAV geoeffnete Projekte NIE gesperrt -- unabhaengig
-    // davon, was in den Einstellungen stand. Am Server nachgewiesen: Schreiben von aussen lieferte
-    // 204 statt 423, obwohl das Projekt offen war.
+    // Previously WebdavBrowserPane set a fixed NO_LOCK. Since this is the path a person actually
+    // uses, projects opened over WebDAV were NEVER locked -- regardless of what the settings
+    // said. Demonstrated against the server: writing from outside returned 204 instead of 423,
+    // although the project was open.
     val webdavLockTimeout =
       (documentManager.webDavStorageUi as? WebDavStorageImpl)?.webDavLockTimeoutOption?.value
         ?: HttpDocument.NO_LOCK
@@ -225,17 +225,17 @@ class StoragePane internal constructor(
       WebdavStorage(it, mode, openDocument, dialogUi, cloudStorageOptions, webdavLockTimeout)
     }
 
-    // [Fork-Aenderung] Beim Speichern die Ablage vorwaehlen, in der das Projekt LIEGT.
+    // [fork change] When saving, preselect the storage the project actually LIVES in.
     //
-    // FEHLER IM ORIGINAL: hier stand fest `localStorage.id` fuer den Speichern-Fall. Wer ein
-    // Projekt von einem WebDAV-Server offen hat und "Speichern unter" waehlt, landete deshalb auf
-    // "Dieser Computer" -- mit der vollstaendigen WebDAV-Adresse als oertlichem Pfad im Namensfeld
-    // und einer roten Fehlermeldung "Uebergeordnetes Verzeichnis existiert nicht". Am Bildschirm
-    // gesehen, direkt nach einem Schreibkonflikt: genau in dem Moment, in dem "als Kopie speichern"
-    // der einzige Ausweg ist, fuehrt die Vorauswahl in die Irre.
+    // BUG IN THE ORIGINAL: a fixed `localStorage.id` stood here for the save case. Anyone with a
+    // project open from a WebDAV server who chose "Speichern unter" therefore landed on
+    // "Dieser Computer" -- with the full WebDAV address as a local path in the name field and a
+    // red error message "Uebergeordnetes Verzeichnis existiert nicht". Seen on screen right
+    // after a write conflict: at exactly the moment when "save as a copy" is the only way out,
+    // the preselection leads astray.
     //
-    // Der Weg funktionierte, man musste nur links den Server anklicken. Aber die Vorauswahl ist
-    // eine Behauptung darueber, was der Mensch vermutlich will, und die war hier falsch.
+    // The path worked, one only had to click the server on the left. But the preselection is an
+    // assertion about what the person probably wants, and here it was wrong.
     val currentStorageId = storageUiList.filterIsInstance<WebdavStorage>()
       .map { it.id }
       .firstOrNull { rootUrl -> rootUrl.isNotBlank() && currentDocument.uri?.toString()?.startsWith(rootUrl) == true }

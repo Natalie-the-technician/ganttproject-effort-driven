@@ -23,12 +23,12 @@ class WebdavStorage(
     private val myDialogUi: StorageDialogBuilder.DialogUi,
     private val myOptions: GPCloudStorageOptions,
     /**
-     * [Fork-Aenderung] Sperrdauer in Minuten, negativ heisst "nicht sperren".
+     * [fork change] Lock timeout in minutes, negative means "do not lock".
      *
-     * Muss hier durchgereicht werden, weil dies der Weg ist, den ein Mensch tatsaechlich benutzt:
-     * die Ablage-Auswahl. Zuvor stand in [WebdavBrowserPane] fest NO_LOCK, wodurch ueber diesen
-     * Weg geoeffnete Projekte NIE gesperrt wurden -- unabhaengig von der Einstellung. Am Server
-     * nachgewiesen: ein Schreibversuch von aussen lieferte 204 statt 423.
+     * Has to be passed through here, because this is the path a person actually uses: the
+     * storage chooser. Previously a fixed NO_LOCK stood in [WebdavBrowserPane], so that projects
+     * opened this way were NEVER locked -- regardless of the setting. Demonstrated against the
+     * server: a write attempt from outside returned 204 instead of 423.
      */
     private val myLockTimeout: Int
 ) : StorageUi {

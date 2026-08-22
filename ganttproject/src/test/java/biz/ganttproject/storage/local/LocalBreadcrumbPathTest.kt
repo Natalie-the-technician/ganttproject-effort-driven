@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 Licensed under the GNU General Public License, version 3 or later.
@@ -14,12 +14,12 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * Mit welchem Pfad die oertliche Ablage aufmacht.
+ * Which path the local storage opens with.
  *
- * AM BILDSCHIRM GEFUNDEN: nach einem Schreibkonflikt bot das Programm "Speichern unter" an, und
- * dort stand die WEBDAV-ADRESSE im Pfadfeld, mit roter Fehlermeldung. Der Weg funktionierte
- * (links den Server anklicken), aber das Angebot fuehrte erst einmal in eine Sackgasse -- und das
- * ausgerechnet in dem Moment, in dem man gerade seine Arbeit retten will.
+ * FOUND ON SCREEN: after a write conflict the program offered "Speichern unter", and there the
+ * WEBDAV ADDRESS stood in the path field, with a red error message. The path worked (click the
+ * server on the left), but the offer led into a dead end first -- and that at exactly the moment
+ * when one is trying to rescue one's work.
  */
 class LocalBreadcrumbPathTest {
 
@@ -35,7 +35,7 @@ class LocalBreadcrumbPathTest {
 
   @Test
   fun `ein oertliches dokument behaelt seinen pfad`() {
-    // Gegenprobe: sonst waere der Test oben auch erfuellt, wenn IMMER der Standardordner kaeme.
+    // Counter-check: otherwise the test above would pass even if the default folder came ALWAYS.
     val datei = File(standardordner, "meinplan.gan")
     val pfad = localBreadcrumbPath(datei.absolutePath, datei.name, standardordner)
     assertEquals(datei.toPath(), pfad)
@@ -51,8 +51,8 @@ class LocalBreadcrumbPathTest {
 
   @Test
   fun `ein relativer pfad wird nicht uebernommen`() {
-    // Relativ heisst: bezogen auf das Arbeitsverzeichnis des Programms. Das ist nicht der Ort,
-    // an dem jemand seinen Plan sucht.
+    // Relative means: relative to the working directory of the program. That is not the place
+    // where anyone looks for their plan.
     val pfad = localBreadcrumbPath("unterordner/plan.gan", "plan.gan", standardordner)
     assertEquals(standardordner.toPath().resolve("plan.gan"), pfad)
   }

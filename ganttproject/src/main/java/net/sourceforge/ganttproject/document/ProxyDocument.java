@@ -24,7 +24,7 @@ import biz.ganttproject.core.table.ColumnList;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import net.sourceforge.ganttproject.IGanttProject;
-// [Fork-Aenderung] fuer die benannten Lesefehler statt "Failed to parse document".
+// [fork change] for the named read errors instead of "Failed to parse document".
 import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.gui.GPColorChooser;
 import net.sourceforge.ganttproject.gui.UIFacade;
@@ -163,13 +163,13 @@ public class ProxyDocument implements Document {
       getHumanResourceManager().setEventsEnabled(false);
       doParse();
     } catch (Exception e) {
-      // [Fork-Aenderung] Den Grund benennen, statt alles "Failed to parse document" zu nennen.
+      // [fork change] Name the reason instead of calling everything "Failed to parse document".
       //
-      // FEHLER IM ORIGINAL: dieses catch faengt ALLES -- auch eine abgelehnte Anmeldung und einen
-      // nicht erreichbaren Server -- und behauptet dann, die Datei sei nicht lesbar. Am Bildschirm
-      // beobachtet: beim Start meldete GanttProject genau das, waehrend in Wahrheit ein 401
-      // zurueckkam, weil zum WebDAV-Server kein Passwort gespeichert ist. Wer der Meldung glaubt,
-      // sucht den Fehler in seiner Projektdatei statt bei den Zugangsdaten.
+      // BUG IN THE ORIGINAL: this catch catches EVERYTHING -- including a rejected login and an
+      // unreachable server -- and then claims the file is not readable. Observed on screen: at
+      // startup GanttProject reported exactly that, while in truth a 401 came back because no
+      // password is stored for the WebDAV server. Whoever believes the message looks for the
+      // fault in their project file instead of in the credentials.
       throw new DocumentException(describeReadFailure(e), e);
     } finally {
       getTaskManager().setEventsEnabled(true);
@@ -178,13 +178,12 @@ public class ProxyDocument implements Document {
   }
 
   /**
-   * [Fork-Aenderung] Sucht in der Ursachenkette nach einem Grund, der KEIN Lesefehler der Datei
-   * ist, und benennt ihn.
+   * [fork change] Searches the cause chain for a reason that is NOT a read error of the file,
+   * and names it.
    *
-   * Nur zwei Faelle werden unterschieden, und beide bewusst: eine abgelehnte Anmeldung und ein
-   * nicht erreichbarer Server fuehren zu voellig anderen naechsten Schritten als eine kaputte
-   * Datei. Alles Uebrige bleibt beim bisherigen Text -- eine Meldung, die alles Moegliche aufzaehlt,
-   * hilft niemandem.
+   * Only two cases are distinguished, and both deliberately: a rejected login and an unreachable
+   * server lead to completely different next steps than a broken file. Everything else keeps the
+   * existing text -- a message that lists every possibility helps nobody.
    */
   private static String describeReadFailure(Throwable failure) {
     for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
