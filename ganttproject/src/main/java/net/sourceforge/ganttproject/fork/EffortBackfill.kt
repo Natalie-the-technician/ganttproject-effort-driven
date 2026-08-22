@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -23,46 +23,45 @@ package net.sourceforge.ganttproject.fork
 import kotlin.math.ceil
 
 /**
- * Leitet Aufwand aus der vorhandenen Dauer ab und schlaegt Zuordnungen vor.
+ * Derives effort from the existing duration and proposes assignments.
  *
- * WOZU: Die aufwandsgetriebene Rechnung und die Kapazitaetsverteilung brauchen beides -- Aufwand
- * am Vorgang und eine Zuordnung zu einer Person. Der Plan, an dem dieser Fork entwickelt wurde,
- * hat 226 Vorgaenge, **null** Zuordnungen und keine Aufwandsspalte; das alles von Hand
- * einzutragen ist Tagesarbeit. Diese Ableitung nimmt sie ab.
+ * WHAT FOR: the effort-driven calculation and capacity levelling need both -- an effort on the
+ * Task and an assignment to a person. The plan this fork was developed against has 226 Tasks,
+ * **zero** assignments and no effort column; entering all of that by hand is a day's work. This
+ * derivation takes it off one's hands.
  *
- * DIE SICHERHEITSEIGENSCHAFT, und sie ist der Grund, warum die Ableitung genau so gewaehlt ist:
+ * THE SAFETY PROPERTY, and it is the reason why the derivation is chosen exactly this way:
  *
- *     Aufwand := Dauer x Stunden pro Tag
- *     die Rueckrechnung ergibt   ceil(Aufwand / Stunden pro Tag) = Dauer
+ *     effort := duration x hours per day
+ *     the back calculation gives   ceil(effort / hours per day) = duration
  *
- * Nach dem Befuellen sieht der Plan also **exakt aus wie vorher**. Das Befuellen selbst
- * verschiebt nichts. Was danach verschiebt, ist die Kapazitaetsverteilung -- und die wird
- * getrennt und mit Vorschau ausgeloest. Ein Hilfsmittel, das beim Ausfuellen heimlich Termine
- * aendert, waere genau die Art stiller Aenderung, die dieser Fork an mehreren Stellen schon
- * gefunden hat.
+ * After filling in, the plan therefore looks **exactly as it did before**. The filling in itself
+ * moves nothing. What moves things afterwards is capacity levelling -- and that is triggered
+ * separately and with a preview. A tool that changed dates secretly while filling in would be
+ * exactly the kind of silent change this fork has already found in several places.
  *
- * Reine Rechnung, keine GanttProject-Typen: so pruefbar ohne laufendes Programm.
+ * Pure calculation, no GanttProject types: checkable without a running program that way.
  */
 
-/** Ein Vorgang, so wie die Ableitung ihn sieht. */
+/** A Task as the derivation sees it. */
 data class BackfillTask(
   val id: String,
   val name: String,
-  /** Dauer in Arbeitstagen. */
+  /** Duration in working days. */
   val durationDays: Int,
-  /** Hat Kinder: dann leitet GanttProject die Dauer ab, und Aufwand gehoert nicht hierher. */
+  /** Has children: then GanttProject derives the duration, and effort does not belong here. */
   val isContainer: Boolean = false,
-  /** Meilenstein: Dauer null, es gibt nichts zu leisten. */
+  /** Milestone: duration zero, there is nothing to deliver. */
   val isMilestone: Boolean = false,
-  /** Reine Wartezeit: dauert, kostet aber keine Arbeit. */
+  /** Pure waiting time: it lasts, but costs no work. */
   val isWaitOnly: Boolean = false,
-  /** Bereits eingetragener Aufwand. Wird nie ueberschrieben. */
+  /** Effort already entered. Is never overwritten. */
   val existingEffortHours: Double? = null,
-  /** Anzahl vorhandener Zuordnungen. */
+  /** Number of existing assignments. */
   val assignmentCount: Int = 0
 )
 
-/** Warum ein Vorgang uebersprungen wurde. Wird dem Menschen gezeigt, nicht verschluckt. */
+/** Why a Task was skipped. Is shown to the person, not swallowed. */
 enum class BackfillSkip {
   CONTAINER,          // Gruppe: Dauer wird abgeleitet
   MILESTONE,          // Meilenstein: nichts zu leisten
@@ -72,21 +71,21 @@ enum class BackfillSkip {
 }
 
 data class BackfillProposal(
-  /** Vorgang -> vorgeschlagener Aufwand in Stunden. */
+  /** Task -> proposed effort in hours. */
   val effortHours: Map<String, Double>,
-  /** Vorgaenge, die eine Zuordnung bekommen sollen. */
+  /** Tasks that are to receive an assignment. */
   val assignTo: List<String>,
-  /** Uebersprungene Vorgaenge mit Grund. */
+  /** Skipped Tasks with a reason. */
   val skipped: Map<String, BackfillSkip>
 ) {
   val changeCount: Int get() = effortHours.size + assignTo.size
 }
 
 /**
- * @param hoursPerDay Tagesleistung der Person, die zugeordnet werden soll.
- * @param alreadyAssignedKeepsIts wenn true, bekommen bereits zugeordnete Vorgaenge keine zweite
- * Zuordnung. Das ist der Normalfall: eine zweite Person zu ergaenzen wuerde die verfuegbaren
- * Stunden pro Tag verdoppeln und damit die Dauer halbieren -- eine stille Planaenderung.
+ * @param hoursPerDay daily rate of the person who is to be assigned.
+ * @param alreadyAssignedKeepsIts when true, Tasks that already have an assignment do not get a
+ * second one. That is the normal case: adding a second person would double the available hours
+ * per day and thereby halve the duration -- a silent change to the plan.
  */
 fun proposeBackfill(
   tasks: List<BackfillTask>,
@@ -113,8 +112,8 @@ fun proposeBackfill(
     } else {
       effort[task.id] = task.durationDays * hoursPerDay
     }
-    // Zuordnen auch dort, wo der Aufwand schon gepflegt ist: ohne Zuordnung kennt die
-    // Kapazitaetsverteilung den Vorgang nicht, und der Aufwand allein bewirkt nichts.
+    // Assign even where the effort is already maintained: without an assignment capacity
+    // levelling does not know the Task, and the effort alone achieves nothing.
     val zuordnen = !task.isContainer && !task.isMilestone && !task.isWaitOnly &&
       (task.assignmentCount == 0 || !alreadyAssignedKeepsIts)
     if (zuordnen) {
@@ -125,11 +124,11 @@ fun proposeBackfill(
 }
 
 /**
- * Die Dauer, die die aufwandsgetriebene Rechnung aus einem Aufwand ableiten wuerde.
+ * The duration the effort-driven calculation would derive from an effort.
  *
- * Steht hier, damit sich die Sicherheitseigenschaft aus dem Klassenkommentar pruefen laesst,
- * ohne die eigentliche Rechnung mitsamt Projektmodell hochzuziehen. Die Formel ist dieselbe wie
- * in [net.sourceforge.ganttproject.task.algorithm.EffortDrivenDurationAlgorithm].
+ * Stands here so that the safety property from the class comment can be checked without pulling
+ * up the actual calculation together with the project model. The formula is the same as in
+ * [net.sourceforge.ganttproject.task.algorithm.EffortDrivenDurationAlgorithm].
  */
 fun durationFromEffort(effortHours: Double, availableHoursPerDay: Double): Int =
   ceil(effortHours / availableHoursPerDay).toInt().coerceAtLeast(1)

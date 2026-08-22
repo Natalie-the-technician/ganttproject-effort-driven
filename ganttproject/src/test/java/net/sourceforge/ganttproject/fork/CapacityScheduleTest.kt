@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -33,7 +33,7 @@ class CapacityScheduleTest {
 
   private fun plan(text: String, base: Double = 4.0) = CapacitySchedule.parse(text, base)
 
-  // ---- Lesen ----------------------------------------------------------------------------
+  // ---- Parsing --------------------------------------------------------------------------
 
   @Test
   fun `ohne eintrag gilt die normale tagesleistung`() {
@@ -73,14 +73,14 @@ class CapacityScheduleTest {
     assertEquals(1, p.changes.size)
   }
 
-  // ---- Fehler, und dass sie NICHT verschluckt werden -------------------------------------
+  // ---- Errors, and that they are NOT swallowed -------------------------------------------
 
   @Test
   fun `ein tippfehler wird gemeldet, nicht ignoriert`() {
     val ergebnis = plan("2027-04-01: acht")
     assertEquals(1, ergebnis.errors.size)
     assertTrue(ergebnis.hasErrors)
-    // Der brauchbare Rest bleibt trotzdem stehen: die Anzeige soll etwas zeigen koennen.
+    // The usable remainder still stands: the display should be able to show something.
     assertEquals(4.0, ergebnis.schedule.hoursOn(LocalDate.of(2027, 5, 1)))
   }
 
@@ -94,7 +94,7 @@ class CapacityScheduleTest {
     assertEquals(1, plan("2027-04-01 8").errors.size)
     assertEquals(1, plan("2027-04-01: -2").errors.size)
     assertEquals(1, plan("2027-04-01: 30").errors.size)
-    // Gegenprobe: genau an der Grenze ist es noch gueltig.
+    // Counter-check: exactly at the limit it is still valid.
     assertTrue(plan("2027-04-01: 24").errors.isEmpty())
   }
 
@@ -105,11 +105,11 @@ class CapacityScheduleTest {
     assertEquals(2, ergebnis.schedule.changes.size)
   }
 
-  // ---- Rechnen --------------------------------------------------------------------------
+  // ---- Computing ------------------------------------------------------------------------
 
   @Test
   fun `ohne abschnitte rechnet es genau wie bisher`() {
-    // Die Sicherheitseigenschaft: der neue Weg darf am alten Verhalten nichts aendern.
+    // The safety property: the new path must change nothing about the old behaviour.
     val montag = LocalDate.of(2026, 8, 17)
     listOf(1.0, 4.0, 7.5, 8.0, 12.0).forEach { stunden ->
       val p = CapacitySchedule(stunden)
@@ -124,19 +124,19 @@ class CapacityScheduleTest {
 
   @Test
   fun `ein vorgang ueber die grenze wird anteilig gerechnet`() {
-    // Ab Mittwoch acht statt vier Stunden. 20 Std. Aufwand ab Montag:
-    // Mo 4, Di 4 (8 verbraucht), Mi 8 (16), Do 8 -> fertig am vierten Tag.
+    // From Wednesday on eight hours instead of four. 20 h of effort from Monday:
+    // Mon 4, Tue 4 (8 used up), Wed 8 (16), Thu 8 -> finished on the fourth day.
     val montag = LocalDate.of(2026, 8, 17)
     val p = plan("2026-08-19: 8").schedule
     assertEquals(4, daysNeeded(20.0, montag, p, isWorkingDay = montagBisFreitag))
-    // Gegenprobe: durchgehend vier Stunden waeren fuenf Tage, durchgehend acht waeren drei.
+    // Counter-check: four hours throughout would be five days, eight throughout would be three.
     assertEquals(5, daysNeeded(20.0, montag, CapacitySchedule(4.0), isWorkingDay = montagBisFreitag))
     assertEquals(3, daysNeeded(20.0, montag, CapacitySchedule(8.0), isWorkingDay = montagBisFreitag))
   }
 
   @Test
   fun `wochenenden zaehlen nicht mit`() {
-    // Freitag, 4 Std./Tag, 8 Std. Aufwand: Freitag und Montag -- zwei Arbeitstage.
+    // Friday, 4 h/day, 8 h of effort: Friday and Monday -- two working days.
     val freitag = LocalDate.of(2026, 8, 21)
     assertEquals(2, daysNeeded(8.0, freitag, CapacitySchedule(4.0), isWorkingDay = montagBisFreitag))
   }
@@ -144,10 +144,10 @@ class CapacityScheduleTest {
   @Test
   fun `ein abschnitt mit null stunden endet nie und wird gemeldet`() {
     val p = plan("2026-08-18: 0").schedule
-    // Montag reicht der Aufwand noch nicht, ab Dienstag geht nichts mehr weiter.
+    // On Monday the effort is not yet enough, from Tuesday on nothing proceeds any further.
     assertNull(daysNeeded(100.0, LocalDate.of(2026, 8, 17), p, isWorkingDay = montagBisFreitag),
       "statt endlos zu laufen, muss die Rechnung aufgeben und den Aufrufer melden lassen")
-    // Gegenprobe: was vor der Null noch hineinpasst, wird sehr wohl gerechnet.
+    // Counter-check: what still fits before the zero is very much computed.
     assertEquals(1, daysNeeded(4.0, LocalDate.of(2026, 8, 17), p, isWorkingDay = montagBisFreitag))
   }
 
@@ -166,45 +166,46 @@ class CapacityScheduleTest {
     assertEquals(p.changes, nochmal.schedule.changes)
   }
 
-  // ---- Zusammenspiel mit der Verteilung ---------------------------------------------------
+  // ---- Interplay with levelling -----------------------------------------------------------
 
   @Test
   fun `die verteilung rechnet die dauer am gelegten termin, nicht am alten`() {
     val montag = LocalDate.of(2026, 8, 17)
-    // Ab dem 1.9. gibt es acht statt vier Stunden.
+    // From 1.9. on there are eight hours instead of four.
     val plan = plan("2026-09-01: 8").schedule
     val aufwand = mapOf("a" to 40.0, "b" to 40.0)
     val durationAt = { task: LevelTask, start: LocalDate ->
       daysNeeded(aufwand.getValue(task.id), start, plan, isWorkingDay = montagBisFreitag) ?: 1
     }
-    // Zwei Vorgaenge, beide 40 Std., beide voll ausgelastet: sie koennen nicht gleichzeitig laufen.
+    // Two Tasks, both 40 h, both fully loaded: they cannot run at the same time.
     val tasks = listOf(
       LevelTask(id = "a", orderInPlan = 0, priority = 2, durationDays = 10, loadPercent = 100),
       LevelTask(id = "b", orderInPlan = 1, priority = 2, durationDays = 10, loadPercent = 100))
 
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag, durationAt)
 
-    // Der erste beginnt am 17.8. -- vier Stunden am Tag, bis zum 1.9. Danach acht.
-    // Mo 17.8. bis Fr 28.8. sind 10 Arbeitstage a 4 Std. = 40 Std.: genau zehn Tage.
+    // The first begins on 17.8. -- four hours a day, until 1.9. After that eight.
+    // Mon 17.8. to Fri 28.8. is 10 working days at 4 h = 40 h: exactly ten days.
     assertEquals(montag, ergebnis.starts["a"])
     assertEquals(10, ergebnis.durations["a"], "vor der Grenze: vier Stunden am Tag")
-    // Der zweite faengt am Montag, 31.8. an -- und das ist EIN TAG VOR der Grenze. Also:
-    // Mo 31.8. 4 Std., dann ab Di 1.9. acht: 4+8+8+8+8+8 = 44 >= 40 am sechsten Tag.
+    // The second starts on Monday 31.8. -- and that is ONE DAY BEFORE the boundary. So:
+    // Mon 31.8. 4 h, then from Tue 1.9. eight: 4+8+8+8+8+8 = 44 >= 40 on the sixth day.
     //
-    // MEINE ERWARTUNG WAR HIER ZUERST 5, und sie war falsch: ich hatte den 31.8. schon zum
-    // Acht-Stunden-Abschnitt gezaehlt. Die Zahl steht bewusst mit dieser Rechnung daneben --
-    // eine Zahl ohne Herleitung laedt dazu ein, sie beim naechsten Fehlschlag einfach anzupassen.
+    // THE EXPECTATION HERE WAS 5 AT FIRST, and it was wrong: 31.8. had already been counted as
+    // part of the eight-hour section. The number deliberately stands next to this derivation --
+    // a number without a derivation invites simply adjusting it at the next failure.
     assertEquals(6, ergebnis.durations["b"],
       "vier Stunden am ersten Tag, danach acht")
-    // Gegenprobe: laege der zweite Vorgang ganz im Acht-Stunden-Abschnitt, waeren es fuenf Tage.
+    // Counter-check: if the second Task lay wholly in the eight-hour section, it would be five days.
     assertEquals(5, daysNeeded(40.0, LocalDate.of(2026, 9, 1), plan, isWorkingDay = montagBisFreitag))
     assertTrue(ergebnis.conflicts.isEmpty(), "niemand ist ueberlastet: ${ergebnis.conflicts}")
   }
 
   @Test
   fun `ohne stundenplan verhaelt sich die verteilung wie vorher`() {
-    // Gegenprobe zur vorigen: dieselbe Aufstellung, aber ohne Abschnitte. Die Dauer muss dann
-    // exakt die aus dem LevelTask sein -- der neue Weg darf am alten Verhalten nichts aendern.
+    // Counter-check to the previous one: the same setup, but without sections. The duration then
+    // has to be exactly the one from the LevelTask -- the new path must change nothing about the
+    // old behaviour.
     val montag = LocalDate.of(2026, 8, 17)
     val tasks = listOf(
       LevelTask(id = "a", orderInPlan = 0, priority = 2, durationDays = 10, loadPercent = 100),
@@ -216,13 +217,12 @@ class CapacityScheduleTest {
 }
 
 /**
- * Die Verteilung mit MEHREREN Personen.
+ * Levelling with SEVERAL people.
  *
- * WOZU: bis zum 17.08.2026 hatte die Verteilung einen einzigen Kapazitaetstopf. Zwei Personen
- * haetten damit nicht gleichzeitig arbeiten koennen -- die Verteilung haette ihre Vorgaenge
- * hintereinandergelegt und ein Ergebnis geliefert, das plausibel aussieht und den Plan um Monate
- * verlaengert. Dass im Pruefbetrieb nur eine Person plant, darf nicht der Grund sein, warum es
- * stimmt.
+ * WHAT FOR: until 17.08.2026 levelling had a single capacity pool. Two people could not have
+ * worked at the same time with it -- levelling would have laid their Tasks one after another and
+ * delivered a result that looks plausible and lengthens the plan by months. That only one person
+ * plans in trial use must not be the reason why it is right.
  */
 class MehrerePersonenTest {
   private val montagBisFreitag: (LocalDate) -> Boolean = {
@@ -243,7 +243,7 @@ class MehrerePersonenTest {
 
   @Test
   fun `dieselbe person kann es nicht gleichzeitig`() {
-    // Gegenprobe: dieselbe Aufstellung, aber beide Vorgaenge bei derselben Person.
+    // Counter-check: the same setup, but both Tasks with the same person.
     val tasks = listOf(
       LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("1")),
       LevelTask("b", 1, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("1")))
@@ -261,7 +261,7 @@ class MehrerePersonenTest {
       LevelTask("nur2", 2, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("2")))
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
     assertEquals(montag, ergebnis.starts["gemeinsam"])
-    // Beide Toepfe sind belegt, also muessen BEIDE Folgevorgaenge warten.
+    // Both pools are occupied, so BOTH following Tasks have to wait.
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["nur1"])
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["nur2"])
   }
@@ -281,9 +281,9 @@ class MehrerePersonenTest {
 
   @Test
   fun `ohne zuordnung teilen sich alle einen topf`() {
-    // Das war das bisherige Verhalten und muss so bleiben: ein Vorgang ohne Zuordnung belegt
-    // Zeit, von der man nur nicht weiss, wessen. Ihn als kostenlos zu behandeln waere die
-    // gefaehrlichere Annahme.
+    // That was the previous behaviour and has to stay: a Task without an assignment occupies
+    // time, only one does not know whose. Treating it as free would be the more dangerous
+    // assumption.
     val tasks = listOf(
       LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100),
       LevelTask("b", 1, 2, durationDays = 5, loadPercent = 100))
@@ -293,10 +293,10 @@ class MehrerePersonenTest {
 }
 
 /**
- * Die drei Erweiterungen vom 17.08.2026: eingefrorene Arbeit, Fristen, Auslastungsgrad.
+ * The three extensions of 17.08.2026: frozen work, deadlines, utilisation.
  *
- * WOZU: ohne die erste war die Verteilung ein EINMALWERKZEUG -- beim zweiten Lauf haette sie
- * abgehakte Vorgaenge neu gelegt und die Vergangenheit umgeschrieben.
+ * WHAT FOR: without the first, levelling was a ONE-OFF TOOL -- on the second run it would have
+ * re-laid Tasks already ticked off and rewritten the past.
  */
 class WiederholtVerteilenTest {
   private val montagBisFreitag: (LocalDate) -> Boolean = {
@@ -318,8 +318,8 @@ class WiederholtVerteilenTest {
 
   @Test
   fun `eingefrorene arbeit wird auch dann nicht verschoben, wenn sie sich ueberlappt`() {
-    // Zwei angefangene Vorgaenge am selben Tag: das ist die Wirklichkeit, nicht ein Fehler der
-    // Verteilung. Sie darf daran nichts aendern -- melden ja, umlegen nein.
+    // Two begun Tasks on the same day: that is reality, not a bug in levelling. It must change
+    // nothing about it -- report yes, re-lay no.
     val a = LevelTask("a", 0, 2, durationDays = 3, loadPercent = 100, frozen = true,
       fixedStart = montag)
     val b = LevelTask("b", 1, 2, durationDays = 3, loadPercent = 100, frozen = true,
@@ -341,13 +341,13 @@ class WiederholtVerteilenTest {
     assertEquals(1, verpasst.size)
     assertEquals("b", verpasst[0].id)
     assertTrue(verpasst[0].missingDays > 0, "die Zahl der fehlenden Tage gehoert dazu")
-    // Der Vorgang wurde NICHT vorgezogen: die Frist zu erzwingen verschoebe nur das Problem.
+    // The Task was NOT pulled forward: enforcing the deadline would only move the problem.
     assertEquals(LocalDate.of(2026, 8, 31), ergebnis.starts["b"])
   }
 
   @Test
   fun `eine haltbare frist meldet nichts`() {
-    // Gegenprobe: sonst wuerde der Test oben auch bei einer Meldung fuer jeden Vorgang bestehen.
+    // Counter-check: otherwise the test above would pass even with a report for every Task.
     val a = LevelTask("a", 0, 2, durationDays = 3, loadPercent = 100,
       deadline = LocalDate.of(2026, 12, 31))
     val ergebnis = levelTasks(listOf(a), montag, montagBisFreitag)
@@ -356,8 +356,8 @@ class WiederholtVerteilenTest {
 
   @Test
   fun `ein auslastungsgrad unter 100 laesst luft`() {
-    // Zwei Vorgaenge zu je 60 % passen bei 100 % nicht zusammen (120), bei 100 % auch nicht --
-    // aber einer zu 60 % und einer zu 30 % passen bei 100 %, nicht mehr bei 80 %.
+    // Two Tasks at 60 % each do not fit together at 100 % (120), nor at 100 % -- but one at
+    // 60 % and one at 30 % fit at 100 %, and no longer at 80 %.
     val a = LevelTask("a", 0, 2, durationDays = 5, loadPercent = 60)
     val b = LevelTask("b", 1, 2, durationDays = 5, loadPercent = 30)
     val voll = levelTasks(listOf(a, b), montag, montagBisFreitag)
@@ -370,15 +370,15 @@ class WiederholtVerteilenTest {
 }
 
 /**
- * Der Auslastungsgrad -- und der teuerste Fehlerausgang dieser Sitzung.
+ * Utilisation -- and the most expensive failure mode of this session.
  *
- * AM RECHNER GEMESSEN, 17.08.2026: der Grad sass als PACKGRENZE in der Verteilung. Bei 80 %
- * Auslastung und Vorgaengen mit 100 % Last passte kein Vorgang mehr an irgendeinen Tag -- auch
- * nicht an einen voellig leeren. Die Fenstersuche lief unbegrenzt weiter: kein Dialog, keine
- * Meldung, ein Programm, das haengt. Nach dem Schliessen der Schleife meldete sie JEDEN Tag als
- * ueberlastet, 37 Meldungen fuer fuenf Vorgaenge.
+ * MEASURED ON THE MACHINE, 17.08.2026: the figure sat in levelling as a PACKING LIMIT. At 80 %
+ * utilisation and Tasks with 100 % load no Task fitted on any day any more -- not even on a
+ * completely empty one. The window search ran on without limit: no dialog, no message, a program
+ * that hangs. After the loop was closed it reported EVERY day as overloaded, 37 reports for five
+ * Tasks.
  *
- * Beides ist behoben, und beides wird hier festgehalten.
+ * Both are fixed, and both are recorded here.
  */
 class AuslastungsgradTest {
   private val montagBisFreitag: (LocalDate) -> Boolean = {
@@ -388,7 +388,7 @@ class AuslastungsgradTest {
 
   @Test
   fun `ein voller vorgang passt auch bei achtzig prozent`() {
-    // Ohne die Regel "die Grenze ist mindestens die eigene Last" haengt dieser Test.
+    // Without the rule "the limit is at least the Task's own load" this test hangs.
     val tasks = listOf(LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100))
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag, capacityOf = { 80 })
     assertEquals(montag, ergebnis.starts["a"],
@@ -397,8 +397,8 @@ class AuslastungsgradTest {
 
   @Test
   fun `der grad begrenzt weiterhin, wie viel NEBENEINANDER liegt`() {
-    // Gegenprobe: der Grad ist nicht wirkungslos geworden. Zwei halbe Vorgaenge ergeben 100 % und
-    // passen bei 80 % nicht zusammen.
+    // Counter-check: the figure has not become ineffective. Two half Tasks make 100 % and do not
+    // fit together at 80 %.
     val tasks = listOf(
       LevelTask("a", 0, 2, durationDays = 5, loadPercent = 50),
       LevelTask("b", 1, 2, durationDays = 5, loadPercent = 50))
@@ -408,8 +408,8 @@ class AuslastungsgradTest {
 
   @Test
   fun `die suche gibt auf, statt endlos zu laufen`() {
-    // Zweite Sicherung: selbst wenn die Grenze eines Tages wieder falsch waere, muss die Suche
-    // enden. Eine Endlosschleife ist der teuerste Fehlerausgang -- man sieht ihr nichts an.
+    // Second safeguard: even if the limit were wrong again one day, the search has to end. An
+    // endless loop is the most expensive failure mode -- nothing about it is visible.
     val tasks = listOf(LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100))
     val ergebnis = levelTasks(tasks, montag, { false })  // KEIN Tag ist Arbeitstag
     assertTrue(ergebnis.starts.containsKey("a"), "die Verteilung muss zurueckkommen")

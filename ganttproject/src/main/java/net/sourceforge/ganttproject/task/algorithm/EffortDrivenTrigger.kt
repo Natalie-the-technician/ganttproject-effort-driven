@@ -1,8 +1,8 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
-Stoesst die Dauerberechnung an, wenn sich an den Ressourcen etwas aendert.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
+Triggers the duration calculation when something changes about the resources.
 
 This file is part of GanttProject, an opensource project management tool.
 

@@ -37,8 +37,8 @@ public class AlgorithmCollection {
 
   private final CriticalPathAlgorithm myCriticalPathAlgorithm;
 
-  // [Fork-Aenderung] Neues Feld: haelt den Algorithmus, der die Dauer aus dem Aufwand rechnet.
-  // Im Original-GanttProject gibt es dieses Feld nicht.
+  // [fork change] New field: holds the algorithm that computes the duration from the effort.
+  // This field does not exist in the original GanttProject.
   private final EffortDrivenDurationAlgorithm myEffortDrivenDurationAlgorithm;
 
   private final AlgorithmBase myScheduler;
@@ -50,7 +50,7 @@ public class AlgorithmCollection {
       AdjustTaskBoundsAlgorithm adjustTaskBoundsAlgorithm,
       RecalculateTaskCompletionPercentageAlgorithm completionPercentageAlgorithm,
       ChartBoundsAlgorithm projectBoundsAlgorithm, CriticalPathAlgorithm criticalPathAlgorithm,
-      // [Fork-Aenderung] Neuer Konstruktorparameter (im Original nicht vorhanden).
+      // [fork change] New constructor parameter (not present in the original).
       EffortDrivenDurationAlgorithm effortDrivenDurationAlgorithm,
       AlgorithmBase scheduler) {
     myScheduler = scheduler;
@@ -60,7 +60,7 @@ public class AlgorithmCollection {
     myCompletionPercentageAlgorithm = completionPercentageAlgorithm;
     myProjectBoundsAlgorithm = projectBoundsAlgorithm;
     myCriticalPathAlgorithm = criticalPathAlgorithm;
-    // [Fork-Aenderung] Neue Zuweisung.
+    // [fork change] New assignment.
     myEffortDrivenDurationAlgorithm = effortDrivenDurationAlgorithm;
   }
 
@@ -89,7 +89,7 @@ public class AlgorithmCollection {
   }
 
   /**
-   * [Fork-Aenderung] Neuer Getter, im Original nicht vorhanden.
+   * [fork change] New getter, not present in the original.
    *
    * Derives task durations from effort and daily resource availability. Must run BEFORE the
    * scheduler: it sets the durations, the scheduler then propagates the dates through the

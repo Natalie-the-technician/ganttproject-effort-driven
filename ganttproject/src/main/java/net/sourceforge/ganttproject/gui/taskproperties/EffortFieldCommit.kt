@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -55,13 +55,13 @@ fun applyEffortFieldsThenSyncColumns(
   fields: List<(CustomPropertyHolder) -> Unit>
 ) {
   fields.forEach { field -> field(holder) }
-  // [Fork-Aenderung] Die erste eingetippte Schaetzung zugleich als URSPRUENGLICHE festhalten.
+  // [fork change] Record the first estimate typed in as the ORIGINAL one at the same time.
   //
-  // WARUM HIER: das ist die Stelle, an der ein Mensch eine Schaetzung eintraegt. Wer sie spaeter
-  // nachbessert, vergleicht die Ist-Stunden sonst gegen die nachgebesserte Zahl -- und die
-  // Abweichung verschwindet genau in dem Moment, in dem man sie bemerkt.
+  // WHY HERE: this is the place where a person enters an estimate. Whoever improves it later
+  // otherwise compares the actual hours against the improved figure -- and the deviation
+  // disappears at exactly the moment it is noticed.
   //
-  // Nur wenn noch nichts festgehalten ist. Ein zweiter Aufruf aendert nichts.
+  // Only when nothing has been recorded yet. A second call changes nothing.
   rememberOriginalEffort(holder, definitions)
   // Must stay AFTER the loop and after the line above: both may create a definition. See above.
   projectDatabase.onCustomColumnChange(definitions)

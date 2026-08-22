@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -24,65 +24,65 @@ import java.time.LocalDate
 import java.time.format.DateTimeParseException
 
 /**
- * Die Tagesleistung einer Person ueber die Zeit.
+ * The daily rate of a person over time.
  *
- * WOZU: bisher war die Tagesleistung EINE Zahl fuer den ganzen Plan. Geplant wird neben einem
- * Hauptberuf; sobald der reduziert wird, steigt die Stundenzahl. Mit einer einzigen Zahl gibt es
- * dafuer nur zwei Moeglichkeiten, und beide sind falsch: die kleine Zahl behalten (dann rechnet
- * sich die Zukunft zu pessimistisch) oder die grosse eintragen (dann rechnet sich die
- * Vergangenheit zu schoen). Deshalb Abschnitte: **ab einem Datum gilt eine andere Zahl.**
+ * WHAT FOR: until now the daily rate was ONE number for the whole plan. Planning happens
+ * alongside a main job; as soon as that is reduced, the number of hours rises. With a single
+ * number there are only two options for this, and both are wrong: keep the small number (then the
+ * future computes too pessimistically) or enter the large one (then the past computes too
+ * favourably). Hence sections: **from a date on, a different number applies.**
  *
- * Reine Rechnung, keine GanttProject-Typen -- pruefbar ohne laufendes Programm.
+ * Pure calculation, no GanttProject types -- checkable without a running program.
  *
- * FORMAT, so wie es in der Spalte "Stundenplan" steht:
+ * FORMAT, as it stands in the "Hours schedule" column:
  *
  *     2027-04-01: 6; 2027-10-01: 8
  *
- * Vor dem ersten Datum gilt die normale Tagesleistung der Person. Trennzeichen zwischen den
- * Abschnitten ist `;` oder ein Zeilenumbruch, zwischen Datum und Stunden `:` oder `=`.
+ * Before the first date the person's normal daily rate applies. The separator between sections is
+ * `;` or a line break, between date and hours `:` or `=`.
  *
- * WARUM DAS ISO-DATUM UND NICHT `01.04.2027`: die Angabe wird auch von der Android-App und von
- * Auswertungen gelesen, und `03.04.05` ist in drei Laendern drei verschiedene Tage. Ein Format,
- * das man falsch verstehen kann, ist in einer geteilten Datei eine Fehlerquelle. Die Fehlermeldung
- * nennt das erwartete Format ausdruecklich.
+ * WHY THE ISO DATE AND NOT `01.04.2027`: the entry is also read by the Android app and by
+ * evaluations, and `03.04.05` is three different days in three countries. A format that can be
+ * misunderstood is a source of error in a shared file. The error message names the expected
+ * format explicitly.
  *
- * FEHLER WERDEN NICHT VERSCHLUCKT. Ein Tippfehler koennte sonst dazu fuehren, dass still mit der
- * alten Zahl weitergerechnet wird -- der Plan saehe plausibel aus und waere falsch. [parse] liefert
- * die Fehler zurueck; die Aufrufer zeigen sie und verweigern die Arbeit.
+ * ERRORS ARE NOT SWALLOWED. A typo could otherwise lead to computing on quietly with the old
+ * number -- the plan would look plausible and be wrong. [parse] returns the errors; the callers
+ * display them and refuse the work.
  */
 data class CapacityChange(
-  /** Ab diesem Tag gilt [hoursPerDay], einschliesslich. */
+  /** From this day on [hoursPerDay] applies, inclusive. */
   val from: LocalDate,
   val hoursPerDay: Double
 )
 
 class CapacitySchedule(
-  /** Die Tagesleistung vor dem ersten Abschnitt: die normale Angabe der Person. */
+  /** The daily rate before the first section: the person's normal entry. */
   val base: Double,
   changes: List<CapacityChange> = emptyList()
 ) {
-  /** Nach Datum sortiert. Bei doppeltem Datum gewinnt der spaetere Eintrag der Eingabe. */
+  /** Sorted by date. On a duplicate date the later entry of the input wins. */
   val changes: List<CapacityChange> = changes
     .associateBy { it.from }.values.sortedBy { it.from }
 
-  /** Die Stunden, die an diesem Tag zur Verfuegung stehen. */
+  /** The hours available on this day. */
   fun hoursOn(day: LocalDate): Double =
     changes.lastOrNull { !it.from.isAfter(day) }?.hoursPerDay ?: base
 
-  /** Ob ueberhaupt etwas zeitabhaengig ist. Ohne Abschnitte rechnet alles wie bisher. */
+  /** Whether anything is time-dependent at all. Without sections everything computes as before. */
   val isConstant: Boolean get() = changes.isEmpty()
 
   override fun toString(): String =
     changes.joinToString("; ") { "${it.from}: ${formatHours(it.hoursPerDay)}" }
 
   companion object {
-    /** Mehr als das kann kein Mensch an einem Tag leisten; darueber ist es ein Tippfehler. */
+    /** No person can deliver more than this in a day; beyond it, it is a typo. */
     const val MAX_HOURS_PER_DAY = 24.0
 
     /**
-     * Obergrenze fuer [daysNeeded]. Ohne sie wuerde ein Abschnitt mit 0 Stunden zu einer
-     * Endlosschleife: der Aufwand wird nie abgearbeitet. Die Zahl entspricht rund 40 Jahren
-     * Arbeitstagen -- wer daraufstoesst, hat kein Rundungsproblem, sondern eine Luecke im Plan.
+     * Upper bound for [daysNeeded]. Without it a section with 0 hours would become an endless
+     * loop: the effort is never worked off. The number corresponds to about 40 years of working
+     * days -- hitting it means not a rounding problem but a gap in the plan.
      */
     const val MAX_DAYS = 10_000
 
@@ -123,25 +123,25 @@ class CapacitySchedule(
 }
 
 /**
- * Ergebnis des Lesens: immer ein brauchbarer Plan UND die Fehler.
+ * Result of parsing: always a usable schedule AND the errors.
  *
- * Beides zusammen, damit der Aufrufer die Wahl hat -- eine Spaltenanzeige kann mit dem
- * unvollstaendigen Plan weiterarbeiten, die Verteilung verweigert bei Fehlern die Arbeit. Ein
- * `null` an dieser Stelle haette die Anzeige gezwungen, still auf die alte Zahl zurueckzufallen.
+ * Both together, so that the caller has the choice -- a column display can carry on with the
+ * incomplete schedule, levelling refuses the work on errors. A `null` in this place would have
+ * forced the display to fall back quietly to the old number.
  */
 data class CapacityParseResult(val schedule: CapacitySchedule, val errors: List<String>) {
   val hasErrors: Boolean get() = errors.isNotEmpty()
 }
 
 /**
- * Wie viele Arbeitstage ein Aufwand braucht, wenn er an [start] beginnt.
+ * How many working days an effort needs when it begins on [start].
  *
- * Das ist der Punkt, an dem die Zeitabschnitte wirken: ein Vorgang, der ueber eine Grenze laeuft,
- * wird VOR der Grenze mit der alten und danach mit der neuen Stundenzahl gerechnet -- nicht
- * durchgehend mit einer der beiden.
+ * This is the point at which the time sections take effect: a Task that runs across a boundary is
+ * computed BEFORE the boundary with the old and afterwards with the new number of hours -- not
+ * throughout with either of the two.
  *
- * @return die Anzahl Arbeitstage, mindestens 1, oder null, wenn der Aufwand in [CapacitySchedule
- * .MAX_DAYS] Arbeitstagen nicht zu leisten ist (etwa in einem Abschnitt mit 0 Stunden).
+ * @return the number of working days, at least 1, or null when the effort cannot be delivered
+ * within [CapacitySchedule.MAX_DAYS] working days (in a section with 0 hours, for instance).
  */
 fun daysNeeded(
   effortHours: Double,
@@ -173,6 +173,6 @@ fun daysNeeded(
   return null
 }
 
-/** Ohne Nachkommastellen, wenn es keine gibt: "8" statt "8.0". */
+/** Without decimal places when there are none: "8" instead of "8.0". */
 internal fun formatHours(hours: Double): String =
   if (hours == hours.toLong().toDouble()) hours.toLong().toString() else hours.toString()

@@ -1,8 +1,8 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
-Kern der aufwandsgetriebenen Terminplanung (Upstream-Issue #83).
+NEW FILE IN THIS FORK — not present in the original GanttProject.
+Core of effort-driven scheduling (upstream issue #83).
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -66,7 +66,7 @@ object EffortDrivenProperties {
   const val RESOURCE_HOURS_PER_DAY = "hours_per_day"
 
   /**
-   * Effort ACTUALLY spent on a task, in hours. Custom property on tasks. [Fork-Aenderung]
+   * Effort ACTUALLY spent on a task, in hours. Custom property on tasks. [fork change]
    *
    * Purely a record. It never influences the duration, the completion percentage or the status
    * of a task — see [Task.actualEffortHours]. Consumed outside this program by the planning
@@ -79,25 +79,25 @@ object EffortDrivenProperties {
   const val DEFAULT_HOURS_PER_DAY = 8.0
 
   /**
-   * [Fork-Aenderung] Die Anzeigenamen kommen aus dem Textbuendel dieses Forks, denn sie erscheinen
-   * als Spaltenkopf. Gesucht wird dagegen ueber die technische id ([TASK_EFFORT_HOURS] usw.), die
-   * bewusst NICHT uebersetzt wird — sonst faende [findEffortDefinition] die Spalte nach einem
-   * Sprachwechsel nicht mehr wieder.
+   * [fork change] The display names come from this fork's text bundle, because they appear as a
+   * column header. The lookup, by contrast, goes through the technical id ([TASK_EFFORT_HOURS]
+   * and so on), which is deliberately NOT translated — otherwise [findEffortDefinition] would no
+   * longer find the column again after a change of language.
    */
   fun findOrCreateTaskEffort(manager: CustomPropertyManager): CustomPropertyDefinition =
     manager.findEffortDefinition(TASK_EFFORT_HOURS)
       ?: manager.createDefinition(TASK_EFFORT_HOURS, CustomPropertyClass.DOUBLE.iD,
                                   forkText("fork.column.effort"), null)
 
-  /** [Fork-Aenderung] Counterpart of [findOrCreateTaskEffort] for the recorded actual effort. */
+  /** [fork change] Counterpart of [findOrCreateTaskEffort] for the recorded actual effort. */
   fun findOrCreateTaskActualEffort(manager: CustomPropertyManager): CustomPropertyDefinition =
     manager.findEffortDefinition(TASK_EFFORT_ACTUAL_HOURS)
       ?: manager.createDefinition(TASK_EFFORT_ACTUAL_HOURS, CustomPropertyClass.DOUBLE.iD,
                                   forkText("fork.column.actualEffort"), null)
 
   /**
-   * [Fork-Aenderung] Zeitabhaengige Tagesleistung als Text, siehe [net.sourceforge.ganttproject
-   * .fork.CapacitySchedule]. Leer heisst: es gilt durchgehend [RESOURCE_HOURS_PER_DAY].
+   * [fork change] The time-dependent daily rate as text, see [net.sourceforge.ganttproject
+   * .fork.CapacitySchedule]. Empty means: [RESOURCE_HOURS_PER_DAY] applies throughout.
    */
   const val RESOURCE_HOURS_SCHEDULE = "hours_schedule"
 
@@ -138,7 +138,7 @@ fun Task.effortHours(manager: CustomPropertyManager): Double? {
 }
 
 /**
- * Reads the recorded actual effort of a task, or null when none was recorded. [Fork-Aenderung]
+ * Reads the recorded actual effort of a task, or null when none was recorded. [fork change]
  *
  * Deliberately NOT used anywhere in the scheduling path. Time spent is not the same as work
  * finished: letting it drive the duration would make a task rewrite its own plan while it is
@@ -166,14 +166,14 @@ fun HumanResource.hoursPerDay(manager: CustomPropertyManager): Double {
 }
 
 /**
- * [Fork-Aenderung] Der Stundenplan dieser Person: die Tagesleistung ueber die Zeit.
+ * [fork change] The hours schedule of this person: the daily rate over time.
  *
- * Die Fehler des Textes werden MITGELIEFERT und nicht verschluckt -- wer rechnet, soll die Wahl
- * haben, bei einem Tippfehler die Arbeit zu verweigern, statt still mit der alten Zahl
- * weiterzurechnen.
+ * The errors in the text are DELIVERED ALONG and not swallowed -- whoever computes should have
+ * the choice of refusing the work on a typo instead of quietly computing on with the old
+ * number.
  */
 fun HumanResource.capacitySchedule(manager: CustomPropertyManager): CapacityParseResult {
-  // Mit dem Auslastungsgrad, aus demselben Grund wie in availableHoursPerDay.
+  // With the utilisation, for the same reason as in availableHoursPerDay.
   val grad = this.utilisationPercent(manager) / 100.0
   val base = this.hoursPerDay(manager) * grad
   val def = manager.findEffortDefinition(EffortDrivenProperties.RESOURCE_HOURS_SCHEDULE)
@@ -188,10 +188,10 @@ fun HumanResource.capacitySchedule(manager: CustomPropertyManager): CapacityPars
 }
 
 /**
- * [Fork-Aenderung] Der Stundenplan, den ein Vorgang ueber seine Zuordnungen sieht.
+ * [fork change] The hours schedule a Task sees through its assignments.
  *
- * Mehrere Personen werden zusammengezaehlt, jeweils mit ihrem Anteil -- genauso, wie es
- * [Task.availableHoursPerDay] fuer den festen Wert tut.
+ * Several people are added together, each with their share -- exactly as
+ * [Task.availableHoursPerDay] does for the fixed value.
  */
 fun Task.capacitySchedule(resourceProperties: CustomPropertyManager): CapacityParseResult {
   val parts = this.assignments.mapNotNull { assignment ->
@@ -204,7 +204,7 @@ fun Task.capacitySchedule(resourceProperties: CustomPropertyManager): CapacityPa
   if (parts.size == 1 && parts[0].second == 1.0) {
     return CapacityParseResult(parts[0].first.schedule, errors)
   }
-  // Bei mehreren Zuordnungen alle Wechseltage zusammenlegen und je Tag summieren.
+  // With several assignments, merge all the changeover days and sum per day.
   val base = parts.sumOf { (result, share) -> result.schedule.base * share }
   val days = parts.flatMap { it.first.schedule.changes.map { c -> c.from } }.distinct().sorted()
   val changes = days.map { day ->
@@ -220,19 +220,18 @@ fun Task.capacitySchedule(resourceProperties: CustomPropertyManager): CapacityPa
 fun Task.availableHoursPerDay(resourceProperties: CustomPropertyManager): Double =
   this.assignments.sumOf { assignment ->
     val resource = assignment.resource as? HumanResource ?: return@sumOf 0.0
-    // [Fork-Aenderung] Der Auslastungsgrad wirkt HIER, auf die verfuegbaren Stunden -- nicht als
-    // Packgrenze in der Verteilung.
+    // [fork change] The utilisation takes effect HERE, on the available hours -- not as a
+    // packing limit in levelling.
     //
-    // AM RECHNER GEMESSEN, als er dort sass: bei 80 % Auslastung und Vorgaengen mit 100 % Last
-    // passte kein Vorgang mehr an irgendeinen Tag. Die Fenstersuche lief endlos (die Verteilung
-    // kam nie zurueck), und nach dem Schliessen dieser Schleife meldete sie JEDEN Tag als
-    // ueberlastet -- 37 Meldungen fuer fuenf Vorgaenge. Beides war Unsinn: "80 % Auslastung"
-    // heisst nicht "ein voller Vorgang ist verboten", sondern "an einem Arbeitstag stehen 80 %
-    // der Stunden fuer geplante Arbeit zur Verfuegung".
+    // MEASURED ON THE MACHINE, when it sat there: at 80 % utilisation and Tasks with 100 % load
+    // no Task fitted on any day any more. The window search ran endlessly (levelling never came
+    // back), and after that loop was closed it reported EVERY day as overloaded -- 37 reports for
+    // five Tasks. Both were nonsense: "80 % utilisation" does not mean "a full Task is
+    // forbidden", but "on a working day 80 % of the hours are available for planned work".
     //
-    // An dieser Stelle wirkt er richtig: 8 Std./Tag bei 80 % sind 6,4 Std./Tag, ein Vorgang mit
-    // 40 Std. Aufwand dauert damit 7 statt 5 Tage. Der Puffer steht im Plan, statt als Warnung
-    // aufzutauchen.
+    // In this place it takes effect correctly: 8 h/day at 80 % is 6.4 h/day, so a Task with 40 h
+    // of effort lasts 7 days instead of 5. The buffer stands in the plan instead of turning up as
+    // a warning.
     val grad = resource.utilisationPercent(resourceProperties) / 100.0
     resource.hoursPerDay(resourceProperties) * grad * assignment.load / 100.0
   }
@@ -330,14 +329,14 @@ abstract class EffortDrivenDurationAlgorithm(
     if (availability <= 0.0) {
       return
     }
-    // [Fork-Aenderung] Zeitabhaengige Tagesleistung: ein Vorgang, der ueber eine Grenze laeuft,
-    // wird davor mit der alten und danach mit der neuen Stundenzahl gerechnet. Ohne Abschnitte
-    // ist das Ergebnis nachweislich dasselbe wie vorher (CapacityScheduleTest).
+    // [fork change] Time-dependent daily rate: a Task that runs across a boundary is computed
+    // with the old number of hours before it and with the new one after it. Without sections the
+    // result is demonstrably the same as before (CapacityScheduleTest).
     //
-    // Bei einem fehlerhaften Stundenplan bleibt es bei der festen Zahl: die Meldung gehoert an die
-    // Oberflaeche, und ein Algorithmus, der bei jedem Durchlauf einen Dialog aufmacht, waere
-    // unbrauchbar. Die beiden Menuepunkte der Verteilung pruefen den Text und verweigern die
-    // Arbeit -- dort sieht der Mensch den Fehler.
+    // On a faulty hours schedule the fixed number stays in force: the report belongs in the user
+    // interface, and an algorithm that opens a dialog on every run would be unusable. The two
+    // levelling menu items check the text and refuse the work -- that is where the person sees
+    // the error.
     val schedule = task.capacitySchedule(resourceProps)
     val start = task.start?.time?.toModelLocalDate()
     val days = if (schedule.hasErrors || schedule.schedule.isConstant || start == null) {

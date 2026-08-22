@@ -180,12 +180,12 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
         it.setCustomProperties(customValues)
         it.commit()
       }
-      // [Fork-Aenderung] Wird der Aufwand direkt in eine Tabellenspalte getippt, muss die Dauer
-      // genauso nachgerechnet werden wie beim Aufgabendialog. NACH dem commit: waehrend eines
-      // laufenden Mutators liefert createMutator() einen wiedereingetretenen Mutator, dessen
-      // commit() nichts tut - die dort gesetzte Dauer waere verloren.
-      // Der Algorithmus geht nur an Vorgaenge mit eingetragenem Aufwand, andere Spalten bleiben
-      // also unberuehrt.
+      // [fork change] When the effort is typed straight into a table column, the duration has to
+      // be recomputed just as it is from the task dialog. AFTER the commit: while a mutator is
+      // running, createMutator() returns a re-entered mutator whose commit() does nothing - the
+      // duration set there would be lost.
+      // The algorithm only goes at Tasks that have an effort entered, so other columns stay
+      // untouched.
       node.manager.algorithmCollection.effortDrivenDurationAlgorithm.run()
     } catch (e: CustomColumnsException) {
       if (!GPLogger.log(e)) {
