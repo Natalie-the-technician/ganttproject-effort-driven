@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -25,15 +25,15 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 
 /**
- * Die Kapazitaetsverteilung, ohne laufendes Programm.
+ * Capacity levelling, without a running program.
  *
- * Jeder Fall prueft beide Richtungen: dass die Verteilung tut, was sie soll, UND dass sie es
- * unterlaesst, wenn kein Grund dazu besteht. Ein Test, der nur "es wurde verschoben" prueft, ist
- * auch dann gruen, wenn immer verschoben wird.
+ * Every case checks both directions: that levelling does what it should, AND that it refrains
+ * when there is no reason to. A test that only checks "something was moved" is green even when
+ * everything is always moved.
  */
 class ResourceLevellingTest : TestCase() {
 
-  /** Montag. Alle Rechnungen im Test gehen von dieser Woche aus. */
+  /** Monday. All calculations in the test start from this week. */
   private val montag: LocalDate = LocalDate.of(2026, 8, 17)
 
   private val werktags: (LocalDate) -> Boolean =
@@ -46,8 +46,8 @@ class ResourceLevellingTest : TestCase() {
   ) = LevelTask(id, reihe, prio, dauer, last, vorgaenger, fest, fruehestens)
 
   /**
-   * DER KERNFALL, und der Grund, warum es diese Datei gibt: zwei Vorgaenge, eine Person, beide
-   * voll. GanttProject legt beide auf denselben Montag. Hier laufen sie nacheinander.
+   * THE CORE CASE, and the reason this file exists: two Tasks, one person, both full.
+   * GanttProject lays both on the same Monday. Here they run one after the other.
    */
   fun testTwoFullTasksRunOneAfterTheOther() {
     val r = levelTasks(listOf(task("a", 3), task("b", 2, reihe = 1)), montag, werktags)
@@ -57,8 +57,8 @@ class ResourceLevellingTest : TestCase() {
   }
 
   /**
-   * Gegenprobe dazu: passen beide nebeneinander, wird NICHT verschoben. Gleichzeitige
-   * Arbeit ist ausdruecklich erlaubt.
+   * Counter-check to it: if both fit alongside each other, nothing is moved. Simultaneous work
+   * is explicitly allowed.
    */
   fun testTwoHalfTasksRunAtTheSameTime() {
     val r = levelTasks(listOf(task("a", 3, last = 50), task("b", 3, last = 50, reihe = 1)),
@@ -68,7 +68,7 @@ class ResourceLevellingTest : TestCase() {
     assertTrue(r.conflicts.isEmpty())
   }
 
-  /** Drei zu 50 % passen nicht mehr: der dritte muss warten, bis einer frei wird. */
+  /** Three at 50 % no longer fit: the third has to wait until one becomes free. */
   fun testThirdHalfTaskHasToWait() {
     val r = levelTasks(
       listOf(task("a", 2, last = 50), task("b", 4, last = 50, reihe = 1), task("c", 1, last = 50, reihe = 2)),
@@ -78,7 +78,7 @@ class ResourceLevellingTest : TestCase() {
     assertEquals("c passt erst, wenn a fertig ist", montag.plusDays(2), r.starts["c"])
   }
 
-  /** Wichtigeres zuerst, auch wenn es im Plan weiter unten steht. */
+  /** More important first, even when it stands further down in the plan. */
   fun testHigherPriorityGoesFirst() {
     val r = levelTasks(
       listOf(task("unwichtig", 2, prio = 1, reihe = 0), task("wichtig", 2, prio = 4, reihe = 1)),
@@ -87,7 +87,7 @@ class ResourceLevellingTest : TestCase() {
     assertEquals(montag.plusDays(2), r.starts["unwichtig"])
   }
 
-  /** Bei gleicher Prioritaet entscheidet die Reihenfolge im Plan, nicht der Zufall. */
+  /** On equal priority the order in the plan decides, not chance. */
   fun testEqualPriorityFollowsPlanOrder() {
     val r = levelTasks(
       listOf(task("zweiter", 2, prio = 2, reihe = 5), task("erster", 2, prio = 2, reihe = 1)),
@@ -96,7 +96,7 @@ class ResourceLevellingTest : TestCase() {
     assertEquals(montag.plusDays(2), r.starts["zweiter"])
   }
 
-  /** Abhaengigkeiten gelten weiterhin, auch wenn Kapazitaet frei waere. */
+  /** Dependencies still apply, even when capacity would be free. */
   fun testPredecessorIsRespectedEvenWithFreeCapacity() {
     val r = levelTasks(
       listOf(task("erst", 2, last = 10), task("dann", 1, last = 10, reihe = 1, vorgaenger = listOf("erst"))),
@@ -107,12 +107,12 @@ class ResourceLevellingTest : TestCase() {
   }
 
   /**
-   * Ueber das Wochenende wird nicht gearbeitet: drei Arbeitstage ab Donnerstag belegen Do, Fr und
-   * Montag, der Nachfolger kann erst am Dienstag.
+   * No work happens over the weekend: three working days from Thursday occupy Thu, Fri and
+   * Monday, the successor can only start on Tuesday.
    *
-   * BEIM ERSTEN ANLAUF FALSCH GETESTET: ohne Abhaengigkeit musste der zweite Vorgang gar nicht
-   * warten -- Montag bis Mittwoch waren frei, und er startete am Montag. Der Test prueft jetzt,
-   * was er pruefen soll.
+   * TESTED WRONGLY ON THE FIRST ATTEMPT: without a dependency the second Task did not have to
+   * wait at all -- Monday to Wednesday were free, and it started on Monday. The test now checks
+   * what it is meant to check.
    */
   fun testWeekendIsSkipped() {
     val donnerstag = montag.plusDays(3)
@@ -124,21 +124,20 @@ class ResourceLevellingTest : TestCase() {
     assertEquals("a belegt Do, Fr und Mo -- b kann erst Dienstag", montag.plusDays(8), r.starts["b"])
   }
 
-  /** „Fruehester Beginn" ist eine untere Schranke, keine Fixierung: spaeter darf es werden. */
+  /** "Earliest begin" is a lower bound, not a fixing: later is allowed. */
   fun testEarliestStartIsALowerBoundOnly() {
     val mittwoch = montag.plusDays(2)
     val r = levelTasks(
       listOf(task("blockierer", 5), task("spaet", 1, reihe = 1, fruehestens = mittwoch)),
       montag, werktags)
-    // plusDays(5) waere ein Samstag -- der naechste Arbeitstag nach der vollen Woche ist Montag.
+    // plusDays(5) would be a Saturday -- the next working day after the full week is Monday.
     assertEquals("nicht vor Mittwoch, aber der Platz ist erst spaeter frei",
       montag.plusDays(7), r.starts["spaet"])
   }
 
   /**
-   * Ein fester Termin bleibt stehen, auch wenn die Kapazitaet dadurch gesprengt wird -- und genau
-   * das wird gemeldet. So entschieden, weil eine Frist stillschweigend zu verschieben
-   * das Problem versteckt.
+   * A fixed date stays, even when the capacity is burst by it -- and exactly that is reported.
+   * Decided that way because moving a deadline silently hides the problem.
    */
   fun testFixedDateIsHeldAndTheOverloadIsReported() {
     val r = levelTasks(
@@ -151,7 +150,7 @@ class ResourceLevellingTest : TestCase() {
     assertEquals(200, overload[0].percent)
   }
 
-  /** Liegt der feste Termin vor dem fruehestmoeglichen, wird auch das gemeldet. */
+  /** If the fixed date lies before the earliest possible one, that is reported as well. */
   fun testUnreachableFixedDateIsReported() {
     val r = levelTasks(
       listOf(task("erst", 5), task("frist", 1, reihe = 1, fest = montag, vorgaenger = listOf("erst"))),
@@ -160,13 +159,13 @@ class ResourceLevellingTest : TestCase() {
     assertEquals(1, problem.size)
     assertEquals("frist", problem[0].id)
     assertEquals(montag, problem[0].fixedStart)
-    // "erst" belegt Mo bis Fr, fruehestens moeglich ist damit der Montag darauf.
+    // "erst" occupies Mon to Fri, so the earliest possible is the Monday after.
     assertEquals(montag.plusDays(7), problem[0].earliestPossible)
   }
 
   /**
-   * Gegenprobe zu den beiden davor: ein fester Termin, der passt, erzeugt KEINE Meldung. Sonst
-   * waere die Konfliktliste bei jedem festen Termin voll und damit wertlos.
+   * Counter-check to the two before: a fixed date that fits produces NO report. Otherwise the
+   * conflict list would be full at every fixed date and thereby worthless.
    */
   fun testAFixedDateThatFitsReportsNothing() {
     val r = levelTasks(listOf(task("frist", 2, fest = montag)), montag, werktags)
@@ -174,7 +173,7 @@ class ResourceLevellingTest : TestCase() {
     assertTrue("kein Konflikt, wenn der Termin haltbar ist", r.conflicts.isEmpty())
   }
 
-  /** Ein Kreis wird gemeldet, statt das Programm in eine Endlosschleife zu schicken. */
+  /** A cycle is reported instead of sending the program into an endless loop. */
   fun testACycleIsReportedInsteadOfHanging() {
     val r = levelTasks(
       listOf(task("a", 1, vorgaenger = listOf("b")), task("b", 1, vorgaenger = listOf("a"))),
@@ -183,7 +182,7 @@ class ResourceLevellingTest : TestCase() {
     assertEquals(1, r.conflicts.filterIsInstance<LevelConflict.Cycle>().size)
   }
 
-  /** Ohne Vorgaenge passiert nichts, und zwar ohne Ausnahme. */
+  /** With no Tasks nothing happens, and without an exception at that. */
   fun testEmptyPlanIsNotAnError() {
     val r = levelTasks(emptyList(), montag, werktags)
     assertTrue(r.starts.isEmpty())

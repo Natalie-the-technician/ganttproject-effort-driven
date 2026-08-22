@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -43,24 +43,24 @@ import java.time.ZoneId
 import java.util.Date
 
 /**
- * Verbindet das Projektmodell mit den reinen Rechnungen in [levelTasks] und [proposeBackfill].
+ * Connects the project model to the pure calculations in [levelTasks] and [proposeBackfill].
  *
- * Getrennt gehalten, und zwar aus dem Grund, der in den Notizen steht: In Stufe 1 steckten zwei
- * Fehler hinter 300 gruenen Tests, weil genau diese Verdrahtung nicht pruefbar war. Die Rechnungen
- * kennen keine GanttProject-Typen und werden ohne Programm geprueft; hier liegt alles, was das
- * Modell anfasst, an einer Stelle und ist damit ueberschaubar.
+ * Kept separate, for the reason recorded in the notes: in stage 1 two bugs hid behind 300 green
+ * tests, because precisely this wiring was not checkable. The calculations know no GanttProject
+ * types and are checked without the program; here everything that touches the model sits in one
+ * place and is thereby surveyable.
  */
 
-/** Der Haken „Termin fest". [Fork-Aenderung] */
+/** The "Date fixed" checkbox. [fork change] */
 const val TASK_DATE_FIXED = "date_fixed"
 
 /**
- * Der Haken „Warten". [Fork-Aenderung]
+ * The "Waiting" checkbox. [fork change]
  *
- * Ein Wartevorgang kostet KEINE Arbeitszeit, bestimmt aber die Reihenfolge: die Bearbeitung beim
- * Amt, eine Lieferfrist, ein Bescheid. Ohne diese Unterscheidung belegt jede Wartezeit die Person,
- * als saesse sie die ganze Zeit daran -- im Plan sind das 12 Vorgaenge mit zusammen 1092
- * Tagen. Nachtraeglich vorgeschlagen, und der Vorschlag trifft genau den Punkt.
+ * A waiting Task costs NO working time but does determine the order: processing at an authority,
+ * a delivery period, an official decision. Without this distinction every waiting period occupies
+ * the person as though they sat at it the whole time -- in the plan that is 12 Tasks with 1092
+ * days between them. Proposed afterwards, and the proposal hits exactly the point.
  */
 const val TASK_WAIT_ONLY = "wait_only"
 
@@ -69,7 +69,7 @@ fun findOrCreateWaitOnly(manager: CustomPropertyManager): CustomPropertyDefiniti
     ?: manager.createDefinition(TASK_WAIT_ONLY, CustomPropertyClass.BOOLEAN.iD,
                                 forkText("fork.column.waitOnly"), null)
 
-/** Ist der Vorgang reine Wartezeit? */
+/** Is the Task pure waiting time? */
 fun Task.isWaitOnly(manager: CustomPropertyManager): Boolean {
   val def = manager.findEffortDefinition(TASK_WAIT_ONLY) ?: return false
   val raw = this.customValues.getValue(def) ?: return false
@@ -77,11 +77,11 @@ fun Task.isWaitOnly(manager: CustomPropertyManager): Boolean {
 }
 
 /**
- * Spaetestes Ende. [Fork-Aenderung]
+ * Latest finish. [fork change]
  *
- * Die harten Termine im Plan sind ENDtermine -- Umsatzsteuervoranmeldung zum 10., Jahresabschluss,
- * Antragsfristen. "Termin fest" haelt dagegen einen ANFANG. Beides ist noetig, und beides bedeutet
- * etwas anderes.
+ * The hard dates in the plan are END dates -- advance VAT return by the 10th, annual accounts,
+ * application deadlines. "Date fixed", by contrast, holds a START. Both are needed, and both mean
+ * something different.
  */
 const val TASK_DEADLINE = "deadline"
 
@@ -91,18 +91,18 @@ fun findOrCreateDeadline(manager: CustomPropertyManager): CustomPropertyDefiniti
                                 forkText("fork.column.deadline"), null)
 
 /**
- * Traegt die Frist ein.
+ * Enters the deadline.
  *
- * ES MUSS EIN `GregorianCalendar` SEIN, kein `Date`. Eine Spalte vom Typ Datum lehnt ein `Date`
- * ab: "value class=class java.util.Date, column class=class java.util.GregorianCalendar". Am
- * Rechner gemessen, als die Serienvorgaenge ihre Frist weitergeben sollten.
+ * IT HAS TO BE A `GregorianCalendar`, not a `Date`. A column of type date rejects a `Date`:
+ * "value class=class java.util.Date, column class=class java.util.GregorianCalendar". Measured on
+ * the machine, when the recurring Tasks were supposed to pass their deadline on.
  */
 fun Task.setDeadline(manager: CustomPropertyManager, date: LocalDate) {
   this.customValues.setValue(findOrCreateDeadline(manager),
     CalendarFactory.createGanttCalendar(date.toModelDate()))
 }
 
-/** Die eingetragene Frist, oder null. */
+/** The deadline that is entered, or null. */
 fun Task.deadlineDate(manager: CustomPropertyManager): LocalDate? {
   val def = manager.findEffortDefinition(TASK_DEADLINE) ?: return null
   return when (val raw = this.customValues.getValue(def)) {
@@ -115,15 +115,15 @@ fun Task.deadlineDate(manager: CustomPropertyManager): LocalDate? {
 }
 
 /**
- * Der urspruenglich geschaetzte Aufwand. [Fork-Aenderung]
+ * The originally estimated effort. [fork change]
  *
- * Wird GENAU EINMAL gesetzt und danach nie wieder angefasst -- das ist der ganze Sinn. Wer eine
- * Schaetzung nachbessert, vergleicht die Ist-Stunden sonst gegen die nachgebesserte Zahl und lernt
- * nichts mehr ueber seine Schaetzguete: die Abweichung verschwindet genau in dem Moment, in dem
- * man sie bemerkt.
+ * Set EXACTLY ONCE and never touched again -- that is the whole point. Anyone who improves an
+ * estimate afterwards compares the actual hours against the improved figure and learns nothing
+ * more about their estimating quality: the deviation disappears at exactly the moment it is
+ * noticed.
  *
- * Der Punkt dazu, festgehalten am 17.08.2026: dass am Ende 15 statt 9 Stunden gebraucht wurden,
- * ist die Aussage -- ueber welchen Zeitraum die Stunden verteilt waren, ist dafuer egal.
+ * The point about this, recorded on 17.08.2026: that 15 hours were needed in the end instead of
+ * 9 is the statement -- over what period the hours were spread does not matter for it.
  */
 const val TASK_EFFORT_ORIGINAL = "effort_original_hours"
 
@@ -132,7 +132,7 @@ fun findOrCreateOriginalEffort(manager: CustomPropertyManager): CustomPropertyDe
     ?: manager.createDefinition(TASK_EFFORT_ORIGINAL, CustomPropertyClass.DOUBLE.iD,
                                 forkText("fork.column.effortOriginal"), null)
 
-/** Die urspruengliche Schaetzung, oder null. */
+/** The original estimate, or null. */
 fun Task.originalEffortHours(manager: CustomPropertyManager): Double? {
   val def = manager.findEffortDefinition(TASK_EFFORT_ORIGINAL) ?: return null
   val raw = this.customValues.getValue(def) ?: return null
@@ -140,9 +140,9 @@ fun Task.originalEffortHours(manager: CustomPropertyManager): Double? {
 }
 
 /**
- * Haelt die heutige Schaetzung fest, falls noch keine festgehalten ist.
+ * Records today's estimate, if none has been recorded yet.
  *
- * @return true, wenn etwas geschrieben wurde.
+ * @return true when something was written.
  */
 fun Task.rememberOriginalEffort(manager: CustomPropertyManager): Boolean {
   if (this.originalEffortHours(manager) != null) {
@@ -159,10 +159,10 @@ fun findOrCreateDateFixed(manager: CustomPropertyManager): CustomPropertyDefinit
                                 forkText("fork.column.dateFixed"), null)
 
 /**
- * Traegt der Vorgang den Haken „Termin fest"?
+ * Does the Task carry the "Date fixed" checkbox?
  *
- * Gesucht wird ueber id ODER Name -- dieselbe Falle wie beim Aufwand: eine vom Benutzer selbst
- * angelegte Spalte traegt den getippten Text als Namen und eine erzeugte Kennung (`tpc0`).
+ * The search goes by id OR name -- the same trap as with the effort: a column created by the user
+ * carries the typed text as its name and a generated id (`tpc0`).
  */
 fun Task.isDateFixed(manager: CustomPropertyManager): Boolean {
   val def = manager.findEffortDefinition(TASK_DATE_FIXED) ?: return false
@@ -171,10 +171,10 @@ fun Task.isDateFixed(manager: CustomPropertyManager): Boolean {
 }
 
 /**
- * Vorgaenge, die in der Vergangenheit liegen und an denen noch nicht gearbeitet wurde.
+ * Tasks that lie in the past and that nobody has worked on yet.
  *
- * Sie sind der Grund fuer die Rueckfrage vor dem Verteilen: sie stehen zu lassen waere eine Luege
- * ueber den Plan, sie ungefragt zu verschieben ein Umschreiben der Vergangenheit.
+ * They are the reason for the question asked before levelling: leaving them alone would be a lie
+ * about the plan, moving them unasked would be a rewriting of the past.
  */
 fun unstartedInThePast(taskManager: TaskManager, today: LocalDate = LocalDate.now()): List<Task> {
   val hierarchy = taskManager.taskHierarchy
@@ -186,15 +186,15 @@ fun unstartedInThePast(taskManager: TaskManager, today: LocalDate = LocalDate.no
 }
 
 /**
- * Vorgaenge, die einen Aufwand tragen, deren URSPRUENGLICHER aber noch nicht festgehalten ist.
+ * Tasks that carry an effort but whose ORIGINAL effort has not been recorded yet.
  *
- * WOZU: Der Plan, an dem dieser Fork entwickelt wurde, hatte 162 Vorgaenge mit Aufwand, bevor es
- * die Spalte "Aufwand urspruenglich" ueberhaupt gab. Ohne einmaliges Nachziehen haette die
- * Auswertung "geschaetzt gegen gebraucht" fuer diese Vorgaenge NIE eine Grundlage -- sie wuerde
- * bis in alle Zukunft melden, es gebe nichts zu vergleichen.
+ * WHAT FOR: the plan this fork was developed against had 162 Tasks with an effort before the
+ * "Original effort (h)" column existed at all. Without a one-off catch-up the "estimated against
+ * needed" evaluation would NEVER have a basis for those Tasks -- it would report for all time
+ * that there is nothing to compare.
  *
- * Nachgezogen wird nur auf ausdrueckliche Nachfrage, nicht beim Oeffnen: es ist ein Schreibvorgang
- * am Plan, und der gehoert nicht in einen Ladevorgang.
+ * The catch-up happens only on explicit request, not when opening: it is a write to the plan, and
+ * that does not belong in a load.
  */
 fun tasksMissingOriginalEffort(
   taskManager: TaskManager, taskProperties: CustomPropertyManager
@@ -207,7 +207,7 @@ fun tasksMissingOriginalEffort(
   }
 }
 
-/** Arbeitstage von [from] (einschliesslich) bis [to] (ausschliesslich). */
+/** Working days from [from] (inclusive) to [to] (exclusive). */
 internal fun workingDaysBetween(
   from: LocalDate, to: LocalDate, isWorkingDay: (LocalDate) -> Boolean
 ): Int {
@@ -221,65 +221,64 @@ internal fun workingDaysBetween(
   return tage
 }
 
-/** Der Kalender des Projekts als Funktion, damit die Rechnung ihn ohne Modell benutzen kann. */
+/** The project calendar as a function, so the calculation can use it without the model. */
 fun workingDayTest(calendar: GPCalendar): (LocalDate) -> Boolean = { day ->
   calendar.getDayMask(day.toLegacyDate()) and GPCalendar.DayMask.WORKING != 0
 }
 
-// Die Umrechnung liegt in LegacyDates.kt und benutzt AUSDRUECKLICH NICHT java.time:
-// GanttProject verbiegt beim Start die Standard-Zeitzone, und java.time sieht die Verbiegung
-// nicht. Die Begruendung samt Messung steht dort.
+// The conversion lives in LegacyDates.kt and EXPLICITLY does NOT use java.time: GanttProject
+// bends the default time zone at startup, and java.time does not see the bending. The reasoning
+// together with the measurement is there.
 private fun LocalDate.toLegacyDate(): Date = this.toModelDate()
 
 private fun Date.toLocalDate(): LocalDate = this.toModelLocalDate()
 
 /**
- * Sammelt die Blattvorgaenge fuer die Verteilung.
+ * Collects the leaf Tasks for levelling.
  *
- * NUR BLAETTER, und das ist keine Vereinfachung: Gruppen leiten ihre Termine aus den Kindern ab.
- * Einer Gruppe einen Start zuzuweisen wuerde vom Modell stillschweigend verworfen -- derselbe
- * Grund, aus dem der Aufwand nur an Blaettern haengt.
+ * LEAVES ONLY, and that is not a simplification: groups derive their dates from their children.
+ * Assigning a start to a group would be discarded silently by the model -- the same reason why
+ * the effort hangs off leaves only.
  */
 fun collectLevelTasks(
   taskManager: TaskManager,
   taskProperties: CustomPropertyManager,
   resourceProperties: CustomPropertyManager,
-  /** Der heutige Tag. Alles davor ist Vergangenheit. */
+  /** Today. Everything before it is the past. */
   today: LocalDate = LocalDate.now(),
   /**
-   * Ob nicht begonnene Vorgaenge aus der Vergangenheit nach vorn geschoben werden duerfen.
+   * Whether unstarted Tasks from the past may be moved forward.
    *
-   * DIESE ANTWORT GIBT DER MENSCH, nicht der Algorithmus. Ein Vorgang ohne erfasste Zeit, der in
-   * der Vergangenheit liegt, ist liegengeblieben -- ihn stehen zu lassen waere eine Luege ueber
-   * den Plan, ihn ungefragt zu verschieben ein Umschreiben der Vergangenheit.
+   * THIS ANSWER COMES FROM THE PERSON, not from the algorithm. A Task with no recorded time that
+   * lies in the past has been left lying -- leaving it alone would be a lie about the plan,
+   * moving it unasked would be a rewriting of the past.
    */
   moveUnstartedPast: Boolean = true
 ): List<LevelTask> {
   val hierarchy = taskManager.taskHierarchy
   val isWorkingDay = workingDayTest(taskManager.calendar)
 
-  // Kennung -> Blaetter darunter. Fuer ein Blatt es selbst, fuer eine Gruppe alle ihre Blaetter.
+  // Id -> the leaves beneath it. For a leaf itself, for a group all of its leaves.
   //
-  // WARUM DAS NOETIG IST: Abhaengigkeiten zeigen in einem gewachsenen Plan auch auf GRUPPEN
-  // ("nach Abschluss von Kapitel 3"). Die Verteilung rechnet aber nur mit Blaettern -- eine
-  // Gruppe hat keinen eigenen Termin. Ohne diese Aufloesung faellt so eine Verknuepfung
-  // stillschweigend weg.
+  // WHY THIS IS NECESSARY: in a plan that has grown, dependencies also point at GROUPS ("after
+  // chapter 3 is finished"). Levelling, however, computes with leaves only -- a group has no date
+  // of its own. Without this resolution such a link silently drops out.
   //
-  // AM RECHNER GEMESSEN, bevor das hier stand: 46 von 162 Vorgaengen wurden nach dem Ausgleich vom
-  // Planer wieder nach hinten geschoben, einer um 10644 Tage. Der Ausgleich hatte die Verknuepfung
-  // nicht gesehen, der Planer setzte sie hinterher durch -- und die Kapazitaetsrechnung war damit
-  // wertlos, obwohl sie fuer sich richtig gerechnet hatte.
+  // MEASURED ON THE MACHINE, before this stood here: 46 of 162 Tasks were pushed back again by
+  // the scheduler after levelling, one of them by 10644 days. Levelling had not seen the link,
+  // the scheduler enforced it afterwards -- and the capacity calculation was thereby worthless,
+  // although it had computed correctly in itself.
   val leavesUnder = mutableMapOf<String, List<String>>()
   fun collectLeaves(task: Task): List<String> {
     val nested = hierarchy.getNestedTasks(task)
-    // MEILENSTEINE ZAEHLEN MIT, obwohl sie keine Arbeit sind.
+    // MILESTONES COUNT, although they are not work.
     //
-    // AM RECHNER GEMESSEN, als sie hier ausgeschlossen waren: 46 von 162 Vorgaengen wurden nach
-    // dem Ausgleich vom Planer wieder verschoben, einer von 2027 nach 2056. Seine Vorgaenger waren
-    // zwei Meilensteine -- die Verknuepfung fehlte in der Rechnung und wurde hinterher durchgesetzt.
-    // 23 der 28 Meilensteine im Plan haben Nachfolger.
+    // MEASURED ON THE MACHINE, when they were excluded here: 46 of 162 Tasks were moved again by
+    // the scheduler after levelling, one of them from 2027 to 2056. Its predecessors were two
+    // milestones -- the link was missing from the calculation and was enforced afterwards.
+    // 23 of the 28 milestones in the plan have successors.
     //
-    // Sie kommen mit Auslastung 0 herein: sie ordnen, ohne Kapazitaet zu kosten.
+    // They come in with utilisation 0: they order without costing capacity.
     val leaves = if (nested.isEmpty()) {
       listOf(task.taskID.toString())
     } else {
@@ -306,17 +305,17 @@ fun collectLevelTasks(
 }
 
 /**
- * Was am Stundenplan der Beteiligten nicht stimmt.
+ * What is wrong with the hours schedule of the people involved.
  *
- * WOZU EIN EIGENER DURCHGANG: die Rechnung selbst faellt bei einem fehlerhaften Stundenplan auf
- * die feste Stundenzahl zurueck -- sie kann mitten im Durchlauf keinen Dialog aufmachen. Genau
- * dieser Rueckfall ist aber die gefaehrliche Stelle: der Plan saehe richtig aus und waere es nicht.
- * Deshalb wird VOR der Arbeit gefragt, und der Mensch entscheidet.
+ * WHY A PASS OF ITS OWN: on a faulty hours schedule the calculation itself falls back to the
+ * fixed number of hours -- it cannot open a dialog in the middle of a run. But that very fallback
+ * is the dangerous spot: the plan would look right and would not be. So the question is asked
+ * BEFORE the work, and the person decides.
  */
 data class CapacityProblems(
-  /** Lesefehler im Text, je Person einmal. */
+  /** Parse errors in the text, once per person. */
   val errors: Map<String, List<String>>,
-  /** Vorgaenge, die mit der eingetragenen Tagesleistung nie fertig werden (Abschnitt mit 0 Std.). */
+  /** Tasks that never finish with the daily rate entered (a section with 0 h). */
   val unreachable: List<String>
 ) {
   val hasErrors: Boolean get() = errors.isNotEmpty()
@@ -352,11 +351,11 @@ fun capacityProblems(
 }
 
 /**
- * Die Dauer eines Vorgangs, wenn er an einem bestimmten Tag beginnt.
+ * The duration of a Task when it starts on a particular day.
  *
- * Ohne zeitabhaengige Tagesleistung ist das immer dieselbe Zahl, und die Verteilung verhaelt sich
- * wie zuvor. Mit Abschnitten haengt die Dauer vom Starttag ab -- deshalb eine Funktion und keine
- * Zahl im [LevelTask].
+ * Without a time-dependent daily rate this is always the same number, and levelling behaves as
+ * before. With sections the duration depends on the starting day -- hence a function and not a
+ * number in [LevelTask].
  */
 fun durationAtStart(
   taskManager: TaskManager,
@@ -382,40 +381,38 @@ private fun Task.toLevelTask(
   leavesUnder: Map<String, List<String>>, today: LocalDate, isWorkingDay: (LocalDate) -> Boolean,
   moveUnstartedPast: Boolean
 ): LevelTask {
-  // Die Auslastung aus den Zuordnungen. Ohne Zuordnung gilt 100 %: der Vorgang belegt den Tag,
-  // auch wenn niemand eingetragen ist. Ihn als kostenlos zu behandeln waere die gefaehrlichere
-  // Annahme -- er verschwaende Kapazitaet, die es nicht gibt.
-  // Meilensteine und Wartezeiten kosten keine Arbeitszeit. Alles andere belegt den Tag voll, auch
-  // ohne Zuordnung: einen unzugeordneten Vorgang als kostenlos zu behandeln waere die
-  // gefaehrlichere Annahme -- er verbraucht Zeit, die der Plan dann nicht kennt.
+  // The utilisation from the assignments. Without an assignment 100 % applies: the Task occupies
+  // the day even when nobody is entered. Treating it as free would be the more dangerous
+  // assumption -- it would waste capacity that does not exist.
+  // Milestones and waiting periods cost no working time. Everything else occupies the day fully,
+  // even without an assignment: treating an unassigned Task as free would be the more dangerous
+  // assumption -- it consumes time that the plan then does not know about.
   val load = when {
     this.isMilestone || this.isWaitOnly(taskProperties) -> 0
     else -> this.assignments.sumOf { it.load.toDouble() }.toInt().let { if (it <= 0) 100 else it }
   }
-  // DREI FAELLE, und sie sind nicht dasselbe. Die Regel dazu, festgelegt am 17.08.2026:
+  // THREE CASES, and they are not the same thing. The rule for it, fixed on 17.08.2026:
   //
-  //   Ein Vorgang, mit dem noch gar nicht begonnen wurde, auf dem also keine Zeit liegt, muss
-  //   aufgeschoben werden -- dafuer braucht es aber vorher die Frage, ob das der Fall ist.
-  //   Was auf keinen Fall geht: etwas zu veraendern, das schon abgeschlossen ist. Und steht ab
-  //   heute doppelt so viel Zeit zur Verfuegung, werden auch die bereits angefangenen Vorgaenge
-  //   schneller fertig.
+  //   A Task that has not been begun at all, that therefore carries no time, has to be deferred
+  //   -- but that requires the question beforehand whether this is the case. What must not happen
+  //   under any circumstances: changing something that is already finished. And if twice as much
+  //   time is available from today on, the Tasks already begun finish sooner as well.
   //
-  // 1. ABGESCHLOSSEN (100 %): unantastbar. Weder Termin noch Dauer werden angefasst -- auch die
-  //    Dauer nicht, denn sie ist gemessene Vergangenheit und keine Vorhersage mehr.
-  // 2. ANGEFANGEN (0 < % < 100): der ANFANG steht, er ist Vergangenheit. Der REST wird mit der
-  //    heutigen Tagesleistung gerechnet: mehr Stunden am Tag heissen frueher fertig.
-  // 3. NICHT BEGONNEN (0 %): darf verschoben werden. Liegt so ein Vorgang in der Vergangenheit,
-  //    FRAGT die Aktion vorher -- ungefragt die Vergangenheit umzuschreiben waere genau das, was
-  //    nicht passieren darf.
+  // 1. FINISHED (100 %): untouchable. Neither date nor duration is touched -- not the duration
+  //    either, because it is measured past and no longer a forecast.
+  // 2. BEGUN (0 < % < 100): the START stands, it is the past. The REMAINDER is computed with
+  //    today's daily rate: more hours per day means finished earlier.
+  // 3. NOT BEGUN (0 %): may be moved. If such a Task lies in the past, the action ASKS
+  //    beforehand -- rewriting the past unasked would be exactly what must not happen.
   val startTag = this.start.time.toLocalDate()
   val fertig = this.completionPercentage >= 100
   val angefangen = this.completionPercentage > 0
   val available = this.availableHoursPerDay(resourceProperties)
   val effort = this.effortHours(taskProperties)
   val duration = when {
-    // Fall 1: gemessene Vergangenheit, keine Rechnung.
+    // Case 1: measured past, no calculation.
     fertig -> this.duration.length.coerceAtLeast(1)
-    // Fall 2: verstrichener Teil plus der Rest zur heutigen Tagesleistung.
+    // Case 2: the elapsed part plus the remainder at today's daily rate.
     angefangen && effort != null && available > 0.0 -> {
       val restAnteil = (100 - this.completionPercentage).coerceIn(0, 100) / 100.0
       val verstrichen = if (startTag < today) workingDaysBetween(startTag, today, isWorkingDay) else 0
@@ -424,8 +421,8 @@ private fun Task.toLevelTask(
     effort != null && available > 0.0 -> durationFromEffort(effort, available)
     else -> this.duration.length.coerceAtLeast(1)
   }
-  // Fest steht der Termin bei 1 und 2; bei 3 nur, wenn der Haken "Termin fest" gesetzt ist --
-  // oder wenn der Mensch entschieden hat, liegengebliebene Arbeit NICHT nach vorn zu schieben.
+  // The date is fixed in cases 1 and 2; in case 3 only when the "Date fixed" checkbox is set --
+  // or when the person has decided NOT to move work that was left lying forward.
   val liegengeblieben = !angefangen && startTag < today
   val bleibtLiegen = liegengeblieben && !moveUnstartedPast
   val fixed = if (this.isDateFixed(taskProperties) || angefangen || bleibtLiegen) startTag else null
@@ -437,11 +434,11 @@ private fun Task.toLevelTask(
   return LevelTask(
     id = this.taskID.toString(),
     orderInPlan = order,
-    // Priority.ordinal, NICHT der gespeicherte Wert: der ist nicht nach Wichtigkeit sortiert.
+    // Priority.ordinal, NOT the stored value: that one is not ordered by importance.
     priority = this.priority.ordinal,
     durationDays = duration,
     loadPercent = load,
-    // Eine Abhaengigkeit auf eine Gruppe heisst: nach ALLEN Blaettern darunter.
+    // A dependency on a group means: after ALL the leaves beneath it.
     predecessors = this.dependenciesAsDependant.toArray()
       .mapNotNull { it.dependee?.taskID?.toString() }
       .flatMap { leavesUnder[it] ?: listOf(it) }
@@ -450,18 +447,18 @@ private fun Task.toLevelTask(
     earliestStart = earliest,
     frozen = angefangen || bleibtLiegen,
     deadline = this.deadlineDate(taskProperties),
-    // Wessen Kapazitaet belegt wird. Meilensteine und Wartevorgaenge belegen mit 0 % ohnehin
-    // nichts; sie bekommen trotzdem ihre Zuordnung mit, damit die Auswertung stimmt.
+    // Whose capacity is occupied. Milestones and waiting Tasks occupy nothing anyway at 0 %;
+    // they still carry their assignment along, so that the evaluation is right.
     resourceIds = this.assignments.mapNotNull { it.resource?.id?.toString() }.distinct()
   )
 }
 
 /**
- * Schreibt die verteilten Termine, als EIN Rueckgaengig-Schritt.
+ * Writes the levelled dates, as ONE undo step.
  *
- * @return die Zahl der tatsaechlich verschobenen Vorgaenge. Nichts zu verschieben heisst: kein
- * Eintrag in der Rueckgaengig-Liste. Ein leerer Schritt, der aussieht als waere etwas passiert,
- * ist schlimmer als keiner -- dieselbe Regel wie beim Toggl-Import.
+ * @return the number of Tasks actually moved. Nothing to move means: no entry in the undo list.
+ * An empty step that looks as though something had happened is worse than none -- the same rule
+ * as in the Toggl import.
  */
 fun applyLevellingAsSingleEdit(
   starts: Map<String, LocalDate>,
@@ -469,13 +466,12 @@ fun applyLevellingAsSingleEdit(
   undoManager: GPUndoManager,
   editName: String,
   /**
-   * Die Dauer, mit der die Verteilung gerechnet hat. Fehlt ein Eintrag, bleibt die bisherige
-   * Dauer stehen.
+   * The duration levelling computed with. If an entry is missing, the existing duration stays.
    *
-   * WARUM DAS NOETIG IST: bei zeitabhaengiger Tagesleistung braucht derselbe Aufwand in einem
-   * Abschnitt mit vier Stunden mehr Tage als in einem mit acht. Wer beim Zurueckschreiben die
-   * ALTE Dauer nimmt, schreibt ein Ende, das zur gerechneten Belegung nicht passt -- und die
-   * Verteilung waere fuer die betroffenen Tage wertlos.
+   * WHY THIS IS NECESSARY: with a time-dependent daily rate the same effort needs more days in a
+   * section of four hours than in one of eight. Taking the OLD duration when writing back writes
+   * an end that does not match the computed occupancy -- and levelling would be worthless for the
+   * days affected.
    */
   durations: Map<String, Int> = emptyMap()
 ): Int {
@@ -491,12 +487,12 @@ fun applyLevellingAsSingleEdit(
     return 0
   }
   undoManager.undoableEdit(editName) {
-    // WARUM DER PLANER WAEHRENDDESSEN AUS IST: jedes commit() stoesst ihn sonst erneut an, und er
-    // laeuft ueber den ganzen Abhaengigkeitsgraphen. Bei 162 Vorgaengen wird daraus quadratischer
-    // Aufwand. AM RECHNER GEMESSEN, bevor das hier stand: nach 767 Sekunden Rechenzeit und 2 GB
-    // Speicher war das Programm immer noch nicht fertig und musste abgebrochen werden.
+    // WHY THE SCHEDULER IS OFF MEANWHILE: otherwise every commit() triggers it again, and it
+    // runs over the whole dependency graph. With 162 Tasks that turns into quadratic effort.
+    // MEASURED ON THE MACHINE, before this stood here: after 767 seconds of computing time and
+    // 2 GB of memory the program was still not finished and had to be aborted.
     //
-    // Dasselbe Muster benutzt das Original bei Sammeloperationen, siehe TaskActions.kt:207.
+    // The original uses the same pattern for bulk operations, see TaskActions.kt:207.
     val scheduler = taskManager.algorithmCollection.scheduler
     val wasEnabled = scheduler.isEnabled
     scheduler.isEnabled = false
@@ -505,49 +501,48 @@ fun applyLevellingAsSingleEdit(
         val mutator = task.createMutator()
         val calendar = CalendarFactory.createGanttCalendar(newStart.toLegacyDate())
         mutator.setStart(calendar)
-        // DAS ENDE MUSS MITGESETZT WERDEN, und zwar das Ende, nicht die Dauer.
+        // THE END HAS TO BE SET AS WELL, and it has to be the end, not the duration.
         //
-        // setStart allein verschiebt nur den Anfang und laesst das Ende stehen -- GanttProject
-        // DEHNT den Vorgang dadurch. AM RECHNER GEMESSEN: die fuenf "Jahresblock"-Vorgaenge hatten
-        // davor 3 Tage Dauer und danach 25, 286, 545, 803 und 1060. Sie belegten Jahre statt Tage,
-        // und der Ausgleich lieferte 1204 ueberlastete Tage mit Spitze 600 % -- genau das, was er
-        // verhindern soll. Der Fehler sah aus wie ein Rechenfehler und lag in der Verdrahtung.
+        // setStart alone moves only the beginning and leaves the end standing -- GanttProject
+        // STRETCHES the Task by that. MEASURED ON THE MACHINE: the five "Jahresblock" Tasks had a
+        // duration of 3 days before and 25, 286, 545, 803 and 1060 afterwards. They occupied
+        // years instead of days, and levelling produced 1204 overloaded days with a peak of
+        // 600 % -- exactly what it is supposed to prevent. The bug looked like an arithmetic
+        // error and lay in the wiring.
         //
-        // setDuration() HILFT HIER NICHT, auch das ist gemessen: MutatorImpl.commit() wendet die
-        // Dauer nur ueber `myDurationChange.ifChanged` an. Die Dauer soll aber gleich BLEIBEN --
-        // der Aufruf ist damit keine Aenderung und wird uebersprungen. Das Ende ist der Wert, der
-        // sich tatsaechlich aendert.
-        // Meilensteine haben keine Dauer -- ein Ende zu setzen wuerde aus ihnen einen Vorgang
-        // machen. Sie werden nur verschoben.
+        // setDuration() DOES NOT HELP HERE, and that too is measured: MutatorImpl.commit()
+        // applies the duration only through `myDurationChange.ifChanged`. But the duration is
+        // meant to STAY the same -- the call is therefore not a change and gets skipped. The end
+        // is the value that actually changes.
+        // Milestones have no duration -- setting an end would turn them into a Task. They are
+        // only moved.
         if (!task.isMilestone) {
           mutator.setEnd(CalendarFactory.createGanttCalendar(
             endAfterWorkingDays(newStart, keepDays, isWorkingDay).toLegacyDate()))
         }
-        // DER START ALLEIN UEBERLEBT DEN PLANER NICHT. SchedulerImpl legt jeden Vorgang so frueh,
-        // wie die Abhaengigkeiten es zulassen, und laeuft bei jedem Oeffnen und jeder Aenderung.
-        // Ein verteilter Termin, der nur als Start gesetzt ist, wird beim naechsten Lauf
-        // zurueckgezogen.
+        // THE START ALONE DOES NOT SURVIVE THE SCHEDULER. SchedulerImpl places every Task as
+        // early as the dependencies allow, and runs on every open and every change. A levelled
+        // date that is set only as a start is pulled back on the next run.
         //
-        // AM RECHNER GEMESSEN, bevor diese Zeile hier stand: nach dem Ausgleich blieben 1204 Tage
-        // ueberlastet, Spitze 600 % -- der Ausgleich hatte gerechnet und der Planer es teilweise
-        // wieder eingerissen.
+        // MEASURED ON THE MACHINE, before this line stood here: after levelling 1204 days
+        // remained overloaded, peak 600 % -- levelling had computed and the scheduler had torn
+        // part of it down again.
         //
-        // Die untere Schranke ("fruehester Beginn") ist das einzige, was er respektiert. Sie
-        // verhindert nur das Vorziehen: waechst spaeter eine Dauer, rutscht der Vorgang weiterhin
-        // nach hinten.
+        // The lower bound ("earliest begin") is the only thing it respects. It prevents only the
+        // pulling forward: if a duration grows later, the Task still slides backwards.
         mutator.setThird(calendar, TaskImpl.EARLIESTBEGIN)
         mutator.commit()
       }
     } finally {
       scheduler.isEnabled = wasEnabled
     }
-    // Einmal am Ende: die Gruppen muessen ihre abgeleiteten Termine nachziehen.
+    // Once at the end: the groups have to catch up their derived dates.
     scheduler.run()
   }
   return moves.size
 }
 
-/** Sammelt die Vorgaenge fuer die Ableitung von Aufwand und Zuordnung. */
+/** Collects the Tasks for deriving effort and assignment. */
 fun collectBackfillTasks(
   taskManager: TaskManager, taskProperties: CustomPropertyManager
 ): List<BackfillTask> {
@@ -571,9 +566,9 @@ fun collectBackfillTasks(
 }
 
 /**
- * Schreibt Aufwand und Zuordnungen, als EIN Rueckgaengig-Schritt.
+ * Writes effort and assignments, as ONE undo step.
  *
- * @return die Zahl der geaenderten Vorgaenge.
+ * @return the number of Tasks changed.
  */
 fun applyBackfillAsSingleEdit(
   proposal: BackfillProposal,
@@ -584,26 +579,26 @@ fun applyBackfillAsSingleEdit(
   undoManager: GPUndoManager,
   editName: String
 ): Int {
-  // KEIN frueher Ausstieg bei changeCount == 0: es kann nichts abzuleiten geben und trotzdem
-  // etwas zu tun sein, naemlich den urspruenglichen Aufwand nachzuziehen. AM RECHNER GEMESSEN:
-  // im Plan war genau das der Fall -- der Dialog sagte "bei 162 Vorgaengen wird der
-  // heutige Aufwand als urspruenglicher festgehalten", geschrieben wurde nichts, weil die
-  // Funktion vorher zurueckkam.
+  // NO early exit at changeCount == 0: there can be nothing to derive and still something to do,
+  // namely catching up the original effort. MEASURED ON THE MACHINE: in the plan that was exactly
+  // the case -- the dialog said "bei 162 Vorgaengen wird der heutige Aufwand als urspruenglicher
+  // festgehalten" (for 162 Tasks today's effort is recorded as the original one), nothing was
+  // written, because the function had returned beforehand.
   if (proposal.changeCount == 0 &&
     tasksMissingOriginalEffort(taskManager, taskProperties).isEmpty()) {
     return 0
   }
   val effortDef = EffortDrivenProperties.findOrCreateTaskEffort(taskProperties)
-  // Ohne diesen Aufruf existiert die Definition ohne Datenbankspalte, und jedes Schreiben
-  // scheitert. In Sitzung 3 genau so passiert. Uebergeben wird der MANAGER, nicht die einzelne
-  // Definition -- die Datenbank gleicht alle Spalten ab.
+  // Without this call the definition exists without a database column, and every write fails.
+  // Happened exactly like that in session 3. What is passed is the MANAGER, not the single
+  // definition -- the database reconciles all columns.
   projectDatabase.onCustomColumnChange(taskProperties)
 
   var touched = 0
   undoManager.undoableEdit(editName) {
-    // Wie bei der Verteilung: waehrend des Schreibens ruht der Planer. Jede einzelne Zuordnung
-    // wuerde sonst die aufwandsgetriebene Rechnung UND den Planer ueber den ganzen Graphen
-    // anstossen -- bei 162 Vorgaengen dauert das laenger als jede Geduld.
+    // As with levelling: the scheduler rests while writing. Otherwise every single assignment
+    // would trigger the effort-driven calculation AND the scheduler over the whole graph -- with
+    // 162 Tasks that takes longer than any patience.
     val scheduler = taskManager.algorithmCollection.scheduler
     val wasEnabled = scheduler.isEnabled
     scheduler.isEnabled = false
@@ -611,15 +606,15 @@ fun applyBackfillAsSingleEdit(
     proposal.effortHours.forEach { (id, hours) ->
       taskManager.getTask(id.toIntOrNull() ?: return@forEach)?.let { task ->
         task.customValues.setValue(effortDef, hours)
-        // Die Schaetzung zugleich als URSPRUENGLICHE festhalten. Nur beim ersten Mal -- danach
-        // ist sie der feste Vergleichswert fuer die Ist-Stunden.
+        // Record the estimate as the ORIGINAL one at the same time. Only the first time --
+        // after that it is the fixed reference value for the actual hours.
         task.rememberOriginalEffort(taskProperties)
         touched++
       }
     }
-    // Den urspruenglichen Aufwand fuer ALLE Vorgaenge festhalten, die schon einen tragen -- nicht
-    // nur fuer die gerade befuellten. Sonst bliebe ein Plan, der vor dieser Spalte entstanden ist,
-    // fuer die Auswertung fuer immer unbrauchbar.
+    // Record the original effort for ALL Tasks that already carry one -- not only for those
+    // just filled in. Otherwise a plan that came into being before this column would stay
+    // unusable for the evaluation for ever.
     tasksMissingOriginalEffort(taskManager, taskProperties).forEach { task ->
       if (task.rememberOriginalEffort(taskProperties)) {
         touched++
@@ -642,10 +637,10 @@ fun applyBackfillAsSingleEdit(
 }
 
 /**
- * Das Ende eines Vorgangs, der an [start] beginnt und [days] Arbeitstage dauert.
+ * The end of a Task that begins on [start] and lasts [days] working days.
  *
- * GanttProject fuehrt das Ende AUSSCHLIESSLICH: der erste Tag danach. Dieselbe Rechnung wie in der
- * Verteilung, damit beide Seiten dieselben Tage belegen.
+ * GanttProject keeps the end EXCLUSIVE: the first day after. The same calculation as in
+ * levelling, so that both sides occupy the same days.
  */
 private fun endAfterWorkingDays(
   start: LocalDate, days: Int, isWorkingDay: (LocalDate) -> Boolean): LocalDate {
@@ -671,11 +666,11 @@ private fun endAfterWorkingDays(
 }
 
 /**
- * Der Auslastungsgrad einer Person in Prozent. [Fork-Aenderung]
+ * The utilisation of a person in per cent. [fork change]
  *
- * Ohne Eintrag 100. Werte ausserhalb 1..100 werden auf 100 zurueckgesetzt statt zu gelten: ein
- * Vertipper wuerde die Verteilung sonst still unbrauchbar machen -- bei 5 % passt nichts mehr
- * zusammen, und der Plan reichte ins naechste Jahrhundert.
+ * 100 when nothing is entered. Values outside 1..100 are reset to 100 instead of applying: a typo
+ * would otherwise make levelling quietly unusable -- at 5 % nothing fits together any more, and
+ * the plan reached into the next century.
  */
 fun HumanResource.utilisationPercent(manager: CustomPropertyManager): Int {
   val def = manager.findEffortDefinition(RESOURCE_UTILISATION) ?: return 100
@@ -684,7 +679,7 @@ fun HumanResource.utilisationPercent(manager: CustomPropertyManager): Int {
   return if (wert in 1..100) wert else 100
 }
 
-/** Auslastungsgrad, als Eigenschaft der Person. [Fork-Aenderung] */
+/** Utilisation, as a property of the person. [fork change] */
 const val RESOURCE_UTILISATION = "utilisation_percent"
 
 fun findOrCreateUtilisation(manager: CustomPropertyManager): CustomPropertyDefinition =
@@ -692,6 +687,6 @@ fun findOrCreateUtilisation(manager: CustomPropertyManager): CustomPropertyDefin
     ?: manager.createDefinition(RESOURCE_UTILISATION, CustomPropertyClass.INTEGER.iD,
                                 forkText("fork.column.utilisation"), null)
 
-/** Die Tagesleistung der Person, auf die sich die Ableitung stuetzt. */
+/** The daily rate of the person that the derivation relies on. */
 fun HumanResource.dailyHours(resourceProperties: CustomPropertyManager): Double =
   this.hoursPerDay(resourceProperties)
