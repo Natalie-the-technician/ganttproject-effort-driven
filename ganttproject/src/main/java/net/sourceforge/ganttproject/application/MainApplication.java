@@ -100,20 +100,20 @@ public class MainApplication implements IPlatformRunnable {
     }
 
 
-    // [Fork-Aenderung] Beendet die Anwendung wirklich.
+    // [fork change] Actually terminates the application.
     //
-    // FEHLER IM ORIGINAL, am Bildschirm nachgewiesen: "Projekt -> Beenden" und dann "Nicht
-    // speichern" schloss das Programm nicht, das Hauptfenster blieb offen (dreimal reproduziert).
+    // BUG IN THE ORIGINAL, demonstrated on screen: "Projekt -> Beenden" and then "Nicht
+    // speichern" did not close the program, the main window stayed open (reproduced three times).
     //
-    // Ursache: Dieser Rueckruf setzte nur myLock und rief notify(). Der Block, der darauf WARTET,
-    // ist weiter unten auskommentiert (Upstream-Commit "commented out or removed usages of the
-    // main application window"). Also wartet niemand, launch() kehrt sofort zurueck, und das
-    // System.exit(0) in Zeile 122 laeuft zu einem Zeitpunkt, zu dem myLock noch false ist.
-    // Ergebnis: quitApplication() macht alles richtig -- Optionen speichern, Projekt schliessen --
-    // und niemand beendet den Prozess.
+    // Cause: this callback only set myLock and called notify(). The block that WAITS for it is
+    // commented out further down (upstream commit "commented out or removed usages of the
+    // main application window"). So nobody waits, launch() returns immediately, and the
+    // System.exit(0) on line 122 runs at a point at which myLock is still false.
+    // Result: quitApplication() does everything right -- save options, close project -- and
+    // nobody ends the process.
     //
-    // withSystemExit ist NICHT immer true: der Aktualisierer benutzt false, um neu zu starten
-    // statt zu beenden. Deshalb die Bedingung.
+    // withSystemExit is NOT always true: the updater uses false in order to restart rather
+    // than to quit. Hence the condition.
     Consumer<Boolean> onApplicationQuit = withSystemExit -> {
       synchronized(myLock) {
         myLock.set(withSystemExit);

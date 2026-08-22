@@ -71,11 +71,11 @@ data class OptionPageItem(
 }
 
 /**
- * [Fork-Aenderung] Stoesst das Anordnen und Zeichnen des eingebetteten Swing-Inhalts an.
+ * [fork change] Triggers the layout and painting of the embedded Swing content.
  *
- * Ein [SwingNode] rechnet die Groesse seines Inhalts nicht selbst nach, wenn er nach dem Aufbau
- * der Oberflaeche gesetzt wird. Ohne diesen Anstoss bleibt die Seite leer, bis irgendetwas anderes
- * eine Groessenaenderung ausloest -- beim Maximieren des Fensters erschien dann alles auf einmal.
+ * A [SwingNode] does not recompute the size of its content by itself when that content is set
+ * after the user interface has been built. Without this nudge the page stays empty until
+ * something else triggers a resize -- on maximising the window everything then appeared at once.
  */
 private fun refreshSwingContent(node: javafx.scene.Node) {
   (node as? SwingNode)?.content?.let { swingContent ->
@@ -99,23 +99,23 @@ class OptionPageUi(editItem: ObservableObject<OptionPageItem?>, var resize: ()->
             FXUtil.runLater(500) {
               resize()
               it.fxNode.requestFocus()
-              // [Fork-Aenderung] Den eingebetteten Swing-Inhalt zum Zeichnen anstossen.
+              // [fork change] Nudge the embedded Swing content into painting.
               //
-              // FEHLER: resize() wird gleich unten nach der ersten Seite stillgelegt. Jede weitere
-              // Seite ist ein SwingNode, dessen Inhalt ohne einen Anstoss weder neu angeordnet
-              // noch gezeichnet wird: die Seite sah leer aus.
+              // BUG: resize() is disabled just below after the first page. Every further page is
+              // a SwingNode whose content is neither laid out again nor painted without a nudge:
+              // the page looked empty.
               //
-              // Am Bildschirm nachgewiesen, und die Asymmetrie war der Hinweis: "Allgemein" (die
-              // erste Seite) war vollstaendig, WebDAV zeigte nur den obersten Knopf, die
-              // unangetastete FTP-Seite ein einzelnes Feld statt vier. Das Protokoll meldete
-              // dabei fuer WebDAV JSplitPane 581x462 und Serverdetails 194x214, alle auf
-              // sichtbar -- die Teile waren also da und richtig bemessen, nur ungezeichnet.
-              // Ein Vergroessern des Fensters brachte alles auf einmal zum Vorschein.
+              // Demonstrated on screen, and the asymmetry was the clue: "Allgemein" (the first
+              // page) was complete, WebDAV showed only the topmost button, the untouched FTP
+              // page a single field instead of four. The log reported for WebDAV a JSplitPane
+              // 581x462 and server details 194x214, all set to visible -- so the parts were
+              // there and correctly sized, merely unpainted.
+              // Enlarging the window brought everything into view at once.
               //
-              // BEWUSST NICHT resize() dauerhaft laufen lassen: das behebt es zwar auch, laesst
-              // den Dialog aber bei jedem Seitenwechsel wachsen, bis "Uebernehmen" ueber den
-              // Bildschirmrand hinausragt. Am Bildschirm gesehen. Ein Anstoss zum Neuzeichnen
-              // reicht und aendert die Fenstergroesse nicht.
+              // DELIBERATELY NOT letting resize() run permanently: that fixes it too, but makes
+              // the dialog grow on every page change until "Uebernehmen" sticks out past the
+              // edge of the screen. Seen on screen. A nudge to repaint is enough and does not
+              // change the window size.
               refreshSwingContent(it.fxNode)
               if (borderPane.width != 0.0) {
                 resize = {}
