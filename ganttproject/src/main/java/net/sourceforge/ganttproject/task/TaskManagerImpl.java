@@ -237,8 +237,8 @@ public class TaskManagerImpl implements TaskManager {
     };
     ChartBoundsAlgorithm alg5 = new ChartBoundsAlgorithm();
     var algCriticalPath = new CriticalPathAlgorithmImpl(this, getCalendar());
-    // [Fork-Aenderung] ---- Anfang: dieser ganze Block ist neu, im Original nicht vorhanden ----
-    // Baut den Algorithmus, der die Dauer aus Aufwand und Tagesverfuegbarkeit rechnet.
+    // [fork change] ---- start: this whole block is new, not present in the original ----
+    // Builds the algorithm that computes the duration from effort and daily availability.
     // The resource custom properties are resolved on every run: the resource manager may be absent
     // (config.getResourceManager() is null in tests) and is wired up after the task manager.
     EffortDrivenDurationAlgorithm algEffortDriven = new EffortDrivenDurationAlgorithm(
@@ -252,8 +252,8 @@ public class TaskManagerImpl implements TaskManager {
         return TaskManagerImpl.this.getTaskHierarchy();
       }
     };
-    // [Fork-Aenderung] ---- Ende des neuen Blocks ----
-    // [Fork-Aenderung] Im Original ohne "algEffortDriven": das Argument ist neu.
+    // [fork change] ---- end of the new block ----
+    // [fork change] In the original without "algEffortDriven": the argument is new.
     myAlgorithmCollection = new AlgorithmCollection(this, alg1, alg2, alg3, alg4, alg5, algCriticalPath, algEffortDriven, myScheduler);
     addTaskListener(new TaskListenerAdapter() {
       @Override

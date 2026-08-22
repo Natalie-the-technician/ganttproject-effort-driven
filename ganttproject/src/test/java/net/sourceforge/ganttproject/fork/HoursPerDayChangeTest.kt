@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -31,14 +31,14 @@ import java.text.DateFormat
 import java.util.Locale
 
 /**
- * Aendert sich die Dauer, wenn sich die Tagesleistung aendert?
+ * Does the duration change when the daily rate changes?
  *
- * WOZU: das ist die eigentliche Frage an den Umbau. Die Stundenzahl pro Tag steigt, sobald
- * der Hauptberuf reduziert wird -- und dann soll der Plan sich neu rechnen, ohne dass 162
- * Dauern von Hand angefasst werden. Der Ausloeser ([EffortDrivenTrigger]) war gebaut und verdrahtet,
- * aber durch keinen Test belegt. "Verdrahtet" und "wirkt" sind nicht dasselbe -- diese Sitzung hat
- * dafuer schon drei Gegenbeispiele gefunden (tote Menuepunkte, eine Einstellungsseite ohne
- * Speicherung, eine Sperre ohne If-Match).
+ * WHAT FOR: that is the real question put to the rebuild. The number of hours per day rises as
+ * soon as the main job is reduced -- and then the plan should recompute itself without 162
+ * durations being touched by hand. The trigger ([EffortDrivenTrigger]) had been built and wired
+ * up, but was not backed by any test. "Wired up" and "takes effect" are not the same thing --
+ * this session has already found three counter-examples for that (dead menu items, a settings
+ * page without saving, a lock without If-Match).
  */
 class HoursPerDayChangeTest {
 
@@ -63,14 +63,14 @@ class HoursPerDayChangeTest {
 
   @Test
   fun `mehr stunden pro tag verkuerzen die dauer`() {
-    // Der Ressourcenverwalter MUSS der des TaskManagers sein: der Algorithmus holt die
-    // Eigenschaften ueber `config.getResourceManager()`. Mit einem eigenen Verwalter griff die
-    // Rechnung auf den Vorgabewert 8 Std./Tag zurueck -- der Test war dann gruen, ohne etwas zu
-    // pruefen. Beim ersten Lauf ist genau das passiert (5 statt 10 Tage im Aufbau).
+    // The resource manager MUST be the TaskManager's own: the algorithm fetches the properties
+    // through `config.getResourceManager()`. With a manager of its own the calculation fell back
+    // to the default of 8 h/day -- the test was then green without checking anything. That is
+    // exactly what happened on the first run (5 instead of 10 days in the setup).
     val builder = TestSetupHelper.newTaskManagerBuilder()
     val taskManager = builder.build()
     val resourceManager = builder.resourceManager
-    // Genau die Verdrahtung aus GanttProjectImpl:109.
+    // Exactly the wiring from GanttProjectImpl:109.
     resourceManager.addView(EffortDrivenTrigger(taskManager))
 
     val resource = resourceManager.create("Natalie", 0)
@@ -78,13 +78,13 @@ class HoursPerDayChangeTest {
 
     val task = taskManager.newTaskBuilder().withName("Firmware").build()
     task.assignmentCollection.addAssignment(resource).load = 100f
-    // 40 Stunden Aufwand bei 4 Std./Tag: zehn Tage.
+    // 40 hours of effort at 4 h/day: ten days.
     val effortDefinition = EffortDrivenProperties.findOrCreateTaskEffort(taskManager.customPropertyManager)
     task.customValues.setValue(effortDefinition, 40.0)
     taskManager.algorithmCollection.effortDrivenDurationAlgorithm.run()
     assertEquals(10, task.duration.length, "Aufbau: 40 Std. bei 4 Std./Tag")
 
-    // Hauptberuf reduziert: acht Stunden am Tag. NIEMAND fasst die Dauer an.
+    // Main job reduced: eight hours a day. NOBODY touches the duration.
     setHoursPerDay(resourceManager.customPropertyManager, resource, 8.0)
 
     assertEquals(5, task.duration.length,

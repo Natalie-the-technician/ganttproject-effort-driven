@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -277,7 +277,7 @@ class EffortPropertyStorageTest {
     assertEquals(30.0, readEffortColumn())
   }
 
-  // [Fork-Aenderung] ---- Anfang: Ist-Stunden (Schritt 1 der Uebergabe Zeiterfassung) ----
+  // [fork change] ---- start: actual hours (step 1 of the time-tracking handover) ----
 
   /**
    * The recorded actual effort walks into exactly the same trap as the planned effort: its
@@ -397,7 +397,7 @@ class EffortPropertyStorageTest {
     assertEquals(12.5, readActualEffortColumn())
   }
 
-  // [Fork-Aenderung] ---- Ende des neuen Blocks ----
+  // [fork change] ---- end of the new block ----
 
   /**
    * The same thing, but wrapped in a project database transaction — this is what the running

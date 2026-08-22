@@ -49,7 +49,7 @@ import net.sourceforge.ganttproject.roles.RoleManager
 import net.sourceforge.ganttproject.task.CostStub
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskMutator
-// [Fork-Aenderung] Neue Importe fuer die aufwandsgetriebene Planung.
+// [fork change] New imports for effort-driven scheduling.
 import biz.ganttproject.customproperty.CustomPropertyHolder
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.task.algorithm.EffortInput
@@ -213,15 +213,15 @@ class TaskResourcesPanel(
         prefWidth = 150.0
       }
 
-      // [Fork-Aenderung] Neue Spalte: zeigt die Tagesstunden der Ressource, mit denen die
-      // Dauerberechnung rechnet. NUR ANZEIGE - die Tagesstunden gelten global fuer alle Aufgaben
-      // dieser Ressource und werden deshalb in der Ressourcenverwaltung bearbeitet, nicht hier.
-      // Ein zweiter Editor an dieser Stelle wuerde fremde Termine verschieben, ohne dass man es
-      // im Aufgabendialog bemerkt.
-      // Feste Beschriftung statt i18n-Schluessel: die Uebersetzungsdateien liegen im Submodul
-      // biz.ganttproject.app.localization, das auf das Original-Repository zeigt und hier nicht
-      // beschrieben werden darf. Ein unbekannter Schluessel wuerde als Schluessel angezeigt
-      // (RootLocalizer.formatText liefert bei fehlendem Eintrag den Schluessel zurueck).
+      // [fork change] New column: shows the daily hours of the resource that the duration
+      // calculation computes with. DISPLAY ONLY - the daily hours apply globally to all tasks of
+      // this resource and are therefore edited in the resource manager, not here. A second editor
+      // in this place would move other tasks' dates without that being noticed in the task
+      // dialog.
+      // A fixed label instead of an i18n key: the translation files live in the submodule
+      // biz.ganttproject.app.localization, which points at the original repository and must not
+      // be written to from here. An unknown key would be displayed as the key
+      // (RootLocalizer.formatText returns the key when an entry is missing).
       val hoursPerDayCol = TableColumn2<ResourceAssignmentRow, String>(EFFORT_LABEL_HOURS_PER_DAY).apply {
         setCellValueFactory { row ->
           val resource = row.value.assignment?.resource
@@ -232,7 +232,7 @@ class TaskResourcesPanel(
         prefWidth = 90.0
       }
 
-      // [Fork-Aenderung] hoursPerDayCol ist neu, die uebrigen Spalten sind Original.
+      // [fork change] hoursPerDayCol is new, the remaining columns are the original ones.
       columns.addAll(idCol, nameCol, unitCol, coordinatorCol, roleCol, hoursPerDayCol)
     }
 
@@ -257,7 +257,7 @@ class TaskResourcesPanel(
     }
   }
 
-  // [Fork-Aenderung] ---- Anfang: neuer Block fuer die aufwandsgetriebene Planung ----
+  // [fork change] ---- start: new block for effort-driven scheduling ----
 
   /**
    * Editor for the effort of this task, in hours. Empty means "no effort set", which switches the
@@ -285,9 +285,9 @@ class TaskResourcesPanel(
     when (val input = parseEffortInput(effortField.text)) {
       is EffortInput.Clear ->
         // Only clear when the property exists; do not create it just to write nothing into it.
-        // [Fork-Aenderung] Kennung ODER Name: eine vom Nutzer selbst angelegte Spalte traegt den
-        // getippten Text nur im Namen. Mit reiner Kennungssuche liess sich so ein Feld nicht mehr
-        // leeren - der alte Wert waere stehen geblieben, ohne Hinweis.
+        // [fork change] Id OR name: a column created by the user carries the typed text in its
+        // name only. With an id-only lookup such a field could no longer be cleared - the old
+        // value would have stayed, without any indication.
         definitions.findEffortDefinition(EffortDrivenProperties.TASK_EFFORT_HOURS)?.let {
           holder.setValue(it, null)
         }
@@ -327,7 +327,7 @@ class TaskResourcesPanel(
     when (val input = parseEffortInput(actualEffortField.text)) {
       is EffortInput.Clear ->
         // Only clear when the property exists; do not create it just to write nothing into it.
-        // [Fork-Aenderung] Kennung ODER Name, siehe applyEffort.
+        // [fork change] Id OR name, see applyEffort.
         definitions.findEffortDefinition(
           EffortDrivenProperties.TASK_EFFORT_ACTUAL_HOURS)?.let { holder.setValue(it, null) }
       is EffortInput.Hours ->
@@ -347,7 +347,7 @@ class TaskResourcesPanel(
     propertyPane.add(actualEffortField, 1, 5)
   }
 
-  // [Fork-Aenderung] ---- Ende des neuen Blocks ----
+  // [fork change] ---- end of the new block ----
 
   private fun createCostPanel(): Region {
     val propertyPane = PropertyPane()
@@ -373,7 +373,7 @@ class TaskResourcesPanel(
     propertyPane.add(calculatedValueLabel, 1, 1)
     builder.createMoneyOptionEditor(costValue).also { propertyPane.add(it, 1, 2) }
 
-    // [Fork-Aenderung] Aufwandsfeld unter den Kostenfeldern ergaenzt.
+    // [fork change] Effort field added underneath the cost fields.
     addEffortEditor(propertyPane)
 
     return propertyPane
@@ -397,18 +397,17 @@ class TaskResourcesPanel(
 // --------------------------------------------------------------------------------------------------------------------
 private val i18n = RootLocalizer
 
-// [Fork-Aenderung] Beschriftungen der neuen Bedienelemente. Sie stehen im eigenen Textbuendel
-// dieses Forks, nicht in den i18n-Dateien des Originals: diese liegen in einem Submodul, das auf
-// das Repository von bardsoftware zeigt und aus diesem Fork nicht beschrieben werden kann.
-// Begruendung und Mechanik siehe ForkI18n.kt.
+// [fork change] Labels of the new controls. They live in this fork's own text bundle, not in the
+// original's i18n files: those lie in a submodule that points at bardsoftware's repository and
+// cannot be written to from this fork. Reasoning and mechanics see ForkI18n.kt.
 private val EFFORT_LABEL_SECTION get() = forkText("fork.effort.section")
 private val EFFORT_LABEL_EFFORT_HOURS get() = forkText("fork.effort.hours")
 private val EFFORT_LABEL_HOURS_PER_DAY get() = forkText("fork.effort.hoursPerDay")
 private val EFFORT_LABEL_ACTUAL_HOURS get() = forkText("fork.effort.actualHours")
 
 /**
- * [Fork-Aenderung] Neue Hilfsfunktion: Stunden ohne ueberfluessige Nachkommastelle anzeigen,
- * damit in der Tabelle "8" statt "8.0" steht.
+ * [fork change] New helper: display hours without a superfluous decimal place, so that the table
+ * shows "8" instead of "8.0".
  */
 private fun formatHours(hours: Double): String =
   if (hours == hours.toLong().toDouble()) hours.toLong().toString() else hours.toString()
