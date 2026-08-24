@@ -23,10 +23,10 @@ import biz.ganttproject.app.*;
 import biz.ganttproject.lib.fx.TreeTableCellsKt;
 import biz.ganttproject.platform.UpdateOptions;
 import biz.ganttproject.storage.cloud.GPCloudOptions;
-// [Fork-Aenderung] Neue Importe fuer die Toggl-Token-Ablage und den Verbindungstest.
+// [fork change] New imports for the Toggl token store and the connection check.
 import net.sourceforge.ganttproject.gui.NotificationChannel;
 import net.sourceforge.ganttproject.timetracking.ConnectionCheckMessageSink;
-// Kotlin legt Deklarationen auf Dateiebene in eine Klasse <Dateiname>Kt.
+// Kotlin puts file-level declarations into a class <FileName>Kt.
 import net.sourceforge.ganttproject.timetracking.ImportPeriodDialogKt;
 import net.sourceforge.ganttproject.timetracking.TaskChoiceDialogKt;
 import net.sourceforge.ganttproject.timetracking.TogglConnectionAction;
@@ -164,12 +164,12 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     }
     mHuman.add(resourceActionSet.getResourceSendMailAction());
     mHuman.add(resourceActionSet.getCloudResourceList());
-    // [Fork-Aenderung] Verbindungstest zu Toggl. Steht im Ressourcen-Menue, weil der Token an der
-    // Ressource haengt. Der Test liest nur und schreibt nichts.
-    // Die Meldung wird hier SELBST gebaut statt ueber showNotificationDialog. Jenes bettet den
-    // Text in die Vorlagen <kanal>.channel.itemTitle/itemBody ein -- und fuer den Kanal RSS gibt es
-    // diese Vorlagen nicht. Der Kasten haette dann "rss.channel.itemBody" angezeigt und unsere
-    // Meldung stillschweigend verschluckt, weil MessageFormat ohne {0} das Argument verwirft.
+    // [fork change] Connection check against Toggl. Sits in the resources menu, because the
+    // token hangs off the resource. The check only reads and writes nothing.
+    // The message is built HERE rather than through showNotificationDialog. That one embeds the
+    // text in the templates <channel>.channel.itemTitle/itemBody -- and for the RSS channel those
+    // templates do not exist. The box would then have displayed "rss.channel.itemBody" and
+    // swallowed our message silently, because MessageFormat discards the argument without {0}.
     ConnectionCheckMessageSink togglMessages = (isProblem, message) -> {
       var manager = getUIFacade().getNotificationManager();
       manager.addNotifications(List.of(manager.createNotification(
@@ -180,9 +180,9 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     };
     mHuman.add(new TogglConnectionAction(getHumanResourceManager(), togglMessages));
 
-    // [Fork-Aenderung] Import der Toggl-Zeiten. Vor dem Schreiben wird gefragt: die Vorschau nennt
-    // die Summen UND was uebersprungen wird. showOptionDialog ist nicht blockierend, deshalb
-    // bekommt die Aktion einen Rueckruf statt eines Rueckgabewerts.
+    // [fork change] Import of the Toggl times. A question is asked before writing: the preview
+    // names the totals AND what gets skipped. showOptionDialog does not block, so the action gets
+    // a callback instead of a return value.
     mHuman.add(new TogglImportAction(
         getTaskManager(),
         getHumanResourceManager(),
@@ -239,11 +239,11 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     // [fork change] The estimating-quality evaluation. Writes NOTHING and therefore does not ask
     // either.
     //
-    // EIN FENSTER, KEINE BENACHRICHTIGUNG, und das ist am Bildschirm gemessen: ueber
-    // togglMessages landet die Meldung als kleines Zeichen unten rechts, das man erst anklicken
-    // muss. Fuer eine Erfolgsmeldung reicht das; ein mehrzeiliger Bericht, der GELESEN werden
-    // soll, ist dort praktisch unsichtbar -- beim ersten Durchlauf habe ich ihn selbst nicht
-    // gefunden und dachte, der Menuepunkt tue nichts.
+    // A WINDOW, NOT A NOTIFICATION, and that is measured on screen: through togglMessages the
+    // message ends up as a small mark at the bottom right that has to be clicked first. For a
+    // success message that is enough; a multi-line report that is meant to be READ is practically
+    // invisible there -- on the first run it was not found at all and the menu item seemed to do
+    // nothing.
     mHuman.add(new EstimateQualityAction(
         getTaskManager(),
         getProject().getTaskCustomColumnManager(),
@@ -304,8 +304,8 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     options.addOptions(GPCloudOptions.INSTANCE.getOptionGroup());
     options.addOptions(getRssFeedChecker().getOptions());
     options.addOptions(UpdateOptions.INSTANCE.getOptionGroup());
-    // [Fork-Aenderung] Toggl-Token je Person. Gehoert in die Anwendungseinstellungen
-    // (~/.ganttproject) und ausdruecklich NICHT in die Projektdatei - die wird geteilt.
+    // [fork change] Toggl token per person. Belongs in the application settings
+    // (~/.ganttproject) and explicitly NOT in the project file - that one is shared.
     options.addOptions(TogglTokenOptions.INSTANCE.getOptionGroup());
     options.addOptions(myTaskManagerConfig.getTaskOptions());
     startupLogger.debug("2. loading options");

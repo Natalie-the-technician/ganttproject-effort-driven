@@ -16,7 +16,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
-// NEUE DATEI DIESES FORKS
+// NEW FILE IN THIS FORK
 package net.sourceforge.ganttproject.timetracking
 
 import junit.framework.TestCase
@@ -44,7 +44,7 @@ class HttpClientBackendTest : TestCase() {
 
   private val anyUrl = "${TogglApi.BASE_URL}/me/time_entries?start_date=2026-08-01&end_date=2026-09-01"
 
-  // --- Wartezeit zwischen Anfragen ---
+  // --- waiting time between requests ---
 
   fun testFirstRequestDoesNotWait() {
     val clock = FakeClock()
@@ -113,7 +113,7 @@ class HttpClientBackendTest : TestCase() {
     assertTrue(buildTogglRequest(anyUrl, "Basic GEHEIM").timeout().isPresent)
   }
 
-  // --- Der Vertrag: nicht werfen bei Nicht-2xx ---
+  // --- the contract: do not throw on non-2xx ---
 
   /**
    * THE contract of this class. Which status means what is decided in TogglClient and tested
