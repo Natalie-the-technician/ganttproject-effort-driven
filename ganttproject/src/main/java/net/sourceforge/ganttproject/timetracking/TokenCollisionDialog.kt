@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -45,9 +45,9 @@ val ASK_IN_A_DIALOG = TokenCollisionAsker { collision, apply ->
       box.children.add(Label(forkText("fork.toggl.collision.consequence")).also {
         it.isWrapText = true
       })
-      // Was verloren geht, steht HIER und nicht auf den Knoepfen. Die Knoepfe haben feste Breite;
-      // eine laengere Beschriftung wird mit "…" abgeschnitten, auch bei maximiertem Fenster --
-      // am Bildschirm nachgewiesen. Damit waere ausgerechnet die Folge unlesbar gewesen.
+      // What gets lost is stated HERE and not on the buttons. The buttons have a fixed width; a
+      // longer label is truncated with "…", even with the window maximised -- demonstrated on
+      // screen. That would have made the consequence of all things unreadable.
       box.children.add(Label(forkText("fork.toggl.collision.choice")).also {
         it.isWrapText = true
       })

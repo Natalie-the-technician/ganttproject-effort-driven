@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -61,23 +61,23 @@ fun encodeTokenMap(tokens: Map<String, String>): String =
     }
 
 /**
- * [Fork-Aenderung] Der Token, wie er in die Einstellungsdatei geschrieben wird: verschluesselt.
+ * [fork change] The token as it is written into the settings file: encrypted.
  *
- * Vorher lag er dort im Klartext -- lesbar fuer alles, was unter demselben Benutzerkonto laeuft.
- * Beim WebDAV-Passwort ist das seit dem 17.08.2026 geloest; hier folgt der Token nach.
+ * Before, it lay there in plain text -- readable by everything running under the same user
+ * account. For the WebDAV password that has been solved since 17.08.2026; here the token follows.
  *
- * ZWEI EIGENARTEN, beide bewusst:
+ * TWO PECULIARITIES, both deliberate:
  *
- * 1. DIE ZUSAGE "unchanged content always yields the same line" GILT SO NICHT MEHR, und das ist
- *    Absicht: DPAPI mischt Zufall bei, damit zwei gleiche Geheimnisse nicht am gleichen
- *    Chiffretext zu erkennen sind. Der gespeicherte Text sieht also nach jedem Schreiben anders
- *    aus, sein INHALT bleibt gleich. Was die Zusage schuetzen sollte -- keine Aenderung ohne
- *    Grund -- betrifft eine Einstellungsdatei, die ohnehin bei jedem Beenden neu geschrieben wird;
- *    dass die Karte ueberall Klartext fuehrt, ist der wichtigere Wert.
- * 2. Laesst sich nicht verschluesseln (kein Windows, fehlende Bibliothek), bleibt es beim
- *    bisherigen Verhalten statt den Token zu verlieren. Beim Passwort war "nicht speichern" die
- *    richtige Antwort, weil man es neu eintippen kann; ein verlorener Token dagegen faellt erst
- *    beim naechsten Import auf, und dann fehlt die Ursache.
+ * 1. THE PROMISE "unchanged content always yields the same line" NO LONGER HOLDS AS STATED, and
+ *    that is intentional: DPAPI mixes in randomness so that two identical secrets cannot be
+ *    recognised by an identical ciphertext. The stored text therefore looks different after every
+ *    write, its CONTENT stays the same. What the promise was meant to protect -- no change without
+ *    a reason -- concerns a settings file that gets rewritten on every exit anyway; that the map
+ *    carries plain text everywhere is the more important value.
+ * 2. If encryption is not possible (not Windows, missing library), the previous behaviour stands
+ *    rather than losing the token. For the password "do not store" was the right answer, because
+ *    it can be typed again; a lost token, by contrast, only shows up at the next import, and then
+ *    the cause is missing.
  */
 private fun protectedToken(token: String): String =
   if (SecretStore.isProtected(token)) token else SecretStore.protect(token) ?: token
@@ -91,11 +91,11 @@ fun decodeTokenMap(text: String?): Map<String, String> {
       val key = fields[0].urlDecodedOrNull()
       val token = fields[1].urlDecodedOrNull()
       if (!key.isNullOrEmpty() && !token.isNullOrEmpty()) {
-        // [Fork-Aenderung] Hier entschluesselt, nicht erst bei der Verwendung: die Karte fuehrt
-        // Klartext. Alles andere im Programm -- Vergleiche, Verschieben, Kollisionspruefung --
-        // rechnet mit Token, nicht mit Chiffretexten. Ein Chiffretext in der Karte hatte in einem
-        // ersten Anlauf genau dort Schaden angerichtet: zwei Chiffretexte DESSELBEN Tokens sind
-        // verschieden, und die Kollisionsfrage waere gestellt worden, wo es keine gibt.
+        // [fork change] Decrypted here, not first at the point of use: the map carries plain
+        // text. Everything else in the program -- comparisons, moving, the collision check --
+        // works with tokens, not with ciphertexts. A ciphertext in the map did damage in exactly
+        // that place on a first attempt: two ciphertexts of the SAME token are different, and the
+        // collision question would have been asked where there is none.
         result[key] = SecretStore.reveal(token)
       }
     }
@@ -107,7 +107,7 @@ fun decodeTokenMap(text: String?): Map<String, String> {
 fun tokenForKey(key: String, storedTokens: String?): String? = decodeTokenMap(storedTokens)[key]
 
 /**
- * [Fork-Aenderung] The store after a person's KEY may have changed.
+ * [fork change] The store after a person's KEY may have changed.
  *
  * The key is derived from the e-mail address, or from the name when there is none — and both can
  * be edited in the very dialog that also edits the token. Without this step the token stays under
@@ -125,11 +125,11 @@ fun movedToken(storedTokens: String?, previousKey: String, newKey: String, token
   val tokens = decodeTokenMap(storedTokens).toMutableMap()
   tokens.remove(previousKey)
   if (token.isEmpty()) {
-    // [Fork-Aenderung] NUR den eigenen Eintrag entfernen. Frueher stand hier ein
-    // `tokens.remove(newKey)` ohne Bedingung -- wer im Dialog das Token-Feld leerte UND zugleich
-    // eine Adresse eintrug, unter der bereits jemand anderes gespeichert war, loeschte damit
-    // dessen Token. Ist der Schluessel unveraendert, ist der Eintrag unter [newKey] der eigene und
-    // muss weg; hat er sich geaendert, gehoert dort Liegendes jemand anderem.
+    // [fork change] Remove ONLY one's own entry. Formerly an unconditional `tokens.remove(newKey)`
+    // stood here -- anyone who emptied the token field in the dialog AND at the same time entered
+    // an address under which somebody else was already stored thereby deleted that person's
+    // token. If the key is unchanged, the entry under [newKey] is one's own and has to go; if it
+    // changed, whatever lies there belongs to somebody else.
     if (newKey == previousKey) tokens.remove(newKey)
   } else {
     tokens[newKey] = token
@@ -138,7 +138,7 @@ fun movedToken(storedTokens: String?, previousKey: String, newKey: String, token
 }
 
 /**
- * [Fork-Aenderung] What has to happen to the store after a person's key changed.
+ * [fork change] What has to happen to the store after a person's key changed.
  *
  * Deliberately a result type rather than a plain string: the interesting case is the one where
  * TWO tokens claim the same key, and that one cannot be decided here — it costs a secret either
@@ -170,7 +170,7 @@ sealed interface TokenKeyChange {
 }
 
 /**
- * [Fork-Aenderung] Works out what a changed key means for the store.
+ * [fork change] Works out what a changed key means for the store.
  *
  * Counterpart to [movedToken] for the second way a key can change. [movedToken] is used where the
  * token field is on screen and its value is known. Here the token is not being edited at all —
@@ -199,10 +199,10 @@ fun tokenKeyChange(
   // Compare against the NORMALISED text, not the raw one: a store that was written by an older
   // version may differ in order or encoding without differing in content, and rewriting it for
   // that reason alone would churn the settings file.
-  // [Fork-Aenderung] INHALTE vergleichen, nicht Texte. Seit der Token verschluesselt gespeichert
-  // wird, sind zwei Texte desselben Inhalts nie mehr gleich -- DPAPI mischt Zufall bei. Ein
-  // Textvergleich haette hier nie wieder "Unchanged" ergeben, und jede Bearbeitung einer
-  // Ressource haette die Einstellungsdatei neu geschrieben. Am Rechner gemessen, gefunden von
+  // [fork change] Compare CONTENTS, not texts. Since the token is stored encrypted, two texts of
+  // the same content are never equal again -- DPAPI mixes in randomness. A text comparison would
+  // never have yielded "Unchanged" here again, and every edit of a resource would have rewritten
+  // the settings file. Measured on the machine, found by
   // testAnUntouchedDialogChangesNothing.
   if (decodeTokenMap(target) == decodeTokenMap(storedTokens)) return TokenKeyChange.Unchanged
 
@@ -224,7 +224,7 @@ fun tokenKeyChange(
 }
 
 /**
- * [Fork-Aenderung] The key without its technical prefix, for showing to a person.
+ * [fork change] The key without its technical prefix, for showing to a person.
  *
  * `mail=nati@example.org` is not something to put in front of somebody who never asked how the
  * store is built. A key without a prefix is shown unchanged rather than as an empty string — a

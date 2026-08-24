@@ -16,7 +16,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
-// NEUE DATEI DIESES FORKS
+// NEW FILE IN THIS FORK
 package net.sourceforge.ganttproject.timetracking
 
 import junit.framework.TestCase
@@ -33,7 +33,7 @@ class TokenStoreTest : TestCase() {
   private val nameKey = "name=Natalie"
   private val mailKey = "mail=natalie@example.org"
 
-  // --- Der Weg ueber den Ressourcendialog: der Token steht in einem Feld ---
+  // --- The path through the resource dialog: the token is in a field ---
 
   /**
    * The resource dialog KNOWS the token, because it is in a field on screen. That is the only
@@ -80,7 +80,7 @@ class TokenStoreTest : TestCase() {
       is TokenKeyChange.Unchanged)
   }
 
-  // --- Der Fund: der Schluessel aendert sich, der Token muss mit ---
+  // --- The finding: the key changes, the token has to move with it ---
 
   /**
    * The case that costs a token: a resource is created with a name, the token is entered, and the
@@ -126,14 +126,15 @@ class TokenStoreTest : TestCase() {
   /**
    * An emptied field removes the entry — the OWN one.
    *
-   * [Fork-Aenderung] Diese Erwartung wurde geaendert. Vorher stand hier, dass ein leeres Feld
-   * BEIDE Schluessel raeumt. Das kostete fremde Token: wer das Feld leerte und zugleich eine
-   * Adresse eintrug, unter der bereits jemand anderes gespeichert war, loeschte dessen Eintrag mit.
+   * [fork change] This expectation was changed. Before, it said here that an empty field clears
+   * BOTH keys. That cost other people's tokens: anyone who emptied the field and at the same time
+   * entered an address under which somebody else was already stored deleted their entry along
+   * with it.
    *
-   * Der urspruenglich gemeinte Fall — dieselbe Person unter zwei Schluesseln — entsteht durch
-   * normalen Gebrauch nie, weil jeder Schreibvorgang den Eintrag verschiebt statt zu verdoppeln.
-   * Der neue Fall entsteht durch normalen Gebrauch sehr wohl. Deshalb gilt jetzt: unter dem neuen
-   * Schluessel Liegendes gehoert jemand anderem und bleibt.
+   * The case originally meant — the same person under two keys — never arises from normal use,
+   * because every write moves the entry rather than duplicating it. The new case does arise from
+   * normal use. Hence the rule now: whatever lies under the new key belongs to somebody else and
+   * stays.
    */
   fun testAnEmptyTokenRemovesTheOwnEntry() {
     val before = encodeTokenMap(mapOf(nameKey to "MEINS", mailKey to "FREMD"))
@@ -144,7 +145,7 @@ class TokenStoreTest : TestCase() {
     assertEquals("ein fremder Token wurde mitgeloescht", "FREMD", tokenForKey(mailKey, after))
   }
 
-  /** Ohne Schluesselwechsel ist der Eintrag unter dem Schluessel der eigene und muss weg. */
+  /** Without a key change the entry under the key is one's own and has to go. */
   fun testAnEmptyTokenRemovesTheEntryWhenTheKeyDidNotChange() {
     val before = encodeTokenMap(mapOf(mailKey to "MEINS"))
 
@@ -163,10 +164,10 @@ class TokenStoreTest : TestCase() {
 
     val after = movedToken(before, mailKey, mailKey, "GEHEIM")
 
-    // GEAENDERT AM 17.08.2026: verglichen wird der INHALT, nicht der Text. Seit der Token
-    // verschluesselt gespeichert wird, sind zwei Texte desselben Inhalts nie mehr gleich --
-    // DPAPI mischt Zufall bei, damit gleiche Geheimnisse nicht am gleichen Chiffretext zu
-    // erkennen sind. Was der Test meint, ist "es geht nichts verloren und nichts kommt hinzu".
+    // CHANGED ON 17.08.2026: what is compared is the CONTENT, not the text. Since the token is
+    // stored encrypted, two texts of the same content are never equal again -- DPAPI mixes in
+    // randomness so that identical secrets cannot be recognised by an identical ciphertext. What
+    // the test means is "nothing is lost and nothing is added".
     assertEquals(decodeTokenMap(before), decodeTokenMap(after))
   }
 
@@ -202,7 +203,7 @@ class TokenStoreTest : TestCase() {
     assertNull(tokenForKey(awkwardKey, after))
   }
 
-  // --- Grundlagen des Speichers ---
+  // --- Basics of the store ---
 
   fun testRoundTrip() {
     val tokens = mapOf(mailKey to "GEHEIM", "name=Kollege" to "AUCHGEHEIM")
@@ -217,10 +218,10 @@ class TokenStoreTest : TestCase() {
 
   /** The settings file must not change just because it was written again. */
   fun testOrderIsDeterministic() {
-    // GEAENDERT AM 17.08.2026, als der Token verschluesselt wurde: die beiden Texte sind nicht
-    // mehr Byte fuer Byte gleich, und das ist Absicht -- DPAPI mischt Zufall bei, damit zwei
-    // gleiche Geheimnisse nicht am gleichen Chiffretext zu erkennen sind. Geprueft wird
-    // weiterhin, was der Test eigentlich meint: die Reihenfolge haengt nicht von der Eingabe ab.
+    // CHANGED ON 17.08.2026, when the token was encrypted: the two texts are no longer equal
+    // byte for byte, and that is intentional -- DPAPI mixes in randomness so that two identical
+    // secrets cannot be recognised by an identical ciphertext. What is still checked is what the
+    // test actually means: the order does not depend on the input.
     val one = decodeTokenMap(encodeTokenMap(mapOf("b" to "2", "a" to "1")))
     val other = decodeTokenMap(encodeTokenMap(mapOf("a" to "1", "b" to "2")))
     assertEquals(one, other)

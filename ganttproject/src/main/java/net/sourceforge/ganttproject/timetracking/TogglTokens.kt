@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -54,54 +54,55 @@ object TogglTokenOptions {
   val tokens: StringOption = DefaultStringOption("resourceTokens", "")
 
   /**
-   * [Fork-Aenderung] Wie weit der Import zurueckschaut, in Tagen.
+   * [fork change] How far back the import looks, in days.
    *
-   * Gemerkt statt jedes Mal neu getippt: wer einmal 180 Tage gewaehlt hat, will das meistens
-   * wieder. Steht in den Anwendungseinstellungen, nicht im Projekt — der Zeitraum ist eine
-   * Gewohnheit der Person, keine Eigenschaft des Plans.
+   * Remembered instead of typed anew every time: whoever once chose 180 days usually wants that
+   * again. Lives in the application settings, not in the project — the period is a habit of the
+   * person, not a property of the plan.
    */
   val importDays: IntegerOption = DefaultIntegerOption("importDays", DEFAULT_IMPORT_DAYS)
 
   val optionGroup: GPOptionGroup = GPOptionGroup("toggl", tokens, importDays)
 }
 
-/** Voreinstellung des Importzeitraums. */
+/** Default of the import period. */
 const val DEFAULT_IMPORT_DAYS = 30
 
-/** Untergrenze: weniger als ein Tag ergibt keinen Zeitraum. */
+/** Lower bound: less than one day is not a period. */
 const val MIN_IMPORT_DAYS = 1
 
 /**
- * Obergrenze: 90 Tage.
+ * Upper bound: 90 days.
  *
- * NICHT selbst gewaehlt, sondern die Grenze von Toggl. `/me/time_entries` liefert hoechstens drei
- * Monate auf einmal und beantwortet groessere Zeitraeume mit Status 400.
+ * NOT chosen by us but Toggl's limit. `/me/time_entries` delivers at most three months at a time
+ * and answers larger periods with status 400.
  *
- * Am lebenden Dienst gesehen: 30 Tage gehen, 99 und 300 nicht. Vorher stand hier 3650 — eine
- * Grenze, die es gar nicht gibt, wodurch das Feld Werte annahm, die der Dienst sicher abweist.
+ * Seen against the live service: 30 days work, 99 and 300 do not. Before, 3650 stood here — a
+ * limit that does not exist at all, so the field accepted values the service is certain to
+ * reject.
  */
 const val MAX_IMPORT_DAYS = 90
 
 /**
- * [Fork-Aenderung] Liest die eingetippte Tageszahl.
+ * [fork change] Parses the number of days that was typed in.
  *
- * Eigene Funktion statt `toIntOrNull()` an der Aufrufstelle, damit die Grenzfaelle geprueft werden
- * koennen: leeres Feld, Buchstaben, 0, negative Zahlen. Jeder davon wuerde sonst einen Zeitraum
- * ergeben, den niemand gemeint hat.
+ * A function of its own instead of `toIntOrNull()` at the call site, so that the edge cases can be
+ * checked: empty field, letters, 0, negative numbers. Each of them would otherwise yield a period
+ * nobody meant.
  *
- * @return die Tageszahl, oder null wenn der Text keine brauchbare ergibt.
+ * @return the number of days, or null when the text does not yield a usable one.
  */
 /**
- * [Fork-Aenderung] Der Wert, mit dem der Zeitraum-Dialog vorbelegt wird.
+ * [fork change] The value the period dialog is pre-filled with.
  *
- * Der gespeicherte Wert kann ausserhalb der Grenzen liegen — genau so passiert: als die Obergrenze
- * noch (faelschlich) 3650 war, blieben 93 Tage in den Einstellungen stehen. Ohne Einpassen stuende
- * beim naechsten Oeffnen eine Zahl im Feld, die Toggl mit 400 abweist, und die Benutzerin muesste
- * raten, warum.
+ * The stored value can lie outside the bounds — and did exactly that: while the upper bound was
+ * still (wrongly) 3650, 93 days stayed in the settings. Without clamping, a number would stand in
+ * the field at the next opening that Toggl rejects with 400, and the user would have to guess
+ * why.
  *
- * Eingepasst statt abgewiesen: Es ist kein Tippfehler, sondern ein Wert aus einer aelteren
- * Fassung. Ihn stillschweigend auf etwas Brauchbares zu ziehen ist hier richtig, weil er sichtbar
- * im Feld steht und noch bestaetigt werden muss.
+ * Clamped rather than rejected: it is not a typo but a value from an older version. Pulling it
+ * quietly to something usable is right here, because it stands visibly in the field and still has
+ * to be confirmed.
  */
 fun usableImportDays(stored: Int?): Int =
   (stored ?: DEFAULT_IMPORT_DAYS).coerceIn(MIN_IMPORT_DAYS, MAX_IMPORT_DAYS)
@@ -134,7 +135,7 @@ fun withToken(storedTokens: String?, resource: HumanResource, token: String): St
   tokenKeyFor(resource).let { key -> movedToken(storedTokens, key, key, token) }
 
 /**
- * [Fork-Aenderung] Runs [change] and takes the stored token along if the key changed.
+ * [fork change] Runs [change] and takes the stored token along if the key changed.
  *
  * WHY THIS EXISTS BESIDE THE DIALOG: `MainPropertiesPanel.save()` already handles the case where
  * name or e-mail are edited in the resource dialog. But both can ALSO be edited straight in the
@@ -161,7 +162,7 @@ fun HumanResource.keepingTokenReachable(
 }
 
 /**
- * [Fork-Aenderung] Asks which of two tokens survives when both claim the same key.
+ * [fork change] Asks which of two tokens survives when both claim the same key.
  *
  * ASYNCHRONOUS ON PURPOSE. The edit that changed the key happens on the interface thread, and a
  * dialog must not block it. [apply] may therefore be called much later — or never, which is a
