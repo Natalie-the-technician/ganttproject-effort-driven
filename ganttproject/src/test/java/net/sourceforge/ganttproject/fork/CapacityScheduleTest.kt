@@ -179,8 +179,10 @@ class CapacityScheduleTest {
     }
     // Two Tasks, both 40 h, both fully loaded: they cannot run at the same time.
     val tasks = listOf(
-      LevelTask(id = "a", orderInPlan = 0, priority = 2, durationDays = 10, loadPercent = 100),
-      LevelTask(id = "b", orderInPlan = 1, priority = 2, durationDays = 10, loadPercent = 100))
+      LevelTask(id = "a", orderInPlan = 0, priority = 2, durationDays = 10,
+        loads = mapOf(SHARED_POOL to 100)),
+      LevelTask(id = "b", orderInPlan = 1, priority = 2, durationDays = 10,
+        loads = mapOf(SHARED_POOL to 100)))
 
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag, durationAt)
 
@@ -208,8 +210,10 @@ class CapacityScheduleTest {
     // old behaviour.
     val montag = LocalDate.of(2026, 8, 17)
     val tasks = listOf(
-      LevelTask(id = "a", orderInPlan = 0, priority = 2, durationDays = 10, loadPercent = 100),
-      LevelTask(id = "b", orderInPlan = 1, priority = 2, durationDays = 10, loadPercent = 100))
+      LevelTask(id = "a", orderInPlan = 0, priority = 2, durationDays = 10,
+        loads = mapOf(SHARED_POOL to 100)),
+      LevelTask(id = "b", orderInPlan = 1, priority = 2, durationDays = 10,
+        loads = mapOf(SHARED_POOL to 100)))
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
     assertEquals(10, ergebnis.durations["a"])
     assertEquals(10, ergebnis.durations["b"])
@@ -233,8 +237,8 @@ class MehrerePersonenTest {
   @Test
   fun `zwei personen arbeiten gleichzeitig`() {
     val tasks = listOf(
-      LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("1")),
-      LevelTask("b", 1, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("2")))
+      LevelTask("a", 0, 2, durationDays = 5, loads = mapOf("1" to 100)),
+      LevelTask("b", 1, 2, durationDays = 5, loads = mapOf("2" to 100)))
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
     assertEquals(montag, ergebnis.starts["a"])
     assertEquals(montag, ergebnis.starts["b"], "die zweite Person hat ihre eigene Kapazitaet")
@@ -245,8 +249,8 @@ class MehrerePersonenTest {
   fun `dieselbe person kann es nicht gleichzeitig`() {
     // Counter-check: the same setup, but both Tasks with the same person.
     val tasks = listOf(
-      LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("1")),
-      LevelTask("b", 1, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("1")))
+      LevelTask("a", 0, 2, durationDays = 5, loads = mapOf("1" to 100)),
+      LevelTask("b", 1, 2, durationDays = 5, loads = mapOf("1" to 100)))
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
     assertEquals(montag, ergebnis.starts["a"])
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["b"], "erst danach")
@@ -255,10 +259,12 @@ class MehrerePersonenTest {
   @Test
   fun `ein vorgang mit zwei personen belegt beide`() {
     val tasks = listOf(
-      LevelTask("gemeinsam", 0, 2, durationDays = 5, loadPercent = 100,
-        resourceIds = listOf("1", "2")),
-      LevelTask("nur1", 1, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("1")),
-      LevelTask("nur2", 2, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("2")))
+      // Both people are FULLY committed to the shared Task -- 100 % each, not 100 % split between
+      // them. Under the old field this had to be written as one number plus a list of people,
+      // which happened to give the same result here and the wrong one at 50 % each.
+      LevelTask("gemeinsam", 0, 2, durationDays = 5, loads = mapOf("1" to 100, "2" to 100)),
+      LevelTask("nur1", 1, 2, durationDays = 5, loads = mapOf("1" to 100)),
+      LevelTask("nur2", 2, 2, durationDays = 5, loads = mapOf("2" to 100)))
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
     assertEquals(montag, ergebnis.starts["gemeinsam"])
     // Both pools are occupied, so BOTH following Tasks have to wait.
@@ -269,10 +275,8 @@ class MehrerePersonenTest {
   @Test
   fun `die ueberlastmeldung nennt die person`() {
     val tasks = listOf(
-      LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("7"),
-        fixedStart = montag),
-      LevelTask("b", 1, 2, durationDays = 5, loadPercent = 100, resourceIds = listOf("7"),
-        fixedStart = montag))
+      LevelTask("a", 0, 2, durationDays = 5, loads = mapOf("7" to 100), fixedStart = montag),
+      LevelTask("b", 1, 2, durationDays = 5, loads = mapOf("7" to 100), fixedStart = montag))
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
     val ueberlast = ergebnis.conflicts.filterIsInstance<LevelConflict.Overload>()
     assertTrue(ueberlast.isNotEmpty(), "zwei feste Termine am selben Tag sprengen die Kapazitaet")
@@ -285,8 +289,8 @@ class MehrerePersonenTest {
     // time, only one does not know whose. Treating it as free would be the more dangerous
     // assumption.
     val tasks = listOf(
-      LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100),
-      LevelTask("b", 1, 2, durationDays = 5, loadPercent = 100))
+      LevelTask("a", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100)),
+      LevelTask("b", 1, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100)))
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["b"])
   }
@@ -306,9 +310,9 @@ class WiederholtVerteilenTest {
 
   @Test
   fun `eingefrorene arbeit bleibt liegen und belegt trotzdem`() {
-    val fertig = LevelTask("fertig", 0, 2, durationDays = 5, loadPercent = 100,
+    val fertig = LevelTask("fertig", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100),
       frozen = true, fixedStart = montag)
-    val offen = LevelTask("offen", 1, 2, durationDays = 5, loadPercent = 100)
+    val offen = LevelTask("offen", 1, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100))
     val ergebnis = levelTasks(listOf(fertig, offen), montag, montagBisFreitag)
 
     assertEquals(montag, ergebnis.starts["fertig"], "die erledigte Arbeit wird nicht verschoben")
@@ -320,10 +324,10 @@ class WiederholtVerteilenTest {
   fun `eingefrorene arbeit wird auch dann nicht verschoben, wenn sie sich ueberlappt`() {
     // Two begun Tasks on the same day: that is reality, not a bug in levelling. It must change
     // nothing about it -- report yes, re-lay no.
-    val a = LevelTask("a", 0, 2, durationDays = 3, loadPercent = 100, frozen = true,
-      fixedStart = montag)
-    val b = LevelTask("b", 1, 2, durationDays = 3, loadPercent = 100, frozen = true,
-      fixedStart = montag)
+    val a = LevelTask("a", 0, 2, durationDays = 3, loads = mapOf(SHARED_POOL to 100),
+      frozen = true, fixedStart = montag)
+    val b = LevelTask("b", 1, 2, durationDays = 3, loads = mapOf(SHARED_POOL to 100),
+      frozen = true, fixedStart = montag)
     val ergebnis = levelTasks(listOf(a, b), montag, montagBisFreitag)
     assertEquals(montag, ergebnis.starts["a"])
     assertEquals(montag, ergebnis.starts["b"])
@@ -332,8 +336,8 @@ class WiederholtVerteilenTest {
 
   @Test
   fun `eine nicht zu haltende frist wird gemeldet, nicht erzwungen`() {
-    val a = LevelTask("a", 0, 2, durationDays = 10, loadPercent = 100)
-    val b = LevelTask("b", 1, 2, durationDays = 10, loadPercent = 100,
+    val a = LevelTask("a", 0, 2, durationDays = 10, loads = mapOf(SHARED_POOL to 100))
+    val b = LevelTask("b", 1, 2, durationDays = 10, loads = mapOf(SHARED_POOL to 100),
       deadline = LocalDate.of(2026, 8, 31))
     val ergebnis = levelTasks(listOf(a, b), montag, montagBisFreitag)
 
@@ -348,7 +352,7 @@ class WiederholtVerteilenTest {
   @Test
   fun `eine haltbare frist meldet nichts`() {
     // Counter-check: otherwise the test above would pass even with a report for every Task.
-    val a = LevelTask("a", 0, 2, durationDays = 3, loadPercent = 100,
+    val a = LevelTask("a", 0, 2, durationDays = 3, loads = mapOf(SHARED_POOL to 100),
       deadline = LocalDate.of(2026, 12, 31))
     val ergebnis = levelTasks(listOf(a), montag, montagBisFreitag)
     assertTrue(ergebnis.conflicts.none { it is LevelConflict.DeadlineMissed })
@@ -358,8 +362,8 @@ class WiederholtVerteilenTest {
   fun `ein auslastungsgrad unter 100 laesst luft`() {
     // Two Tasks at 60 % each do not fit together at 100 % (120), nor at 100 % -- but one at
     // 60 % and one at 30 % fit at 100 %, and no longer at 80 %.
-    val a = LevelTask("a", 0, 2, durationDays = 5, loadPercent = 60)
-    val b = LevelTask("b", 1, 2, durationDays = 5, loadPercent = 30)
+    val a = LevelTask("a", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 60))
+    val b = LevelTask("b", 1, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 30))
     val voll = levelTasks(listOf(a, b), montag, montagBisFreitag)
     assertEquals(montag, voll.starts["b"], "bei 100 % passen 60 und 30 zusammen")
 
@@ -389,7 +393,7 @@ class AuslastungsgradTest {
   @Test
   fun `ein voller vorgang passt auch bei achtzig prozent`() {
     // Without the rule "the limit is at least the Task's own load" this test hangs.
-    val tasks = listOf(LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100))
+    val tasks = listOf(LevelTask("a", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100)))
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag, capacityOf = { 80 })
     assertEquals(montag, ergebnis.starts["a"],
       "ein einzelner Vorgang muss liegen duerfen, sonst sucht die Verteilung endlos")
@@ -400,8 +404,8 @@ class AuslastungsgradTest {
     // Counter-check: the figure has not become ineffective. Two half Tasks make 100 % and do not
     // fit together at 80 %.
     val tasks = listOf(
-      LevelTask("a", 0, 2, durationDays = 5, loadPercent = 50),
-      LevelTask("b", 1, 2, durationDays = 5, loadPercent = 50))
+      LevelTask("a", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 50)),
+      LevelTask("b", 1, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 50)))
     val ergebnis = levelTasks(tasks, montag, montagBisFreitag, capacityOf = { 80 })
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["b"])
   }
@@ -410,7 +414,7 @@ class AuslastungsgradTest {
   fun `die suche gibt auf, statt endlos zu laufen`() {
     // Second safeguard: even if the limit were wrong again one day, the search has to end. An
     // endless loop is the most expensive failure mode -- nothing about it is visible.
-    val tasks = listOf(LevelTask("a", 0, 2, durationDays = 5, loadPercent = 100))
+    val tasks = listOf(LevelTask("a", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100)))
     val ergebnis = levelTasks(tasks, montag, { false })  // KEIN Tag ist Arbeitstag
     assertTrue(ergebnis.starts.containsKey("a"), "die Verteilung muss zurueckkommen")
   }

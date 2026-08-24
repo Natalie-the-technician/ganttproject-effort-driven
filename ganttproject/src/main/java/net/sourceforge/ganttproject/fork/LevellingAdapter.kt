@@ -381,31 +381,43 @@ private fun Task.toLevelTask(
   leavesUnder: Map<String, List<String>>, today: LocalDate, isWorkingDay: (LocalDate) -> Boolean,
   moveUnstartedPast: Boolean
 ): LevelTask {
-  // The utilisation from the assignments. It is read from three different situations, and
-  // lumping any two of them together is how this went wrong once already.
+  // What this Task claims of each person's day, PER PERSON.
   //
-  // 1. Milestones and waiting periods cost no working time.
+  // NOT ONE NUMBER FOR THE WHOLE TASK, and that is the whole point: the previous version summed
+  // all assignment loads into a single figure and levelling then booked that figure against every
+  // person on the Task. Two people at 50 % each were each recorded as fully committed. See
+  // [LevelTask.loads].
   //
-  // 2. NO ASSIGNMENT AT ALL: 100 % applies. The Task occupies the day even when nobody is
-  //    entered; treating it as free would be the more dangerous assumption -- it consumes time
-  //    that the plan then does not know about.
+  // The loads of one person are added up: the model does not stop the same person from being
+  // assigned to the same Task twice.
+  val proPerson: Map<String, Int> = this.assignments
+    .mapNotNull { a -> a.resource?.id?.toString()?.let { it to a.load.toDouble() } }
+    .groupBy({ it.first }, { it.second })
+    // A negative load is clamped to 0 rather than refused. The model does not prevent one --
+    // `HumanResource.setLoad(float)` validates nothing -- and a negative occupancy would let
+    // levelling hand out capacity that does not exist.
+    .mapValues { (_, werte) -> werte.sum().toInt().coerceAtLeast(0) }
+
+  // Three situations, and lumping any two of them together is how this went wrong once already.
+  //
+  // 1. Milestones and waiting periods cost no working time -- but they keep their pool
+  //    membership, so that a report can still name whom they belong to.
+  //
+  // 2. NO ASSIGNMENT AT ALL: the shared pool at [SHARED_POOL_LOAD]. The Task occupies the day
+  //    even when nobody is entered; treating it as free would be the more dangerous assumption
+  //    -- it consumes time that the plan then does not know about.
   //
   // 3. ASSIGNMENTS EXIST: their entered loads are the answer, INCLUDING a deliberate 0.
   //
   // Cases 2 and 3 used to share one branch, `if (sum <= 0) 100`. That branch was written for
-  // case 2 and its reasoning is sound -- but the condition also catches case 3, and a person
+  // case 2 and its reasoning is sound -- but the condition also caught case 3, and a person
   // entered at 0 % is exactly the one who attends without working on it: supervision, an
   // acceptance to be witnessed, a hand-over. Their 0 was turned into its own opposite, silently.
   // Both cases are pinned down in `LevellingWriteBackTest`.
-  //
-  // A negative sum is clamped to 0 rather than refused. The model does not prevent one --
-  // `HumanResource.setLoad(float)` validates nothing -- and a negative occupancy would let
-  // levelling hand out capacity that does not exist. Letting it fall back to 100 % instead, as
-  // the old condition did, would be worse still: a typo would turn into a full working day.
-  val load = when {
-    this.isMilestone || this.isWaitOnly(taskProperties) -> 0
-    this.assignments.isEmpty() -> 100
-    else -> this.assignments.sumOf { it.load.toDouble() }.toInt().coerceAtLeast(0)
+  val loads: Map<String, Int> = when {
+    this.isMilestone || this.isWaitOnly(taskProperties) ->
+      proPerson.mapValues { 0 }.ifEmpty { mapOf(SHARED_POOL to 0) }
+    else -> proPerson.ifEmpty { mapOf(SHARED_POOL to SHARED_POOL_LOAD) }
   }
   // THREE CASES, and they are not the same thing. The rule for it, fixed on 17.08.2026:
   //
@@ -453,7 +465,7 @@ private fun Task.toLevelTask(
     // Priority.ordinal, NOT the stored value: that one is not ordered by importance.
     priority = this.priority.ordinal,
     durationDays = duration,
-    loadPercent = load,
+    loads = loads,
     // A dependency on a group means: after ALL the leaves beneath it.
     predecessors = this.dependenciesAsDependant.toArray()
       .mapNotNull { it.dependee?.taskID?.toString() }
@@ -463,9 +475,6 @@ private fun Task.toLevelTask(
     earliestStart = earliest,
     frozen = angefangen || bleibtLiegen,
     deadline = this.deadlineDate(taskProperties),
-    // Whose capacity is occupied. Milestones and waiting Tasks occupy nothing anyway at 0 %;
-    // they still carry their assignment along, so that the evaluation is right.
-    resourceIds = this.assignments.mapNotNull { it.resource?.id?.toString() }.distinct()
   )
 }
 

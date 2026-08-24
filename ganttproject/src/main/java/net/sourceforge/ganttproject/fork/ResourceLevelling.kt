@@ -68,8 +68,6 @@ data class LevelTask(
   /** Duration in working days. Comes from the effort-driven calculation already. */
   val durationDays: Int,
 
-  /** Utilisation of this assignment in per cent. 100 means: the person is fully committed. */
-  val loadPercent: Int,
 
   /** Predecessors, finish-to-start. */
   val predecessors: List<String> = emptyList(),
@@ -80,17 +78,24 @@ data class LevelTask(
   /** "Earliest begin": not before this date, but later is allowed. */
   val earliestStart: LocalDate? = null,
   /**
-   * The people whose capacity this Task occupies.
+   * How much of each person's working day this Task claims, in per cent, PER PERSON.
    *
-   * WHY THIS IS NECESSARY: until then levelling had ONE capacity pool. With two people it would
-   * have laid their work one after another, as though they could not work at the same time --
-   * quietly and looking plausible. That only one person plans in trial use must not be the reason
-   * why it looks right.
+   * WHY A MAP AND NOT ONE NUMBER: until then levelling had ONE capacity pool. With two people it
+   * would have laid their work one after another, as though they could not work at the same time
+   * -- quietly and looking plausible. That only one person plans in trial use must not be the
+   * reason why it looks right.
    *
-   * Empty means: nobody is assigned. These Tasks share a common pool -- they occupy time, only
-   * one does not know whose.
+   * WHY PER PERSON AND NOT ONE NUMBER PLUS A LIST OF PEOPLE, which is what stood here before: the
+   * one number was the SUM of all assignment loads, and it was entered at full value into EVERY
+   * pool. Two people at 50 % each therefore booked 100 % against each of them instead of 50 %.
+   * Measured: a Task was pushed a day to the right although the person still had room -- silently,
+   * with no conflict reported -- and with fixed dates an overload of 150 % was reported where the
+   * true figure was 100 %. Both are pinned down in `LevellingWriteBackTest`.
+   *
+   * Empty means: nobody is assigned. Such Tasks share the common pool [SHARED_POOL] -- they
+   * occupy time, one just does not know whose -- and claim [SHARED_POOL_LOAD] of it.
    */
-  val resourceIds: List<String> = emptyList(),
+  val loads: Map<String, Int> = emptyMap(),
   /**
    * Finished or begun work: stays exactly where it lies.
    *
@@ -201,7 +206,7 @@ fun levelTasks(
     val days = workingDays(liegtAuf, durationAt(task, liegtAuf), isWorkingDay)
     task.pools.forEach { pool ->
       val belegung = used.getOrPut(pool) { mutableMapOf() }
-      days.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadPercent }
+      days.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadIn(pool) }
     }
     starts[task.id] = days.first()
     durations[task.id] = days.size
@@ -235,7 +240,7 @@ fun levelTasks(
 
     task.pools.forEach { pool ->
       val belegung = used.getOrPut(pool) { mutableMapOf() }
-      days.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadPercent }
+      days.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadIn(pool) }
     }
     starts[id] = days.first()
     durations[id] = days.size
@@ -279,9 +284,24 @@ fun levelTasks(
   return LevelResult(starts, conflicts, durations)
 }
 
-/** The capacity pools this Task occupies. Without an assignment the common pool "". */
+/** The pool shared by all Tasks that have nobody assigned. */
+const val SHARED_POOL = ""
+
+/** What a Task with no assignment at all claims of [SHARED_POOL]. */
+const val SHARED_POOL_LOAD = 100
+
+/** The capacity pools this Task occupies. Without an assignment the common pool [SHARED_POOL]. */
 internal val LevelTask.pools: List<String>
-  get() = if (resourceIds.isEmpty()) listOf("") else resourceIds
+  get() = if (loads.isEmpty()) listOf(SHARED_POOL) else loads.keys.toList()
+
+/**
+ * How much of [pool]'s working day this Task claims.
+ *
+ * The fallback is reached in exactly one situation -- an empty [LevelTask.loads], where [pools]
+ * hands out [SHARED_POOL] and nothing is stored for it. For a non-empty map [pools] returns its
+ * own keys, so the lookup always hits.
+ */
+internal fun LevelTask.loadIn(pool: String): Int = loads[pool] ?: SHARED_POOL_LOAD
 
 /**
  * Processing order: only Tasks whose predecessors already lie, and among those the most
@@ -364,7 +384,6 @@ private fun findEarliestWindow(
   isWorkingDay: (LocalDate) -> Boolean,
   capacityOf: (String) -> Int
 ): List<LocalDate> {
-  val loadPercent = task.loadPercent
   var candidate = nextWorkingDay(earliest, isWorkingDay)
   var schutz = 0
   while (true) {
@@ -386,12 +405,16 @@ private fun findEarliestWindow(
     // A day blocks as soon as it is too full for ONE of the people involved.
     val blockedAt = window.firstOrNull { day ->
       task.pools.any { pool ->
+        // THE DEMAND IS THE ONE ON THIS PERSON, not the sum over everybody on the Task. Asking
+        // the sum here was the defect: two people at 50 % each blocked a day on which each of
+        // them was only half committed.
+        val gefordert = task.loadIn(pool)
         // THE LIMIT IS AT LEAST THE TASK'S OWN LOAD. A Task that on its own demands more than
         // the utilisation allows (100 % load at 80 % utilisation) otherwise fits NOWHERE -- and
         // the search never finds a window. The utilisation limits how much OTHER work fits
         // alongside; it cannot forbid a single Task.
-        val grenze = maxOf(capacityOf(pool), loadPercent)
-        (used[pool]?.get(day) ?: 0) + loadPercent > grenze
+        val grenze = maxOf(capacityOf(pool), gefordert)
+        (used[pool]?.get(day) ?: 0) + gefordert > grenze
       }
     }
     if (blockedAt == null) {
