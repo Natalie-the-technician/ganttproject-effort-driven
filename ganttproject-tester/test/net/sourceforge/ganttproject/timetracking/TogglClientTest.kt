@@ -16,7 +16,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
-// NEUE DATEI DIESES FORKS
+// NEW FILE IN THIS FORK
 package net.sourceforge.ganttproject.timetracking
 
 import junit.framework.TestCase
@@ -52,9 +52,9 @@ class TogglClientTest : TestCase() {
     ]
   """.trimIndent()
 
-  // --- Authentifizierung: der Fehler, den alle machen ---
+  // --- authentication: the mistake everybody makes ---
 
-  /** Token gehoert in den Benutzernamen, das Wort api_token ins Passwort. */
+  /** The token belongs in the user name, the word api_token in the password. */
   fun testTokenGoesIntoTheUsername() {
     val header = TogglClient(FakeBackend(200, "[]")).authorizationHeader("GEHEIM")
     val decoded = String(Base64.getDecoder().decode(header.removePrefix("Basic ")))
@@ -70,7 +70,7 @@ class TogglClientTest : TestCase() {
     }
   }
 
-  // --- Fehlerarten, jede mit eigener Aussage ---
+  // --- kinds of failure, each with a statement of its own ---
 
   private fun expectFailure(status: Int, expected: TogglFailure) {
     try {

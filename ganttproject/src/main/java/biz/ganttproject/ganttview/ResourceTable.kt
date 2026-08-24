@@ -44,7 +44,7 @@ import net.sourceforge.ganttproject.ResourceDefaultColumn
 import net.sourceforge.ganttproject.action.resource.ResourceActionSet
 import net.sourceforge.ganttproject.chart.export.TreeTableApi
 import net.sourceforge.ganttproject.resource.*
-// [Fork-Aenderung] Der Toggl-Token haengt am Namen bzw. der E-Mail der Ressource.
+// [fork change] The Toggl token hangs off the name or the e-mail of the resource.
 import net.sourceforge.ganttproject.timetracking.ASK_IN_A_DIALOG
 import net.sourceforge.ganttproject.timetracking.keepingTokenReachable
 import net.sourceforge.ganttproject.roles.Role
@@ -466,9 +466,9 @@ class ResourceTableModel(private val areChangesIgnored: ()->Boolean)
     }
     if (node is ResourceNode) {
       when (property) {
-        // [Fork-Aenderung] Name und E-Mail bilden den Schluessel der Toggl-Token-Ablage. Werden
-        // sie hier geaendert, muss der Token mitwandern -- der Ressourcendialog tut das bereits,
-        // diese Tabelle geht aber an ihm vorbei. Siehe keepingTokenReachable.
+        // [fork change] Name and e-mail form the key of the Toggl token store. If they are
+        // changed here, the token has to move along -- the resource dialog already does that, but
+        // this table goes past it. See keepingTokenReachable.
         ResourceDefaultColumn.NAME ->
           node.resource.keepingTokenReachable(ASK_IN_A_DIALOG) { node.resource.name = "$value" }
         ResourceDefaultColumn.PHONE -> node.resource.phone = "$value"
