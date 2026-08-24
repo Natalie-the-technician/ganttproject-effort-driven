@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 Licensed under the GNU General Public License, version 3 or later.
@@ -12,23 +12,22 @@ import junit.framework.TestCase
 import net.sourceforge.ganttproject.fork.SecretStore
 
 /**
- * Der Toggl-Token in der Einstellungsdatei: verschluesselt, nicht nur kodiert.
+ * The Toggl token in the settings file: encrypted, not merely encoded.
  *
- * WOZU: bis zum 17.08.2026 stand er dort im Klartext -- lesbar fuer alles, was unter demselben
- * Benutzerkonto laeuft. Beim WebDAV-Passwort war Verschluesselung ausdrueckliche Bedingung; der
- * Token ist dasselbe Geheimnis in derselben Datei.
+ * WHAT FOR: until 17.08.2026 it stood there in plain text -- readable by everything running under
+ * the same user account. For the WebDAV password encryption was an explicit condition; the token
+ * is the same secret in the same file.
  *
- * OHNE WINDOWS PRUEFT KEINE DIESER VIER METHODEN ETWAS -- und sie sagen es nicht.
+ * WITHOUT WINDOWS NONE OF THESE FOUR METHODS CHECKS ANYTHING -- and they do not say so.
  *
- * `SecretStore.isAvailable` ist nur unter Windows wahr; es liest `os.name`. Jede Methode hier
- * beginnt mit `if (!SecretStore.isAvailable) return`, kehrt unter Linux und macOS also vor der
- * ersten Zusicherung zurueck. JUnit wertet eine Methode, die ohne Fehler zurueckkommt, als
- * BESTANDEN -- nicht als uebersprungen. Der Testlauf meldet dort vier gruene Tests, gemessen
- * wurde nichts.
+ * `SecretStore.isAvailable` is true only on Windows; it reads `os.name`. Every method here begins
+ * with `if (!SecretStore.isAvailable) return` and therefore returns on Linux and macOS before the
+ * first assertion. JUnit counts a method that returns without an error as PASSED -- not as
+ * skipped. The test run reports four green tests there, and nothing was measured.
  *
- * Das ist beim Lesen der Zahlen wichtig: eine Linux-Grundlinie von 711 gruenen Tests enthaelt
- * vier, die zur Verschluesselung keine Aussage tragen. Wer sie dort fuer belegt haelt, irrt --
- * belegt ist sie nur auf einem Windows-Lauf.
+ * That matters when reading the numbers: a Linux baseline of 711 green tests contains four that
+ * carry no statement about the encryption. Whoever takes it as demonstrated there is mistaken --
+ * it is demonstrated only on a Windows run.
  */
 class TokenEncryptionTest : TestCase() {
 
@@ -45,7 +44,7 @@ class TokenEncryptionTest : TestCase() {
 
   fun testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite() {
     if (!SecretStore.isAvailable) return
-    // So sah die Datei vor dieser Aenderung aus: nur URL-kodiert.
+    // This is how the file looked before this change: URL-encoded only.
     val alt = "mail%3Dnatalie%40example.invalid:$geheim"
     assertEquals("wer schon einen Token hatte, darf ihn nicht verlieren",
       geheim, tokenForKey(key, alt))
@@ -55,11 +54,11 @@ class TokenEncryptionTest : TestCase() {
   }
 
   /**
-   * Die Gegenprobe zur Verschluesselung: derselbe Token ergibt ZWEI verschiedene Texte.
+   * The counter-check to the encryption: the same token yields TWO different texts.
    *
-   * Das ist keine Panne, sondern der Zweck -- waere der Chiffretext immer derselbe, koennte man
-   * zwei gleiche Geheimnisse aneinander erkennen, ohne eines davon zu kennen. Der Test haelt es
-   * fest, damit niemand die Eigenschaft spaeter fuer einen Fehler haelt und "repariert".
+   * That is not a mishap but the purpose -- if the ciphertext were always the same, two identical
+   * secrets could be recognised by each other without knowing either. The test records it so that
+   * nobody later takes the property for a bug and "fixes" it.
    */
   fun testTheSameTokenYieldsDifferentCiphertext() {
     if (!SecretStore.isAvailable) return
@@ -70,7 +69,7 @@ class TokenEncryptionTest : TestCase() {
     assertEquals("der Inhalt ist derselbe", decodeTokenMap(einmal), decodeTokenMap(nochmal))
   }
 
-  /** Zwei gleiche Token duerfen keine Kollisionsfrage ausloesen. */
+  /** Two identical tokens must not trigger a collision question. */
   fun testTheSameTokenIsNoCollision() {
     if (!SecretStore.isAvailable) return
     val gespeichert = encodeTokenMap(mapOf(key to geheim, "name=Natalie" to geheim))

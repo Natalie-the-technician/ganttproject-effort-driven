@@ -42,7 +42,7 @@ import javafx.util.StringConverter
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RoleManager
-// [Fork-Aenderung] Neue Importe fuer den Toggl-Token.
+// [fork change] New imports for the Toggl token.
 import biz.ganttproject.lib.fx.openInBrowser
 import java.awt.Desktop
 import net.sourceforge.ganttproject.fork.forkText
@@ -71,11 +71,11 @@ class MainPropertiesPanel(private val resource: HumanResource) {
     it.setWritable(false)
   }
   /**
-   * [Fork-Aenderung] Der Toggl-Token dieser Person.
+   * [fork change] The Toggl token of this person.
    *
-   * Liegt NICHT im Projekt, sondern in den Anwendungseinstellungen — die Projektdatei wird
-   * geteilt und liegt im Vault. Siehe TogglTokenOptions; dort steht auch, dass der Token
-   * kodiert, aber nicht verschluesselt abgelegt wird.
+   * Lives NOT in the project but in the application settings — the project file is shared and
+   * lives in the Vault. See TogglTokenOptions; it also states there that the token is stored
+   * encoded but not encrypted.
    */
   private val togglTokenOption = ObservableString(
     "togglToken", tokenFor(resource, TogglTokenOptions.tokens.value))
@@ -98,9 +98,9 @@ class MainPropertiesPanel(private val resource: HumanResource) {
       money(totalCostOption)
       numeric(totalLoadOption)
 
-      // [Fork-Aenderung] Zeiterfassung. Beschriftungen fest verdrahtet, weil die
-      // Uebersetzungsdateien im Submodul des Original-Repositories liegen und ein unbekannter
-      // Schluessel sonst als Schluessel im Dialog stuende.
+      // [fork change] Time tracking. Labels hard-wired, because the translation files live in
+      // the submodule of the original repository and an unknown key would otherwise stand in the
+      // dialog as the key.
       skip()
       title(TOGGL_SECTION_LABEL)
       text(togglTokenOption) {
@@ -113,15 +113,15 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   }
 
   /**
-   * [Fork-Aenderung] Haengt den Hinweis unter das Token-Feld.
+   * [fork change] Hangs the hint underneath the token field.
    *
-   * Nachtraeglich ins Raster gehaengt, nicht ueber die DSL des Property-Blatts: die kennt nur
-   * Zeilen aus Eigenschaft plus Editor, eine Zeile aus einem freien Knoten gibt es dort nicht. Sie
-   * dafuer zu erweitern hiesse, Originalcode umzubauen — dafuer ist ein Hinweis zu wenig.
+   * Attached to the grid afterwards, not through the DSL of the property sheet: that one knows
+   * only rows made of a property plus an editor, a row made of a free node does not exist there.
+   * Extending it for this would mean rebuilding original code — a hint is too little for that.
    *
-   * Spalte 1 ist die Spalte der Eingabefelder, der Hinweis steht damit unter dem Feld und nicht
-   * unter den Beschriftungen. Die Zeile ist die naechste freie; das Token-Feld ist die letzte Zeile
-   * des Blatts, weil der Abschnitt Zeiterfassung oben als letzter aufgebaut wird.
+   * Column 1 is the column of the input fields, so the hint stands underneath the field and not
+   * underneath the labels. The row is the next free one; the token field is the last row of the
+   * sheet, because the time tracking section above is built last.
    */
   private fun appendTogglTokenHint(paneNode: Node) {
     val grid = paneNode as? GridPane ?: return
@@ -130,11 +130,11 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   }
 
   /**
-   * [Fork-Aenderung] Der Hinweis selbst: ein Satz, wo der Token herkommt, darunter der Verweis auf
-   * den Hilfeartikel.
+   * [fork change] The hint itself: one sentence on where the token comes from, below it the link
+   * to the help article.
    *
-   * Ohne Browser bleibt reiner Text mit sichtbarer URL stehen — ein Verweis, der nichts tut, waere
-   * schlimmer als keiner, und abgetippt werden kann die Adresse immer noch.
+   * Without a browser, plain text with a visible URL remains — a link that does nothing would be
+   * worse than none, and the address can still be typed off.
    */
   private fun togglTokenHint(): Node = VBox(2.0).also { box ->
     box.children.add(Label(TOGGL_TOKEN_HINT).asHint())
@@ -152,11 +152,11 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   fun requestFocus() = onRequestFocus()
 
   fun save() {
-    // [Fork-Aenderung] Der Schluessel der Token-Ablage wird aus E-Mail bzw. Name gebildet - und
-    // BEIDE werden in den Zeilen direkt darunter geaendert. Deshalb muss der alte Schluessel
-    // vorher feststehen, sonst bleibt der Token unter ihm liegen: fuer die Person unauffindbar
-    // (der Verbindungstest meldet "kein Token", obwohl sie einen eingetragen hat) und als
-    // Geheimnis in ~/.ganttproject zurueck. Siehe movedToken.
+    // [fork change] The key of the token store is formed from the e-mail or the name - and BOTH
+    // are changed in the lines directly below. The old key therefore has to be fixed beforehand,
+    // otherwise the token stays lying under it: unfindable for the person (the connection check
+    // reports "no token" although they have entered one) and left behind as a secret in
+    // ~/.ganttproject. See movedToken.
     val previousTokenKey = tokenKeyFor(resource)
 
     nameOption.ifChanged(resource::setName)
@@ -168,16 +168,15 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   }
 
   /**
-   * [Fork-Aenderung] Der Token wandert in die Anwendungseinstellungen, nicht ins Projekt. Ein
-   * leeres Feld entfernt den Eintrag.
+   * [fork change] The token goes into the application settings, not into the project. An empty
+   * field removes the entry.
    *
-   * Bewusst NICHT an `togglTokenOption.ifChanged` gehaengt: der Eintrag muss auch dann umziehen,
-   * wenn nur die E-Mail-Adresse geaendert wurde und das Token-Feld unberuehrt blieb. Genau das ist
-   * der haeufigste Fall — Ressource mit Namen anlegen, Token eintragen, spaeter die Adresse
-   * nachtragen.
+   * Deliberately NOT hung off `togglTokenOption.ifChanged`: the entry has to move even when only
+   * the e-mail address was changed and the token field stayed untouched. That is precisely the
+   * most frequent case — create a resource with a name, enter a token, add the address later.
    *
-   * Geschrieben wird nur, wenn sich der Speicher wirklich aendert, damit ein Dialog, in dem
-   * niemand etwas angefasst hat, die Einstellungsdatei nicht anfasst.
+   * A write happens only when the store really changes, so that a dialog in which nobody touched
+   * anything does not touch the settings file.
    */
   private fun saveTogglToken(previousTokenKey: String) {
     val outcome = tokenKeyChange(
@@ -189,9 +188,9 @@ class MainPropertiesPanel(private val resource: HumanResource) {
     when (outcome) {
       is TokenKeyChange.Unchanged -> Unit
       is TokenKeyChange.Move -> TogglTokenOptions.tokens.value = outcome.tokens
-      // [Fork-Aenderung] Frueher wurde hier still ueberschrieben. Liegt unter der neuen Adresse
-      // bereits ein ANDERER Token, kostet jeder Ausgang ein Geheimnis -- das entscheidet nicht
-      // dieser Dialog, sondern die Person. Der Ressourcentabelle liegt dieselbe Regel zugrunde.
+      // [fork change] Formerly this overwrote silently. If a DIFFERENT token already lies under
+      // the new address, every outcome costs a secret -- that is not for this dialog to decide but
+      // for the person. The resource table follows the same rule.
       is TokenKeyChange.Collision ->
         ASK_IN_A_DIALOG.ask(outcome) { chosen -> TogglTokenOptions.tokens.value = chosen }
     }
@@ -199,28 +198,28 @@ class MainPropertiesPanel(private val resource: HumanResource) {
 
 }
 
-// [Fork-Aenderung] Beschriftungen aus dem eigenen Textbuendel dieses Forks. Die
-// Uebersetzungsdateien des Originals liegen in einem Submodul, das aus diesem Fork nicht
-// beschrieben werden kann; siehe ForkI18n.kt.
+// [fork change] Labels from this fork's own text bundle. The original's translation files live
+// in a submodule that cannot be written to from this fork; see ForkI18n.kt.
 private val TOGGL_SECTION_LABEL get() = forkText("fork.toggl.section")
 private val TOGGL_TOKEN_LABEL get() = forkText("fork.toggl.token")
 private val TOGGL_TOKEN_HINT get() = forkText("fork.toggl.token.hint")
 private val TOGGL_TOKEN_LINK get() = forkText("fork.toggl.token.link")
 
 /**
- * [Fork-Aenderung] Der Hilfeartikel, nicht die Profilseite selbst.
+ * [fork change] The help article, not the profile page itself.
  *
- * Bewusst keine Deep-Link-Adresse: die Profilseite kann Toggl umbauen, der Hilfeartikel ueberdauert
- * das eher. Die Adresse steht als Konstante im Code und NICHT in den Sprachdateien — sie ist in
- * jeder Sprache dieselbe, und ein uebersetzter Verweis waere ein Verweis, den niemand pflegt.
+ * Deliberately not a deep link: Toggl may rebuild the profile page, the help article is more
+ * likely to outlast that. The address stands as a constant in the code and NOT in the language
+ * files — it is the same in every language, and a translated link would be a link nobody
+ * maintains.
  */
 private const val TOGGL_TOKEN_HELP_URL = "https://support.toggl.com/where-is-my-api-key-located"
 
 /**
- * [Fork-Aenderung] Breite, auf die der Hinweis umbricht.
+ * [fork change] The width the hint wraps at.
  *
- * Ohne Deckel setzt das Raster die Spalte auf die Breite des ungebrochenen Satzes und zieht den
- * Dialog in die Laenge; erst eine begrenzte Maximalbreite laesst `isWrapText` ueberhaupt umbrechen.
+ * Without a cap the grid sets the column to the width of the unwrapped sentence and stretches the
+ * dialog; only a bounded maximum width lets `isWrapText` wrap at all.
  */
 private const val HINT_WIDTH = 420.0
 
@@ -230,12 +229,12 @@ private fun Label.asHint(): Label = also {
 }
 
 /**
- * [Fork-Aenderung] Gibt es einen Browser, den wir aufrufen koennen?
+ * [fork change] Is there a browser that can be called?
  *
- * NICHT ueber isBrowseSupported() in biz/ganttproject/lib/fx/Desktop.kt:39 — das ruft
- * Desktop.getDesktop() ohne vorherige isDesktopSupported()-Pruefung auf und wirft dann eine
- * UnsupportedOperationException, statt false zu liefern. Fehler des Originals; hier wird er nur
- * umgangen, nicht behoben.
+ * NOT through isBrowseSupported() in biz/ganttproject/lib/fx/Desktop.kt:39 — that calls
+ * Desktop.getDesktop() without checking isDesktopSupported() first and then throws an
+ * UnsupportedOperationException instead of returning false. A bug in the original; here it is
+ * merely worked around, not fixed.
  */
 private fun canBrowse(): Boolean = try {
   Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)

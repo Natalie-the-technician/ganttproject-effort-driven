@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -84,7 +84,7 @@ class TogglTokensTest : TestCase() {
     assertEquals(keyBefore, tokenKeyFor(person))
   }
 
-  // --- der zweite Weg, auf dem sich der Schluessel aendert ---
+  // --- the second path on which the key changes ---
 
   /**
    * Name and e-mail can be edited straight in the RESOURCE TABLE, which never opens the resource
@@ -140,9 +140,9 @@ class TogglTokensTest : TestCase() {
     try {
       val stored = TogglTokenOptions.tokens.value
       person.keepingTokenReachable { person.phone = "0123" }
-      // GEAENDERT AM 17.08.2026: INHALT statt Text, aus demselben Grund wie oben. Der Test meint
-      // "eine Bearbeitung, die den Schluessel nicht anfasst, schreibt nichts um" -- und genau das
-      // wird geprueft, seit tokenKeyChange die Inhalte vergleicht.
+      // CHANGED ON 17.08.2026: CONTENT instead of text, for the same reason as above. The test
+      // means "an edit that does not touch the key rewrites nothing" -- and that is exactly what
+      // is checked, since tokenKeyChange compares the contents.
       assertEquals(decodeTokenMap(stored), decodeTokenMap(TogglTokenOptions.tokens.value))
     } finally {
       TogglTokenOptions.tokens.value = before
@@ -162,7 +162,7 @@ class TogglTokensTest : TestCase() {
     }
   }
 
-  // --- zwei Token beanspruchen denselben Schluessel ---
+  // --- two tokens claim the same key ---
 
   /**
    * The case that needs a person to decide: "Nati" has no address and a token; another resource
@@ -389,9 +389,9 @@ class TogglTokensTest : TestCase() {
     val second = resource("Anders", 2, "anders@example.org")
     val oneWay = withToken(withToken("", first, "A"), second, "B")
     val otherWay = withToken(withToken("", second, "B"), first, "A")
-    // GEAENDERT AM 17.08.2026: INHALTE vergleichen. Der Token wird verschluesselt gespeichert,
-    // und DPAPI mischt Zufall bei -- zwei Texte desselben Inhalts sind nie mehr gleich. Gemeint
-    // ist "die Reihenfolge der Eingabe aendert das Ergebnis nicht", und das gilt weiterhin.
+    // CHANGED ON 17.08.2026: compare CONTENTS. The token is stored encrypted, and DPAPI mixes in
+    // randomness -- two texts of the same content are never equal again. What is meant is "the
+    // order of the input does not change the result", and that still holds.
     assertEquals(decodeTokenMap(oneWay), decodeTokenMap(otherWay))
   }
 }
