@@ -381,15 +381,31 @@ private fun Task.toLevelTask(
   leavesUnder: Map<String, List<String>>, today: LocalDate, isWorkingDay: (LocalDate) -> Boolean,
   moveUnstartedPast: Boolean
 ): LevelTask {
-  // The utilisation from the assignments. Without an assignment 100 % applies: the Task occupies
-  // the day even when nobody is entered. Treating it as free would be the more dangerous
-  // assumption -- it would waste capacity that does not exist.
-  // Milestones and waiting periods cost no working time. Everything else occupies the day fully,
-  // even without an assignment: treating an unassigned Task as free would be the more dangerous
-  // assumption -- it consumes time that the plan then does not know about.
+  // The utilisation from the assignments. It is read from three different situations, and
+  // lumping any two of them together is how this went wrong once already.
+  //
+  // 1. Milestones and waiting periods cost no working time.
+  //
+  // 2. NO ASSIGNMENT AT ALL: 100 % applies. The Task occupies the day even when nobody is
+  //    entered; treating it as free would be the more dangerous assumption -- it consumes time
+  //    that the plan then does not know about.
+  //
+  // 3. ASSIGNMENTS EXIST: their entered loads are the answer, INCLUDING a deliberate 0.
+  //
+  // Cases 2 and 3 used to share one branch, `if (sum <= 0) 100`. That branch was written for
+  // case 2 and its reasoning is sound -- but the condition also catches case 3, and a person
+  // entered at 0 % is exactly the one who attends without working on it: supervision, an
+  // acceptance to be witnessed, a hand-over. Their 0 was turned into its own opposite, silently.
+  // Both cases are pinned down in `LevellingWriteBackTest`.
+  //
+  // A negative sum is clamped to 0 rather than refused. The model does not prevent one --
+  // `HumanResource.setLoad(float)` validates nothing -- and a negative occupancy would let
+  // levelling hand out capacity that does not exist. Letting it fall back to 100 % instead, as
+  // the old condition did, would be worse still: a typo would turn into a full working day.
   val load = when {
     this.isMilestone || this.isWaitOnly(taskProperties) -> 0
-    else -> this.assignments.sumOf { it.load.toDouble() }.toInt().let { if (it <= 0) 100 else it }
+    this.assignments.isEmpty() -> 100
+    else -> this.assignments.sumOf { it.load.toDouble() }.toInt().coerceAtLeast(0)
   }
   // THREE CASES, and they are not the same thing. The rule for it, fixed on 17.08.2026:
   //

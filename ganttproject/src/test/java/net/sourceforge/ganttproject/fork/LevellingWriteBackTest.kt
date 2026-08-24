@@ -23,9 +23,13 @@ package net.sourceforge.ganttproject.fork
 import biz.ganttproject.core.calendar.CalendarEvent
 import biz.ganttproject.core.calendar.WeekendCalendarImpl
 import biz.ganttproject.core.time.CalendarFactory
+import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.TestSetupHelper
+import net.sourceforge.ganttproject.resource.HumanResource
+import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskManager
+import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.undo.GPUndoListener
 import net.sourceforge.ganttproject.undo.GPUndoManager
 import net.sourceforge.ganttproject.undo.UndoableEditTxnFactory
@@ -37,16 +41,23 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * What WRITING the levelled dates does in the real model.
+ * What `LevellingAdapter` does against the REAL model -- in both directions.
  *
- * WHY THIS FILE EXISTS: levelling itself is checked in `ResourceLevellingTest`, and it computed
- * correctly. Nevertheless four Tasks afterwards carried a SHORTER duration in the plan than
- * before -- 11 days became 8, 26 became 16. Measured against the effort, 24 and 80 hours of work
- * respectively were missing that the plan had known before. No calculation finds that: the bug
- * only arises in the interplay of mutator, scheduler and calendar.
+ * WHY THIS FILE EXISTS: levelling itself is checked in `ResourceLevellingTest` and in
+ * `CapacityScheduleTest`, and it computed correctly. Nevertheless four Tasks afterwards carried a
+ * SHORTER duration in the plan than before -- 11 days became 8, 26 became 16. Measured against the
+ * effort, 24 and 80 hours of work respectively were missing that the plan had known before. No
+ * calculation finds that: the bug only arises in the interplay of mutator, scheduler and calendar.
  *
- * That interplay is exactly what is rebuilt here -- with the real TaskManager and a real calendar
- * with holidays, but without a running program.
+ * That interplay is exactly what is rebuilt here -- with the real TaskManager, a real
+ * HumanResourceManager and a real calendar, but without a running program.
+ *
+ * READING IS COVERED HERE TOO, and it was not before. `collectLevelTasks` had exactly one caller
+ * in the whole tree, in production code, and `toLevelTask` is private -- so the step that turns
+ * real assignments into [LevelTask] was never checked by anything. Two defects lived there
+ * undisturbed. Every test built its [LevelTask] objects by hand, with valid values, and therefore
+ * could not see them. Tests against hand-built values check the calculation; these check the
+ * conversion.
  */
 class LevellingWriteBackTest {
 
@@ -134,6 +145,83 @@ class LevellingWriteBackTest {
       RunOnlyUndoManager(), "Test")
     assertEquals(LocalDate.of(2026, 10, 23), task.startDate)
     assertEquals(11, task.duration.length)
+  }
+
+  // ---- Reading: what collectLevelTasks makes of real assignments ---------------------------
+
+  /**
+   * A project with a real resource manager, which the levelling conversion needs.
+   *
+   * [TestSetupHelper.TaskManagerBuilder] already builds one; it only has to be kept, because
+   * `build()` hands out the TaskManager alone.
+   */
+  private class Project {
+    val builder: TestSetupHelper.TaskManagerBuilder =
+      TestSetupHelper.newTaskManagerBuilder().withCalendar(WeekendCalendarImpl())
+    val taskManager: TaskManager = builder.build()
+    val resourceManager: HumanResourceManager = builder.resourceManager
+    val resourceProperties: CustomPropertyManager get() = resourceManager.customPropertyManager
+    val taskProperties: CustomPropertyManager get() = taskManager.customPropertyManager
+
+    fun resource(name: String, id: Int): HumanResource = resourceManager.create(name, id)
+
+    fun task(name: String, start: LocalDate, effortHours: Double): Task =
+      taskManager.newTaskBuilder().withName(name).withStartDate(start.toModelDate())
+        .withDuration(taskManager.createLength(1L)).build().also {
+          it.customValues.setValue(
+            EffortDrivenProperties.findOrCreateTaskEffort(taskProperties), effortHours)
+        }
+
+    fun assign(task: Task, resource: HumanResource, load: Float) {
+      task.assignmentCollection.addAssignment(resource).load = load
+    }
+
+    /**
+     * The conversion under test. [today] lies before every Task built here on purpose: a Task in
+     * the past counts as left lying and would come back frozen and date-fixed, which has nothing
+     * to do with what is measured here.
+     */
+    fun levelTasks(): List<LevelTask> =
+      collectLevelTasks(taskManager, taskProperties, resourceProperties,
+        LocalDate.of(2026, 9, 1), true)
+  }
+
+  /**
+   * An assignment with load 0 means "occupies nothing", not "no figure given".
+   *
+   * WHY THIS IS NOT A CORNER CASE: 0 is the only way a person can be put on a Task without that
+   * Task eating their working time -- supervision, an acceptance to be attended, a hand-over.
+   * Turning it into 100 % says the opposite of what was entered, and says it silently.
+   *
+   * The fallback to 100 % exists for a different case, and for a good reason: a Task with NO
+   * assignment at all still consumes the day, and treating it as free would waste capacity that
+   * does not exist. The two cases were sharing one branch.
+   */
+  @Test
+  fun `eine zuordnung mit last null belegt nichts`() {
+    val projekt = Project()
+    val p = projekt.resource("P", 1)
+    val z = projekt.task("Z", LocalDate.of(2026, 9, 14), 4.0)
+    projekt.assign(z, p, 0f)
+
+    val umgerechnet = projekt.levelTasks().single()
+    assertEquals(0, umgerechnet.loadPercent,
+      "eingetragen war Last 0; 100 waere das Gegenteil der Eingabe")
+  }
+
+  /**
+   * The counter-check that keeps the fix honest: WITHOUT any assignment the 100 % has to stay.
+   * Without this test, "load 0 gives 0" would also be satisfied by simply deleting the fallback,
+   * and an unassigned Task would then occupy nothing at all.
+   */
+  @Test
+  fun `ganz ohne zuordnung bleibt es bei hundert`() {
+    val projekt = Project()
+    projekt.task("ohne", LocalDate.of(2026, 9, 14), 4.0)
+
+    val umgerechnet = projekt.levelTasks().single()
+    assertEquals(100, umgerechnet.loadPercent,
+      "ein Vorgang ohne Zuordnung kostet trotzdem den Tag")
   }
 }
 
