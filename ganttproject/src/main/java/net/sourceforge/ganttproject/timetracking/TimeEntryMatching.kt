@@ -16,7 +16,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
-// NEUE DATEI DIESES FORKS
+// NEW FILE IN THIS FORK
 package net.sourceforge.ganttproject.timetracking
 
 import net.sourceforge.ganttproject.fork.forkText

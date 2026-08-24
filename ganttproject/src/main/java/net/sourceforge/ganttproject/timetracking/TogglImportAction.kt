@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -158,8 +158,8 @@ class TogglImportAction @JvmOverloads constructor(
       (selection.assignments.mapNotNull { (entry, id) -> taskById[id]?.let { entry to it } } +
         manual.mapNotNull { taskById[it.taskId]?.let { task -> it.entry to task } })
 
-    // Was durch die Hand zugeordnet wurde, gilt nicht mehr als uebersprungen -- sonst zaehlte die
-    // Meldung es weiterhin als "ohne Vorgangsnummer" und widerspraeche der eigenen Buchung.
+    // What was assigned by hand no longer counts as skipped -- otherwise the message would keep
+    // counting it as "without a task number" and would contradict its own booking.
     val assignedByHand = manual.map { it.entry.id }.toSet()
     val reported = selection.copy(
       withoutNumber = selection.withoutNumber.filterNot { it.id in assignedByHand })
@@ -217,9 +217,9 @@ internal fun resultMessage(result: ImportWriteResult, selection: ImportSelection
  * imported".
  */
 private fun skippedNote(selection: ImportSelection): String = buildString {
-  // Die Eintraege werden AUFGEZAEHLT, nicht nur gezaehlt. "7 Eintraege uebersprungen" sagt, dass
-  // etwas fehlt, aber nicht WELCHE -- und ohne das kann niemand etwas tun. Mit Datum und Text
-  // findet man sie in Toggl wieder.
+  // The entries are LISTED, not merely counted. "7 entries skipped" says that something is
+  // missing, but not WHICH ones -- and without that nobody can do anything. With a date and a
+  // text they can be found again in Toggl.
   if (selection.unknownNumber.isNotEmpty()) {
     append("\n\n").append(forkText("fork.toggl.import.unknownNumber", selection.unknownNumber.size))
     append("\n").append(describeEntries(selection.unknownNumber))
