@@ -43,7 +43,13 @@ class ResourceLevellingTest : TestCase() {
     id: String, dauer: Int, last: Int = 100, prio: Int = 2, reihe: Int = 0,
     vorgaenger: List<String> = emptyList(),
     fest: LocalDate? = null, fruehestens: LocalDate? = null
-  ) = LevelTask(id, reihe, prio, dauer, last, vorgaenger, fest, fruehestens)
+    // NAMED arguments, not positional. When `loadPercent` gave way to the per-person `loads`,
+    // every value behind it would otherwise have slipped one place along -- and `predecessors`
+    // landing in `fixedStart` compiles just as well as the right order does. The same lesson is
+    // recorded in `EffortBackfillTest`.
+  ) = LevelTask(id = id, orderInPlan = reihe, priority = prio, durationDays = dauer,
+    predecessors = vorgaenger, fixedStart = fest, earliestStart = fruehestens,
+    loads = mapOf(SHARED_POOL to last))
 
   /**
    * THE CORE CASE, and the reason this file exists: two Tasks, one person, both full.

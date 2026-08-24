@@ -34,6 +34,7 @@ import net.sourceforge.ganttproject.undo.GPUndoListener
 import net.sourceforge.ganttproject.undo.GPUndoManager
 import net.sourceforge.ganttproject.undo.UndoableEditTxnFactory
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.text.DateFormat
 import java.time.LocalDate
@@ -155,6 +156,9 @@ class LevellingWriteBackTest {
    * [TestSetupHelper.TaskManagerBuilder] already builds one; it only has to be kept, because
    * `build()` hands out the TaskManager alone.
    */
+  /** A Monday, comfortably in the future so that nothing counts as left lying. */
+  private val MONTAG: LocalDate = LocalDate.of(2026, 9, 14)
+
   private class Project {
     val builder: TestSetupHelper.TaskManagerBuilder =
       TestSetupHelper.newTaskManagerBuilder().withCalendar(WeekendCalendarImpl())
@@ -205,7 +209,7 @@ class LevellingWriteBackTest {
     projekt.assign(z, p, 0f)
 
     val umgerechnet = projekt.levelTasks().single()
-    assertEquals(0, umgerechnet.loadPercent,
+    assertEquals(mapOf("1" to 0), umgerechnet.loads,
       "eingetragen war Last 0; 100 waere das Gegenteil der Eingabe")
   }
 
@@ -220,8 +224,99 @@ class LevellingWriteBackTest {
     projekt.task("ohne", LocalDate.of(2026, 9, 14), 4.0)
 
     val umgerechnet = projekt.levelTasks().single()
-    assertEquals(100, umgerechnet.loadPercent,
+    assertEquals(mapOf(SHARED_POOL to SHARED_POOL_LOAD), umgerechnet.loads,
       "ein Vorgang ohne Zuordnung kostet trotzdem den Tag")
+  }
+
+  /**
+   * Marks a Task as "date fixed", so that levelling may not dodge sideways and the occupancy
+   * becomes visible as a conflict instead of as a movement.
+   */
+  private fun Project.pinDown(task: Task) {
+    task.customValues.setValue(findOrCreateDateFixed(taskProperties), true)
+  }
+
+  /**
+   * The shared setup for both load tests: `P` at 50 % on `X`, `Q` at 50 % on `X`, `P` at 50 %
+   * on `Y`. `P` is fully committed when both Tasks lie on the same day -- and not more than that.
+   */
+  private fun Project.zweiPersonenAnEinemVorgang(): Pair<Task, Task> {
+    val p = resource("P", 1)
+    val q = resource("Q", 2)
+    val x = task("X", MONTAG, 4.0)
+    val y = task("Y", MONTAG, 4.0)
+    assign(x, p, 50f)
+    assign(x, q, 50f)
+    assign(y, p, 50f)
+    return x to y
+  }
+
+  /**
+   * THE QUIET ONE, and therefore the more important of the two.
+   *
+   * Levelling must not move a Task out of a day on which the person still has room. Here `P` is
+   * at 50 % from `X` and at 50 % from `Y`, which is exactly a full day -- both fit.
+   *
+   * WHY THIS MATTERS MORE THAN THE OVERLOAD BELOW: a wrong conflict message is at least visible
+   * and can be argued with. A Task that quietly slides one day to the right looks like a correct
+   * calculation, and nothing on screen says why it moved.
+   */
+  @Test
+  fun `zwei personen an einem vorgang verschieben nichts grundlos`() {
+    val projekt = Project()
+    val (x, y) = projekt.zweiPersonenAnEinemVorgang()
+
+    val ergebnis = levelTasks(projekt.levelTasks(), MONTAG,
+      workingDayTest(projekt.taskManager.calendar))
+
+    assertEquals(ergebnis.starts[x.taskID.toString()], ergebnis.starts[y.taskID.toString()],
+      "P ist mit 50 % + 50 % genau voll; beide Vorgaenge passen auf denselben Tag")
+    assertTrue(ergebnis.conflicts.isEmpty(),
+      "und es gibt nichts zu melden, gemeldet wurde aber: ${ergebnis.conflicts}")
+  }
+
+  /**
+   * The loud one: with both dates pinned down, levelling cannot dodge, and the occupancy it has
+   * computed comes out as a number in a message. That number is the inflated one.
+   */
+  @Test
+  fun `zwei personen an einem vorgang erzeugen keine ueberlast`() {
+    val projekt = Project()
+    val (x, y) = projekt.zweiPersonenAnEinemVorgang()
+    projekt.pinDown(x)
+    projekt.pinDown(y)
+
+    val ergebnis = levelTasks(projekt.levelTasks(), MONTAG,
+      workingDayTest(projekt.taskManager.calendar))
+
+    val ueberlast = ergebnis.conflicts.filterIsInstance<LevelConflict.Overload>()
+    assertTrue(ueberlast.isEmpty(),
+      "P traegt an diesem Tag 50 % aus X und 50 % aus Y, also genau 100 %; gemeldet wurde " +
+        ueberlast.joinToString { "${it.percent} % fuer Person ${it.resourceId}" })
+  }
+
+  /**
+   * The control: the same two Tasks, but one person each. The sum then equals the single value,
+   * so nothing can go wrong -- and nothing may change here when the plural case is fixed.
+   */
+  @Test
+  fun `eine person je vorgang bleibt unveraendert`() {
+    val projekt = Project()
+    val p = projekt.resource("P", 1)
+    val x = projekt.task("X", MONTAG, 4.0)
+    val y = projekt.task("Y", MONTAG, 4.0)
+    projekt.assign(x, p, 50f)
+    projekt.assign(y, p, 50f)
+    projekt.pinDown(x)
+    projekt.pinDown(y)
+
+    val ergebnis = levelTasks(projekt.levelTasks(), MONTAG,
+      workingDayTest(projekt.taskManager.calendar))
+
+    assertTrue(ergebnis.conflicts.isEmpty(),
+      "50 % + 50 % auf eine Person ist genau voll: ${ergebnis.conflicts}")
+    assertEquals(ergebnis.starts[x.taskID.toString()], ergebnis.starts[y.taskID.toString()],
+      "beide passen auf denselben Tag")
   }
 }
 
