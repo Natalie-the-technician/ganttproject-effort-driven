@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -71,24 +71,23 @@ data class TaskImportChange(
  * [projectImportLedger] — project-wide, not per task, so that an entry which landed on a
  * different task last time is still recognised.
  *
- * [Fork-Aenderung] EINE BUCHUNG, EIN VORGANG — und warum das hier abgewiesen statt gerechnet wird:
+ * [fork change] ONE ENTRY, ONE TASK — and why this is refused here rather than computed:
  *
- * Diese Funktion kennt je Zuordnung nur den Eintrag und den Vorgang, also **keine Anteile**. Würde
- * derselbe Eintrag zweimal auftauchen, bekäme jeder betroffene Vorgang seine **vollen** Stunden:
- * `hoursDelta()` liefert für einen neuen Eintrag `entry.hours`, und `ledgerAfterImport` schreibt
- * ebenfalls die vollen Stunden in die Buchführung jedes Vorgangs. Aus vier Stunden würden acht —
- * in den Vorgängen und in der Buchführung. Genau das, was dieses Feature verhindern soll, und
- * still.
+ * Per assignment this function knows only the entry and the Task, so **no shares**. If the same
+ * entry turned up twice, every Task affected would get its **full** hours: `hoursDelta()` returns
+ * `entry.hours` for a new entry, and `ledgerAfterImport` likewise writes the full hours into the
+ * ledger of every Task. Four hours would become eight — in the Tasks and in the ledger. Exactly
+ * what this feature is meant to prevent, and silently.
  *
- * Eine Aufteilung liesse sich hier nicht raten: gleichmässig? nach Aufwand? Das ist eine
- * Entscheidung der Bedienung, keine Rechenregel. Deshalb **laut abweisen** statt falsch rechnen.
+ * A split could not be guessed here: evenly? by effort? That is a decision for the operator, not
+ * an arithmetic rule. Hence **refuse loudly** instead of computing wrongly.
  *
- * **Für Schritt 6:** `validateSplit(...)` liefert bereits `SplitPart(taskId, hours)`. Wenn die
- * Aufteilung gebaut wird, braucht diese Funktion je Zuordnung **einen eigenen Stundenwert** (etwa
- * `EntryAssignment(entry, task, hours)` statt eines Paars). Dann bekommt jeder Vorgang seinen
- * Anteil, und `mergeLedgers` zählt die Teile wieder zusammen — dafür ist das Zusammenzählen dort
- * gedacht (`ImportLedgerTest.testMergeAddsUpAnEntrySplitOverTwoTasks`). Bis dahin gilt diese
- * Vorbedingung.
+ * **For step 6:** `validateSplit(...)` already returns `SplitPart(taskId, hours)`. When the split
+ * is built, this function will need **an hours value of its own** per assignment (something like
+ * `EntryAssignment(entry, task, hours)` instead of a pair). Then every Task gets its share, and
+ * `mergeLedgers` adds the parts back together — that is what the summing there is for
+ * (`ImportLedgerTest.testMergeAddsUpAnEntrySplitOverTwoTasks`). Until then this precondition
+ * applies.
  */
 fun planTaskImport(
   assignments: List<Pair<TogglTimeEntry, Task>>,

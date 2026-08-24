@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -204,14 +204,14 @@ class ImportApplyTest {
   }
 
   /**
-   * [Fork-Aenderung] Derselbe Eintrag auf zwei Vorgängen — die Aufteilung, die es noch nicht gibt.
+   * [fork change] The same entry on two Tasks — the split that does not exist yet.
    *
-   * Ohne Vorbedingung bekäme JEDER der beiden Vorgänge die vollen Stunden: `hoursDelta()` liefert
-   * für einen neuen Eintrag `entry.hours`, und `ledgerAfterImport` schreibt ebenfalls die vollen
-   * Stunden in die Buchführung beider Vorgänge. Aus 4 Stunden würden 8 — in den Vorgängen und in
-   * der Buchführung, ohne jede Meldung.
+   * Without the precondition EACH of the two Tasks would get the full hours: `hoursDelta()`
+   * returns `entry.hours` for a new entry, and `ledgerAfterImport` likewise writes the full hours
+   * into the ledger of both Tasks. 4 hours would become 8 — in the Tasks and in the ledger,
+   * without any message.
    *
-   * Bis Schritt 6 die Aufteilung mit Anteilen baut, muss das laut scheitern.
+   * Until step 6 builds the split with shares, this has to fail loudly.
    */
   @Test
   fun `the same entry on two tasks is refused instead of counted twice`() {
@@ -225,12 +225,12 @@ class ImportApplyTest {
     assertTrue(failure.message!!.contains("1"),
       "the message must name the entry, otherwise nobody can find it: ${failure.message}")
 
-    // Und nichts darf dabei geschrieben worden sein.
+    // And nothing may have been written in the process.
     assertEquals(null, first.actualEffortHours(properties))
     assertEquals(null, second.actualEffortHours(properties))
   }
 
-  /** Zweimal derselbe Eintrag auf DEMSELBEN Vorgang zählt genauso doppelt. */
+  /** The same entry twice on the SAME Task counts double just as much. */
   @Test
   fun `the same entry twice on one task is refused`() {
     val task = newTask("A")

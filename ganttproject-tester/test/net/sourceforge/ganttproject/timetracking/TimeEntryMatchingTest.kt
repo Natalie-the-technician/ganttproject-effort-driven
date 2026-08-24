@@ -16,7 +16,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
-// NEUE DATEI DIESES FORKS
+// NEW FILE IN THIS FORK
 package net.sourceforge.ganttproject.timetracking
 
 import junit.framework.TestCase
@@ -49,7 +49,7 @@ class TimeEntryMatchingTest : TestCase() {
     MatchableTask(101, "Office paperwork: business registration",
       LocalDate.parse("2026-08-10"), LocalDate.parse("2026-08-25")))
 
-  // --- Vorgangsnummer im Text ---
+  // --- task number in the text ---
 
   fun testTaskNumberInTheText() {
     assertEquals(332, explicitTaskNumber("#332 Firmware Sensorik"))
@@ -82,7 +82,7 @@ class TimeEntryMatchingTest : TestCase() {
     assertTrue("the ordinary suggestions must still work", s.isNotEmpty())
   }
 
-  // --- Gelernte Zuordnung ---
+  // --- learned assignment ---
 
   fun testLearnedKeyIsSuggestedFirst() {
     val gelernt = vorgaenge.map {
@@ -102,7 +102,7 @@ class TimeEntryMatchingTest : TestCase() {
     assertTrue(s.first().reasons.contains(MatchReason.LEARNED))
   }
 
-  // --- Textaehnlichkeit ---
+  // --- text similarity ---
 
   fun testSimilarTextIsSuggested() {
     val s = suggestTasks(entry(description = "Office paperwork prepared"), vorgaenge)
@@ -118,7 +118,7 @@ class TimeEntryMatchingTest : TestCase() {
     assertEquals(0.0, textSimilarity("Steuerberater angerufen", "Firmware Sensorik"), 0.001)
   }
 
-  // --- Zeitliche Plausibilitaet ---
+  // --- plausibility in time ---
 
   fun testDateInsideTheTaskWindowCounts() {
     val s = suggestTasks(entry(description = "irgendwas", date = "2026-08-17"), vorgaenge)
@@ -130,7 +130,7 @@ class TimeEntryMatchingTest : TestCase() {
     assertTrue(s.isEmpty())
   }
 
-  // --- Projektverknuepfung ---
+  // --- project link ---
 
   fun testProjectLinkRanksItsGroupHigher() {
     val s = suggestTasks(
@@ -141,7 +141,7 @@ class TimeEntryMatchingTest : TestCase() {
     assertTrue(s[0].reasons.contains(MatchReason.PROJECT_LINK))
   }
 
-  // --- Aufteilung ---
+  // --- splitting ---
 
   fun testSplitThatAddsUpIsAccepted() {
     val r = validateSplit(4.0, listOf(SplitPart(332, 2.5), SplitPart(333, 1.5)))
@@ -175,7 +175,7 @@ class TimeEntryMatchingTest : TestCase() {
       SplitPart(3, 0.334))) is SplitResult.Ok)
   }
 
-  // --- Doppelimport: der gefaehrlichste Fehler dieses Features ---
+  // --- double import: the most dangerous bug of this feature ---
 
   fun testNewEntryIsImported() {
     val d = planImport(listOf(entry(id = 7, hours = 3.0)), emptyMap())

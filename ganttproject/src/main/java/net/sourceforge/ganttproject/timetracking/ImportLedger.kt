@@ -1,7 +1,7 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -150,8 +150,8 @@ object TimeTrackingProperties {
 
   fun findOrCreateImportedEntries(manager: CustomPropertyManager): CustomPropertyDefinition =
     manager.findEffortDefinition(TASK_IMPORTED_ENTRIES)
-      // [Fork-Aenderung] Anzeigename aus dem Textbuendel: er erscheint als Spaltenkopf. Die id
-      // bleibt unuebersetzt, weil die Suche darueber laeuft.
+      // [fork change] Display name from the text bundle: it appears as a column header. The id
+      // stays untranslated, because the lookup goes through it.
       ?: manager.createDefinition(TASK_IMPORTED_ENTRIES, CustomPropertyClass.TEXT.iD,
                                   forkText("fork.column.togglImported"), null)
 }
