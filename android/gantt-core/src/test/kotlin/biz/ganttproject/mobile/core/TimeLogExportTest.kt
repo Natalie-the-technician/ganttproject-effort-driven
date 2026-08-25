@@ -15,6 +15,7 @@ import org.junit.jupiter.api.assertThrows
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.YearMonth
 import java.time.ZoneOffset
 
 class TimeLogExportTest {
@@ -189,6 +190,80 @@ class TimeLogExportTest {
     val last = record(id = "last", start = at(31, 22, 0))
     val july = ExportPeriod(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), ZoneId.of("Europe/Berlin"))
     assertEquals(2, recordsInPeriod(listOf(first, last), july).size)
+  }
+
+  @Test
+  @DisplayName("a stretch across midnight counts on the day it STARTED")
+  fun `the month boundary follows the start`() {
+    // 22:00 on the last day of July until 01:00 on the first of August. The
+    // whole stretch counts as July, because a record is attributed to the day
+    // it began on.
+    //
+    // Not arbitrary: it is the same rule the reporting tool uses, where the
+    // date of an entry is the local date of its start. Two tools splitting a
+    // night shift differently is exactly how two monthly sheets stop adding
+    // up to the same number, so this is pinned rather than left to chance.
+    val overnight = record(id = "night", start = at(31, 22), seconds = 3 * 3600)
+    val july = ExportPeriod(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), ZoneId.of("Europe/Berlin"))
+    val august = ExportPeriod(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31), ZoneId.of("Europe/Berlin"))
+
+    assertEquals(listOf("night"), recordsInPeriod(listOf(overnight), july).map { it.id })
+    assertTrue(recordsInPeriod(listOf(overnight), august).isEmpty())
+    assertEquals(3 * 3600 * 1000L, entriesOf(TimeLogExport.toTogglV2Json(listOf(overnight)))
+      .single()["dur"].asLong(), "and the whole stretch goes with it")
+  }
+
+  @Test
+  @DisplayName("a record booked late still belongs to the month it was worked in")
+  fun `when it was recorded does not move it`() {
+    // Booked on 2 August for work done on 31 July: createdAt is August, start
+    // is July, and July is where it counts. Which also means a month can still
+    // grow after it has been exported -- see monthsWithRecords, and see the
+    // note in the report about re-exporting a month that was already frozen.
+    val late = TimeRecord(
+      id = "late",
+      taskUid = "t1",
+      start = at(31, 9),
+      durationSeconds = 3600,
+      description = "forgot to book this yesterday",
+      createdAt = OffsetDateTime.of(2026, 8, 2, 10, 0, 0, 0, ZoneOffset.ofHours(2))
+    )
+    val july = ExportPeriod(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31), ZoneId.of("Europe/Berlin"))
+    assertEquals(listOf("late"), recordsInPeriod(listOf(late), july).map { it.id })
+  }
+
+  // -------------------------------------------------------- Which months
+
+  @Test
+  fun `the months that have records are offered newest first`() {
+    val records = listOf(
+      record(id = "a", start = at(3, 9)),
+      record(id = "b", start = at(4, 9)),
+      record(id = "c", start = at(3, 9).plusMonths(1)),
+      record(id = "d", start = at(3, 9).minusMonths(2))
+    )
+    assertEquals(
+      listOf(YearMonth.of(2026, 8), YearMonth.of(2026, 7), YearMonth.of(2026, 5)),
+      monthsWithRecords(records, ZoneId.of("Europe/Berlin"))
+    )
+  }
+
+  @Test
+  @DisplayName("a month with records is reachable however long ago it was")
+  fun `no month becomes unreachable`() {
+    // The reason this exists: assuming "the previous month" is right for the
+    // ordinary rhythm and wrong the moment one is missed. A month nobody can
+    // select is a month whose hours cannot be shown to anybody.
+    val old = record(id = "old", start = at(3, 9).minusYears(1))
+    val months = monthsWithRecords(listOf(old), ZoneId.of("Europe/Berlin"))
+    assertEquals(1, months.size)
+    val period = monthPeriod(months.single(), ZoneId.of("Europe/Berlin"))
+    assertEquals(listOf("old"), recordsInPeriod(listOf(old), period).map { it.id })
+  }
+
+  @Test
+  fun `an empty log offers no months rather than a wrong one`() {
+    assertTrue(monthsWithRecords(emptyList(), ZoneOffset.UTC).isEmpty())
   }
 
   @Test

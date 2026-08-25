@@ -106,6 +106,11 @@ fun AppScaffold(
   var menuOpen by remember { mutableStateOf(false) }
   var aboutOpen by remember { mutableStateOf(false) }
   var settingsOpen by remember { mutableStateOf(false) }
+  // Which month the JSON export covers. Held here because the document picker
+  // comes back on its own callback and has to know what was chosen before it
+  // opened.
+  var exportPickerOpen by remember { mutableStateOf(false) }
+  var pendingExportMonth by remember { mutableStateOf<java.time.YearMonth?>(null) }
   var confirmCloseOpen by remember { mutableStateOf(false) }
   // The level the user just picked but has not confirmed yet. Non-null only
   // while the "are you sure" dialog is up.
@@ -133,7 +138,11 @@ fun AppScaffold(
   // a share provider of its own.
   val exportJson = rememberLauncherForActivityResult(
     ActivityResultContracts.CreateDocument("application/json")
-  ) { uri -> uri?.let(viewModel::exportTimeLogJson) }
+  ) { uri ->
+    val month = pendingExportMonth
+    if (uri != null && month != null) viewModel.exportTimeLogJson(uri, month)
+    pendingExportMonth = null
+  }
 
   val exportCsv = rememberLauncherForActivityResult(
     ActivityResultContracts.CreateDocument("text/csv")
@@ -265,10 +274,7 @@ fun AppScaffold(
             if (state.project != null) {
               DropdownMenuItem(
                 text = { Text(stringResource(R.string.action_export_timelog_json)) },
-                onClick = {
-                  menuOpen = false
-                  exportJson.launch(viewModel.exportJsonFileName())
-                }
+                onClick = { menuOpen = false; exportPickerOpen = true }
               )
               DropdownMenuItem(
                 text = { Text(stringResource(R.string.action_export_timelog_csv)) },
@@ -469,6 +475,48 @@ fun AppScaffold(
       },
       dismissButton = {
         TextButton(onClick = { serverSaveRequest = null }) {
+          Text(stringResource(R.string.action_cancel))
+        }
+      }
+    )
+  }
+
+  if (exportPickerOpen) {
+    // Which months exist is read from the log rather than assumed. Assuming
+    // "last month" is right for the ordinary rhythm and wrong the moment one
+    // is missed -- and a month nobody can pick is a month whose hours cannot
+    // be shown to anybody.
+    val months = viewModel.exportMonths()
+    AlertDialog(
+      onDismissRequest = { exportPickerOpen = false },
+      title = { Text(stringResource(R.string.export_pick_month)) },
+      text = {
+        Column(
+          modifier = Modifier.verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          if (months.isEmpty()) {
+            Text(stringResource(R.string.export_no_months))
+          } else {
+            Text(
+              stringResource(R.string.export_month_hint),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            months.forEach { month ->
+              TextButton(onClick = {
+                exportPickerOpen = false
+                pendingExportMonth = month
+                exportJson.launch(viewModel.exportJsonFileName(month))
+              }) {
+                Text(month.toString())
+              }
+            }
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { exportPickerOpen = false }) {
           Text(stringResource(R.string.action_cancel))
         }
       }

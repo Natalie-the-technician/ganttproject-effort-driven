@@ -11,11 +11,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import biz.ganttproject.mobile.core.EditScope
 import biz.ganttproject.mobile.core.GanttDocument
+import biz.ganttproject.mobile.core.monthsWithRecords
+import biz.ganttproject.mobile.core.monthPeriod
 import biz.ganttproject.mobile.core.RunningTimer
 import biz.ganttproject.mobile.core.recordsInPeriod
 import biz.ganttproject.mobile.core.TimeLogExport
 import biz.ganttproject.mobile.core.TimeLogCsv
-import biz.ganttproject.mobile.core.ExportPeriod
 import biz.ganttproject.mobile.core.ImportAssignment
 import biz.ganttproject.mobile.core.ImportPlan
 import biz.ganttproject.mobile.core.Matching
@@ -955,34 +956,40 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
   // ---------------------------------------------------------------- Export
 
   /**
-   * The month an export covers by default: the last one that is complete.
+   * The months that actually have records, newest first.
    *
-   * A reporting tool checks that every entry falls inside the period it was
-   * asked about, so an export has to be cut to a month rather than handed over
-   * whole. The previous one is the only month that cannot still grow.
+   * Offered instead of assuming one. "The previous month" is right for the
+   * ordinary rhythm and wrong the moment a month is missed — and a month that
+   * cannot be selected is a month whose hours cannot be shown to anybody.
    */
-  private fun exportMonth(): YearMonth = YearMonth.now().minusMonths(1)
+  fun exportMonths(): List<YearMonth> =
+    open?.let { monthsWithRecords(it.document.timeLog().records, ZoneId.systemDefault()) }
+      .orEmpty()
 
   /** Suggested file name, so the month is visible without opening the file. */
-  fun exportJsonFileName(): String = "zeitjournal-${exportMonth()}.json"
+  fun exportJsonFileName(month: YearMonth): String = "zeitjournal-$month.json"
 
   fun exportCsvFileName(): String = "zeitjournal.csv"
 
   /**
-   * Writes the previous month's records in the shape a reporting tool reads.
+   * Writes one month's records in the shape a reporting tool reads.
    *
-   * The device's zone decides which day a record falls on, and therefore which
-   * month. It is the only zone the app knows; the file itself carries a full
-   * offset per record, so a reader that needs a different one can still work
-   * it out.
+   * A record counts in the month its stretch **started** in, which is the rule
+   * the reporting tool uses too. A night shift therefore belongs to the day it
+   * began on, and a stretch booked in August for work done on 31 July stays in
+   * July — which also means a month can still grow after it has been exported.
+   *
+   * The device's zone decides which day a record falls on. It is the only zone
+   * the app knows; the file carries a full offset per record, so a reader that
+   * needs another one can still work it out.
    */
-  fun exportTimeLogJson(target: android.net.Uri) {
+  fun exportTimeLogJson(target: android.net.Uri, month: YearMonth) {
     val project = open ?: return
-    val month = exportMonth()
-    val zone = ZoneId.systemDefault()
-    val period = ExportPeriod(month.atDay(1), month.atEndOfMonth(), zone)
     val document = project.document
-    val records = recordsInPeriod(document.timeLog().records, period)
+    val records = recordsInPeriod(
+      document.timeLog().records,
+      monthPeriod(month, ZoneId.systemDefault())
+    )
     val text = TimeLogExport.toTogglV2Json(records, document.labelsByTaskUid())
     writeExport(target, text, Notice.TimeLogExported(records.size))
   }

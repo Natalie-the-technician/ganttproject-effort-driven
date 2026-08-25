@@ -83,8 +83,11 @@
     <string name="task_labels_apply">Apply</string>
     <string name="person_section">Who is recording</string>
     <string name="person_name">Your name (optional)</string>
-    <string name="person_hint">Copied into every booking made on this device. Left empty, records carry no name.</string>
+    <string name="person_hint">Written into every booking made on this device — and therefore into the project file, which travels with it to whoever you share it with. Left empty, the records carry no name.</string>
     <string name="person_apply">Save</string>
+    <string name="export_pick_month">Which month?</string>
+    <string name="export_month_hint">A record counts in the month its stretch started in, so a night shift belongs to the day it began on.</string>
+    <string name="export_no_months">Nothing recorded yet.</string>
     <string name="timelog_source_manual">typed in</string>
     <string name="timelog_source_timer">timer</string>
     <string name="timelog_source_quick">widget</string>

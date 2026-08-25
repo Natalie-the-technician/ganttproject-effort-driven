@@ -6,6 +6,7 @@
 package biz.ganttproject.mobile.core
 
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 
 /*
@@ -43,6 +44,24 @@ data class ExportPeriod(val from: LocalDate, val to: LocalDate, val zone: ZoneId
  */
 fun recordsInPeriod(records: List<TimeRecord>, period: ExportPeriod): List<TimeRecord> =
   records.filter { it in period }
+
+/**
+ * The months that actually contain records, newest first.
+ *
+ * Offered so a caller can let somebody pick a month instead of assuming one.
+ * Assuming the previous month is right for the ordinary rhythm and wrong the
+ * moment a month is missed: without this, a month that was never exported
+ * becomes unreachable, and the hours in it cannot be shown to anybody.
+ */
+fun monthsWithRecords(records: List<TimeRecord>, zone: ZoneId): List<YearMonth> =
+  records.filter { it.durationSeconds > 0L }
+    .map { YearMonth.from(it.dateIn(zone)) }
+    .distinct()
+    .sortedDescending()
+
+/** The whole of one month, in the stated zone. */
+fun monthPeriod(month: YearMonth, zone: ZoneId): ExportPeriod =
+  ExportPeriod(month.atDay(1), month.atEndOfMonth(), zone)
 
 object TimeLogExport {
 
