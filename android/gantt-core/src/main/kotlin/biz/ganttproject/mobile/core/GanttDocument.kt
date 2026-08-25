@@ -377,6 +377,15 @@ class GanttDocument private constructor(private val root: XmlElement) {
   }
 
   /**
+   * The uid of a task addressed by its id.
+   *
+   * The bridge in the other direction, for callers that still hold an id --
+   * the Toggl import plan, for one, which predates the log and works in ids.
+   */
+  fun taskUidOfId(taskId: String): String? =
+    taskElement(taskId)?.attr("uid")?.ifEmpty { null }
+
+  /**
    * Tasks that carry no `uid`.
    *
    * Nothing can be booked on them, because a record would have nothing stable

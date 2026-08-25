@@ -428,3 +428,49 @@ fun mergeLogs(preferred: List<TimeRecord>, other: List<TimeRecord>): List<TimeRe
   preferred.forEach { byId[it.id] = it }
   return byId.values.sortedWith(compareBy({ it.start }, { it.id }))
 }
+
+// ------------------------------------------------------ From other sources
+
+/**
+ * Prefix of a record id that came from Toggl. Also the reason a second import
+ * of the same entry replaces rather than adds: the id is derived from the
+ * entry, so it is the same on every run.
+ */
+const val TOGGL_RECORD_PREFIX = "toggl:"
+
+/** The record id an entry will always produce. */
+fun togglRecordId(entryId: Long): String = "$TOGGL_RECORD_PREFIX$entryId"
+
+/**
+ * Turns a tracker entry into a record of work on [taskUid].
+ *
+ * The id is derived from the entry id, not invented, so importing the same
+ * month twice replaces the records instead of doubling the hours. That makes
+ * this safe to re-run, which the separate import ledger had to arrange by hand.
+ *
+ * Returns `null` when the entry carries no timestamp and no [fallbackZone] is
+ * given. **The fallback places the record at the start of the day, and that is
+ * a placement, not a measurement** — the payload simply did not say when the
+ * work began. Callers that need the truth should pass no zone and handle the
+ * null rather than let a made-up midnight into a record somebody may later
+ * have to vouch for.
+ */
+fun TogglTimeEntry.toTimeRecord(
+  taskUid: String,
+  person: String? = null,
+  fallbackZone: ZoneId? = null
+): TimeRecord? {
+  val began = startedAt
+    ?: fallbackZone?.let { start.atStartOfDay(it).toOffsetDateTime() }
+    ?: return null
+  return TimeRecord(
+    id = togglRecordId(id),
+    taskUid = taskUid,
+    start = began,
+    durationSeconds = durationSeconds,
+    description = description,
+    person = person,
+    source = TimeSource.IMPORTED,
+    createdAt = began
+  )
+}

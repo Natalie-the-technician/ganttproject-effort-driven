@@ -26,7 +26,17 @@ data class TogglTimeEntry(
   val durationSeconds: Long,
   val projectId: Long?,
   val projectName: String?,
-  val tags: List<String>
+  val tags: List<String>,
+  /**
+   * The full timestamp the entry began at, offset and all.
+   *
+   * [start] narrows this to a date, which is all the import matching needs.
+   * A record of work needs more: the same instant falls on a different day
+   * depending on the zone it is read in, and a month boundary is exactly
+   * where a reporting period ends. Null only for a payload that carried a
+   * bare date with no time in it.
+   */
+  val startedAt: OffsetDateTime? = null
 ) {
   val hours: Double get() = durationSeconds / 3600.0
 }
@@ -215,7 +225,8 @@ class TogglClient(
       val id = obj["id"].asLong() ?: return@mapNotNull null
       val duration = obj["duration"].asLong() ?: return@mapNotNull null
       if (duration <= 0L) return@mapNotNull null // still running
-      val start = obj["start"].asString()?.let(::parseTogglDate) ?: return@mapNotNull null
+      val startText = obj["start"].asString() ?: return@mapNotNull null
+      val start = parseTogglDate(startText) ?: return@mapNotNull null
       val projectId = obj["project_id"].asLong()
       TogglTimeEntry(
         id = id,
@@ -224,12 +235,27 @@ class TogglClient(
         durationSeconds = duration,
         projectId = projectId,
         projectName = projectId?.let { projectNames[it] },
-        tags = obj["tags"].asArray()?.mapNotNull { it.asString() } ?: emptyList()
+        tags = obj["tags"].asArray()?.mapNotNull { it.asString() } ?: emptyList(),
+        startedAt = parseTogglInstant(startText)
       )
     }
     return TogglResult.Success(entries)
   }
 }
+
+/**
+ * The full timestamp, or null when the text carried only a date.
+ *
+ * Deliberately no fallback: a date without a time is not a timestamp, and
+ * inventing midnight here would hide that from every caller. [parseTogglDate]
+ * is the one that may fall back, because a date is all it promises.
+ */
+internal fun parseTogglInstant(text: String): OffsetDateTime? =
+  try {
+    OffsetDateTime.parse(text)
+  } catch (e: DateTimeParseException) {
+    null
+  }
 
 /** Accepts a full ISO timestamp, falling back to a bare date. */
 internal fun parseTogglDate(text: String): LocalDate? =
