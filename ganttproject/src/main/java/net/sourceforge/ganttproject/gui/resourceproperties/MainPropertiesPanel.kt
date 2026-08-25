@@ -137,6 +137,10 @@ class MainPropertiesPanel(private val resource: HumanResource) {
    * worse than none, and the address can still be typed off.
    */
   private fun togglTokenHint(): Node = VBox(2.0).also { box ->
+    // Auch der Behaelter darf die Spalte nicht setzen: eine VBox reicht die groesste
+    // Vorzugsbreite ihrer Kinder nach oben weiter. Begruendung siehe asHint().
+    box.prefWidth = 0.0
+    box.maxWidth = Double.MAX_VALUE
     box.children.add(Label(TOGGL_TOKEN_HINT).asHint())
     box.children.add(
       if (canBrowse()) {
@@ -216,16 +220,22 @@ private val TOGGL_TOKEN_LINK get() = forkText("fork.toggl.token.link")
 private const val TOGGL_TOKEN_HELP_URL = "https://support.toggl.com/where-is-my-api-key-located"
 
 /**
- * [fork change] The width the hint wraps at.
+ * [Fork-Aenderung] Der Hinweis soll die Rasterspalte NEHMEN, nicht setzen.
  *
- * Without a cap the grid sets the column to the width of the unwrapped sentence and stretches the
- * dialog; only a bounded maximum width lets `isWrapText` wrap at all.
+ * Ein Label mit `isWrapText` meldet als Vorzugsbreite den UNGEBROCHENEN Satz; im Raster wird daraus
+ * die Spaltenbreite. Dagegen stand hier zuvor ein fester Deckel von 420 px. Der hat die Spalte aber
+ * nicht nur begrenzt, sondern AUFGEZOGEN: gemessen war die Feldspalte im Original 346 px breit, im
+ * Fork 419 px, der Dialog entsprechend 496 px gegen 569 px.
+ *
+ * Ohne Vorzugsbreite fragt der Hinweis keinen Platz mehr an. Die Spalte bekommt ihre Breite damit
+ * vom Token-Feld darueber, und der Hinweis bricht auf genau diese Breite um. `maxWidth` bleibt
+ * offen, weil das Raster den Knoten sonst nicht auf die Zellenbreite dehnt und der Hinweis auf
+ * seine Mindestbreite zusammenfiele.
  */
-private const val HINT_WIDTH = 420.0
-
 private fun Label.asHint(): Label = also {
   it.isWrapText = true
-  it.maxWidth = HINT_WIDTH
+  it.prefWidth = 0.0
+  it.maxWidth = Double.MAX_VALUE
 }
 
 /**
