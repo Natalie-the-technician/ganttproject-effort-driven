@@ -164,28 +164,28 @@ class TogglImportAction @JvmOverloads constructor(
     val reported = selection.copy(
       withoutNumber = selection.withoutNumber.filterNot { it.id in assignedByHand })
 
-    // [Fork-Aenderung] Diagnose an der Entscheidungsstelle.
+    // [fork change] Diagnosis at the point where the decision is made.
     //
-    // "Es gibt nichts Neues zu uebernehmen" ist die einzige Meldung fuer ZWEI voellig
-    // verschiedene Lagen: alles war schon importiert -- oder es kam gar keine Zuordnung an. Am
-    // 20.08.2026 am echten Plan aufgefallen: sechs von Hand zugeordnete Eintraege, danach diese
-    // Meldung. Ohne diese Zeilen ist von aussen nicht zu unterscheiden, welcher Fall vorliegt.
+    // "There is nothing new to take over" is the single message for TWO entirely different
+    // situations: everything had been imported already -- or no assignment arrived at all. Noticed
+    // on the real plan on 20 August 2026: six entries assigned by hand, then this message. Without
+    // these lines there is no way to tell from the outside which of the two it is.
     val ledger = projectImportLedger(tasks, taskProperties)
-    val automatisch = selection.assignments.count { taskById.containsKey(it.second) }
+    val matchedAutomatically = selection.assignments.count { taskById.containsKey(it.second) }
     GPLogger.log(
-      "Toggl import: $automatisch automatisch zugeordnet, ${manual.size} von Hand gewaehlt," +
-      " zusammen ${assignments.size} wirksam; Merkzettel kennt ${ledger.size} Eintraege")
+      "Toggl import: $matchedAutomatically matched automatically, ${manual.size} chosen by hand," +
+      " ${assignments.size} effective in total; the ledger knows ${ledger.size} entries")
 
     val changes = planTaskImport(assignments, ledger, taskProperties)
     val toWrite = changes.filterNot { it.isEmpty }
 
     if (toWrite.isEmpty()) {
-      // Je Eintrag sagen, WARUM nichts uebrig blieb. Ohne das steht der Mensch vor einer Meldung,
-      // die das Gegenteil dessen behauptet, was er gerade getan hat.
+      // Say per entry WHY nothing was left. Without it the person faces a message that claims
+      // the opposite of what they just did.
       assignments.forEach { (entry, task) ->
         GPLogger.log(
-          "Toggl import: nichts zu tun fuer Eintrag ${entry.id} (${entry.hours} h)" +
-          " auf Vorgang ${task.taskID} -- Merkzettel: ${ledger[entry.id] ?: "unbekannt"}")
+          "Toggl import: nothing to do for entry ${entry.id} (${entry.hours} h)" +
+          " on task ${task.taskID} -- ledger: ${ledger[entry.id] ?: "unknown"}")
       }
       // Nothing to write is a normal outcome, not a failure: it means everything was imported
       // before. Saying so beats a silent no-op that looks like the menu item is broken.

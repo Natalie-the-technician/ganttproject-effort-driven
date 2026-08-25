@@ -18,44 +18,42 @@ import net.sourceforge.ganttproject.fork.SecretStore
  * the same user account. For the WebDAV password encryption was an explicit condition; the token
  * is the same secret in the same file.
  *
- * OHNE WINDOWS PRUEFT KEINE DIESER VIER METHODEN ETWAS.
+ * WITHOUT WINDOWS NONE OF THESE FOUR METHODS CHECKS ANYTHING.
  *
- * `SecretStore.isAvailable` liest `os.name` und ist nur unter Windows wahr. Jede Methode kehrt
- * darum auf jedem anderen System vor der ersten Zusicherung zurueck. JUnit wertet eine Methode,
- * die ohne Fehler zurueckkommt, als BESTANDEN -- ein Linux-Lauf meldet hier also vier gruene
- * Tests, und keiner davon hat etwas gemessen. Belegt ist die Verschluesselung nach wie vor nur
- * durch einen Windows-Lauf.
+ * `SecretStore.isAvailable` reads `os.name` and is true only on Windows. Every method therefore
+ * returns on every other system before the first assertion. JUnit counts a method that returns
+ * without an error as PASSED -- so a Linux run reports four green tests here, and not one of them
+ * measured anything. The encryption is still demonstrated only by a Windows run.
  *
- * WARUM NICHT `assumeTrue` -- gemessen, nicht vermutet:
+ * WHY NOT `assumeTrue` -- measured, not assumed:
  *
- * Vom 19. bis zum 20.08.2026 stand hier `assumeTrue(GRUND, SecretStore.isAvailable)` statt des
- * fruehen `return`, damit der Lauf die vier als UEBERSPRUNGEN zaehlt statt als bestanden. Das
- * funktioniert nicht. Nachgemessen auf einer Linux-VM am 20.08.2026, Zahlen aus dem JUnit-XML:
+ * From 19 to 20 August 2026 `assumeTrue(REASON, SecretStore.isAvailable)` stood here instead of the
+ * early `return`, so that the run would count the four as SKIPPED rather than passed. That does not
+ * work. Measured on a Linux VM on 20 August 2026, figures from the JUnit XML:
  *
  *     tests=4  failures=4  errors=0  skipped=0
- *     org.junit.AssumptionViolatedException: DPAPI gibt es nur unter Windows; ...
+ *     org.junit.AssumptionViolatedException: DPAPI exists only on Windows; ...
  *
- * Vier ROTE Tests, nicht vier uebersprungene -- und damit `BUILD FAILED` bei jedem Volllauf
- * ausserhalb von Windows. Der Grund steckt in der Vererbung: diese Klasse erbt von
- * `junit.framework.TestCase` und wird deshalb ueber die Vintage-Engine von
- * `JUnit38ClassRunner` ausgefuehrt. Der reicht jede geworfene Ausnahme ueber
- * `TestResult.addError` als Fehler weiter; die Sonderbehandlung fuer die
- * `AssumptionViolatedException` sitzt im JUnit-4-Runner, den eine JUnit-3-`TestCase` nie
- * erreicht. Auf einem Windows-Rechner faellt das nie auf, weil `isAvailable` dort wahr ist und
- * die Annahme gar nicht erst greift -- genau deshalb ging die Umstellung ungeprueft hinaus.
+ * Four RED tests, not four skipped -- and with them `BUILD FAILED` on every full run outside
+ * Windows. The reason lies in the inheritance: this class extends `junit.framework.TestCase` and is
+ * therefore run through the Vintage engine's `JUnit38ClassRunner`. That runner passes every thrown
+ * exception on as an error via `TestResult.addError`; the special handling for the
+ * `AssumptionViolatedException` sits in the JUnit 4 runner, which a JUnit 3 `TestCase` never
+ * reaches. On a Windows machine it never shows, because `isAvailable` is true there and the
+ * assumption never fires -- which is precisely why the change went out unchecked.
  *
- * Der Kommentar, der bis zum 20.08.2026 hier stand, behauptete das Gegenteil: die Vintage-Engine
- * melde die Annahme als uebersprungen. Das war eine Annahme ueber die Annahme, keine Messung,
- * und sie ist falsch.
+ * The comment that stood here until 20 August 2026 claimed the opposite: that the Vintage engine
+ * reports the assumption as skipped. That was an assumption about the assumption, not a
+ * measurement, and it is wrong.
  *
- * Wer die vier wirklich als uebersprungen gezaehlt haben will, muss die Klasse von `TestCase`
- * loesen und sie als JUnit-4- oder Jupiter-Test mit `@Test` schreiben. Solange sie eine
- * JUnit-3-`TestCase` ist, bleibt der fruehe `return`: vier falsch-gruene Tests sind ein
- * Buchhaltungsfehler, vier rote sind ein kaputter Bau auf jeder Nicht-Windows-Maschine.
+ * Whoever really wants the four counted as skipped has to detach the class from `TestCase` and
+ * write it as a JUnit 4 or Jupiter test with `@Test`. As long as it is a JUnit 3 `TestCase`, the
+ * early `return` stays: four falsely green tests are a bookkeeping error, four red ones are a
+ * broken build on every non-Windows machine.
  *
- * FUERS LESEN DER ZAHLEN: eine Linux-Grundlinie ist genauso gross wie eine Windows-Grundlinie,
- * diese vier eingerechnet. Der Unterschied steckt nicht in der Zahl, sondern darin, was
- * dahinter gemessen wurde -- unter Linux naemlich nichts.
+ * FOR READING THE NUMBERS: a Linux baseline is exactly as large as a Windows baseline, these four
+ * included. The difference is not in the number but in what was measured behind it -- on Linux,
+ * namely nothing.
  */
 class TokenEncryptionTest : TestCase() {
 
