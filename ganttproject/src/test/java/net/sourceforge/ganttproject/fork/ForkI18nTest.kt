@@ -174,6 +174,40 @@ class ForkI18nTest {
   }
 
   /**
+   * The legend of the baseline dialog, pinned in both languages.
+   *
+   * WHY THIS IS WORTH A TEST OF ITS OWN. These three keys do not reach the screen the way every
+   * other fork key does. The original's labels ARE in the main bundle, so the fallback in
+   * `OptionsPageBuilder.I18N` never asks this bundle for them; the labels only arrive because
+   * `GanttGraphicArea.redirectLegendToForkBundle` points the canonical keys at the three keys
+   * below. A typo on either side is invisible — the dialog would quietly show the original's
+   * text again, which is the very thing that had to go.
+   *
+   * The texts themselves are pinned because they were chosen under constraints that are easy to
+   * lose: no line may name a quantity, because the band means an end date under DATES, a length
+   * under DURATIONS and hours under EFFORT. Only the DIRECTION is common to all three. And the
+   * grey line has to say "one of the two", not "the comparison value" — under DURATIONS the
+   * planned value is the missing one, under EFFORT the current one.
+   */
+  @Test
+  fun `the baseline legend says the same thing in both languages`() {
+    assertEquals("One of the two values is missing",
+      ForkI18n.textOrNull("fork.baseline.legend.missing", english))
+    assertEquals("Einer der beiden Werte fehlt",
+      ForkI18n.textOrNull("fork.baseline.legend.missing", german))
+
+    assertEquals("Below the planned value",
+      ForkI18n.textOrNull("fork.baseline.legend.below", english))
+    assertEquals("Unter dem geplanten Wert",
+      ForkI18n.textOrNull("fork.baseline.legend.below", german))
+
+    assertEquals("Above the planned value",
+      ForkI18n.textOrNull("fork.baseline.legend.above", english))
+    assertEquals("Über dem geplanten Wert",
+      ForkI18n.textOrNull("fork.baseline.legend.above", german))
+  }
+
+  /**
    * Every key this fork's interface asks for must exist in the English file. Without this, adding
    * a German label and forgetting the English one produces a bare key on any non-German system —
    * invisible to anyone developing in German.
