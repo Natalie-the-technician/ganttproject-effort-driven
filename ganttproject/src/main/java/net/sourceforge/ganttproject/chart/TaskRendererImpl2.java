@@ -33,6 +33,7 @@ import biz.ganttproject.customproperty.CustomPropertyManager;
 import com.google.common.collect.ImmutableList;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
 import net.sourceforge.ganttproject.fork.ChartComparison;
+import net.sourceforge.ganttproject.fork.ChartComparisonKt;
 import net.sourceforge.ganttproject.fork.LevellingAdapterKt;
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenDurationAlgorithmKt;
 import net.sourceforge.ganttproject.chart.gantt.*;
@@ -217,8 +218,11 @@ public class TaskRendererImpl2 extends ChartRendererBase {
   public int calculateRowHeight() {
     int rowHeight = chartRenderer.myLabelsRenderer.calculateRowHeight();
     // [Fork change] The effort view needs the same room for its band even though it works
-    // without a baseline. Without this line it draws into the row below.
-    if (myModel.getBaseline() != null || myModel.getComparison() == ChartComparison.EFFORT) {
+    // without a baseline. Without this line it draws into the row below. The durations view was
+    // added to the same condition on 25 August 2026 for the same reason: without a baseline it
+    // draws a NEUTRAL band rather than staying empty, so it needs the room too.
+    if (myModel.getBaseline() != null
+        || ChartComparisonKt.needsBandRoomWithoutBaseline(myModel.getComparison())) {
       rowHeight = rowHeight + 8;
     }
     return rowHeight;

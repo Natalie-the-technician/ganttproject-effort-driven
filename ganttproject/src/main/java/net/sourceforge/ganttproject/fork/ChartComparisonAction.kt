@@ -2,7 +2,7 @@
 Copyright 2026
 
 NEW FILE IN THIS FORK — not present in the original GanttProject.
-The toggle between the dates view and the effort view in the chart toolbar.
+The dropdown that selects the comparison view in the chart toolbar.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -26,40 +26,83 @@ import net.sourceforge.ganttproject.gui.UIFacade
 import java.awt.event.ActionEvent
 
 /**
- * [Fork change] Switches the band underneath a task bar between the two comparisons.
- * See [ChartComparison] for why there are two of them.
+ * [Fork change] Selects the comparison shown by the band underneath a task bar.
+ * See [ChartComparison] for why there is more than one.
  *
- * WHY A BUTTON OF ITS OWN AND NOT A SETTING IN THE BASELINE DIALOG: the effort view needs no
+ * WHY A CONTROL OF ITS OWN AND NOT A SETTING IN THE BASELINE DIALOG: the effort view needs no
  * baseline at all. Hiding it inside a dialog that one only opens because of baselines would be
  * the wrong place.
  *
- * The label ALWAYS names the view currently shown, never the one the button leads to. A button
- * reading "effort" while dates are on screen is exactly the kind of ambiguity that has already
- * cost time here.
+ * WHY A DROPDOWN AND NOT A BUTTON THAT CYCLES, changed on 25 August 2026. Until then there were
+ * two views and one button that swapped between them; its caption always named the view on
+ * screen. With three views a cycling button stops working: the caption still says where one IS,
+ * but no longer where the next press LEADS, so finding a particular view means pressing until it
+ * appears. A dropdown shows all three at once and still names the current one when closed.
+ *
+ * THE ENTRIES KEEP THE "Compare:" PREFIX even though it repeats down an open list. Closed — which
+ * is how the control spends nearly all of its time — the dropdown shows only the selected entry,
+ * and a bare "Dates" next to a "Baselines" button says nothing about what is being compared. The
+ * redundancy costs a moment when the list is open; dropping it would cost clarity permanently.
  */
-class ChartComparisonAction(private val uiFacade: UIFacade) : GPAction("chart.comparison") {
-  /**
-   * The state lives on the chart, not here. This field is only the copy used for the label — a
-   * `Boolean` rather than an enum, because `GPAction` already calls [getLocalizedName] from its
-   * own constructor, that is BEFORE this class's fields are assigned. A primitive boolean is
-   * `false` at that point rather than `null`.
-   */
-  private var showsEffort = false
+sealed class ChartComparisonAction(
+  private val uiFacade: UIFacade,
+  actionId: String
+) : GPAction(actionId) {
 
-  override fun getLocalizedName(): String =
-    if (showsEffort) forkText("fork.comparison.effort") else forkText("fork.comparison.dates")
+  /**
+   * The view this entry selects. Read ONLY from [actionPerformed], never from
+   * [getLocalizedName] — `GPAction` calls that one from its own constructor, that is before the
+   * subclass has assigned its fields.
+   */
+  protected abstract val comparison: ChartComparison
 
   override fun actionPerformed(event: ActionEvent?) {
     val chart = uiFacade.ganttChart
-    val next = when (chart.comparison) {
-      ChartComparison.EFFORT -> ChartComparison.DATES
-      else -> ChartComparison.EFFORT
+    if (chart.comparison == comparison) {
+      return
     }
-    chart.comparison = next
-    showsEffort = next == ChartComparison.EFFORT
-    // The label hangs off the action's observable name; without this call the button keeps the
-    // caption of the previous view.
-    updateAction()
+    chart.comparison = comparison
     uiFacade.refresh()
   }
+
+  companion object {
+    /**
+     * The entries, in the order they appear in the dropdown. THE ORDER IS FIXED and does not
+     * depend on which view is selected — see `DropdownVisitor`, which takes the starting entry as
+     * a parameter for exactly that reason.
+     */
+    fun all(uiFacade: UIFacade): List<ChartComparisonAction> = listOf(
+      DatesComparisonAction(uiFacade),
+      EffortComparisonAction(uiFacade),
+      DurationsComparisonAction(uiFacade)
+    )
+
+    /** The index [all] gives to [comparison]. */
+    fun indexOf(comparison: ChartComparison): Int = when (comparison) {
+      ChartComparison.DATES -> 0
+      ChartComparison.EFFORT -> 1
+      ChartComparison.DURATIONS -> 2
+    }
+  }
+}
+
+/** "Am I on schedule?" — end date now against end date in the baseline. */
+class DatesComparisonAction(uiFacade: UIFacade) :
+  ChartComparisonAction(uiFacade, "chart.comparison.dates") {
+  override val comparison = ChartComparison.DATES
+  override fun getLocalizedName(): String = forkText("fork.comparison.dates")
+}
+
+/** "Did this take more or less working time than I thought?" — recorded hours against estimate. */
+class EffortComparisonAction(uiFacade: UIFacade) :
+  ChartComparisonAction(uiFacade, "chart.comparison.effort") {
+  override val comparison = ChartComparison.EFFORT
+  override fun getLocalizedName(): String = forkText("fork.comparison.effort")
+}
+
+/** "Does the work still take as long as it was planned to?" — length against length. */
+class DurationsComparisonAction(uiFacade: UIFacade) :
+  ChartComparisonAction(uiFacade, "chart.comparison.durations") {
+  override val comparison = ChartComparison.DURATIONS
+  override fun getLocalizedName(): String = forkText("fork.comparison.durations")
 }

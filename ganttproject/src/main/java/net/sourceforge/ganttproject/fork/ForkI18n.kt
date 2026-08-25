@@ -132,3 +132,12 @@ object ForkLocalizer : Localizer {
  * an empty label that looks like an ordinary blank.
  */
 fun forkText(key: String, vararg args: Any): String = ForkLocalizer.formatText(key, *args)
+
+/**
+ * The fork's text for [key], or null if the fork's bundle does not know it.
+ *
+ * Unlike [forkText] this never falls back to the key itself. It exists for callers that have a
+ * bundle of their own to try first and only want to know whether the fork has an answer at all --
+ * `OptionsPageBuilder.I18N` is the one that does.
+ */
+fun forkTextOrNull(key: String): String? = ForkLocalizer.formatTextOrNull(key)
