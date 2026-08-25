@@ -1,8 +1,8 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
-Die Vergleichsregeln fuer das Band unter dem Vorgangsbalken.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
+The comparison rules for the band underneath a task bar.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -25,105 +25,105 @@ import java.util.Date
 import kotlin.math.abs
 
 /**
- * [Fork-Aenderung] Was das Band unter dem Vorgangsbalken vergleicht.
+ * [Fork change] What the band underneath a task bar compares.
  *
- * WARUM ES ZWEI GIBT, festgelegt am 20.08.2026. In diesem Fork ist die DAUER eines Vorgangs
- * keine Eingabe, sondern ein Rechenergebnis: `EffortDrivenDurationAlgorithm` leitet sie aus dem
- * Aufwand und der Tagesleistung der zugeordneten Person ab. Wer die Tagesleistung aendert,
- * aendert damit jede Dauer im Plan, ohne dass sich an der Arbeit etwas geaendert haette.
+ * WHY THERE ARE TWO, decided on 20 August 2026. In this fork a task's DURATION is not an input
+ * but a computed value: `EffortDrivenDurationAlgorithm` derives it from the effort and the daily
+ * availability of the assigned people. Changing that availability changes every duration in the
+ * plan without anything about the work having changed.
  *
- * Gemessen an einem echten Plan am 20.08.2026: Tagesleistung von 8 auf 1,8 Stunden gesetzt, und
- * 163 von 163 Vorgaengen mit Aufwand wurden um den Faktor 8/1,8 = 4,44 laenger. Ein Basisplan von
- * vorher faerbte danach 194 von 276 Zeilen rot — richtig gerechnet und trotzdem ohne Aussage,
- * weil nicht zwei Planstaende verglichen wurden, sondern zwei Kapazitaetsannahmen.
+ * Measured on a real plan on 20 August 2026: availability set from 8.0 to 1.8 hours a day, and
+ * 163 of 163 tasks carrying an effort grew by the factor 8/1.8 = 4.44. A baseline taken before
+ * that point then coloured 194 of 276 rows red — correctly computed and yet saying nothing,
+ * because it did not compare two plans but two capacity assumptions.
  *
- * Daraus folgen zwei verschiedene Fragen, die vorher in einer Anzeige vermischt waren:
+ * Two different questions follow from that, and they used to be mixed into one display:
  *
- *  - [TERMIN]  "Liege ich im Zeitplan?"  -> Ende jetzt gegen Ende im Basisplan.
- *  - [AUFWAND] "Habe ich mehr oder weniger Arbeitszeit gebraucht?"
- *              -> erfasste Ist-Stunden gegen die urspruengliche Schaetzung.
+ *  - [DATES]  "Am I on schedule?"       -> end date now against end date in the baseline.
+ *  - [EFFORT] "Did this take more or less working time than I thought?"
+ *             -> recorded hours against the original estimate.
  *
- * Der Aufwandsvergleich braucht KEINEN Basisplan. Seine beiden Zahlen stehen schon am Vorgang:
- * [TASK_EFFORT_ORIGINAL] wird genau einmal festgehalten und danach nie wieder angefasst, die
- * Ist-Stunden kommen aus der Zeiterfassung. Das ist der bessere Anker als ein Basisplan — er
- * ueberlebt auch das Anlegen eines zweiten Basisplans.
+ * The effort comparison needs NO baseline. Both of its numbers are already on the task:
+ * [TASK_EFFORT_ORIGINAL] is written exactly once and never touched again, and the recorded hours
+ * come from time tracking. That is a better anchor than a baseline — it survives saving a second
+ * baseline.
  */
 enum class ChartComparison {
-  TERMIN,
-  AUFWAND
+  DATES,
+  EFFORT
 }
 
 /**
- * Das Ergebnis eines Vergleichs. Bewusst keine Farbe: welche Farbe daraus wird, entscheidet
- * `StyledPainterImpl` anhand der drei einstellbaren Werte in `UIConfiguration`.
+ * The outcome of a comparison. Deliberately not a colour: which colour this turns into is decided
+ * by `StyledPainterImpl` from the three configurable values in `UIConfiguration`.
  */
-enum class Vergleichsbefund {
-  /** Es gibt nichts zu zeigen. Es wird gar kein Band gezeichnet. */
-  KEIN_BAND,
+enum class ComparisonResult {
+  /** There is nothing to show. No band is drawn at all. */
+  NO_BAND,
 
-  /** Es gibt eine Abweichung, aber keine in die eine oder andere Richtung. Neutrale Farbe. */
+  /** There is a difference, but not one in either direction. The neutral colour. */
   NEUTRAL,
 
-  /** Spaeter beziehungsweise mehr gebraucht. Die "later"-Farbe. */
-  MEHR,
+  /** Later, respectively more time spent. The "later" colour. */
+  MORE,
 
-  /** Frueher beziehungsweise weniger gebraucht. Die "earlier"-Farbe. */
-  WENIGER
+  /** Earlier, respectively less time spent. The "earlier" colour. */
+  LESS
 }
 
 /**
- * [ChartComparison.TERMIN]: das Ende von heute gegen das Ende im Basisplan.
+ * [ChartComparison.DATES]: today's end date against the end date in the baseline.
  *
- * Das ist die Regel des Original-GanttProject, und sie ist hier wieder die richtige: die Frage
- * lautet "liege ich im Zeitplan", und darauf antwortet das Enddatum. Die zwischenzeitliche
- * Fassung dieses Forks (Vergleich der Dauern, eingefuehrt am 17.08.2026 in `misc-fixes`) hat
- * versucht, mit derselben Anzeige die Aufwandsfrage mitzubeantworten; das geht nicht, siehe den
- * Klassenkommentar oben. Die Aufwandsfrage hat jetzt ihre eigene Ansicht.
+ * This is the original GanttProject's rule, and here it is the right one again: the question is
+ * "am I on schedule", and an end date answers that. The intermediate version of this fork
+ * (comparing durations, introduced on 17 August 2026 in `misc-fixes`) tried to answer the effort
+ * question with the same display; that does not work, see the enum comment above. The effort
+ * question now has a view of its own.
  *
- * Gleiches Ende heisst planmaessig — dann bleibt die Zeile leer.
+ * The same end date means on schedule — then the row stays empty.
  */
-fun terminVergleich(basisplanEnde: Date, aktuellesEnde: Date): Vergleichsbefund = when {
-  basisplanEnde == aktuellesEnde -> Vergleichsbefund.KEIN_BAND
-  aktuellesEnde.after(basisplanEnde) -> Vergleichsbefund.MEHR
-  else -> Vergleichsbefund.WENIGER
+fun compareDates(baselineEnd: Date, currentEnd: Date): ComparisonResult = when {
+  baselineEnd == currentEnd -> ComparisonResult.NO_BAND
+  currentEnd.after(baselineEnd) -> ComparisonResult.MORE
+  else -> ComparisonResult.LESS
 }
 
-/** Unter dieser Stundenzahl gelten zwei Aufwaende als gleich. Eine Minute. */
-private const val STUNDEN_TOLERANZ = 1.0 / 60.0
+/** Below this many hours two efforts count as equal. One minute. */
+private const val HOURS_TOLERANCE = 1.0 / 60.0
 
 /**
- * [ChartComparison.AUFWAND]: die erfassten Ist-Stunden gegen die urspruengliche Schaetzung.
+ * [ChartComparison.EFFORT]: the recorded hours against the original estimate.
  *
- * Verglichen wird gegen die URSPRUENGLICHE Schaetzung, nicht gegen die heutige. Der Grund steht
- * schon bei [TASK_EFFORT_ORIGINAL]: wer eine Schaetzung nachbessert und danach gegen die
- * nachgebesserte Zahl vergleicht, sieht nie wieder eine Abweichung — sie verschwindet genau in
- * dem Moment, in dem man sie bemerkt.
+ * The comparison is against the ORIGINAL estimate, not against today's. The reason is already
+ * stated at [TASK_EFFORT_ORIGINAL]: whoever revises an estimate and then compares against the
+ * revised number will never see a deviation again — it disappears at the very moment one notices
+ * it.
  *
- * Die Faelle:
- *  - keine urspruengliche Schaetzung -> es gibt keinen Massstab, also kein Band
- *  - Schaetzung ja, aber nichts erfasst -> NEUTRAL. Das ist eine eigene Aussage
- *    ("hier ist noch keine Zeit gebucht") und ausdruecklich nicht dasselbe wie "passt".
- *  - gleich viele Stunden (auf eine Minute genau) -> kein Band
+ * The cases:
+ *  - no original estimate -> there is no yardstick, so no band
+ *  - an estimate but nothing recorded -> NEUTRAL. That is a statement of its own ("no time booked
+ *    here yet") and deliberately not the same as "on target".
+ *  - the same number of hours (to within a minute) -> no band
  */
-fun aufwandVergleich(urspruenglicheStunden: Double?, istStunden: Double?): Vergleichsbefund {
-  if (urspruenglicheStunden == null || urspruenglicheStunden <= 0.0) {
-    return Vergleichsbefund.KEIN_BAND
+fun compareEffort(originalHours: Double?, recordedHours: Double?): ComparisonResult {
+  if (originalHours == null || originalHours <= 0.0) {
+    return ComparisonResult.NO_BAND
   }
-  if (istStunden == null || istStunden <= 0.0) {
-    return Vergleichsbefund.NEUTRAL
+  if (recordedHours == null || recordedHours <= 0.0) {
+    return ComparisonResult.NEUTRAL
   }
-  if (abs(istStunden - urspruenglicheStunden) < STUNDEN_TOLERANZ) {
-    return Vergleichsbefund.KEIN_BAND
+  if (abs(recordedHours - originalHours) < HOURS_TOLERANCE) {
+    return ComparisonResult.NO_BAND
   }
-  return if (istStunden > urspruenglicheStunden) Vergleichsbefund.MEHR else Vergleichsbefund.WENIGER
+  return if (recordedHours > originalHours) ComparisonResult.MORE else ComparisonResult.LESS
 }
 
 /**
- * Der Stil, den der Maler auswertet, oder null fuer die neutrale Farbe.
- * Die Namen sind die des Originals und stehen so in `StyledPainterImpl`.
+ * The style the painter evaluates, or null for the neutral colour.
+ * The names are the original's and appear verbatim in `StyledPainterImpl`.
  */
-fun Vergleichsbefund.stilName(): String? = when (this) {
-  Vergleichsbefund.MEHR -> "later"
-  Vergleichsbefund.WENIGER -> "earlier"
+fun ComparisonResult.styleName(): String? = when (this) {
+  ComparisonResult.MORE -> "later"
+  ComparisonResult.LESS -> "earlier"
   else -> null
 }

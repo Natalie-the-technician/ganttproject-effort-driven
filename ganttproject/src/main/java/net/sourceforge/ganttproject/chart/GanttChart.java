@@ -29,10 +29,10 @@ public interface GanttChart extends TimelineChart {
 
   GanttPreviousState getBaseline();
 
-  /** [Fork-Aenderung] Was das Band unter dem Vorgangsbalken vergleicht. */
+  /** [Fork change] What the band underneath a task bar compares. */
   ChartComparison getComparison();
 
-  /** [Fork-Aenderung] Setzt die Vergleichsansicht und passt die Zeilenhoehe an. */
+  /** [Fork change] Sets the comparison view and adjusts the row height. */
   void setComparison(ChartComparison comparison);
 
   GPOptionGroup getBaselineColorOptions();

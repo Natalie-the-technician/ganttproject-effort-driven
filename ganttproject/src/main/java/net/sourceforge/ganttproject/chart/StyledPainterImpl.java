@@ -275,12 +275,11 @@ public class StyledPainterImpl implements Painter {
   }
 
   /**
-   * Die Farbe des Vergleichsbandes unter dem Vorgangsbalken.
+   * The colour of the comparison band underneath a task bar.
    *
-   * [Fork-Aenderung] Herausgezogen aus dem Rechteck-Maler, weil sie jetzt an zwei Stellen
-   * gebraucht wird: fuer das Band eines gewoehnlichen Vorgangs und fuer die Raute eines
-   * Meilensteins. Die Raute nimmt einen anderen Weg durch den Maler, siehe
-   * {@link #paint(Canvas.Rhombus)}.
+   * [Fork change] Pulled out of the rectangle painter because it is now needed in two places: for
+   * the band of an ordinary task and for the rhombus of a milestone. The rhombus takes a
+   * different route through the painter, see {@link #paint(Canvas.Rhombus)}.
    */
   private Color getComparisonBandColor(Canvas.Shape shape) {
     if (shape.hasStyle("earlier")) {
@@ -358,28 +357,27 @@ public class StyledPainterImpl implements Painter {
 
   @Override
   public void paint(Canvas.Rhombus rhombus) {
-    // [Fork-Aenderung] ---- Anfang ----
+    // [Fork change] ---- begin ----
     //
-    // EIN MEILENSTEIN IST EINE RAUTE UND KEIN RECHTECK. TaskActivitySceneBuilder erzeugt fuer
-    // ihn eine Canvas.Rhombus, und die landete bisher ungeprueft beim PolygonRenderer -- der
-    // schaut nie in myStyle2painter. Das Vergleichsband eines Meilensteins wurde deshalb in der
-    // FARBE DES VORGANGS gemalt statt in einer der drei Vergleichsfarben, und der
-    // milestone-Zweig im Bandmaler weiter oben war toter Code: er kann nie ein Rechteck
-    // bekommen.
+    // A MILESTONE IS A RHOMBUS, NOT A RECTANGLE. TaskActivitySceneBuilder creates a
+    // Canvas.Rhombus for it, and that used to land at the PolygonRenderer unchecked -- which
+    // never consults myStyle2painter. A milestone's comparison band was therefore painted in the
+    // TASK'S OWN COLOUR instead of one of the three comparison colours, and the milestone branch
+    // in the band painter above was dead code: it can never receive a rectangle.
     //
-    // Gemessen am 20.08.2026 an einem echten Plan: die Raute eines verschobenen Meilensteins
-    // kam als srgb(255,51,51) heraus -- das ist die Vorgangsfarbe, keine der Vergleichsfarben
-    // (192,192,192 / 229,50,50 / 50,229,50). 27 Rauten waren betroffen, 20 davon sahen rot aus,
-    // ohne dass eine einzige eine Rotfaerbung des Vergleichs gewesen waere.
+    // Measured on a real plan on 20 August 2026: the rhombus of a shifted milestone came out as
+    // srgb(255,51,51) -- that is the task colour, none of the comparison colours
+    // (192,192,192 / 229,50,50 / 50,229,50). 27 rhombi were affected, 20 of which looked red
+    // without a single one being a red of the comparison.
     //
-    // Das ist ein Fehler DES ORIGINALS, nicht dieses Forks: auf e523bedc6 steht dieselbe
-    // Rauten-Erzeugung und derselbe Weg durch den Maler.
+    // This is a defect OF THE ORIGINAL, not of this fork: e523bedc6 carries the same rhombus
+    // creation and the same route through the painter.
     //
-    // [Fork-Aenderung] ---- Ende ----
-    // ACHTUNG, hier war schon ein Fehlversuch: `setStyle` und `addStyle` fuellen in
-    // Canvas.Shape ZWEI VERSCHIEDENE Felder. `hasStyle` sieht nur, was `addStyle` abgelegt hat;
-    // der Hauptstil aus `setStyle` steht in `getStyle()`. Eine Abfrage ueber
-    // hasStyle("previousStateTask") ist deshalb immer falsch.
+    // [Fork change] ---- end ----
+    // CAREFUL, there was a failed attempt here already: `setStyle` and `addStyle` fill TWO
+    // DIFFERENT fields in Canvas.Shape. `hasStyle` only sees what `addStyle` put there; the main
+    // style from `setStyle` lives in `getStyle()`. A query via hasStyle("previousStateTask") is
+    // therefore always wrong.
     if ("previousStateTask".equals(rhombus.getStyle())) {
       Graphics g = myGraphics;
       g.setColor(getComparisonBandColor(rhombus));
