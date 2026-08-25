@@ -39,6 +39,7 @@ import kotlin.jvm.functions.Function0;
 import net.sourceforge.ganttproject.action.BaselineDialogAction;
 import net.sourceforge.ganttproject.action.CalculateCriticalPathAction;
 import net.sourceforge.ganttproject.action.GPAction;
+import net.sourceforge.ganttproject.fork.ChartComparisonAction;
 import net.sourceforge.ganttproject.chart.Chart;
 import net.sourceforge.ganttproject.chart.ChartSelection;
 import net.sourceforge.ganttproject.chart.gantt.GanttChartSelection;
@@ -64,6 +65,8 @@ class GanttChartTabContentPanel extends ChartTabContentPanel implements ViewProv
   private final UIFacade myWorkbenchFacade;
   private final CalculateCriticalPathAction myCriticalPathAction;
   private final BaselineDialogAction myBaselineAction;
+  /** [Fork-Aenderung] Umschalter zwischen Termin- und Aufwandsansicht. */
+  private final ChartComparisonAction myComparisonAction;
   private final Supplier<TaskTable> myTaskTableSupplier;
   private final TaskActions myTaskActions;
   private final Function0<Unit> myInitializationCompleted;
@@ -93,6 +96,8 @@ class GanttChartTabContentPanel extends ChartTabContentPanel implements ViewProv
     myCriticalPathAction.putValue(GPAction.TEXT_DISPLAY, ContentDisplay.TEXT_ONLY);
     myBaselineAction = new BaselineDialogAction(project, workbenchFacade);
     myBaselineAction.putValue(GPAction.TEXT_DISPLAY, ContentDisplay.TEXT_ONLY);
+    myComparisonAction = new ChartComparisonAction(workbenchFacade);
+    myComparisonAction.putValue(GPAction.TEXT_DISPLAY, ContentDisplay.TEXT_ONLY);
 
     setImageHeight(() -> Double.valueOf(myViewComponents.getImage().getHeight()).intValue());
     myDividerOption.addChangeValueListener(event -> {
@@ -106,7 +111,7 @@ class GanttChartTabContentPanel extends ChartTabContentPanel implements ViewProv
 
   private FXToolbarBuilder createScheduleToolbar() {
     return new FXToolbarBuilder().withApplicationFont(FontKt.getApplicationFont())
-      .addButton(myCriticalPathAction).addButton(myBaselineAction)
+      .addButton(myCriticalPathAction).addButton(myBaselineAction).addButton(myComparisonAction)
       .withClasses("toolbar-common", "toolbar-small", "toolbar-chart", "align-right");
   }
 
