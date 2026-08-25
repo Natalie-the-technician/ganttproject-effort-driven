@@ -1,8 +1,8 @@
 /*
 Copyright 2026
 
-NEUE DATEI DIESES FORKS — im Original-GanttProject nicht vorhanden.
-Der Umschalter zwischen Termin- und Aufwandsansicht in der Werkzeugleiste des Diagramms.
+NEW FILE IN THIS FORK — not present in the original GanttProject.
+The toggle between the dates view and the effort view in the chart toolbar.
 
 This file is part of GanttProject, an opensource project management tool.
 
@@ -26,39 +26,39 @@ import net.sourceforge.ganttproject.gui.UIFacade
 import java.awt.event.ActionEvent
 
 /**
- * [Fork-Aenderung] Schaltet das Band unter dem Vorgangsbalken zwischen den beiden Vergleichen um.
- * Siehe [ChartComparison] fuer die Begruendung, warum es zwei sind.
+ * [Fork change] Switches the band underneath a task bar between the two comparisons.
+ * See [ChartComparison] for why there are two of them.
  *
- * WARUM EIN EIGENER KNOPF UND KEINE EINSTELLUNG IM BASISPLAN-DIALOG: die Aufwandsansicht braucht
- * gar keinen Basisplan. Sie in einem Dialog zu verstecken, den man nur wegen der Basisplaene
- * oeffnet, waere die falsche Stelle.
+ * WHY A BUTTON OF ITS OWN AND NOT A SETTING IN THE BASELINE DIALOG: the effort view needs no
+ * baseline at all. Hiding it inside a dialog that one only opens because of baselines would be
+ * the wrong place.
  *
- * Die Beschriftung nennt IMMER die gerade gezeigte Ansicht, nicht die, zu der der Knopf fuehrt.
- * Ein Knopf, der "Aufwand" heisst, waehrend Termine zu sehen sind, ist genau die Sorte
- * Zweideutigkeit, die hier schon einmal Zeit gekostet hat.
+ * The label ALWAYS names the view currently shown, never the one the button leads to. A button
+ * reading "effort" while dates are on screen is exactly the kind of ambiguity that has already
+ * cost time here.
  */
 class ChartComparisonAction(private val uiFacade: UIFacade) : GPAction("chart.comparison") {
   /**
-   * Der Zustand liegt am Diagramm, nicht hier. Dieses Feld ist nur die Kopie fuer die
-   * Beschriftung -- ein `Boolean` und keine Aufzaehlung, weil `GPAction` schon im Konstruktor
-   * der Oberklasse [getLocalizedName] aufruft, also BEVOR die Felder dieser Klasse gesetzt sind.
-   * Ein primitiver Wahrheitswert ist an dieser Stelle `false` und nicht `null`.
+   * The state lives on the chart, not here. This field is only the copy used for the label — a
+   * `Boolean` rather than an enum, because `GPAction` already calls [getLocalizedName] from its
+   * own constructor, that is BEFORE this class's fields are assigned. A primitive boolean is
+   * `false` at that point rather than `null`.
    */
-  private var zeigtAufwand = false
+  private var showsEffort = false
 
   override fun getLocalizedName(): String =
-    if (zeigtAufwand) forkText("fork.comparison.aufwand") else forkText("fork.comparison.termin")
+    if (showsEffort) forkText("fork.comparison.effort") else forkText("fork.comparison.dates")
 
   override fun actionPerformed(event: ActionEvent?) {
     val chart = uiFacade.ganttChart
-    val neu = when (chart.comparison) {
-      ChartComparison.AUFWAND -> ChartComparison.TERMIN
-      else -> ChartComparison.AUFWAND
+    val next = when (chart.comparison) {
+      ChartComparison.EFFORT -> ChartComparison.DATES
+      else -> ChartComparison.EFFORT
     }
-    chart.comparison = neu
-    zeigtAufwand = neu == ChartComparison.AUFWAND
-    // Die Beschriftung haengt am beobachtbaren Namen der Aktion; ohne diesen Aufruf bleibt am
-    // Knopf die Aufschrift der vorherigen Ansicht stehen.
+    chart.comparison = next
+    showsEffort = next == ChartComparison.EFFORT
+    // The label hangs off the action's observable name; without this call the button keeps the
+    // caption of the previous view.
     updateAction()
     uiFacade.refresh()
   }

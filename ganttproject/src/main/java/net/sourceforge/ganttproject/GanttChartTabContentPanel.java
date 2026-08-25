@@ -65,7 +65,7 @@ class GanttChartTabContentPanel extends ChartTabContentPanel implements ViewProv
   private final UIFacade myWorkbenchFacade;
   private final CalculateCriticalPathAction myCriticalPathAction;
   private final BaselineDialogAction myBaselineAction;
-  /** [Fork-Aenderung] Umschalter zwischen Termin- und Aufwandsansicht. */
+  /** [Fork change] Toggle between the dates view and the effort view. */
   private final ChartComparisonAction myComparisonAction;
   private final Supplier<TaskTable> myTaskTableSupplier;
   private final TaskActions myTaskActions;

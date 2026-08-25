@@ -129,9 +129,9 @@ public class TaskRendererImpl2 extends ChartRendererBase {
     }
 
     /**
-     * [Fork-Aenderung] Die Aufwandszahlen holt der Renderer hier, nicht im Szenenbauer: nur hier
-     * gibt es den echten Vorgang und die Spaltenverwaltung. Ein Vorgang, den es nicht mehr gibt,
-     * liefert null -- der Aufwandsvergleich zeichnet dann nichts.
+     * [Fork change] The renderer fetches the effort numbers here rather than in the scene
+     * builder: only here are the real task and the column manager available. A task that no
+     * longer exists yields null -- the effort comparison then draws nothing.
      */
     @Override
     public Double getOriginalEffortHours(int rowId) {
@@ -216,9 +216,9 @@ public class TaskRendererImpl2 extends ChartRendererBase {
 
   public int calculateRowHeight() {
     int rowHeight = chartRenderer.myLabelsRenderer.calculateRowHeight();
-    // [Fork-Aenderung] Die Aufwandsansicht braucht denselben Platz fuer ihr Band, obwohl sie
-    // ohne Basisplan auskommt. Ohne diese Zeile zeichnet sie in die Zeile darunter.
-    if (myModel.getBaseline() != null || myModel.getComparison() == ChartComparison.AUFWAND) {
+    // [Fork change] The effort view needs the same room for its band even though it works
+    // without a baseline. Without this line it draws into the row below.
+    if (myModel.getBaseline() != null || myModel.getComparison() == ChartComparison.EFFORT) {
       rowHeight = rowHeight + 8;
     }
     return rowHeight;

@@ -251,8 +251,8 @@ public class GanttGraphicArea extends ChartComponentBase implements GanttChart, 
   }
 
   /**
-   * [Fork-Aenderung] Wie {@link #setBaseline}: die neue Zeilenhoehe muss an die Tabelle
-   * durchgereicht werden, sonst zeichnet das Aufwandsband in die Zeile darunter.
+   * [Fork change] Like {@link #setBaseline}: the new row height has to be handed through to the
+   * table, otherwise the effort band draws into the row below.
    */
   @Override
   public void setComparison(ChartComparison comparison) {
