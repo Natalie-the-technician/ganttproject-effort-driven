@@ -81,6 +81,10 @@
     <string name="task_labels">Labels</string>
     <string name="task_labels_hint">Separated by spaces. Passed to exports unchanged.</string>
     <string name="task_labels_apply">Apply</string>
+    <string name="person_section">Who is recording</string>
+    <string name="person_name">Your name (optional)</string>
+    <string name="person_hint">Copied into every booking made on this device. Left empty, records carry no name.</string>
+    <string name="person_apply">Save</string>
     <string name="timelog_source_manual">typed in</string>
     <string name="timelog_source_timer">timer</string>
     <string name="timelog_source_quick">widget</string>

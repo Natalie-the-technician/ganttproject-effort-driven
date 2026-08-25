@@ -505,6 +505,10 @@ fun AppScaffold(
 
           HorizontalDivider()
 
+          PersonSection(viewModel)
+
+          HorizontalDivider()
+
           SyncServerSection(davState, viewModel)
 
           HorizontalDivider()
@@ -864,5 +868,51 @@ internal fun EditingOffBanner() {
       color = MaterialTheme.colorScheme.onSurfaceVariant,
       modifier = Modifier.padding(12.dp)
     )
+  }
+}
+
+/**
+ * Who the bookings made on this device are recorded as.
+ *
+ * Free text and optional. The app has no notion of accounts and must not
+ * invent one: left empty the records simply carry no name, which is a
+ * different statement from a guessed one. A report that quietly attributes
+ * work to somebody is worse than one that admits the gap — and where the name
+ * matters, it usually matters legally.
+ *
+ * Committed on a button rather than on every keystroke, so a half-typed name
+ * never reaches a record.
+ */
+@Composable
+private fun PersonSection(viewModel: ProjectViewModel) {
+  val stored = viewModel.person()
+  var text by remember(stored) { mutableStateOf(stored.orEmpty()) }
+
+  Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Text(stringResource(R.string.person_section), style = MaterialTheme.typography.labelMedium)
+    OutlinedTextField(
+      value = text,
+      onValueChange = { text = it },
+      label = { Text(stringResource(R.string.person_name)) },
+      singleLine = true,
+      modifier = Modifier.fillMaxWidth()
+    )
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Text(
+        stringResource(R.string.person_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.weight(1f)
+      )
+      if (text.trim() != stored.orEmpty()) {
+        TextButton(onClick = { viewModel.setPerson(text) }) {
+          Text(stringResource(R.string.person_apply))
+        }
+      }
+    }
   }
 }

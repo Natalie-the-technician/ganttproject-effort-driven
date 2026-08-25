@@ -76,6 +76,10 @@
     <string name="task_labels">Marken</string>
     <string name="task_labels_hint">Durch Leerzeichen getrennt. Wandern unverändert in Exporte.</string>
     <string name="task_labels_apply">Übernehmen</string>
+    <string name="person_section">Wer aufzeichnet</string>
+    <string name="person_name">Ihr Name (freiwillig)</string>
+    <string name="person_hint">Wird in jede Buchung dieses Geräts übernommen. Leer gelassen tragen die Sätze keinen Namen.</string>
+    <string name="person_apply">Speichern</string>
     <string name="timelog_source_manual">eingetippt</string>
     <string name="timelog_source_timer">Uhr</string>
     <string name="timelog_source_quick">Widget</string>
