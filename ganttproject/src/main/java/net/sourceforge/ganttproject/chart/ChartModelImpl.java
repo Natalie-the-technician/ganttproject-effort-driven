@@ -24,6 +24,7 @@ import net.sourceforge.ganttproject.chart.item.TaskRegularAreaChartItem;
 import net.sourceforge.ganttproject.gui.UIConfiguration;
 import net.sourceforge.ganttproject.gui.options.OptionsPageBuilder;
 import net.sourceforge.ganttproject.task.Task;
+import net.sourceforge.ganttproject.fork.ChartComparison;
 import net.sourceforge.ganttproject.task.TaskManager;
 
 import java.util.Arrays;
@@ -53,6 +54,13 @@ public class ChartModelImpl extends ChartModelBase {
   private Set<Task> myHiddenTasks;
 
   private List<GanttPreviousStateTask> myBaseline;
+
+  /**
+   * [Fork-Aenderung] Was das Band unter dem Vorgangsbalken vergleicht. Siehe
+   * {@link ChartComparison}. Voreinstellung ist der Terminvergleich, damit ein Projekt, das
+   * nichts von den Aufwandsspalten weiss, sich genau wie das Original verhaelt.
+   */
+  private ChartComparison myComparison = ChartComparison.TERMIN;
 
   public ChartModelImpl(TaskManager taskManager, TimeUnitStack timeUnitStack, final UIConfiguration projectConfig) {
     super(taskManager, timeUnitStack, projectConfig);
@@ -225,12 +233,28 @@ public class ChartModelImpl extends ChartModelBase {
     return myBaseline;
   }
 
+  /** [Fork-Aenderung] Die gewaehlte Vergleichsansicht. */
+  public ChartComparison getComparison() {
+    return myComparison;
+  }
+
+  /**
+   * [Fork-Aenderung] Setzt die Vergleichsansicht und liefert die neue Zeilenhoehe, genau wie
+   * {@link #setBaseline}: die Aufwandsansicht braucht denselben Platz fuer ihr Band wie ein
+   * Basisplan, auch wenn gar kein Basisplan gewaehlt ist.
+   */
+  public int setComparison(ChartComparison comparison) {
+    myComparison = comparison;
+    return calculateRowHeight();
+  }
+
   @Override
   public ChartModelBase createCopy() {
     ChartModelImpl result = new ChartModelImpl(getTaskManager(), getTimeUnitStack(), getProjectConfig());
     super.setupCopy(result);
     result.setVisibleTasks(getVisibleTasks());
     result.setBaseline(getBaseline());
+    result.setComparison(getComparison());
     return result;
   }
 
