@@ -161,6 +161,28 @@ class ChartComparisonTest {
       "the durations view answers \"did the work grow\" -- five days are still five days")
   }
 
+  @Test
+  fun `longer but ending on the same day -- the blind spot the durations view exists for`() {
+    // THIS IS THE CASE THE VIEW WAS BUILT FOR, and it is not made up. It was measured on screen
+    // on 20 August 2026: a task planned to run from 10 to 14 August over five days, actually
+    // running from 3 to 14 August over ten. It takes twice as long and finishes on the same day,
+    // because it started a week earlier.
+    //
+    // The original draws NOTHING here -- both ends match, so its rule has nothing to say. That
+    // blind spot is what `misc-fixes` set out to fix by comparing durations instead of ends.
+    // Here the fix is a view of its own, so the dates view keeps its answer and the durations
+    // view gives the other one.
+    val plannedEnd = day("2026-08-14")
+    val actualEnd = day("2026-08-14")
+    val plannedDuration = 5
+    val actualDuration = 10
+
+    assertEquals(ComparisonResult.NO_BAND, compareDates(plannedEnd, actualEnd),
+      "the dates view answers \"am I on schedule\" -- the same end date is on schedule")
+    assertEquals(ComparisonResult.MORE, compareDurations(plannedDuration, actualDuration),
+      "the durations view answers \"did the work grow\" -- five days became ten")
+  }
+
   // ---- Room for the band in the row --------------------------------------------------------
 
   @Test
