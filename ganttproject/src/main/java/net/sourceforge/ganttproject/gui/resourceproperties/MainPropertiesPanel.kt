@@ -137,8 +137,8 @@ class MainPropertiesPanel(private val resource: HumanResource) {
    * worse than none, and the address can still be typed off.
    */
   private fun togglTokenHint(): Node = VBox(2.0).also { box ->
-    // Auch der Behaelter darf die Spalte nicht setzen: eine VBox reicht die groesste
-    // Vorzugsbreite ihrer Kinder nach oben weiter. Begruendung siehe asHint().
+    // The container must not set the column either: a VBox passes the largest preferred width
+    // of its children upwards. Reasoning in asHint().
     box.prefWidth = 0.0
     box.maxWidth = Double.MAX_VALUE
     box.children.add(Label(TOGGL_TOKEN_HINT).asHint())
@@ -220,17 +220,17 @@ private val TOGGL_TOKEN_LINK get() = forkText("fork.toggl.token.link")
 private const val TOGGL_TOKEN_HELP_URL = "https://support.toggl.com/where-is-my-api-key-located"
 
 /**
- * [Fork-Aenderung] Der Hinweis soll die Rasterspalte NEHMEN, nicht setzen.
+ * [fork change] The hint is to TAKE the grid column, not to set it.
  *
- * Ein Label mit `isWrapText` meldet als Vorzugsbreite den UNGEBROCHENEN Satz; im Raster wird daraus
- * die Spaltenbreite. Dagegen stand hier zuvor ein fester Deckel von 420 px. Der hat die Spalte aber
- * nicht nur begrenzt, sondern AUFGEZOGEN: gemessen war die Feldspalte im Original 346 px breit, im
- * Fork 419 px, der Dialog entsprechend 496 px gegen 569 px.
+ * A label with `isWrapText` reports the UNWRAPPED sentence as its preferred width, and in the grid
+ * that becomes the column width. A fixed cap of 420 px used to stand here against it. That cap did
+ * not only limit the column, it PULLED IT OPEN: measured, the field column was 346 px wide in the
+ * original and 419 px in the fork, the dialog 496 px against 569 px accordingly.
  *
- * Ohne Vorzugsbreite fragt der Hinweis keinen Platz mehr an. Die Spalte bekommt ihre Breite damit
- * vom Token-Feld darueber, und der Hinweis bricht auf genau diese Breite um. `maxWidth` bleibt
- * offen, weil das Raster den Knoten sonst nicht auf die Zellenbreite dehnt und der Hinweis auf
- * seine Mindestbreite zusammenfiele.
+ * Without a preferred width the hint asks for no space at all. The column therefore takes its width
+ * from the token field above it, and the hint wraps at exactly that width. `maxWidth` stays open,
+ * because otherwise the grid does not stretch the node to the cell width and the hint would
+ * collapse to its minimum.
  */
 private fun Label.asHint(): Label = also {
   it.isWrapText = true

@@ -171,46 +171,43 @@ fun applyTaskImport(
     change.task.createMutator().also { it.setCustomProperties(values) }.commit()
   }
 
-  // [Fork-Aenderung] Die Kontrolle liest den ROHWERT, nicht actualEffortHours.
+  // [fork change] The check reads the RAW value, not actualEffortHours.
   //
-  // Jene Funktion liefert fuer 0.0 bewusst null -- fuer die Anzeige richtig, fuer eine
-  // Erfolgskontrolle falsch: ein korrekt geschriebener Nullwert waere hier als Schreibfehler
-  // gezaehlt worden. Null ist ein gueltiger Ist-Aufwand, etwa wenn ein Eintrag zurueckgenommen
-  // wird.
+  // That function deliberately returns null for 0.0 -- right for the display, wrong for a success
+  // check: a correctly written zero would have been counted as a write failure here. Zero is a
+  // valid actual effort, for instance when an entry is withdrawn.
   val failed = toWrite.filter { change ->
     val stored = change.task.storedActualHours(taskProperties)
-    val abweichung = stored == null || kotlin.math.abs(stored - change.newActualHours) > SPLIT_TOLERANCE_HOURS
-    // [Fork-Aenderung] Ins Protokoll, und zwar JEDER Fall.
+    val deviates = stored == null || kotlin.math.abs(stored - change.newActualHours) > SPLIT_TOLERANCE_HOURS
+    // [fork change] Into the log, and EVERY case at that.
     //
-    // Die Meldung am Bildschirm sagt "Einzelheiten stehen im Protokoll" -- bis hierher stand
-    // dort nichts, weil dieser Pfad keine einzige Zeile schrieb. Wer einen Fehlschlag sah,
-    // konnte weder erkennen, welcher Vorgang betroffen war, noch mit welchen Zahlen. Am
-    // 20.08.2026 an einem echten Plan aufgefallen: 0 geschrieben, 2 fehlgeschlagen, Protokoll
-    // leer.
-    if (abweichung) {
+    // The message on screen says "the details are in the log" -- until now nothing stood there,
+    // because this path wrote not a single line. Whoever saw a failure could tell neither which
+    // task was affected nor with which figures. Noticed on a real plan on 20 August 2026:
+    // 0 written, 2 failed, log empty.
+    if (deviates) {
       GPLogger.log(
-        "Toggl import: Schreiben fehlgeschlagen fuer Vorgang ${change.task.taskID}" +
-        " \"${change.task.name}\" -- erwartet ${change.newActualHours} h," +
-        " zurueckgelesen ${stored ?: "nichts"}"
+        "Toggl import: write failed for task ${change.task.taskID}" +
+        " \"${change.task.name}\" -- expected ${change.newActualHours} h," +
+        " read back ${stored ?: "nothing"}"
       )
     } else {
       GPLogger.log(
-        "Toggl import: Vorgang ${change.task.taskID} geschrieben, ${change.newActualHours} h"
+        "Toggl import: task ${change.task.taskID} written, ${change.newActualHours} h"
       )
     }
-    abweichung
+    deviates
   }.map { it.task }
 
   return ImportWriteResult(toWrite.map { it.task } - failed.toSet(), failed)
 }
 
 /**
- * [Fork-Aenderung] Liest den gespeicherten Ist-Aufwand ROH, ohne die Null-Sonderbehandlung.
+ * [fork change] Reads the stored actual effort RAW, without the special handling of zero.
  *
- * `actualEffortHours` gibt fuer 0.0 null zurueck, damit die Anzeige einen leeren Wert von einer
- * gemessenen Null unterscheiden kann. Fuer die Kontrolle nach dem Schreiben ist genau das falsch:
- * dort heisst null "der Wert kam nicht an", und eine geschriebene Null waere faelschlich als
- * Schreibfehler gezaehlt worden.
+ * `actualEffortHours` returns null for 0.0, so that the display can tell an empty value from a
+ * measured zero. For the check after writing that is exactly wrong: there, null means "the value
+ * did not arrive", and a written zero would wrongly have been counted as a write failure.
  */
 private fun Task.storedActualHours(manager: CustomPropertyManager): Double? {
   val def = manager.findEffortDefinition(EffortDrivenProperties.TASK_EFFORT_ACTUAL_HOURS) ?: return null
