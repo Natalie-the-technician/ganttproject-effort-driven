@@ -11,6 +11,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import biz.ganttproject.mobile.core.EditScope
 import biz.ganttproject.mobile.core.GanttDocument
+import biz.ganttproject.mobile.core.RunningTimer
 import biz.ganttproject.mobile.core.recordsInPeriod
 import biz.ganttproject.mobile.core.TimeLogExport
 import biz.ganttproject.mobile.core.TimeLogCsv
@@ -834,7 +835,7 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
           start = now.minusSeconds(seconds),
           durationSeconds = seconds,
           description = description.trim(),
-          person = null,
+          person = prefs.person(),
           source = TimeSource.MANUAL,
           createdAt = now
         )
@@ -878,6 +879,78 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    */
   fun setTaskLabels(taskUid: String, labels: List<String>) =
     edit { it.setTaskLabels(taskUid, labels) }
+
+  // ----------------------------------------------------------------- Timer
+
+  /**
+   * The timer that is running, or null.
+   *
+   * Read from preferences on every call rather than held in a field: the
+   * widget process and this one both write bookings, and a value cached here
+   * would keep showing a timer somebody already stopped elsewhere.
+   */
+  fun runningTimer(): RunningTimer? = RunningTimer.decode(prefs.runningTimer())
+
+  /**
+   * Starts a timer on a task. Refuses when one is already running.
+   *
+   * Refusing rather than replacing: a second start is far more likely to be a
+   * mis-tap than a deliberate switch, and silently dropping the first timer
+   * would throw away however long it had been running.
+   */
+  fun startTimer(taskUid: String, description: String = ""): Boolean {
+    if (runningTimer() != null) return false
+    if (!_state.value.editScope.allowsAppEdits) return false
+    prefs.setRunningTimer(
+      RunningTimer(
+        taskUid = taskUid,
+        startedAt = OffsetDateTime.now(),
+        description = description.trim(),
+        person = prefs.person()
+      ).encode()
+    )
+    revision++
+    open?.let { project -> _state.update { it.copy(project = snapshot(project)) } }
+    return true
+  }
+
+  /**
+   * Stops the timer and writes what it measured.
+   *
+   * The timer is only cleared once the record is actually in the document. If
+   * the task is not in the project that happens to be open, the write fails
+   * and the timer keeps running — losing a measured stretch because the wrong
+   * file was open would be the one mistake this must not make.
+   */
+  fun stopTimer(): Boolean {
+    val timer = runningTimer() ?: return false
+    val record = timer.stop(OffsetDateTime.now(), UUID.randomUUID().toString())
+      ?: return false
+    if (!edit { it.addTimeRecord(record) }) return false
+    prefs.setRunningTimer(null)
+    return true
+  }
+
+  /**
+   * Throws the running timer away without writing anything.
+   *
+   * Separate from stopping and named for what it does, because it destroys a
+   * measurement. The screen asks before calling it.
+   */
+  fun discardTimer() {
+    prefs.setRunningTimer(null)
+    revision++
+    open?.let { project -> _state.update { it.copy(project = snapshot(project)) } }
+  }
+
+  /** Who bookings from this device are recorded as, or null when nobody said. */
+  fun person(): String? = prefs.person()
+
+  fun setPerson(name: String?) {
+    prefs.setPerson(name)
+    revision++
+    open?.let { project -> _state.update { it.copy(project = snapshot(project)) } }
+  }
 
   // ---------------------------------------------------------------- Export
 

@@ -66,6 +66,16 @@
     <string name="task_timelog_book_hint">Wird als soeben beendet aufgezeichnet.</string>
     <string name="task_timelog_book_invalid">Bitte eine Stundenzahl größer als null eingeben.</string>
     <string name="task_timelog_delete">Diesen Satz löschen</string>
+    <string name="task_timer_start">Uhr starten</string>
+    <string name="task_timer_stop">Stoppen und aufzeichnen</string>
+    <string name="task_timer_discard">Verwerfen</string>
+    <string name="task_timer_discard_confirm">Damit ist die gemessene Zeit weg.</string>
+    <string name="task_timer_discard_yes">Wegwerfen</string>
+    <string name="task_timer_running_since">Läuft seit %1$s.</string>
+    <string name="task_timer_elsewhere">Auf einem anderen Vorgang läuft eine Uhr. Stoppen Sie sie dort zuerst.</string>
+    <string name="task_labels">Marken</string>
+    <string name="task_labels_hint">Durch Leerzeichen getrennt. Wandern unverändert in Exporte.</string>
+    <string name="task_labels_apply">Übernehmen</string>
     <string name="timelog_source_manual">eingetippt</string>
     <string name="timelog_source_timer">Uhr</string>
     <string name="timelog_source_quick">Widget</string>

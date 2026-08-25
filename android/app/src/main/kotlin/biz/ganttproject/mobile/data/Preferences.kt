@@ -315,6 +315,40 @@ class AppPreferences(context: Context) {
   fun setEditScope(scope: EditScope) =
     prefs.edit().putString(KEY_EDIT_SCOPE, scope.key).apply()
 
+  // ------------------------------------------------------- Time recording
+
+  /**
+   * The timer that is currently running, as one encoded line, or null.
+   *
+   * Kept here rather than in memory because the process does not survive: the
+   * system kills the app while a timer runs and nobody would notice until the
+   * hours were gone. A start timestamp on disk survives that, and the elapsed
+   * time is a subtraction whenever somebody asks — which is why there is no
+   * service and nothing that has to keep ticking.
+   *
+   * Deliberately not in the project file: a timer is a thing this device is
+   * doing right now, not a fact about the plan, and writing it would dirty a
+   * document the user has not changed.
+   */
+  fun runningTimer(): String? = prefs.getString(KEY_RUNNING_TIMER, null)?.ifBlank { null }
+
+  fun setRunningTimer(encoded: String?) =
+    prefs.edit().putString(KEY_RUNNING_TIMER, encoded).apply()
+
+  /**
+   * Who the records of this device belong to, or null when nobody said.
+   *
+   * Free text, and only ever copied into a record: the app has no notion of
+   * accounts and must not invent one. Null stays null rather than becoming a
+   * guess from the device owner or the WebDAV login — "nobody said who" is a
+   * different statement from a name, and a report that quietly attributes
+   * work is worse than one that admits the gap.
+   */
+  fun person(): String? = prefs.getString(KEY_PERSON, null)?.trim()?.ifBlank { null }
+
+  fun setPerson(name: String?) =
+    prefs.edit().putString(KEY_PERSON, name?.trim()?.ifBlank { null }).apply()
+
   companion object {
     private const val KEY_RECENT = "recent_files"
     private const val KEY_WIDGET_URI = "widget_project_uri"
@@ -331,6 +365,8 @@ class AppPreferences(context: Context) {
     private const val KEY_DAV_URL = "dav_base_url"
     private const val KEY_DAV_USER = "dav_username"
     private const val KEY_DAV_LOCKING = "dav_supports_locking"
+    private const val KEY_RUNNING_TIMER = "running_timer"
+    private const val KEY_PERSON = "record_person"
     private const val MAX_RECENT = 10
   }
 }

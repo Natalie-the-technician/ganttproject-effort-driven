@@ -235,7 +235,7 @@ class WidgetProject(private val context: Context) {
             start = now.minusSeconds(seconds),
             durationSeconds = seconds,
             description = "",
-            person = null,
+            person = prefs.person(),
             source = TimeSource.QUICK,
             createdAt = now
           )

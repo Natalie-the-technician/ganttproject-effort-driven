@@ -101,5 +101,9 @@ fun hours(value: Double?): String {
 fun formatDate(date: LocalDate): String =
   date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
 
+/** Time of day in the device's notation, for "running since ...". */
+fun formatTime(at: java.time.OffsetDateTime): String =
+  at.toLocalTime().format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+
 fun formatDateRange(from: LocalDate, to: LocalDate): String =
   if (from == to) formatDate(from) else "${formatDate(from)} – ${formatDate(to)}"

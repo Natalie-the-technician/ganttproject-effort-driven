@@ -525,7 +525,11 @@ private fun TimeLogSection(
         TimeRecordRow(record, viewModel, canEdit)
       }
 
-      if (canEdit) BookHoursRow(uid, viewModel)
+      if (canEdit) {
+        TimerRow(uid, viewModel, revision)
+        BookHoursRow(uid, viewModel)
+        LabelsField(uid, viewModel, revision)
+      }
     }
   }
 }
@@ -634,6 +638,118 @@ private fun BookHoursRow(taskUid: String, viewModel: ProjectViewModel) {
       ) {
         Icon(Icons.Default.Add, contentDescription = null)
         Text(stringResource(R.string.task_timelog_book))
+      }
+    }
+  }
+}
+
+/**
+ * Start and stop for this task.
+ *
+ * Shows when the timer was started rather than a counter that ticks. A running
+ * total would have to be rebuilt every second to stay true, and "running since
+ * 14:30" is a fact that cannot go stale — the duration lands in the record the
+ * moment it is stopped.
+ *
+ * There is no service behind this and nothing that keeps running: the timer is
+ * a start timestamp in the preferences, and the elapsed time is a subtraction
+ * whenever somebody asks. That is also what makes it survive the app being
+ * killed.
+ */
+@Composable
+private fun TimerRow(taskUid: String, viewModel: ProjectViewModel, revision: Int) {
+  val timer = remember(taskUid, revision) { viewModel.runningTimer() }
+  var confirmDiscard by remember(taskUid) { mutableStateOf(false) }
+
+  when {
+    timer == null ->
+      TextButton(onClick = { viewModel.startTimer(taskUid) }) {
+        Text(stringResource(R.string.task_timer_start))
+      }
+
+    timer.taskUid == taskUid -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Text(
+        stringResource(R.string.task_timer_running_since, formatTime(timer.startedAt)),
+        style = MaterialTheme.typography.bodyMedium
+      )
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextButton(onClick = { viewModel.stopTimer() }) {
+          Text(stringResource(R.string.task_timer_stop))
+        }
+        TextButton(onClick = { confirmDiscard = true }) {
+          Text(stringResource(R.string.task_timer_discard))
+        }
+      }
+      if (confirmDiscard) {
+        // Asked, because this throws away a measurement rather than storing
+        // one, and the elapsed time cannot be reconstructed afterwards.
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          Text(
+            stringResource(R.string.task_timer_discard_confirm),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.weight(1f)
+          )
+          TextButton(onClick = { confirmDiscard = false; viewModel.discardTimer() }) {
+            Text(stringResource(R.string.task_timer_discard_yes))
+          }
+          TextButton(onClick = { confirmDiscard = false }) {
+            Text(stringResource(R.string.action_cancel))
+          }
+        }
+      }
+    }
+
+    // A timer belonging to another task. Said plainly rather than offering a
+    // second start: two timers at once would book the same minutes twice.
+    else -> Text(
+      stringResource(R.string.task_timer_elsewhere),
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+  }
+}
+
+/**
+ * Free labels on this task, passed to the export untouched.
+ *
+ * The app attaches no meaning to them. Whether a label denotes a funded
+ * project, a customer or a cost centre is decided by whoever reads the export,
+ * which is what lets one log serve a funding claim, an invoice and a
+ * post-calculation at the same time.
+ */
+@Composable
+private fun LabelsField(taskUid: String, viewModel: ProjectViewModel, revision: Int) {
+  val stored = remember(taskUid, revision) { viewModel.taskLabels(taskUid) }
+  var text by remember(taskUid, revision) { mutableStateOf(stored.joinToString(" ")) }
+
+  Column {
+    OutlinedTextField(
+      value = text,
+      onValueChange = { text = it },
+      label = { Text(stringResource(R.string.task_labels)) },
+      singleLine = true,
+      modifier = Modifier.fillMaxWidth()
+    )
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Text(
+        stringResource(R.string.task_labels_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.weight(1f)
+      )
+      val pending = text.split(' ', '\t').map { it.trim() }.filter { it.isNotEmpty() }
+      if (pending != stored) {
+        TextButton(onClick = { viewModel.setTaskLabels(taskUid, pending) }) {
+          Text(stringResource(R.string.task_labels_apply))
+        }
       }
     }
   }

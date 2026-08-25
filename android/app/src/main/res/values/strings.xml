@@ -71,6 +71,16 @@
     <string name="task_timelog_book_hint">Recorded as ending now.</string>
     <string name="task_timelog_book_invalid">Please enter a number of hours greater than zero.</string>
     <string name="task_timelog_delete">Delete this record</string>
+    <string name="task_timer_start">Start timer</string>
+    <string name="task_timer_stop">Stop and record</string>
+    <string name="task_timer_discard">Discard</string>
+    <string name="task_timer_discard_confirm">This throws the measured time away.</string>
+    <string name="task_timer_discard_yes">Throw away</string>
+    <string name="task_timer_running_since">Running since %1$s.</string>
+    <string name="task_timer_elsewhere">A timer is running on another task. Stop it there first.</string>
+    <string name="task_labels">Labels</string>
+    <string name="task_labels_hint">Separated by spaces. Passed to exports unchanged.</string>
+    <string name="task_labels_apply">Apply</string>
     <string name="timelog_source_manual">typed in</string>
     <string name="timelog_source_timer">timer</string>
     <string name="timelog_source_quick">widget</string>
