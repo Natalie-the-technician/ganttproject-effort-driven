@@ -42,9 +42,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import biz.ganttproject.mobile.R
 import biz.ganttproject.mobile.core.ProjectModel
 import biz.ganttproject.mobile.core.TaskNode
+import biz.ganttproject.mobile.core.TimeRecord
+import biz.ganttproject.mobile.core.TimeSource
 import biz.ganttproject.mobile.core.availableHoursPerDay
 import biz.ganttproject.mobile.core.computeDurationDays
 import biz.ganttproject.mobile.core.parseEffortInput
+import java.time.ZoneId
+import kotlin.math.abs
 
 /**
  * Everything about one task that can be changed from a phone.
@@ -59,7 +63,13 @@ fun TaskSheet(
   task: TaskNode,
   model: ProjectModel,
   viewModel: ProjectViewModel,
-  canEdit: Boolean
+  canEdit: Boolean,
+  /**
+   * Changes on every edit. The time log is read straight from the document
+   * rather than from the model snapshot, so this is what tells the section
+   * to look again.
+   */
+  revision: Int
 ) {
   Column(
     modifier = Modifier
@@ -110,6 +120,10 @@ fun TaskSheet(
 
     // ----------------------------------------------------------- Hours
     HoursSection(task, model, viewModel, canEdit)
+
+    HorizontalDivider()
+
+    TimeLogSection(task, viewModel, canEdit, revision)
 
     HorizontalDivider()
 
@@ -419,6 +433,208 @@ private fun AssignmentsSection(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
       )
+    }
+  }
+}
+
+// ------------------------------------------------------------------ Time log
+
+/**
+ * Individual records of work on this task.
+ *
+ * Separate from the "actual hours" field above, and deliberately so: that
+ * field is one number, this is what the number is made of. Only the log can
+ * answer "when, how long, and on what" — which is what any report, invoice or
+ * funding claim actually asks for.
+ *
+ * Nothing here rounds. What is booked is what is stored, down to the second;
+ * whoever reads the export decides how to round it, once.
+ */
+@Composable
+private fun TimeLogSection(
+  task: TaskNode,
+  viewModel: ProjectViewModel,
+  canEdit: Boolean,
+  revision: Int
+) {
+  val uid = task.uid
+
+  Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Text(stringResource(R.string.task_timelog), style = MaterialTheme.typography.titleMedium)
+
+    if (uid == null) {
+      // A record has to point at something that survives the task being moved
+      // or re-indented, and only the uid does. Files written by older
+      // GanttProject versions may not have one, and saying so beats a button
+      // that quietly does nothing.
+      Text(
+        stringResource(R.string.task_timelog_no_uid),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    } else {
+      val records = remember(uid, revision) { viewModel.timeRecordsOf(uid) }
+      val unreadable = remember(uid, revision) { viewModel.unreadableRecordsOf(uid) }
+      val loggedHours = records.sumOf { it.durationSeconds } / 3600.0
+
+      if (records.isEmpty()) {
+        Text(
+          stringResource(R.string.task_timelog_empty),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      } else {
+        Text(
+          stringResource(R.string.task_timelog_total, hours(loggedHours), records.size),
+          style = MaterialTheme.typography.bodyMedium
+        )
+      }
+
+      if (unreadable > 0) {
+        // Never silent. A record that cannot be read is work somebody did, and
+        // hours that were worked cannot be reconstructed later.
+        Text(
+          stringResource(R.string.task_timelog_unreadable, unreadable),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.error
+        )
+      }
+
+      // The stored total and the log can disagree: the field is an ordinary
+      // editable column on the desktop, and the home-screen widget writes it
+      // from another process. Reported rather than corrected — the difference
+      // may well be a correction somebody made on purpose.
+      val stored = task.actualEffortHours
+      val differs = if (stored == null) loggedHours > 0.01 else abs(stored - loggedHours) > 0.01
+      if (differs) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          Text(
+            stringResource(R.string.task_timelog_drift, hours(stored ?: 0.0), hours(loggedHours)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+          if (canEdit) {
+            TextButton(onClick = { viewModel.alignActualHoursWithLog() }) {
+              Text(stringResource(R.string.task_timelog_align))
+            }
+          }
+        }
+      }
+
+      records.forEach { record ->
+        TimeRecordRow(record, viewModel, canEdit)
+      }
+
+      if (canEdit) BookHoursRow(uid, viewModel)
+    }
+  }
+}
+
+@Composable
+private fun TimeRecordRow(record: TimeRecord, viewModel: ProjectViewModel, canEdit: Boolean) {
+  Row(
+    modifier = Modifier.fillMaxWidth(),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(8.dp)
+  ) {
+    Column(modifier = Modifier.weight(1f)) {
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // The device's zone, because this is a screen. A report takes its zone
+        // from the reporting period instead — the same instant falls on a
+        // different day depending on where the question is asked.
+        Text(
+          formatDate(record.dateIn(ZoneId.systemDefault())),
+          style = MaterialTheme.typography.bodyMedium
+        )
+        Text(
+          stringResource(R.string.task_timelog_hours, hours(record.hours)),
+          style = MaterialTheme.typography.bodyMedium
+        )
+        if (record.source != TimeSource.MANUAL) {
+          Text(
+            record.source.text(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+      }
+      if (record.description.isNotBlank()) {
+        Text(
+          record.description,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis
+        )
+      }
+    }
+    if (canEdit) {
+      IconButton(onClick = { viewModel.removeTimeRecord(record.id) }) {
+        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.task_timelog_delete))
+      }
+    }
+  }
+}
+
+/**
+ * Books a stretch that has just finished.
+ *
+ * Hours and a description, no date field: the record is placed ending now,
+ * which is what "I just worked on this" means and gives it a real timestamp.
+ * A date picker would let somebody enter a day without a time, and the time is
+ * exactly what decides which reporting period the hours land in.
+ */
+@Composable
+private fun BookHoursRow(taskUid: String, viewModel: ProjectViewModel) {
+  var hoursText by remember(taskUid) { mutableStateOf("") }
+  var what by remember(taskUid) { mutableStateOf("") }
+  var invalid by remember(taskUid) { mutableStateOf(false) }
+
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    OutlinedTextField(
+      value = hoursText,
+      onValueChange = { hoursText = it; invalid = false },
+      label = { Text(stringResource(R.string.task_timelog_book_hours)) },
+      singleLine = true,
+      isError = invalid,
+      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+      modifier = Modifier.fillMaxWidth()
+    )
+    OutlinedTextField(
+      value = what,
+      onValueChange = { what = it },
+      label = { Text(stringResource(R.string.task_timelog_book_what)) },
+      singleLine = true,
+      modifier = Modifier.fillMaxWidth()
+    )
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Text(
+        text = if (invalid) stringResource(R.string.task_timelog_book_invalid)
+        else stringResource(R.string.task_timelog_book_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = if (invalid) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.weight(1f)
+      )
+      TextButton(
+        onClick = {
+          val parsed = parseEffortInput(hoursText)
+          if (parsed == null || parsed <= 0.0 || !viewModel.bookHours(taskUid, parsed, what)) {
+            invalid = true
+          } else {
+            hoursText = ""
+            what = ""
+            invalid = false
+          }
+        }
+      ) {
+        Icon(Icons.Default.Add, contentDescription = null)
+        Text(stringResource(R.string.task_timelog_book))
+      }
     }
   }
 }

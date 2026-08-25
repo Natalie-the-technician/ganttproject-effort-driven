@@ -16,6 +16,8 @@ import biz.ganttproject.mobile.core.ImportPlan
 import biz.ganttproject.mobile.core.Matching
 import biz.ganttproject.mobile.core.ProjectModel
 import biz.ganttproject.mobile.core.TaskCandidate
+import biz.ganttproject.mobile.core.TimeRecord
+import biz.ganttproject.mobile.core.TimeSource
 import biz.ganttproject.mobile.core.TogglClient
 import biz.ganttproject.mobile.core.TogglError
 import biz.ganttproject.mobile.core.TogglResult
@@ -49,6 +51,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.util.UUID
 
 /** What the UI needs to know about the currently open project. */
 data class ProjectUi(
@@ -779,6 +783,91 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
   fun unassignResource(taskId: String, resourceId: String) =
     edit { it.unassignResource(taskId, resourceId) }
+
+  // -------------------------------------------------------------- Time log
+
+  /**
+   * The records stored on one task, oldest first.
+   *
+   * Read from the document rather than from the snapshot: [ProjectModel]
+   * deliberately does not carry the log, so decoding it costs nothing on the
+   * projects that have none. Callers key their `remember` on
+   * [ProjectUi.revision], which changes on every edit.
+   */
+  fun timeRecordsOf(taskUid: String): List<TimeRecord> =
+    open?.document?.timeLogOfTask(taskUid)?.records.orEmpty()
+
+  /** How many stored records on this task could not be read back. */
+  fun unreadableRecordsOf(taskUid: String): Int =
+    open?.document?.timeLogOfTask(taskUid)?.skippedLines ?: 0
+
+  /**
+   * Books a stretch of work that has just finished.
+   *
+   * Placed ending *now*, which is what "I just worked on this" means. It also
+   * gives the record a real timestamp instead of a date with an invented time
+   * on it — and the timestamp is what decides which day, and therefore which
+   * reporting period, the hours fall in.
+   *
+   * The id is generated here rather than in the core, which has no clock and
+   * no randomness on purpose so that its results stay reproducible.
+   */
+  fun bookHours(taskUid: String, hours: Double, description: String): Boolean {
+    val seconds = Math.round(hours * 3600.0)
+    if (seconds <= 0L) return false
+    val now = OffsetDateTime.now()
+    return edit {
+      it.addTimeRecord(
+        TimeRecord(
+          id = UUID.randomUUID().toString(),
+          taskUid = taskUid,
+          start = now.minusSeconds(seconds),
+          durationSeconds = seconds,
+          description = description.trim(),
+          person = null,
+          source = TimeSource.MANUAL,
+          createdAt = now
+        )
+      )
+    }
+  }
+
+  fun removeTimeRecord(recordId: String) = edit { it.removeTimeRecord(recordId) }
+
+  /** Tasks whose stored total does not match the sum of their records. */
+  fun actualHoursDrift(): List<GanttDocument.ActualHoursDrift> =
+    open?.document?.actualHoursDrift().orEmpty()
+
+  /**
+   * Rewrites the recorded total of every task from its records.
+   *
+   * An action the user takes, not something that happens on load. The total is
+   * an ordinary editable column on the desktop and the widget writes it from
+   * another process, so a difference is as likely to be a correction somebody
+   * made deliberately as it is to be a mistake. Overwriting it unasked would
+   * throw that away with no trace.
+   */
+  fun alignActualHoursWithLog(): Int {
+    var changed = 0
+    edit { document ->
+      changed = document.applyActualHoursFromLog()
+      changed > 0
+    }
+    return changed
+  }
+
+  fun taskLabels(taskUid: String): List<String> =
+    open?.document?.taskLabels(taskUid).orEmpty()
+
+  /**
+   * Free labels on a task, handed to the export untouched.
+   *
+   * The app attaches no meaning to them: whether a label denotes a funded
+   * project, a customer or a cost centre is decided by whoever reads the
+   * export.
+   */
+  fun setTaskLabels(taskUid: String, labels: List<String>) =
+    edit { it.setTaskLabels(taskUid, labels) }
 
   private fun snapshot(project: OpenProject) =
     ProjectUi(

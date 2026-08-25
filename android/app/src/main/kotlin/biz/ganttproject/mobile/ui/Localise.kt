@@ -10,6 +10,7 @@ import androidx.compose.ui.res.stringResource
 import biz.ganttproject.mobile.R
 import biz.ganttproject.mobile.core.MatchReason
 import biz.ganttproject.mobile.core.SplitValidation
+import biz.ganttproject.mobile.core.TimeSource
 import biz.ganttproject.mobile.core.TogglError
 import biz.ganttproject.mobile.core.formatHours
 import biz.ganttproject.mobile.data.FileError
@@ -75,6 +76,15 @@ fun MatchReason.text(): String = when (this) {
   MatchReason.EXACT_NAME -> stringResource(R.string.import_reason_name)
   MatchReason.NAME_CONTAINED -> stringResource(R.string.import_reason_contained)
   MatchReason.WORD_OVERLAP -> stringResource(R.string.import_reason_words)
+}
+
+/** Where a record came from, for the one-word note beside it. */
+@Composable
+fun TimeSource.text(): String = when (this) {
+  TimeSource.MANUAL -> stringResource(R.string.timelog_source_manual)
+  TimeSource.TIMER -> stringResource(R.string.timelog_source_timer)
+  TimeSource.QUICK -> stringResource(R.string.timelog_source_quick)
+  TimeSource.IMPORTED -> stringResource(R.string.timelog_source_imported)
 }
 
 /**
