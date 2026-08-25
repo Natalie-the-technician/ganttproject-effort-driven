@@ -491,3 +491,175 @@ fun TogglTimeEntry.toTimeRecord(
     createdAt = began
   )
 }
+
+// ---------------------------------------------------------------- Amendments
+
+/**
+ * A deliberate, dated change to records that were already written.
+ *
+ * Records of work are not ordinary data: somebody may have to vouch for them
+ * years later. German bookkeeping law states the standard plainly — an entry
+ * must not be changed so that the original content can no longer be
+ * established, and it has to be evident whether something was written
+ * originally or afterwards (§ 146 Abs. 4 AO). That is not "no changes"; it is
+ * "changes leave a trace".
+ *
+ * So the log is not immutable, and an amendment is what makes a change
+ * legitimate rather than suspicious: it keeps the previous value, says when
+ * the change was made, names the records it touched, and carries the reason
+ * the person gave. A change nobody explained is worse than none, because it
+ * cannot be defended afterwards.
+ */
+data class LogAmendment(
+  val id: String,
+  /** When the change was made — not when the work was done. */
+  val at: OffsetDateTime,
+  val kind: AmendmentKind,
+  /** The value before, so the original stays establishable. */
+  val from: String?,
+  val to: String?,
+  /** Which records were touched. */
+  val recordIds: List<String>,
+  /** Why. Required: see the note above. */
+  val reason: String
+)
+
+enum class AmendmentKind {
+  /** The person a set of records is attributed to was changed or removed. */
+  PERSON
+}
+
+/**
+ * Changes the person on [records], returning the new records and the note that
+ * records the change.
+ *
+ * A pure function, like everything else here: the timestamp and the id are
+ * supplied, so the same call always produces the same result.
+ *
+ * Only records that actually carry [from] are touched — passing a name nobody
+ * has changes nothing and produces no amendment, because a note about a change
+ * that did not happen is noise in a file that has to stay readable.
+ *
+ * @param to the new name, or null to remove it. Removing is a change like any
+ *   other and is recorded the same way.
+ */
+fun changePersonInLog(
+  records: List<TimeRecord>,
+  from: String?,
+  to: String?,
+  reason: String,
+  at: OffsetDateTime,
+  amendmentId: String
+): Pair<List<TimeRecord>, LogAmendment?> {
+  if (from == to) return records to null
+  val touched = records.filter { it.person == from }
+  if (touched.isEmpty()) return records to null
+
+  val changed = records.map { if (it.person == from) it.copy(person = to) else it }
+  return changed to LogAmendment(
+    id = amendmentId,
+    at = at,
+    kind = AmendmentKind.PERSON,
+    from = from,
+    to = to,
+    recordIds = touched.map { it.id }.sorted(),
+    reason = reason.trim()
+  )
+}
+
+/**
+ * Text form of the amendments, sharing the log's separators and escaping.
+ *
+ * Record ids are joined with a comma, which is escaped in values like every
+ * other separator, so an id containing one cannot split the list.
+ */
+object AmendmentCodec {
+  private const val FIELD = '|'
+  private const val RECORD = ';'
+  private const val ID_SEPARATOR = ','
+
+  private fun escape(text: String): String = buildString(text.length) {
+    for (ch in text) {
+      when (ch) {
+        '\\' -> append("\\\\")
+        '\t' -> append("\\t")
+        '\n' -> append("\\n")
+        '\r' -> append("\\r")
+        FIELD -> append("\\p")
+        RECORD -> append("\\s")
+        ID_SEPARATOR -> append("\\c")
+        else -> append(ch)
+      }
+    }
+  }
+
+  private fun unescape(text: String): String = buildString(text.length) {
+    var i = 0
+    while (i < text.length) {
+      val ch = text[i]
+      if (ch != '\\' || i == text.lastIndex) { append(ch); i++; continue }
+      when (val next = text[i + 1]) {
+        '\\' -> append('\\')
+        't' -> append('\t')
+        'n' -> append('\n')
+        'r' -> append('\r')
+        'p' -> append(FIELD)
+        's' -> append(RECORD)
+        'c' -> append(ID_SEPARATOR)
+        else -> { append(ch); append(next) }
+      }
+      i += 2
+    }
+  }
+
+  fun encodeOne(a: LogAmendment): String = listOf(
+    a.id,
+    a.at.toString(),
+    a.kind.name,
+    a.from.orEmpty(),
+    a.to.orEmpty(),
+    a.recordIds.joinToString(ID_SEPARATOR.toString()) { escape(it) },
+    a.reason
+  ).joinToString(FIELD.toString()) { escape(it) }
+
+  fun encode(amendments: List<LogAmendment>): String =
+    amendments.sortedWith(compareBy({ it.at }, { it.id }))
+      .joinToString(RECORD.toString()) { encodeOne(it) }
+
+  fun decodeOne(chunk: String): LogAmendment? {
+    if (chunk.isBlank()) return null
+    val f = chunk.split(FIELD).map { unescape(it) }
+    if (f.size < 5) return null
+    val id = f[0].ifBlank { return null }
+    val at = try {
+      OffsetDateTime.parse(f[1].trim())
+    } catch (e: DateTimeParseException) {
+      return null
+    }
+    val kind = AmendmentKind.entries.firstOrNull { it.name == f[2] } ?: return null
+    return LogAmendment(
+      id = id,
+      at = at,
+      kind = kind,
+      from = f[3].ifBlank { null },
+      to = f[4].ifBlank { null },
+      // The ids were escaped individually before being joined, so they have to
+      // be unescaped individually too -- the split above only undid the field
+      // level.
+      recordIds = f.getOrNull(5).orEmpty()
+        .split(ID_SEPARATOR).map { unescape(it) }.filter { it.isNotEmpty() },
+      reason = f.getOrNull(6).orEmpty()
+    )
+  }
+
+  /** Reads a whole list, keeping one copy of each id. */
+  fun decode(text: String?): List<LogAmendment> {
+    if (text.isNullOrBlank()) return emptyList()
+    val byId = LinkedHashMap<String, LogAmendment>()
+    text.split(RECORD, '\n', '\r')
+      .filter { it.isNotBlank() }
+      .mapNotNull { decodeOne(it) }
+      .forEach { byId.putIfAbsent(it.id, it) }
+    return byId.values.sortedWith(compareBy({ it.at }, { it.id }))
+  }
+}

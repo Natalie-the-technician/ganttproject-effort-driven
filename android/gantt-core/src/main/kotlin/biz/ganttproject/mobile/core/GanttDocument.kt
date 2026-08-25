@@ -494,6 +494,82 @@ class GanttDocument private constructor(private val root: XmlElement) {
     return setTimeLogOfTask(record.taskUid, remaining)
   }
 
+  // ------------------------------------------------------------ Amendments
+
+  /**
+   * Every dated note about a deliberate change to records already written.
+   *
+   * Gathered from all tasks and deduplicated by id, because a note is written
+   * to each task it touched so that deleting one task cannot make the change
+   * unexplainable.
+   */
+  fun logAmendments(): List<LogAmendment> {
+    val defId = taskPropertyDefinitionsByName()[ForkProperties.TASK_LOG_AMENDMENTS]
+      ?: return emptyList()
+    val byId = LinkedHashMap<String, LogAmendment>()
+    fun walk(parent: XmlElement) {
+      for (task in parent.childElements("task")) {
+        AmendmentCodec.decode(readTaskPropertyValue(task, defId))
+          .forEach { byId.putIfAbsent(it.id, it) }
+        walk(task)
+      }
+    }
+    tasksElement()?.let { walk(it) }
+    return byId.values.sortedWith(compareBy({ it.at }, { it.id }))
+  }
+
+  /**
+   * Changes the person on every record that carries [from], and writes the
+   * note that records the change.
+   *
+   * Returns how many records were touched; zero means nothing was changed and
+   * nothing was written. Passing a name nobody has is not an error — it simply
+   * does nothing, rather than leaving a note about a change that did not
+   * happen.
+   *
+   * The records and the note land in the same edit. A note without the change,
+   * or a change without the note, would each be worse than neither: the first
+   * claims something that did not happen, the second is exactly the silent
+   * rewrite that § 146 Abs. 4 AO exists to prevent.
+   *
+   * @param at when the change is being made, supplied by the caller because
+   *   this module has no clock
+   * @param amendmentId supplied for the same reason, so a retry does not add a
+   *   second note for one change
+   */
+  fun changePersonInLog(
+    from: String?,
+    to: String?,
+    reason: String,
+    at: java.time.OffsetDateTime,
+    amendmentId: String
+  ): Int {
+    val (changed, amendment) = changePersonInLog(
+      timeLog().records, from, to, reason, at, amendmentId
+    )
+    if (amendment == null) return 0
+
+    val touchedUids = changed.filter { it.id in amendment.recordIds.toSet() }
+      .map { it.taskUid }.distinct()
+
+    for (uid in touchedUids) {
+      val forTask = changed.filter { it.taskUid == uid }
+      if (!setTimeLogOfTask(uid, forTask)) continue
+      val taskId = taskElementByUid(uid)?.attr("id") ?: continue
+      val existing = AmendmentCodec.decode(
+        taskPropertyDefinitionsByName()[ForkProperties.TASK_LOG_AMENDMENTS]
+          ?.let { defId -> taskElementByUid(uid)?.let { readTaskPropertyValue(it, defId) } }
+      )
+      writeTaskProperty(
+        taskId,
+        ForkProperties.TASK_LOG_AMENDMENTS,
+        "text",
+        AmendmentCodec.encode(existing.filterNot { it.id == amendmentId } + amendment)
+      )
+    }
+    return amendment.recordIds.size
+  }
+
   // ---------------------------------------------------------------- Labels
 
   fun taskLabels(taskUid: String): List<String> {

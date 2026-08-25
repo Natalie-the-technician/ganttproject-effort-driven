@@ -276,6 +276,117 @@ class TimeLogDocumentTest {
     assertNull(doc.read().task("0")!!.actualEffortHours, "not left standing at the old value")
   }
 
+  // ----------------------------------------------------------- Amendments
+
+  private fun changeAt(hour: Int) =
+    OffsetDateTime.of(2026, 8, 10, hour, 0, 0, 0, ZoneOffset.ofHours(2))
+
+  @Test
+  @DisplayName("changing a name rewrites the records and leaves a dated note")
+  fun `a person change is recorded`() {
+    val doc = load()
+    doc.addTimeRecord(record(id = "a", description = "x").copy(person = "nat"))
+    doc.addTimeRecord(record(id = "b", start = at(4, 9)).copy(person = "nat"))
+    doc.addTimeRecord(record(id = "c", start = at(5, 9)).copy(person = "chris"))
+
+    val touched = doc.changePersonInLog("nat", "Natalie", "legal name", changeAt(9), "am-1")
+    assertEquals(2, touched)
+
+    assertEquals(
+      listOf("Natalie", "Natalie", "chris"),
+      doc.timeLog().records.map { it.person }
+    )
+
+    val note = doc.logAmendments().single()
+    assertEquals("nat", note.from, "the previous value has to stay establishable")
+    assertEquals("Natalie", note.to)
+    assertEquals(listOf("a", "b"), note.recordIds)
+    assertEquals("legal name", note.reason)
+    assertEquals(changeAt(9), note.at)
+    assertEquals(AmendmentKind.PERSON, note.kind)
+  }
+
+  @Test
+  @DisplayName("removing a name is a change like any other and is recorded too")
+  fun `removing a person leaves a note`() {
+    val doc = load()
+    doc.addTimeRecord(record(id = "a").copy(person = "nat"))
+
+    assertEquals(1, doc.changePersonInLog("nat", null, "asked to be removed", changeAt(9), "am-1"))
+    assertNull(doc.timeLog().records.single().person)
+
+    val note = doc.logAmendments().single()
+    assertEquals("nat", note.from)
+    assertNull(note.to)
+  }
+
+  @Test
+  fun `changing a name nobody has does nothing and writes no note`() {
+    // A note about a change that did not happen is noise in a file that has to
+    // stay readable years later.
+    val doc = load()
+    doc.addTimeRecord(record(id = "a").copy(person = "nat"))
+
+    assertEquals(0, doc.changePersonInLog("someone else", "x", "typo", changeAt(9), "am-1"))
+    assertEquals("nat", doc.timeLog().records.single().person)
+    assertTrue(doc.logAmendments().isEmpty())
+  }
+
+  @Test
+  @DisplayName("two changes in a row keep the original establishable")
+  fun `the chain of notes reconstructs the first value`() {
+    // The point of the whole mechanism. After two renames the file still says
+    // what the name was to begin with, and in what order it changed.
+    val doc = load()
+    doc.addTimeRecord(record(id = "a").copy(person = "nat"))
+
+    doc.changePersonInLog("nat", "Natalie", "legal name", changeAt(9), "am-1")
+    doc.changePersonInLog("Natalie", "N. T.", "shortened", changeAt(11), "am-2")
+
+    val notes = doc.logAmendments()
+    assertEquals(2, notes.size)
+    assertEquals(listOf("nat", "Natalie"), notes.map { it.from })
+    assertEquals(listOf("Natalie", "N. T."), notes.map { it.to })
+    assertEquals("nat", notes.first().from, "the original, two changes later")
+  }
+
+  @Test
+  fun `repeating the same change does not add a second note`() {
+    val doc = load()
+    doc.addTimeRecord(record(id = "a").copy(person = "nat"))
+    doc.changePersonInLog("nat", "Natalie", "legal name", changeAt(9), "am-1")
+    // Same id: a retry, not a second change.
+    doc.changePersonInLog("Natalie", "Natalie", "legal name", changeAt(9), "am-1")
+    assertEquals(1, doc.logAmendments().size)
+  }
+
+  @Test
+  fun `notes survive the round trip through the XML`() {
+    val doc = load()
+    doc.addTimeRecord(record(id = "a").copy(person = "nat"))
+    doc.changePersonInLog("nat", null, "pipe | comma , semicolon ;", changeAt(9), "am-1")
+
+    val note = GanttDocument.parse(doc.toXmlString()).logAmendments().single()
+    assertEquals("am-1", note.id)
+    assertEquals("nat", note.from)
+    assertEquals("pipe | comma , semicolon ;", note.reason)
+    assertEquals(listOf("a"), note.recordIds)
+  }
+
+  @Test
+  @DisplayName("a note is on every task it touched, so deleting one cannot hide the change")
+  fun `notes are not lost with a task`() {
+    val doc = load()
+    doc.addTimeRecord(record(id = "a", taskUid = designUid).copy(person = "nat"))
+    doc.addTimeRecord(record(id = "b", taskUid = draftUid, start = at(4, 9)).copy(person = "nat"))
+    doc.changePersonInLog("nat", "Natalie", "legal name", changeAt(9), "am-1")
+
+    // Read as a union and deduplicated, so two copies still read as one note.
+    assertEquals(1, doc.logAmendments().size)
+    // and each task really does carry it
+    assertTrue(doc.toXmlString().split("am-1").size - 1 >= 2)
+  }
+
   // ------------------------------------------------------ The whole chain
 
   @Test

@@ -78,6 +78,16 @@ object ForkProperties {
   const val TASK_TIME_LOG = "time_log"
 
   /**
+   * Dated notes about deliberate changes to records already written.
+   *
+   * Written to **every** task whose records a change touched, and read as a
+   * union deduplicated by id. The duplication is the point: an amendment that
+   * lived on one task only would disappear when that task was deleted, and a
+   * note about a change is exactly the thing that must not go missing.
+   */
+  const val TASK_LOG_AMENDMENTS = "time_log_amendments"
+
+  /**
    * A free label per task, passed through to the export untouched.
    *
    * Deliberately without meaning here: whether the text denotes a funded

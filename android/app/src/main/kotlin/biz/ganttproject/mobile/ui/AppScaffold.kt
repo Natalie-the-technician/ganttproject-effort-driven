@@ -156,6 +156,7 @@ fun AppScaffold(
   val savedToServerText = stringResource(R.string.saved_to_server)
   val exportedTemplate = stringResource(R.string.timelog_exported, "%d")
   val carriedTemplate = stringResource(R.string.conflict_records_carried, "%d")
+  val amendedTemplate = stringResource(R.string.amend_done, "%d")
   LaunchedEffect(state.notice) {
     when (val notice = state.notice) {
       Notice.Saved -> snackbarHost.showSnackbar(savedText)
@@ -169,6 +170,11 @@ fun AppScaffold(
       Notice.SavedToServer -> snackbarHost.showSnackbar(savedToServerText)
       is Notice.TimeLogExported ->
         snackbarHost.showSnackbar(exportedTemplate.format(notice.records))
+      is Notice.RecordsAmended ->
+        snackbarHost.showSnackbar(
+          amendedTemplate.format(notice.records),
+          duration = SnackbarDuration.Long
+        )
       is Notice.RecordsCarriedOver ->
         snackbarHost.showSnackbar(
           carriedTemplate.format(notice.records),
@@ -582,6 +588,8 @@ fun AppScaffold(
 
           PersonSection(viewModel)
 
+          AmendPersonSection(viewModel)
+
           HorizontalDivider()
 
           SyncServerSection(davState, viewModel)
@@ -987,6 +995,84 @@ private fun PersonSection(viewModel: ProjectViewModel) {
         TextButton(onClick = { viewModel.setPerson(text) }) {
           Text(stringResource(R.string.person_apply))
         }
+      }
+    }
+  }
+}
+
+/**
+ * Changing a name on records that were already written.
+ *
+ * Kept apart from the field above, and reached in more steps than it, because
+ * the two are different acts: one says who future bookings belong to, the
+ * other reaches into what is already recorded. Setting the first must never do
+ * the second by accident.
+ *
+ * Nothing here is optional. The name is picked from the ones that actually
+ * appear in the log rather than typed, so a change starts from what is there;
+ * a reason is required, because a change nobody explained cannot be defended
+ * afterwards; and the button says how many records it will touch before it is
+ * pressed.
+ *
+ * The change itself is not destructive: the previous name, the date and the
+ * reason are written into the file as a dated note, so the original stays
+ * establishable and the change is visibly a later one. That is the standard
+ * German bookkeeping law sets for records of this kind (§ 146 Abs. 4 AO) — not
+ * "nothing may change", but "changes leave a trace".
+ */
+@Composable
+private fun AmendPersonSection(viewModel: ProjectViewModel) {
+  val people = viewModel.personsInLog()
+  if (people.isEmpty()) return
+
+  var chosen by remember(people.keys.joinToString()) { mutableStateOf<String?>(null) }
+  var replacement by remember(chosen) { mutableStateOf("") }
+  var reason by remember(chosen) { mutableStateOf("") }
+
+  Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Text(stringResource(R.string.amend_section), style = MaterialTheme.typography.labelMedium)
+    Text(
+      stringResource(R.string.amend_explain),
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    people.entries.sortedBy { it.key }.forEach { (name, count) ->
+      TextButton(onClick = { chosen = if (chosen == name) null else name }) {
+        Text(stringResource(R.string.amend_person_row, name, count))
+      }
+    }
+
+    chosen?.let { from ->
+      OutlinedTextField(
+        value = replacement,
+        onValueChange = { replacement = it },
+        label = { Text(stringResource(R.string.amend_new_name)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth()
+      )
+      Text(
+        stringResource(R.string.amend_empty_removes),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+      OutlinedTextField(
+        value = reason,
+        onValueChange = { reason = it },
+        label = { Text(stringResource(R.string.amend_reason)) },
+        singleLine = true,
+        isError = reason.isBlank(),
+        modifier = Modifier.fillMaxWidth()
+      )
+      val count = people[from] ?: 0
+      TextButton(
+        enabled = reason.isNotBlank() && replacement.trim() != from,
+        onClick = {
+          viewModel.changePersonInLog(from, replacement, reason)
+          chosen = null
+        }
+      ) {
+        Text(stringResource(R.string.amend_apply, count))
       }
     }
   }

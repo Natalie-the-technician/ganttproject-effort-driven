@@ -91,6 +91,14 @@
     <string name="conflict_records_explain">There is a way out that loses no recorded time: take the other version and carry this device\'s records into it. The plan, progress and assignments then come from the other version — those can be made again, hours cannot.</string>
     <string name="conflict_keep_records">Keep the other version, carry my records over</string>
     <string name="conflict_records_carried">%1$s records carried over.</string>
+    <string name="amend_section">Change a name in existing records</string>
+    <string name="amend_explain">This reaches into what is already recorded, so it asks for more than the field above. The previous name, the date and your reason are written into the file: the original stays establishable and the change is visibly a later one.</string>
+    <string name="amend_person_row">%1$s — %2$d records</string>
+    <string name="amend_new_name">New name</string>
+    <string name="amend_empty_removes">Leave empty to remove the name. That is a change like any other and is recorded the same way.</string>
+    <string name="amend_reason">Why (required)</string>
+    <string name="amend_apply">Change %1$d records and note it</string>
+    <string name="amend_done">%1$s records changed, with a note.</string>
     <string name="timelog_source_manual">typed in</string>
     <string name="timelog_source_timer">timer</string>
     <string name="timelog_source_quick">widget</string>

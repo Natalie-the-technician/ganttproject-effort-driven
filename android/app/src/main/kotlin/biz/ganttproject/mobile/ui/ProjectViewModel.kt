@@ -148,6 +148,9 @@ sealed interface Notice {
   /** A conflict was resolved by carrying this device's records across. */
   data class RecordsCarriedOver(val records: Int) : Notice
 
+  /** A name was changed on records already written, with a note to say so. */
+  data class RecordsAmended(val records: Int) : Notice
+
   /**
    * The project was opened while someone has it open on the desktop.
    *
@@ -1032,6 +1035,51 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     prefs.setPerson(name)
     revision++
     open?.let { project -> _state.update { it.copy(project = snapshot(project)) } }
+  }
+
+  /**
+   * The names that appear in the log, with how many records each carries.
+   *
+   * Offered so a change starts from what is actually there rather than from
+   * something typed: picking a name that exists is the difference between a
+   * correction and a guess.
+   */
+  fun personsInLog(): Map<String, Int> =
+    open?.document?.timeLog()?.records
+      ?.mapNotNull { it.person }
+      ?.groupingBy { it }
+      ?.eachCount()
+      .orEmpty()
+
+  /**
+   * Changes a name on records already written, and leaves the dated note that
+   * records the change.
+   *
+   * Deliberately not a side effect of [setPerson]: setting the name for future
+   * bookings must never reach into what is already recorded. This is the other
+   * operation, it is reached from somewhere else, and it insists on a reason —
+   * a change nobody explained cannot be defended afterwards.
+   *
+   * Returns how many records were touched; zero means nothing happened.
+   */
+  fun changePersonInLog(from: String, to: String?, reason: String): Int {
+    if (reason.isBlank()) return 0
+    val project = open ?: return 0
+    var touched = 0
+    edit { document ->
+      touched = document.changePersonInLog(
+        from = from,
+        to = to?.trim()?.ifBlank { null },
+        reason = reason.trim(),
+        at = OffsetDateTime.now(),
+        amendmentId = UUID.randomUUID().toString()
+      )
+      touched > 0
+    }
+    if (touched > 0) {
+      _state.update { it.copy(notice = Notice.RecordsAmended(touched)) }
+    }
+    return touched
   }
 
   // ---------------------------------------------------------------- Export
