@@ -6,6 +6,7 @@
 package biz.ganttproject.mobile.core
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -125,6 +126,43 @@ class TimeLogTest {
   }
 
   @Test
+  @DisplayName("the encoded log survives XML attribute normalisation")
+  fun `no character that an XML attribute would destroy`() {
+    // A custom property is stored as <customproperty value="...">, and
+    // attribute-value normalisation replaces tab, LF and CR with a space in
+    // every conforming parser. If any of them reached the output, a round trip
+    // through the desktop would come back as one run of spaces: no error, no
+    // warning, the whole log gone. This test is the guard for that, so it is
+    // written against the encoded text rather than against a decoded record.
+    val text = TimeLogCodec.encode(
+      listOf(
+        record(id = "a", description = "measured\tthe\nrail\r"),
+        record(id = "b", start = at(4, 9), description = "pipe|and;semicolon")
+      )
+    )
+
+    assertFalse(text.contains('\t'), "a tab would become a space in an attribute")
+    assertFalse(text.contains('\n'), "a newline would become a space in an attribute")
+    assertFalse(text.contains('\r'), "a carriage return would become a space in an attribute")
+
+    // and it still reads back
+    assertEquals(2, TimeLogCodec.decode(text).records.size)
+    assertEquals("measured\tthe\nrail\r", TimeLogCodec.decode(text).records.first().description)
+  }
+
+  @Test
+  fun `a log written one record per line is still readable`() {
+    // What a file on disk would look like. encode() writes a single line so it
+    // survives an attribute; a reader has to cope with both.
+    val a = record(id = "a")
+    val b = record(id = "b", start = at(4, 9))
+    val asFile = listOf(TimeLogCodec.encodeRecord(a), TimeLogCodec.encodeRecord(b)).joinToString("\n")
+
+    assertEquals(listOf("a", "b"), TimeLogCodec.decode(asFile).records.map { it.id })
+    assertEquals(0, TimeLogCodec.decode(asFile).skippedLines)
+  }
+
+  @Test
   fun `the same records always produce the same text`() {
     val a = record(id = "a", start = at(3, 9))
     val b = record(id = "b", start = at(4, 9))
@@ -139,7 +177,7 @@ class TimeLogTest {
   @Test
   @DisplayName("an older reader tolerates fields it does not know")
   fun `unknown trailing fields are ignored`() {
-    val line = TimeLogCodec.encodeRecord(record()) + "\tsomething\tfrom\tthe\tfuture"
+    val line = TimeLogCodec.encodeRecord(record()) + "|something|from|the|future"
     val decoded = TimeLogCodec.decodeRecord(line)
     assertEquals("r1", decoded?.id)
     assertEquals(3600L, decoded?.durationSeconds)
@@ -147,7 +185,7 @@ class TimeLogTest {
 
   @Test
   fun `a minimal line is readable with defaults`() {
-    val line = listOf("r9", "uid9", at(3, 9).toString(), "1800").joinToString("\t")
+    val line = listOf("r9", "uid9", at(3, 9).toString(), "1800").joinToString("|")
     val decoded = TimeLogCodec.decodeRecord(line)
     assertEquals(TimeSource.MANUAL, decoded?.source)
     assertNull(decoded?.person)
@@ -176,7 +214,7 @@ class TimeLogTest {
 
   @Test
   fun `a record without a task is refused by the reader`() {
-    val line = listOf("r1", "", at(3, 9).toString(), "60").joinToString("\t")
+    val line = listOf("r1", "", at(3, 9).toString(), "60").joinToString("|")
     assertNull(TimeLogCodec.decodeRecord(line))
   }
 

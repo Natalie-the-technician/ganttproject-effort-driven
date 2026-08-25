@@ -224,18 +224,28 @@ fun secondsByDay(
 // ---------------------------------------------------------------- Encoding
 
 /**
- * Text form of the log: one record per line, tab-separated, values escaped.
+ * Text form of the log: one record per chunk, `|`-separated fields, values
+ * escaped.
  *
- * Three properties, and each is a decision:
+ * Four properties, and each is a decision:
  *
- * - **One record per line, and lines never reordered on write.** That makes the
- *   text appendable, so the same encoding works whether it ends up in a model
+ * - **Nothing but printable characters.** No tab, no newline, no carriage
+ *   return anywhere in the output — they are escaped even though they are the
+ *   obvious separators. The reason is XML: a custom property is stored as an
+ *   *attribute* (`<customproperty value="…">`), and attribute-value
+ *   normalisation turns tab, LF and CR into a space in every conforming
+ *   parser. A log separated by tabs would come back from a desktop round trip
+ *   as one run of spaces — no error, no warning, the whole journal gone. This
+ *   is the same family of trap as the one [ForkProperties] describes for
+ *   unknown attributes, and it is why the separators here are `|` and `;`.
+ * - **One record per chunk, order preserved on write.** The text stays
+ *   appendable, so the same encoding works whether it ends up in a model
  *   field, in a property, or in an append-only file beside the project. An
  *   encoding that has to be rewritten as a whole rules out append-only before
  *   the storage question is even asked.
- * - **Tab as separator, everything escaped.** Descriptions contain commas,
- *   semicolons, pipes and quotes as a matter of course; the one character they
- *   reliably do not contain is a tab, and it is escaped anyway.
+ * - **Both `;` and a newline end a record on read.** Written as one line so it
+ *   survives an attribute; read either way so a file may still keep one record
+ *   per line, which is what makes it readable and appendable on disk.
  * - **Unknown trailing fields are ignored, missing optional ones defaulted.**
  *   New fields are appended at the end and nowhere else. An older reader then
  *   drops what it does not understand instead of refusing the file, and a newer
@@ -243,7 +253,10 @@ fun secondsByDay(
  *   middle breaks both directions and must not be done.
  */
 object TimeLogCodec {
-  private const val FIELD = '\t'
+  private const val FIELD = '|'
+
+  /** Ends a record. See the note about attribute-value normalisation above. */
+  const val RECORD = ';'
 
   /** Field count as of this version. Readers must not rely on it. */
   private const val FIELDS_WRITTEN = 8
@@ -255,6 +268,8 @@ object TimeLogCodec {
         '\t' -> append("\\t")
         '\n' -> append("\\n")
         '\r' -> append("\\r")
+        FIELD -> append("\\p")
+        RECORD -> append("\\s")
         else -> append(ch)
       }
     }
@@ -274,6 +289,8 @@ object TimeLogCodec {
         't' -> append('\t')
         'n' -> append('\n')
         'r' -> append('\r')
+        'p' -> append(FIELD)
+        's' -> append(RECORD)
         // An escape we do not know: keep both characters rather than guess.
         // Losing a backslash silently would corrupt a description for good.
         else -> { append(ch); append(next) }
@@ -307,7 +324,7 @@ object TimeLogCodec {
    */
   fun encode(records: List<TimeRecord>): String =
     records.sortedWith(compareBy({ it.start }, { it.id }))
-      .joinToString("\n") { encodeRecord(it) }
+      .joinToString(RECORD.toString()) { encodeRecord(it) }
 
   /**
    * Reads one record, or `null` when the line cannot be read.
@@ -370,10 +387,13 @@ object TimeLogCodec {
   fun decode(text: String?): DecodeResult {
     if (text.isNullOrBlank()) return DecodeResult(emptyList(), 0)
     var skipped = 0
-    val records = text.lineSequence()
+    // Both separators are accepted: `;` is what encode() writes so the text
+    // survives an XML attribute, a newline is what a file on disk is likely to
+    // use so it stays readable and appendable there. Neither can appear inside
+    // a value, both are escaped, so splitting on either is unambiguous.
+    val records = text.split(RECORD, '\n', '\r')
       .filter { it.isNotBlank() }
-      .mapNotNull { line -> decodeRecord(line).also { if (it == null) skipped++ } }
-      .toList()
+      .mapNotNull { chunk -> decodeRecord(chunk).also { if (it == null) skipped++ } }
     return DecodeResult(records, skipped)
   }
 }
