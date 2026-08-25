@@ -33,6 +33,7 @@ import net.sourceforge.ganttproject.timetracking.TogglConnectionAction;
 import net.sourceforge.ganttproject.timetracking.TogglImportAction;
 // [Fork-Aenderung] Kapazitaetsverteilung.
 import net.sourceforge.ganttproject.fork.AskBeforeWriting;
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.fork.BackfillAction;
 import net.sourceforge.ganttproject.fork.LevellingAction;
 import net.sourceforge.ganttproject.fork.EstimateQualityAction;
@@ -170,14 +171,32 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     // text in the templates <channel>.channel.itemTitle/itemBody -- and for the RSS channel those
     // templates do not exist. The box would then have displayed "rss.channel.itemBody" and
     // swallowed our message silently, because MessageFormat discards the argument without {0}.
-    ConnectionCheckMessageSink togglMessages = (isProblem, message) -> {
-      var manager = getUIFacade().getNotificationManager();
-      manager.addNotifications(List.of(manager.createNotification(
-          isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS,
-          TogglConnectionAction.getNotificationTitle(),
-          "<p>" + message.replace("\n", "<br>") + "</p>",
-          null)));
-    };
+    //
+    // [fork change] THE HEADING COMES FROM THE CALLER, no longer fixed to Toggl.
+    //
+    // All actions of this fork used to share one box -- and with it the title "Toggl connection".
+    // Seen on screen: the message "No recurrence is entered" appeared under that heading. Whoever
+    // reads it looks for the fault in a connection that has nothing to do with the matter.
+    //
+    // A Supplier and not a string, for the same reason that notificationTitle is a getter: the
+    // language can change while the program runs, and a text captured here would stay in the
+    // language the program started in.
+    java.util.function.Function<java.util.function.Supplier<String>, ConnectionCheckMessageSink> messageSink =
+        title -> (isProblem, message) -> {
+          var manager = getUIFacade().getNotificationManager();
+          manager.addNotifications(List.of(manager.createNotification(
+              isProblem ? NotificationChannel.WARNING : NotificationChannel.RSS,
+              title.get(),
+              "<p>" + message.replace("\n", "<br>") + "</p>",
+              null)));
+        };
+    ConnectionCheckMessageSink togglMessages =
+        messageSink.apply(TogglConnectionAction::getNotificationTitle);
+    // Deriving effort and levelling capacity belong together and share their heading.
+    ConnectionCheckMessageSink capacityMessages =
+        messageSink.apply(() -> ForkI18nKt.forkText("fork.capacity.title"));
+    ConnectionCheckMessageSink recurrenceMessages =
+        messageSink.apply(() -> ForkI18nKt.forkText("fork.recurrence.title"));
     mHuman.add(new TogglConnectionAction(getHumanResourceManager(), togglMessages));
 
     // [fork change] Import of the Toggl times. A question is asked before writing: the preview
@@ -220,7 +239,7 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         getHumanResourceManager().getCustomPropertyManager(),
         getProjectDatabase(),
         getUndoManager(),
-        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
+        (isProblem, message) -> { capacityMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
     mHuman.add(new LevellingAction(
         getTaskManager(),
@@ -233,7 +252,7 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         // the first file is opened -- measured on the machine.
         () -> (java.util.List<net.sourceforge.ganttproject.GanttPreviousState>) getBaselines(),
         java.time.LocalDate::now,
-        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
+        (isProblem, message) -> { capacityMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
 
     // [fork change] The estimating-quality evaluation. Writes NOTHING and therefore does not ask
@@ -262,7 +281,7 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         getProject().getTaskCustomColumnManager(),
         getProjectDatabase(),
         getUndoManager(),
-        (isProblem, message) -> { togglMessages.show(isProblem, message); return Unit.INSTANCE; },
+        (isProblem, message) -> { recurrenceMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
