@@ -83,6 +83,9 @@
     <string name="export_pick_month">Welcher Monat?</string>
     <string name="export_month_hint">Ein Satz zählt in dem Monat, in dem er begonnen hat — eine Nachtschicht gehört also zu dem Tag, an dem sie anfing.</string>
     <string name="export_no_months">Noch nichts aufgezeichnet.</string>
+    <string name="conflict_records_explain">Es gibt einen Weg, der keine aufgezeichnete Zeit verliert: die andere Fassung nehmen und die Sätze dieses Geräts hinübertragen. Plan, Fortschritt und Zuweisungen stammen dann aus der anderen Fassung — die lassen sich neu machen, Stunden nicht.</string>
+    <string name="conflict_keep_records">Andere Fassung nehmen, meine Sätze mitnehmen</string>
+    <string name="conflict_records_carried">%1$s Sätze übernommen.</string>
     <string name="timelog_source_manual">eingetippt</string>
     <string name="timelog_source_timer">Uhr</string>
     <string name="timelog_source_quick">Widget</string>

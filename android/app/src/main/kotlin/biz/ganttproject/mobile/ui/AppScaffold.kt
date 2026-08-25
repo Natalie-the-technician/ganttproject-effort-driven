@@ -155,6 +155,7 @@ fun AppScaffold(
   val lockedText = stringResource(R.string.notice_opened_while_locked)
   val savedToServerText = stringResource(R.string.saved_to_server)
   val exportedTemplate = stringResource(R.string.timelog_exported, "%d")
+  val carriedTemplate = stringResource(R.string.conflict_records_carried, "%d")
   LaunchedEffect(state.notice) {
     when (val notice = state.notice) {
       Notice.Saved -> snackbarHost.showSnackbar(savedText)
@@ -168,6 +169,11 @@ fun AppScaffold(
       Notice.SavedToServer -> snackbarHost.showSnackbar(savedToServerText)
       is Notice.TimeLogExported ->
         snackbarHost.showSnackbar(exportedTemplate.format(notice.records))
+      is Notice.RecordsCarriedOver ->
+        snackbarHost.showSnackbar(
+          carriedTemplate.format(notice.records),
+          duration = SnackbarDuration.Long
+        )
       null -> Unit
     }
     if (state.notice != null) viewModel.dismissNotice()
@@ -353,7 +359,28 @@ fun AppScaffold(
       AlertDialog(
         onDismissRequest = viewModel::dismissError,
         title = { Text(stringResource(R.string.conflict_title)) },
-        text = { Text(error.text()) },
+        text = {
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(error.text())
+            // Offered inside the text rather than as a fourth button: the row
+            // below is already full and its order was chosen deliberately.
+            // This is also the only way out that loses no measurement, so it
+            // belongs where it is read first rather than where a thumb lands.
+            if (viewModel.hasTimeRecords()) {
+              Text(
+                stringResource(R.string.conflict_records_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+              TextButton(onClick = {
+                viewModel.dismissError()
+                viewModel.keepOtherVersionWithRecords()
+              }) {
+                Text(stringResource(R.string.conflict_keep_records))
+              }
+            }
+          }
+        },
         confirmButton = {
           // A rescue copy belongs where the original is. Sending a server
           // project through the Android file picker takes the rescued work off

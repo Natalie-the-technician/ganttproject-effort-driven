@@ -145,6 +145,9 @@ sealed interface Notice {
   /** An export was written. The count says what actually went into the file. */
   data class TimeLogExported(val records: Int) : Notice
 
+  /** A conflict was resolved by carrying this device's records across. */
+  data class RecordsCarriedOver(val records: Int) : Notice
+
   /**
    * The project was opened while someone has it open on the desktop.
    *
@@ -279,6 +282,84 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     } else {
       store.save(project, force)
     }
+
+  /** Re-reads the project from wherever it came from, with a fresh version stamp. */
+  private suspend fun openThrough(project: OpenProject): FileResult<OpenProject> =
+    project.remoteName?.let { name ->
+      remoteStore()?.open(name) ?: FileResult.Err(FileError.SyncFailed("not configured"))
+    } ?: store.open(project.uri)
+
+  /** True when this device holds records that a conflict could lose. */
+  fun hasTimeRecords(): Boolean = open?.document?.timeLog()?.records?.isNotEmpty() == true
+
+  /**
+   * Resolves a conflict by taking the other version and carrying this device's
+   * **records** into it.
+   *
+   * The other version wins for everything else — the plan, the progress, the
+   * assignments. That is a deliberate asymmetry rather than a half-hearted
+   * merge: a plan edit can be made again, and hours that were worked cannot.
+   * Of the three ways out of a conflict this is the only one that loses no
+   * measurement, which is why it is offered first and says plainly what it
+   * gives up.
+   *
+   * Records are matched by id, so the two sides do not have to be disjoint and
+   * running this twice changes nothing. Only records the other side does not
+   * already have are written, so the file gains exactly what it was missing.
+   */
+  fun keepOtherVersionWithRecords() {
+    val project = open ?: return
+    val mine = project.document.timeLog().records
+    viewModelScope.launch {
+      _state.update { it.copy(busy = true, fileError = null) }
+      val reopened = openThrough(project)
+      if (reopened is FileResult.Err) {
+        _state.update { it.copy(busy = false, fileError = reopened.error) }
+        return@launch
+      }
+      val fresh = (reopened as FileResult.Ok).value
+      val theirs = fresh.document.timeLog().records.map { it.id }.toSet()
+      val missing = mine.filterNot { it.id in theirs }
+
+      var carried = 0
+      if (missing.isNotEmpty()) {
+        fresh.edit { document ->
+          missing.forEach { if (document.addTimeRecord(it)) carried++ }
+          carried > 0
+        }
+      }
+
+      // Nothing of ours was missing: the other version already has everything,
+      // so adopting it is enough and there is nothing to write back.
+      if (carried == 0) {
+        open = fresh
+        revision++
+        _state.update {
+          it.copy(busy = false, project = snapshot(fresh), notice = Notice.RecordsCarriedOver(0))
+        }
+        return@launch
+      }
+
+      when (val result = saveThrough(fresh, force = false)) {
+        is FileResult.Ok -> {
+          open = fresh
+          revision++
+          _state.update {
+            it.copy(
+              busy = false,
+              project = snapshot(fresh),
+              notice = Notice.RecordsCarriedOver(carried)
+            )
+          }
+          refreshWidget()
+        }
+        // Somebody wrote again while we were merging. The old project stays
+        // open with its records intact, so the user can simply try again.
+        is FileResult.Err ->
+          _state.update { it.copy(busy = false, fileError = result.error) }
+      }
+    }
+  }
 
   fun save(force: Boolean = false) {
     val project = open ?: return

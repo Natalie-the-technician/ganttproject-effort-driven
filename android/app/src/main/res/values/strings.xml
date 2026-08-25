@@ -88,6 +88,9 @@
     <string name="export_pick_month">Which month?</string>
     <string name="export_month_hint">A record counts in the month its stretch started in, so a night shift belongs to the day it began on.</string>
     <string name="export_no_months">Nothing recorded yet.</string>
+    <string name="conflict_records_explain">There is a way out that loses no recorded time: take the other version and carry this device\'s records into it. The plan, progress and assignments then come from the other version — those can be made again, hours cannot.</string>
+    <string name="conflict_keep_records">Keep the other version, carry my records over</string>
+    <string name="conflict_records_carried">%1$s records carried over.</string>
     <string name="timelog_source_manual">typed in</string>
     <string name="timelog_source_timer">timer</string>
     <string name="timelog_source_quick">widget</string>
