@@ -105,6 +105,25 @@ public class GanttGraphicArea extends ChartComponentBase implements GanttChart, 
     myPublicHolidayDialogAction = new ProjectCalendarDialogAction(getProject(), getUIFacade());
     getProject().getTaskCustomColumnManager().addListener(this);
     initMouseListeners();
+
+    // [Fork change] The saved comparison view. The option is read out of ~/.ganttproject long
+    // after this constructor has run, so the value is not fetched here but followed: whatever
+    // GanttOptions loads fires this listener, and the chart follows it.
+    //
+    // The listener stays alive afterwards, so changing the setting on the settings page takes
+    // effect at once rather than only at the next start. The dropdown in the toolbar follows the
+    // same option, so both stay in step -- WITHOUT that, and this was seen on 25 August 2026, the
+    // dropdown kept reading "Compare: dates" while the chart already drew durations.
+    //
+    // The reverse does NOT happen: switching the view in the toolbar changes the chart for this
+    // session and deliberately does not write back here. This is what the program starts with.
+    app.getUIConfiguration().getComparisonAtStartupOption().addChangeValueListener(event -> {
+      ChartComparison value = app.getUIConfiguration().getComparisonAtStartupOption().getSelectedValue();
+      if (value != null && value != getComparison()) {
+        setComparison(value);
+        getUIFacade().refresh();
+      }
+    });
   }
 
   @Override

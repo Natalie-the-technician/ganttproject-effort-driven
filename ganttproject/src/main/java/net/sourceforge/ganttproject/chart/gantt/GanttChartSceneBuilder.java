@@ -235,16 +235,99 @@ public class GanttChartSceneBuilder {
   }
 
   /**
-   * [Fork change] Draws the band underneath the task bar -- depending on the selected view either
-   * the baseline comparison (dates) or the effort comparison. See {@link ChartComparison} for why
-   * there are two of them rather than one.
+   * [Fork change] Draws the band underneath the task bar -- depending on the selected view the
+   * date comparison, the effort comparison or the duration comparison. See {@link ChartComparison}
+   * for why there is more than one of them.
+   *
+   * EXACTLY ONE BAND IS EVER DRAWN. The dropdown in the chart toolbar says which, and it always
+   * names the view currently on screen.
    */
   private void renderComparisonBand(ITaskSceneTask t, int rowNum, OffsetList defaultUnitOffsets) {
-    if (input.getComparison() == ChartComparison.EFFORT) {
-      renderEffortBand(t, rowNum, defaultUnitOffsets);
-    } else {
-      renderBaseline(t, rowNum, defaultUnitOffsets);
+    switch (input.getComparison()) {
+      case EFFORT:
+        renderEffortBand(t, rowNum, defaultUnitOffsets);
+        break;
+      case DURATIONS:
+        renderDurationBand(t, rowNum, defaultUnitOffsets);
+        break;
+      default:
+        renderBaseline(t, rowNum, defaultUnitOffsets);
+        break;
     }
+  }
+
+  /**
+   * [Fork change] The duration band: today's length against the length in the baseline.
+   *
+   * WHY THIS BAND HANGS OFF TODAY'S START AND NOT OFF THE PLANNED ONE, unlike
+   * {@link #renderBaseline}. This is deliberate and it is not an oversight -- if the two views
+   * ever get the same anchor, the test
+   * `a merely shifted task -- the dates view reports a deviation, the durations view does not`
+   * in `ChartComparisonTest` fails on purpose.
+   *
+   * The dates view asks "am I on schedule". Its band therefore lies where the task was PLANNED to
+   * lie: it starts at the baseline's start and ends at the baseline's end, and the overhang shows
+   * the whole displacement between plan and reality.
+   *
+   * The durations view asks something else: "does the work still take as long as it was planned
+   * to". A shift is not part of that answer. So this band starts flush with the task bar and is
+   * as long as the task was planned to be -- the overhang is then EXCLUSIVELY the difference in
+   * length. A task that starts a week later but still runs five days shows a band exactly as long
+   * as its bar: no overhang, no colour, nothing to see. That is the point of the view.
+   *
+   * Each view thus has precisely one anchor, and it is the one its question needs. Which of the
+   * two is on screen is never in doubt: the dropdown in the toolbar names it, one entry apart.
+   *
+   * WITHOUT A BASELINE it draws a NEUTRAL band under the bar rather than staying empty, because
+   * empty would be indistinguishable from "no deviation". See {@link ChartComparisonKt#compareDurations}.
+   */
+  private void renderDurationBand(ITaskSceneTask t, int rowNum, OffsetList defaultUnitOffsets) {
+    List<ITaskActivity<ITaskSceneTask>> activities = t.getActivities();
+    if (activities.isEmpty()) {
+      return;
+    }
+    Integer baselineDuration = findBaselineDuration(t);
+    ComparisonResult result = ChartComparisonKt.compareDurations(
+        baselineDuration, t.getDuration().getLength());
+    if (result == ComparisonResult.NO_BAND) {
+      return;
+    }
+    if (baselineDuration == null) {
+      // No yardstick. The band lies under the bar and carries no colour -- the same device the
+      // effort view uses for "estimated but nothing recorded yet".
+      paintBand(rowNum, defaultUnitOffsets, mySplitter.split(activities, Integer.MAX_VALUE),
+          result, t.isMilestone());
+      return;
+    }
+    // The bar's own start, not a model value: the band has to be flush with what is actually
+    // drawn, and that is where the first activity begins.
+    Date startDate = activities.get(0).getStart();
+    Date endDate = input.getCalendar().shiftDate(startDate, input.createLength(baselineDuration));
+    List<ITaskActivity<ITaskSceneTask>> bandActivities = new ArrayList<ITaskActivity<ITaskSceneTask>>();
+    if (t.isMilestone()) {
+      bandActivities.add(new TaskSceneMilestoneActivity(t, startDate, endDate, input.createLength(1)));
+    } else {
+      TaskActivitiesSceneAlgorithm alg = new TaskActivitiesSceneAlgorithm(
+        input.getCalendar(),
+        (Date s, Date e) -> input.createLength(t.getDuration().getTimeUnit(), s, e)
+      );
+      alg.recalculateActivities(t, bandActivities, startDate, endDate);
+    }
+    paintBand(rowNum, defaultUnitOffsets, bandActivities, result, t.isMilestone());
+  }
+
+  /** [Fork change] The task's duration in the baseline, or null if it is not in one. */
+  private Integer findBaselineDuration(ITaskSceneTask t) {
+    List<GanttPreviousStateTask> baseline = input.getBaseline();
+    if (baseline == null) {
+      return null;
+    }
+    for (GanttPreviousStateTask taskBaseline : baseline) {
+      if (taskBaseline.getId() == t.getRowId()) {
+        return taskBaseline.getDuration();
+      }
+    }
+    return null;
   }
 
   /**

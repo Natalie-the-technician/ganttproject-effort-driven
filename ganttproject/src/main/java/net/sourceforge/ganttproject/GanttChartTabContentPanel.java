@@ -39,6 +39,8 @@ import kotlin.jvm.functions.Function0;
 import net.sourceforge.ganttproject.action.BaselineDialogAction;
 import net.sourceforge.ganttproject.action.CalculateCriticalPathAction;
 import net.sourceforge.ganttproject.action.GPAction;
+import javafx.beans.property.SimpleIntegerProperty;
+import net.sourceforge.ganttproject.fork.ChartComparison;
 import net.sourceforge.ganttproject.fork.ChartComparisonAction;
 import net.sourceforge.ganttproject.chart.Chart;
 import net.sourceforge.ganttproject.chart.ChartSelection;
@@ -65,8 +67,14 @@ class GanttChartTabContentPanel extends ChartTabContentPanel implements ViewProv
   private final UIFacade myWorkbenchFacade;
   private final CalculateCriticalPathAction myCriticalPathAction;
   private final BaselineDialogAction myBaselineAction;
-  /** [Fork change] Toggle between the dates view and the effort view. */
-  private final ChartComparisonAction myComparisonAction;
+  /** [Fork change] The dropdown that selects the comparison view. */
+  private final List<ChartComparisonAction> myComparisonActions;
+  /**
+   * [Fork change] Which entry of that dropdown is showing. It is observable rather than a value
+   * read once, because the view can also be switched from the settings page -- and then the
+   * caption has to follow, or it says something the chart contradicts.
+   */
+  private final SimpleIntegerProperty myComparisonIndex;
   private final Supplier<TaskTable> myTaskTableSupplier;
   private final TaskActions myTaskActions;
   private final Function0<Unit> myInitializationCompleted;
@@ -96,8 +104,22 @@ class GanttChartTabContentPanel extends ChartTabContentPanel implements ViewProv
     myCriticalPathAction.putValue(GPAction.TEXT_DISPLAY, ContentDisplay.TEXT_ONLY);
     myBaselineAction = new BaselineDialogAction(project, workbenchFacade);
     myBaselineAction.putValue(GPAction.TEXT_DISPLAY, ContentDisplay.TEXT_ONLY);
-    myComparisonAction = new ChartComparisonAction(workbenchFacade);
-    myComparisonAction.putValue(GPAction.TEXT_DISPLAY, ContentDisplay.TEXT_ONLY);
+    myComparisonActions = ChartComparisonAction.Companion.all(workbenchFacade);
+    for (ChartComparisonAction action : myComparisonActions) {
+      action.putValue(GPAction.TEXT_DISPLAY, ContentDisplay.TEXT_ONLY);
+    }
+    // [Fork change] Seeded from the chart and then kept in step with the saved setting. Reading
+    // the setting once here would not do: it is loaded out of ~/.ganttproject after this
+    // constructor has run, and the dropdown may be built before or after that -- following the
+    // option makes the order irrelevant.
+    myComparisonIndex = new SimpleIntegerProperty(
+        ChartComparisonAction.Companion.indexOf(workbenchFacade.getGanttChart().getComparison()));
+    uiConfiguration.getComparisonAtStartupOption().addChangeValueListener(event -> {
+      ChartComparison value = uiConfiguration.getComparisonAtStartupOption().getSelectedValue();
+      if (value != null) {
+        myComparisonIndex.set(ChartComparisonAction.Companion.indexOf(value));
+      }
+    });
 
     setImageHeight(() -> Double.valueOf(myViewComponents.getImage().getHeight()).intValue());
     myDividerOption.addChangeValueListener(event -> {
@@ -111,7 +133,10 @@ class GanttChartTabContentPanel extends ChartTabContentPanel implements ViewProv
 
   private FXToolbarBuilder createScheduleToolbar() {
     return new FXToolbarBuilder().withApplicationFont(FontKt.getApplicationFont())
-      .addButton(myCriticalPathAction).addButton(myBaselineAction).addButton(myComparisonAction)
+      .addButton(myCriticalPathAction).addButton(myBaselineAction)
+      // [Fork change] The selected entry is NOT fixed to entry 0 but follows the view the chart
+      // is showing -- see myComparisonIndex.
+      .addDropdown(new ArrayList<GPAction>(myComparisonActions), myComparisonIndex)
       .withClasses("toolbar-common", "toolbar-small", "toolbar-chart", "align-right");
   }
 

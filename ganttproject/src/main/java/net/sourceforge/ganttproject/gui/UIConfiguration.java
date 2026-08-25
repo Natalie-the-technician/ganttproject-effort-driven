@@ -23,6 +23,8 @@ import biz.ganttproject.core.option.*;
 import biz.ganttproject.lib.fx.TreeTableCellsKt;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
+import net.sourceforge.ganttproject.fork.ChartComparison;
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.gui.options.model.GP1XOptionConverter;
 
 import java.awt.*;
@@ -60,6 +62,25 @@ public class UIConfiguration {
 
   private final AlphaRenderingOption myWeekendAlphaRenderingOption;
   private final RedlineOption myRedlineOption = new RedlineOption();
+
+  /**
+   * [Fork change] Which comparison the chart shows when the program starts. See
+   * {@link ChartComparison}. It sits here and in the `ganttChartGridDetails` group for the same
+   * reason {@link RedlineOption} does: that is the path along which `GanttOptions` writes an
+   * option into `~/.ganttproject` and reads it back -- the key becomes
+   * `ganttChartGridDetails.comparisonAtStartup`.
+   *
+   * It is a STARTUP setting, not a mirror of the toolbar. Switching the view in the toolbar does
+   * not write here; this is what the program comes up with, and the toolbar is where one departs
+   * from it for the session.
+   */
+  private final DefaultEnumerationOption<ChartComparison> myComparisonAtStartupOption =
+      new DefaultEnumerationOption<>("comparisonAtStartup", ChartComparison.values());
+  {
+    myComparisonAtStartupOption.setValueLocalizer(
+        value -> ForkI18nKt.forkText("fork.comparison." + value.toLowerCase(java.util.Locale.ROOT)));
+    myComparisonAtStartupOption.setSelectedValue(ChartComparison.DATES);
+  }
   private BooleanOption myProjectDatesOption = new DefaultBooleanOption("showProjectDates");
   private final BooleanOption myTimelineMilestonesOption = new DefaultBooleanOption("timeline.showMilestones", true);
 
@@ -206,6 +227,11 @@ public class UIConfiguration {
       setRedlineOn(isChecked());
     }
   };
+
+  /** [Fork change] Which comparison the chart shows at startup. */
+  public DefaultEnumerationOption<ChartComparison> getComparisonAtStartupOption() {
+    return myComparisonAtStartupOption;
+  }
 
   public BooleanOption getRedlineOption() {
     return myRedlineOption;
