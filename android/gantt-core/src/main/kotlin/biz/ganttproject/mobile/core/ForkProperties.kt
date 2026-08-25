@@ -55,6 +55,38 @@ object ForkProperties {
    */
   const val TASK_TOGGL_IMPORTED = "toggl_imported"
 
+  /**
+   * The time log: individual records of work, encoded by [TimeLogCodec].
+   *
+   * Stored per task and read as a union across all of them, like
+   * [TASK_TOGGL_IMPORTED] — but for a different reason. There it is a trick to
+   * fake a project-wide store; here each record already names its own task, so
+   * the placement is merely where it happens to sit and the record's own
+   * `taskUid` is what counts.
+   *
+   * **This is an interim home, and the code should stay easy to move.** A
+   * custom property is shown by stock GanttProject as an ordinary editable
+   * column, which is a poor place for a record somebody may later have to
+   * vouch for, and the whole custom-property substructure is on its way out
+   * upstream. It is used anyway because it is the only thing that survives a
+   * desktop round trip today: `TaskSaver` writes a fixed list of attributes
+   * *and* a fixed sequence of child elements, so an invented attribute or
+   * element is dropped without a word the next time the desktop saves. The
+   * encoding is deliberately independent of this decision — moving the log to
+   * a model field means changing where the string is put, not how it is made.
+   */
+  const val TASK_TIME_LOG = "time_log"
+
+  /**
+   * A free label per task, passed through to the export untouched.
+   *
+   * Deliberately without meaning here: whether the text denotes a funded
+   * project, a customer or a cost centre is decided by whoever reads the
+   * export. Keeping the interpretation out is what lets the same log serve a
+   * funding scheme, an invoice and a post-calculation at once.
+   */
+  const val TASK_LABELS = "labels"
+
   /** Working hours per day, per resource. */
   const val RESOURCE_HOURS_PER_DAY = "hours_per_day"
 
@@ -77,6 +109,15 @@ object ForkProperties {
       .filter { it.isNotEmpty() }
       .distinct()
       .joinToString(MATCH_KEY_SEPARATOR)
+
+  /**
+   * Labels share the match-key encoding on purpose: same shape, same
+   * separator, same rule that the separator is stripped from values. One
+   * encoding to get right instead of two that drift apart.
+   */
+  fun encodeLabels(labels: List<String>): String = encodeMatchKeys(labels)
+
+  fun decodeLabels(raw: String?): List<String> = decodeMatchKeys(raw)
 
   fun decodeMatchKeys(raw: String?): List<String> =
     raw?.split(MATCH_KEY_SEPARATOR)

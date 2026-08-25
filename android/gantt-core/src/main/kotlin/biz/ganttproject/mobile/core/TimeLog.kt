@@ -230,14 +230,25 @@ fun secondsByDay(
  * Four properties, and each is a decision:
  *
  * - **Nothing but printable characters.** No tab, no newline, no carriage
- *   return anywhere in the output — they are escaped even though they are the
- *   obvious separators. The reason is XML: a custom property is stored as an
- *   *attribute* (`<customproperty value="…">`), and attribute-value
- *   normalisation turns tab, LF and CR into a space in every conforming
- *   parser. A log separated by tabs would come back from a desktop round trip
- *   as one run of spaces — no error, no warning, the whole journal gone. This
- *   is the same family of trap as the one [ForkProperties] describes for
- *   unknown attributes, and it is why the separators here are `|` and `;`.
+ *   return anywhere in the output, even though those are the obvious
+ *   separators. A custom property is stored as an XML *attribute*
+ *   (`<customproperty value="…">`), and attribute-value normalisation turns a
+ *   *raw* tab, LF or CR into a space in every conforming parser — a log
+ *   separated by tabs would then come back as one run of spaces, with no error
+ *   and nothing left to recover.
+ *
+ *   **Measured, because the first version of this note guessed and was wrong:**
+ *   both writers in the actual path already avoid that. This module's
+ *   [XmlWriter] escapes them as `&#9;`, `&#10;` and `&#13;` and says so, and
+ *   the JDK serialiser the desktop uses does the same — a tab written through
+ *   `Transformer` comes back as a tab. So the round trip that exists today
+ *   would *not* have lost anything.
+ *
+ *   The separators are `|` and `;` anyway, because the guarantee then comes
+ *   from the encoding rather than from every writer the text may ever pass
+ *   through. That chain is not fully known: a WebDAV tool, a pretty-printer or
+ *   a future version of the desktop only has to emit one raw tab for the log
+ *   to be gone. Depending on nobody is cheaper than checking everybody.
  * - **One record per chunk, order preserved on write.** The text stays
  *   appendable, so the same encoding works whether it ends up in a model
  *   field, in a property, or in an append-only file beside the project. An

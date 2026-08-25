@@ -8,6 +8,7 @@ package biz.ganttproject.mobile.core
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
+import kotlin.math.abs
 
 /**
  * Why a file could not be read. Branch on [reason]; [message] is
@@ -350,6 +351,222 @@ class GanttDocument private constructor(private val root: XmlElement) {
       "text",
       ForkProperties.encodeImportedHours(merged).ifEmpty { null }
     )
+  }
+
+  // ------------------------------------------------------------- Time log
+
+  /**
+   * Depth-first lookup by `uid`.
+   *
+   * The time log is keyed by uid and everything else in this class by `id`, so
+   * this is the bridge between the two. It exists rather than the log using
+   * ids because a uid survives a move and a cut-and-paste and changes on a
+   * copy, which is exactly what a record of work needs, while an id is a
+   * per-project counter that collides the moment two projects meet.
+   */
+  private fun taskElementByUid(uid: String): XmlElement? {
+    if (uid.isEmpty()) return null
+    fun search(parent: XmlElement): XmlElement? {
+      for (child in parent.childElements("task")) {
+        if (child.attr("uid") == uid) return child
+        search(child)?.let { return it }
+      }
+      return null
+    }
+    return tasksElement()?.let { search(it) }
+  }
+
+  /**
+   * Tasks that carry no `uid`.
+   *
+   * Nothing can be booked on them, because a record would have nothing stable
+   * to point at. Current GanttProject always writes a uid; a file from an
+   * older version may not, and then this is the precondition the user has to
+   * be told about rather than a silent refusal to save.
+   */
+  fun taskIdsWithoutUid(): List<String> {
+    val out = mutableListOf<String>()
+    fun walk(parent: XmlElement) {
+      for (task in parent.childElements("task")) {
+        if (task.attr("uid").isNullOrEmpty()) out.add(task.attrOrEmpty("id"))
+        walk(task)
+      }
+    }
+    tasksElement()?.let { walk(it) }
+    return out
+  }
+
+  /**
+   * Every record in the project, and how many stored records could not be read.
+   *
+   * Records are gathered from wherever they sit; each one names its own task,
+   * so the placement is storage, not meaning. Duplicates are **not** removed
+   * here — [validateLog] reports them, and dropping one silently would hide
+   * exactly the merge accident that produced it.
+   */
+  fun timeLog(): TimeLogCodec.DecodeResult {
+    val defId = taskPropertyDefinitionsByName()[ForkProperties.TASK_TIME_LOG]
+      ?: return TimeLogCodec.DecodeResult(emptyList(), 0)
+    val records = mutableListOf<TimeRecord>()
+    var skipped = 0
+    fun walk(parent: XmlElement) {
+      for (task in parent.childElements("task")) {
+        val result = TimeLogCodec.decode(readTaskPropertyValue(task, defId))
+        records.addAll(result.records)
+        skipped += result.skippedLines
+        walk(task)
+      }
+    }
+    tasksElement()?.let { walk(it) }
+    return TimeLogCodec.DecodeResult(
+      records.sortedWith(compareBy({ it.start }, { it.id })),
+      skipped
+    )
+  }
+
+  /** The records stored on one task. */
+  fun timeLogOfTask(taskUid: String): TimeLogCodec.DecodeResult {
+    val el = taskElementByUid(taskUid) ?: return TimeLogCodec.DecodeResult(emptyList(), 0)
+    val defId = taskPropertyDefinitionsByName()[ForkProperties.TASK_TIME_LOG]
+      ?: return TimeLogCodec.DecodeResult(emptyList(), 0)
+    return TimeLogCodec.decode(readTaskPropertyValue(el, defId))
+  }
+
+  /**
+   * Replaces the records stored on one task.
+   *
+   * Returns false when the task is unknown. It deliberately does not create
+   * anything: a record that cannot be attached must not disappear quietly, and
+   * the caller is the only one who can decide what to do instead.
+   */
+  fun setTimeLogOfTask(taskUid: String, records: List<TimeRecord>): Boolean {
+    val taskId = taskElementByUid(taskUid)?.attr("id") ?: return false
+    return writeTaskProperty(
+      taskId,
+      ForkProperties.TASK_TIME_LOG,
+      "text",
+      TimeLogCodec.encode(records).ifEmpty { null }
+    )
+  }
+
+  /**
+   * Adds one record to the task it names.
+   *
+   * A record with the same id replaces the stored one rather than joining it:
+   * writing the same record twice is a retry, not two stretches of work, and
+   * an id that appears twice would be counted twice by anything that sums.
+   */
+  fun addTimeRecord(record: TimeRecord): Boolean {
+    if (validateRecord(record).isNotEmpty()) return false
+    val existing = timeLogOfTask(record.taskUid).records.filterNot { it.id == record.id }
+    return setTimeLogOfTask(record.taskUid, existing + record)
+  }
+
+  /** Removes a record wherever it sits. False when no record had that id. */
+  fun removeTimeRecord(recordId: String): Boolean {
+    val record = timeLog().records.firstOrNull { it.id == recordId } ?: return false
+    val remaining = timeLogOfTask(record.taskUid).records.filterNot { it.id == recordId }
+    return setTimeLogOfTask(record.taskUid, remaining)
+  }
+
+  // ---------------------------------------------------------------- Labels
+
+  fun taskLabels(taskUid: String): List<String> {
+    val el = taskElementByUid(taskUid) ?: return emptyList()
+    val defId = taskPropertyDefinitionsByName()[ForkProperties.TASK_LABELS] ?: return emptyList()
+    return ForkProperties.decodeLabels(readTaskPropertyValue(el, defId))
+  }
+
+  fun setTaskLabels(taskUid: String, labels: List<String>): Boolean {
+    val taskId = taskElementByUid(taskUid)?.attr("id") ?: return false
+    return writeTaskProperty(
+      taskId,
+      ForkProperties.TASK_LABELS,
+      "text",
+      ForkProperties.encodeLabels(labels).ifEmpty { null }
+    )
+  }
+
+  /** Labels of every task that has one — the map an export needs. */
+  fun labelsByTaskUid(): Map<String, List<String>> {
+    val defId = taskPropertyDefinitionsByName()[ForkProperties.TASK_LABELS] ?: return emptyMap()
+    val out = mutableMapOf<String, List<String>>()
+    fun walk(parent: XmlElement) {
+      for (task in parent.childElements("task")) {
+        val uid = task.attr("uid")
+        val labels = ForkProperties.decodeLabels(readTaskPropertyValue(task, defId))
+        if (!uid.isNullOrEmpty() && labels.isNotEmpty()) out[uid] = labels
+        walk(task)
+      }
+    }
+    tasksElement()?.let { walk(it) }
+    return out
+  }
+
+  // ------------------------------------------- Deriving the recorded total
+
+  /**
+   * A task whose stored total does not match the sum of its records.
+   *
+   * @param storedHours what `effort_actual_hours` says, or `null` when unset
+   * @param loggedHours what the records add up to
+   */
+  data class ActualHoursDrift(
+    val taskUid: String,
+    val taskId: String,
+    val storedHours: Double?,
+    val loggedHours: Double
+  )
+
+  /**
+   * Where the stored total and the log disagree.
+   *
+   * Reporting and repairing are two calls on purpose. `effort_actual_hours` is
+   * an ordinary editable column on the desktop and the home-screen widget
+   * writes it from a different process, so a difference is as likely to be a
+   * correction somebody made deliberately as it is to be a bug. Overwriting it
+   * on load would throw that away without a trace — and a value quietly
+   * replaced is precisely what a record of work must not do.
+   */
+  fun actualHoursDrift(): List<ActualHoursDrift> {
+    val logged = hoursByTaskUid(timeLog().records)
+    val storedDefId = taskPropertyDefinitionsByName()[ForkProperties.TASK_EFFORT_ACTUAL_HOURS]
+    val out = mutableListOf<ActualHoursDrift>()
+    fun walk(parent: XmlElement) {
+      for (task in parent.childElements("task")) {
+        val uid = task.attr("uid")
+        if (!uid.isNullOrEmpty()) {
+          val stored = storedDefId?.let { readTaskPropertyValue(task, it)?.toDoubleOrNull() }
+          val fromLog = logged[uid] ?: 0.0
+          val differs = if (stored == null) fromLog > HOURS_EPSILON
+          else abs(stored - fromLog) > HOURS_EPSILON
+          if (differs) {
+            out.add(ActualHoursDrift(uid, task.attrOrEmpty("id"), stored, fromLog))
+          }
+        }
+        walk(task)
+      }
+    }
+    tasksElement()?.let { walk(it) }
+    return out
+  }
+
+  /**
+   * Writes the sum of the records into `effort_actual_hours` for every task
+   * where the two differ, and returns how many were changed.
+   *
+   * The log is the source; the field is a derived convenience that older
+   * readers and the estimate-quality report already use. Keeping it in step
+   * has to be an explicit act, see [actualHoursDrift].
+   */
+  fun applyActualHoursFromLog(): Int {
+    val drift = actualHoursDrift()
+    var changed = 0
+    for (d in drift) {
+      val value = if (d.loggedHours <= HOURS_EPSILON) null else d.loggedHours
+      if (setTaskActualEffortHours(d.taskId, value)) changed++
+    }
+    return changed
   }
 
   /** Working hours per day for a resource. Passing `null` removes the value. */

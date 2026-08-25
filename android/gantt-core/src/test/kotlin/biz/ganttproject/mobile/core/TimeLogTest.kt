@@ -129,11 +129,19 @@ class TimeLogTest {
   @DisplayName("the encoded log survives XML attribute normalisation")
   fun `no character that an XML attribute would destroy`() {
     // A custom property is stored as <customproperty value="...">, and
-    // attribute-value normalisation replaces tab, LF and CR with a space in
-    // every conforming parser. If any of them reached the output, a round trip
-    // through the desktop would come back as one run of spaces: no error, no
-    // warning, the whole log gone. This test is the guard for that, so it is
-    // written against the encoded text rather than against a decoded record.
+    // attribute-value normalisation replaces a RAW tab, LF or CR with a space
+    // in every conforming parser.
+    //
+    // Measured: both writers in today's path already escape them as character
+    // references -- this module's XmlWriter says so in its own comment, and
+    // the JDK serialiser the desktop uses does it too. So this guard is not
+    // covering a live defect; it removes the dependency on every writer the
+    // text may ever pass through doing the right thing. One raw tab from a
+    // WebDAV tool or a pretty-printer is enough to lose the whole log.
+    //
+    // Written against the encoded text rather than a decoded record on
+    // purpose: a round trip through a careful writer would pass either way and
+    // would prove nothing.
     val text = TimeLogCodec.encode(
       listOf(
         record(id = "a", description = "measured\tthe\nrail\r"),
