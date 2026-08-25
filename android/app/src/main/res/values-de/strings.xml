@@ -126,6 +126,9 @@
     <string name="import_preview_nothing">Nichts zu schreiben — alle Einträge waren schon importiert.</string>
     <string name="import_apply">Stunden hinzufügen</string>
     <string name="import_done">%1$s h hinzugefügt.</string>
+    <string name="timelog_exported">%1$s Sätze geschrieben.</string>
+    <string name="action_export_timelog_json">Vormonat exportieren (JSON)</string>
+    <string name="action_export_timelog_csv">Alle Sätze exportieren (CSV)</string>
     <string name="import_learn_keys">Diese Zuordnungen für das nächste Mal merken</string>
     <string name="import_reason_id">Vorgangsnummer in der Beschreibung</string>
     <string name="import_reason_learned">Aus einem früheren Import gelernt</string>

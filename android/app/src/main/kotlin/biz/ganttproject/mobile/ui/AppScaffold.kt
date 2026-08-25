@@ -128,12 +128,24 @@ fun AppScaffold(
     ActivityResultContracts.CreateDocument("application/xml")
   ) { uri -> uri?.let(viewModel::saveCopyTo) }
 
+  // Exports go through the same document picker as everything else: the user
+  // says where the file lands, and the app never needs storage permission or
+  // a share provider of its own.
+  val exportJson = rememberLauncherForActivityResult(
+    ActivityResultContracts.CreateDocument("application/json")
+  ) { uri -> uri?.let(viewModel::exportTimeLogJson) }
+
+  val exportCsv = rememberLauncherForActivityResult(
+    ActivityResultContracts.CreateDocument("text/csv")
+  ) { uri -> uri?.let(viewModel::exportTimeLogCsv) }
+
   val savedText = stringResource(R.string.action_saved)
   // Resolved here rather than inside the effect: stringResource is a
   // composable and cannot be called from a coroutine.
   val importedTemplate = stringResource(R.string.import_done, "%s")
   val lockedText = stringResource(R.string.notice_opened_while_locked)
   val savedToServerText = stringResource(R.string.saved_to_server)
+  val exportedTemplate = stringResource(R.string.timelog_exported, "%d")
   LaunchedEffect(state.notice) {
     when (val notice = state.notice) {
       Notice.Saved -> snackbarHost.showSnackbar(savedText)
@@ -145,6 +157,8 @@ fun AppScaffold(
       Notice.OpenedWhileLocked ->
         snackbarHost.showSnackbar(lockedText, duration = SnackbarDuration.Long)
       Notice.SavedToServer -> snackbarHost.showSnackbar(savedToServerText)
+      is Notice.TimeLogExported ->
+        snackbarHost.showSnackbar(exportedTemplate.format(notice.records))
       null -> Unit
     }
     if (state.notice != null) viewModel.dismissNotice()
@@ -245,6 +259,22 @@ fun AppScaffold(
                     suggestedName = state.project.displayName,
                     adopt = true
                   )
+                }
+              )
+            }
+            if (state.project != null) {
+              DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_export_timelog_json)) },
+                onClick = {
+                  menuOpen = false
+                  exportJson.launch(viewModel.exportJsonFileName())
+                }
+              )
+              DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_export_timelog_csv)) },
+                onClick = {
+                  menuOpen = false
+                  exportCsv.launch(viewModel.exportCsvFileName())
                 }
               )
             }

@@ -342,6 +342,24 @@ class ProjectStore(private val context: Context) {
       FileResult.Ok(Unit)
     }
 
+  /**
+   * Writes arbitrary bytes to a document the user picked.
+   *
+   * Used for exports, which are not projects: nothing is remembered about the
+   * target, no fingerprint is taken and no version is checked. The user chose
+   * where it goes and gets a fresh file each time.
+   */
+  suspend fun writeBytes(target: Uri, bytes: ByteArray): FileResult<Unit> =
+    withContext(Dispatchers.IO) {
+      try {
+        resolver.openOutputStream(target, "wt")?.use { it.write(bytes) }
+          ?: return@withContext FileResult.Err(FileError.SaveFailed("no stream"))
+      } catch (e: Exception) {
+        return@withContext FileResult.Err(FileError.SaveFailed(e.message ?: "unknown"))
+      }
+      FileResult.Ok(Unit)
+    }
+
   /** Fingerprint of the file as it is right now, or null if unreadable. */
   private fun readFingerprint(uri: Uri): String? = runCatching {
     resolver.openInputStream(uri)?.use { contentFingerprint(it.readBytes()) }

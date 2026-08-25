@@ -11,6 +11,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import biz.ganttproject.mobile.core.EditScope
 import biz.ganttproject.mobile.core.GanttDocument
+import biz.ganttproject.mobile.core.recordsInPeriod
+import biz.ganttproject.mobile.core.TimeLogExport
+import biz.ganttproject.mobile.core.TimeLogCsv
+import biz.ganttproject.mobile.core.ExportPeriod
 import biz.ganttproject.mobile.core.ImportAssignment
 import biz.ganttproject.mobile.core.ImportPlan
 import biz.ganttproject.mobile.core.Matching
@@ -53,6 +57,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.YearMonth
+import java.time.ZoneId
 import java.util.UUID
 
 /** What the UI needs to know about the currently open project. */
@@ -133,6 +139,9 @@ data class AppState(
 sealed interface Notice {
   data object Saved : Notice
   data class HoursImported(val hours: Double) : Notice
+
+  /** An export was written. The count says what actually went into the file. */
+  data class TimeLogExported(val records: Int) : Notice
 
   /**
    * The project was opened while someone has it open on the desktop.
@@ -869,6 +878,71 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
    */
   fun setTaskLabels(taskUid: String, labels: List<String>) =
     edit { it.setTaskLabels(taskUid, labels) }
+
+  // ---------------------------------------------------------------- Export
+
+  /**
+   * The month an export covers by default: the last one that is complete.
+   *
+   * A reporting tool checks that every entry falls inside the period it was
+   * asked about, so an export has to be cut to a month rather than handed over
+   * whole. The previous one is the only month that cannot still grow.
+   */
+  private fun exportMonth(): YearMonth = YearMonth.now().minusMonths(1)
+
+  /** Suggested file name, so the month is visible without opening the file. */
+  fun exportJsonFileName(): String = "zeitjournal-${exportMonth()}.json"
+
+  fun exportCsvFileName(): String = "zeitjournal.csv"
+
+  /**
+   * Writes the previous month's records in the shape a reporting tool reads.
+   *
+   * The device's zone decides which day a record falls on, and therefore which
+   * month. It is the only zone the app knows; the file itself carries a full
+   * offset per record, so a reader that needs a different one can still work
+   * it out.
+   */
+  fun exportTimeLogJson(target: android.net.Uri) {
+    val project = open ?: return
+    val month = exportMonth()
+    val zone = ZoneId.systemDefault()
+    val period = ExportPeriod(month.atDay(1), month.atEndOfMonth(), zone)
+    val document = project.document
+    val records = recordsInPeriod(document.timeLog().records, period)
+    val text = TimeLogExport.toTogglV2Json(records, document.labelsByTaskUid())
+    writeExport(target, text, Notice.TimeLogExported(records.size))
+  }
+
+  /**
+   * Writes every record as a table, for a spreadsheet.
+   *
+   * Not cut to a month: this one is for looking at, and cutting it would only
+   * hide the rest. Both raw seconds and unrounded hours are in the file, so
+   * whoever opens it can round their own way.
+   */
+  fun exportTimeLogCsv(target: android.net.Uri) {
+    val project = open ?: return
+    val document = project.document
+    val records = document.timeLog().records
+    val text = TimeLogCsv.write(
+      records,
+      ZoneId.systemDefault(),
+      document.labelsByTaskUid(),
+      decimalComma = java.text.DecimalFormatSymbols.getInstance().decimalSeparator == ','
+    )
+    writeExport(target, text, Notice.TimeLogExported(records.size))
+  }
+
+  private fun writeExport(target: android.net.Uri, text: String, notice: Notice) {
+    viewModelScope.launch {
+      _state.update { it.copy(busy = true, fileError = null) }
+      when (val result = store.writeBytes(target, text.toByteArray(Charsets.UTF_8))) {
+        is FileResult.Ok -> _state.update { it.copy(busy = false, notice = notice) }
+        is FileResult.Err -> _state.update { it.copy(busy = false, fileError = result.error) }
+      }
+    }
+  }
 
   private fun snapshot(project: OpenProject) =
     ProjectUi(

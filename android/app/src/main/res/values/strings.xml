@@ -131,6 +131,9 @@
     <string name="import_preview_nothing">Nothing to write — every entry was already imported.</string>
     <string name="import_apply">Add hours</string>
     <string name="import_done">%1$s h added.</string>
+    <string name="timelog_exported">%1$s records written.</string>
+    <string name="action_export_timelog_json">Export last month (JSON)</string>
+    <string name="action_export_timelog_csv">Export all records (CSV)</string>
     <string name="import_learn_keys">Remember these assignments for next time</string>
     <string name="import_reason_id">Task number in the description</string>
     <string name="import_reason_learned">Learned from an earlier import</string>
