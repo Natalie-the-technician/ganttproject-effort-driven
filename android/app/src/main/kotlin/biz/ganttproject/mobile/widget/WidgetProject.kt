@@ -10,6 +10,8 @@ import android.net.Uri
 import biz.ganttproject.mobile.core.AgendaItem
 import biz.ganttproject.mobile.core.AgendaWindow
 import biz.ganttproject.mobile.core.GanttDocument
+import biz.ganttproject.mobile.core.TimeRecord
+import biz.ganttproject.mobile.core.TimeSource
 import biz.ganttproject.mobile.core.agenda
 import biz.ganttproject.mobile.core.compareFingerprint
 import biz.ganttproject.mobile.core.contentFingerprint
@@ -22,6 +24,8 @@ import biz.ganttproject.mobile.data.SecureStore
 import biz.ganttproject.mobile.data.WidgetTarget
 import biz.ganttproject.mobile.net.AndroidHttpBackend
 import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.util.UUID
 
 /** What the widget managed to load, and what went wrong if it did not. */
 sealed interface WidgetState {
@@ -203,9 +207,42 @@ class WidgetProject(private val context: Context) {
   fun complete(taskId: String): WidgetEditResult =
     edit { it.setTaskCompletion(taskId, 100) }
 
-  /** Adds to a task's recorded hours; the widget's "I just worked on this". */
+  /**
+   * Adds to a task's recorded hours; the widget's "I just worked on this".
+   *
+   * Writes a record as well as the total. Only the total would leave the log
+   * disagreeing with it after every tap from the home screen, and the widget
+   * runs in its own process, so nothing would be there to notice.
+   *
+   * The stretch is placed ending now, like every other booking: a tap means
+   * the work just happened, and a real timestamp is what decides which day the
+   * hours count towards.
+   *
+   * A task with no uid still gets its total. The record cannot be attached,
+   * and the task sheet will show that the two disagree rather than either of
+   * them being quietly wrong.
+   */
   fun addHours(taskId: String, hours: Double): WidgetEditResult =
-    edit { it.addTaskActualEffortHours(taskId, hours) != null }
+    edit { document ->
+      val seconds = Math.round(hours * 3600.0)
+      if (seconds <= 0L) return@edit false
+      document.taskUidOfId(taskId)?.let { uid ->
+        val now = OffsetDateTime.now()
+        document.addTimeRecord(
+          TimeRecord(
+            id = UUID.randomUUID().toString(),
+            taskUid = uid,
+            start = now.minusSeconds(seconds),
+            durationSeconds = seconds,
+            description = "",
+            person = null,
+            source = TimeSource.QUICK,
+            createdAt = now
+          )
+        )
+      }
+      document.addTaskActualEffortHours(taskId, hours) != null
+    }
 
   /** Sets progress to a fixed step, for the quick 25/50/75 taps. */
   fun setProgress(taskId: String, percent: Int): WidgetEditResult =

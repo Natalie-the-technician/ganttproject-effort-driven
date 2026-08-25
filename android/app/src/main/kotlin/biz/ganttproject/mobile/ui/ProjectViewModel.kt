@@ -21,6 +21,7 @@ import biz.ganttproject.mobile.core.TimeSource
 import biz.ganttproject.mobile.core.TogglClient
 import biz.ganttproject.mobile.core.TogglError
 import biz.ganttproject.mobile.core.TogglResult
+import biz.ganttproject.mobile.core.toTimeRecord
 import biz.ganttproject.mobile.core.TogglTimeEntry
 import biz.ganttproject.mobile.core.DavError
 import biz.ganttproject.mobile.core.DavResult
@@ -1011,6 +1012,33 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         if (line.isSkipped) continue
         document.recordImportedHours(line.taskId, line.entryId, line.hoursToAdd)
       }
+      // The same hours again, this time as records: a date, a duration and a
+      // description instead of one number. The total above stays -- older
+      // readers and the estimate-quality report use it -- and the two are kept
+      // in step by deriving, not by writing twice.
+      //
+      // An entry that cannot become a record is skipped rather than placed at
+      // an invented time. That is not silent: the hours did reach the total,
+      // so the task sheet shows the difference between the total and the
+      // records and offers to explain it.
+      val entriesById = _importState.value.rows.associate { it.entry.id to it.entry }
+      for ((entryId, lines) in plan.lines.filter { !it.isSkipped }.groupBy { it.entryId }) {
+        val entry = entriesById[entryId] ?: continue
+        val isSplit = lines.size > 1
+        for (line in lines) {
+          val uid = document.taskUidOfId(line.taskId) ?: continue
+          val record = entry.toTimeRecord(
+            taskUid = uid,
+            seconds = Math.round(line.hoursToAdd * 3600.0),
+            // Only a split needs its parts told apart. An entry booked whole
+            // keeps the plain id, so a later import that moves it to another
+            // task moves the record instead of leaving a copy behind.
+            part = if (isSplit) uid else null
+          ) ?: continue
+          document.addTimeRecord(record)
+        }
+      }
+
       if (learn) {
         // Remember the confirmed pairing so the next import recognises it
         // outright instead of asking again.

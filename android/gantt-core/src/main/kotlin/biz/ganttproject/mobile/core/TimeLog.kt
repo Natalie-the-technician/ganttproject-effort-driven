@@ -458,16 +458,33 @@ fun togglRecordId(entryId: Long): String = "$TOGGL_RECORD_PREFIX$entryId"
 fun TogglTimeEntry.toTimeRecord(
   taskUid: String,
   person: String? = null,
-  fallbackZone: ZoneId? = null
+  fallbackZone: ZoneId? = null,
+  /**
+   * Only part of the entry's duration, when it was split across tasks.
+   * Defaults to the whole entry.
+   */
+  seconds: Long = durationSeconds,
+  /**
+   * Tells the parts of a split entry apart — pass the task uid.
+   *
+   * Null for an entry booked whole, which keeps its id at plain
+   * `toggl:<entry>`; that id then follows the entry if a later import puts it
+   * on a different task, because [GanttDocument.addTimeRecord] removes the
+   * old copy wherever it sits. A split genuinely is several records and needs
+   * several ids, and keying them by task rather than by position makes a
+   * re-import land on the same ids no matter what order the parts come in.
+   */
+  part: String? = null
 ): TimeRecord? {
   val began = startedAt
     ?: fallbackZone?.let { start.atStartOfDay(it).toOffsetDateTime() }
     ?: return null
+  if (seconds <= 0L) return null
   return TimeRecord(
-    id = togglRecordId(id),
+    id = if (part == null) togglRecordId(id) else "${togglRecordId(id)}#$part",
     taskUid = taskUid,
     start = began,
-    durationSeconds = durationSeconds,
+    durationSeconds = seconds,
     description = description,
     person = person,
     source = TimeSource.IMPORTED,

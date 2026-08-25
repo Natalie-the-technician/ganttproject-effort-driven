@@ -156,6 +156,24 @@ class TimeLogDocumentTest {
     assertFalse(reloaded.timeLog().hasLosses, "an emptied log must not read as a damaged one")
   }
 
+  @Test
+  @DisplayName("a record reassigned to another task moves rather than being duplicated")
+  fun `the same id does not survive on two tasks`() {
+    // The case a second import hits when an entry is put on a different task
+    // the second time round. Leaving the first copy behind would count the
+    // same hours twice, under two different tasks, with nothing to show for it.
+    val doc = load()
+    doc.addTimeRecord(record(id = "same", taskUid = designUid, seconds = 3600))
+    doc.addTimeRecord(record(id = "same", taskUid = draftUid, seconds = 3600))
+
+    assertEquals(1, doc.timeLog().records.size)
+    assertEquals(draftUid, doc.timeLog().records.single().taskUid)
+    assertEquals(0, doc.timeLogOfTask(designUid).records.size, "nothing left behind")
+    assertTrue(
+      validateLog(doc.timeLog().records).none { it is TimeLogProblem.DuplicateId }
+    )
+  }
+
   // ------------------------------------------------------------- Refusals
 
   @Test

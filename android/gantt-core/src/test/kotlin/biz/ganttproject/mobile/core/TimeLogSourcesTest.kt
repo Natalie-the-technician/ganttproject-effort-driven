@@ -115,6 +115,32 @@ class TimeLogSourcesTest {
     assertEquals(LocalDate.of(2026, 7, 3), parseTogglDate("2026-07-03"))
   }
 
+  @Test
+  @DisplayName("a split entry becomes several records with stable, distinct ids")
+  fun `split parts are told apart by task`() {
+    // Keyed by task rather than by position, so a re-import lands on the same
+    // ids however the parts happen to be ordered that run.
+    val e = entry(id = 7, seconds = 5400)
+    val a = e.toTimeRecord("uid-a", seconds = 3600, part = "uid-a")!!
+    val b = e.toTimeRecord("uid-b", seconds = 1800, part = "uid-b")!!
+
+    assertEquals("toggl:7#uid-a", a.id)
+    assertEquals("toggl:7#uid-b", b.id)
+    assertEquals(3600L, a.durationSeconds)
+    assertEquals(1800L, b.durationSeconds)
+    assertEquals(5400L, a.durationSeconds + b.durationSeconds, "the parts add up to the entry")
+  }
+
+  @Test
+  fun `a whole entry keeps the plain id`() {
+    assertEquals("toggl:7", entry(id = 7).toTimeRecord("uid-a")?.id)
+  }
+
+  @Test
+  fun `a part with no time in it is refused`() {
+    assertNull(entry(id = 7).toTimeRecord("uid-a", seconds = 0, part = "uid-a"))
+  }
+
   // ---------------------------------------------------------- From a timer
 
   @Test

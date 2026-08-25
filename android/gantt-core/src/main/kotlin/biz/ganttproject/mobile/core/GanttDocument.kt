@@ -464,9 +464,25 @@ class GanttDocument private constructor(private val root: XmlElement) {
    * A record with the same id replaces the stored one rather than joining it:
    * writing the same record twice is a retry, not two stretches of work, and
    * an id that appears twice would be counted twice by anything that sums.
+   *
+   * The old copy is removed **wherever it sits**, not just on the target task.
+   * That is what makes re-importing work when an entry is assigned to a
+   * different task the second time round: the record moves. Removing it only
+   * from the target would leave the first copy behind on the old task, and the
+   * hours would then be counted twice under two different tasks.
    */
   fun addTimeRecord(record: TimeRecord): Boolean {
     if (validateRecord(record).isNotEmpty()) return false
+    if (taskElementByUid(record.taskUid) == null) return false
+
+    // Only touch another task when the id really is over there, so the common
+    // case stays a single property write.
+    timeLog().records.firstOrNull { it.id == record.id && it.taskUid != record.taskUid }
+      ?.let { stale ->
+        val remaining = timeLogOfTask(stale.taskUid).records.filterNot { it.id == record.id }
+        setTimeLogOfTask(stale.taskUid, remaining)
+      }
+
     val existing = timeLogOfTask(record.taskUid).records.filterNot { it.id == record.id }
     return setTimeLogOfTask(record.taskUid, existing + record)
   }
