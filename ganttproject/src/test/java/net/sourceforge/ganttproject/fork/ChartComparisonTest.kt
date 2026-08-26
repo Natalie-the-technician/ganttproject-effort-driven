@@ -19,6 +19,7 @@ package net.sourceforge.ganttproject.fork
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -38,6 +39,9 @@ class ChartComparisonTest {
 
   private fun day(iso: String): Date =
     Date.from(LocalDate.parse(iso).atStartOfDay(ZoneId.systemDefault()).toInstant())
+
+  private fun LocalDate.asDate(): Date =
+    Date.from(this.atStartOfDay(ZoneId.systemDefault()).toInstant())
 
   // ---- Dates: end against end -------------------------------------------------------------
 
@@ -183,6 +187,84 @@ class ChartComparisonTest {
       "the durations view answers \"did the work grow\" -- five days became ten")
   }
 
+  // ---- Both axes at once ---------------------------------------------------------------------
+
+  /**
+   * THE GAP THIS VIEW WAS BUILT FOR. It was seen red on 26 August 2026, before `compareBoth`
+   * existed: an assertion that the two situations below must differ failed with
+   * `expected: not equal but was: <MORE>` -- the date rule gave the same answer for both.
+   *
+   * A task that has only MOVED and one that has only GROWN both end later than planned, and the
+   * date rule says the same thing about both. Only the two answers together tell them apart.
+   */
+  @Test
+  fun `a shift and a growth look the same to the date rule and different to both rules`() {
+    // Planned in both cases: 31 August for five days, so ending on 4 September.
+    val plannedEnd = day("2026-09-04")
+    val plannedDays = 5
+
+    // Only moved: starts a week later, still five days, ends 11 September.
+    val moved = compareBoth(plannedEnd, day("2026-09-11"), plannedDays, 5)
+    // Only grown: starts as planned, takes ten days, also ends 11 September.
+    val grown = compareBoth(plannedEnd, day("2026-09-11"), plannedDays, 10)
+
+    assertEquals(ComparisonResult.MORE, moved.dates, "both are late, and by the same amount")
+    assertEquals(ComparisonResult.MORE, grown.dates)
+    assertEquals(ComparisonResult.NO_BAND, moved.durations, "the mover has not grown")
+    assertEquals(ComparisonResult.MORE, grown.durations, "the grower has")
+    assertNotEquals(moved, grown,
+      "the two rules together must tell a shift from a growth -- that is the whole view")
+  }
+
+  @Test
+  fun `without a baseline both halves are neutral, not just the duration one`() {
+    // Neither question has a yardstick then. Saying it once per question is honest; one grey
+    // half next to an empty one would suggest the empty one had an answer.
+    val both = compareBoth(null, day("2026-09-11"), null, 5)
+    assertEquals(ComparisonResult.NEUTRAL, both.dates)
+    assertEquals(ComparisonResult.NEUTRAL, both.durations)
+  }
+
+  /**
+   * THE RULE THAT MAKES A LONE STRIP READABLE, and the reason it is a rule rather than a habit.
+   *
+   * In the combined view a half with nothing to say is not drawn. So a row can show a single
+   * five-pixel strip, and the only thing that says which axis it belongs to is where it sits:
+   *
+   *   a lone DURATION strip is anchored at today's start, so it is FLUSH with the bar;
+   *   a lone DATE strip is anchored at the planned start -- and it can NEVER be flush,
+   *   because "same length, different end" forces a different start.
+   *
+   * The first half of that is the anchor choice in `renderBothBands` and is fixed by the code
+   * there. THE SECOND HALF IS AN IMPLICATION, and this test holds it: it walks a grid of
+   * lengths and shifts and insists that no lone date band ever coincides with the task's start.
+   * Give `compareDurations` a tolerance -- so that "no band" stops meaning "exactly equal" --
+   * and this fails, which is exactly when the rule would stop being true.
+   */
+  @Test
+  fun `a lone date band can never sit flush with the bar`() {
+    val plannedStart = LocalDate.of(2026, 8, 31)
+    var loneDateBands = 0
+    for (plannedDays in 1..8) {
+      for (actualDays in 1..8) {
+        for (shift in -4..4) {
+          val actualStart = plannedStart.plusDays(shift.toLong())
+          val plannedEnd = plannedStart.plusDays(plannedDays.toLong())
+          val actualEnd = actualStart.plusDays(actualDays.toLong())
+          val dates = compareDates(plannedEnd.asDate(), actualEnd.asDate())
+          val durations = compareDurations(plannedDays, actualDays)
+          if (dates != ComparisonResult.NO_BAND && durations == ComparisonResult.NO_BAND) {
+            loneDateBands++
+            assertNotEquals(plannedStart, actualStart,
+              "a lone date band would sit flush with the bar: planned $plannedDays days from " +
+                "$plannedStart, actually $actualDays days from $actualStart")
+          }
+        }
+      }
+    }
+    assertTrue(loneDateBands > 0, "setup: the grid has to contain lone date bands at all")
+  }
+
   // ---- Room for the band in the row --------------------------------------------------------
 
   @Test
@@ -196,6 +278,8 @@ class ChartComparisonTest {
       "the effort view takes both its numbers from the task and always draws")
     assertTrue(ChartComparison.DURATIONS.needsBandRoomWithoutBaseline(),
       "the durations view draws a NEUTRAL band when the baseline is missing")
+    assertTrue(ChartComparison.DATES_AND_DURATIONS.needsBandRoomWithoutBaseline(),
+      "the combined view draws a neutral band across both halves without a baseline")
   }
 
   // ---- Style names ------------------------------------------------------------------------

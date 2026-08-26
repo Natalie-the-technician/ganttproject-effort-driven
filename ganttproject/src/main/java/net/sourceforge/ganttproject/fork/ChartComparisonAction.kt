@@ -37,7 +37,7 @@ import java.awt.event.ActionEvent
  * two views and one button that swapped between them; its caption always named the view on
  * screen. With three views a cycling button stops working: the caption still says where one IS,
  * but no longer where the next press LEADS, so finding a particular view means pressing until it
- * appears. A dropdown shows all three at once and still names the current one when closed.
+ * appears. A dropdown shows all of them at once and still names the current one when closed.
  *
  * THE ENTRIES KEEP THE "Compare:" PREFIX even though it repeats down an open list. Closed — which
  * is how the control spends nearly all of its time — the dropdown shows only the selected entry,
@@ -74,7 +74,8 @@ sealed class ChartComparisonAction(
     fun all(uiFacade: UIFacade): List<ChartComparisonAction> = listOf(
       DatesComparisonAction(uiFacade),
       EffortComparisonAction(uiFacade),
-      DurationsComparisonAction(uiFacade)
+      DurationsComparisonAction(uiFacade),
+      DatesAndDurationsComparisonAction(uiFacade)
     )
 
     /** The index [all] gives to [comparison]. */
@@ -82,6 +83,7 @@ sealed class ChartComparisonAction(
       ChartComparison.DATES -> 0
       ChartComparison.EFFORT -> 1
       ChartComparison.DURATIONS -> 2
+      ChartComparison.DATES_AND_DURATIONS -> 3
     }
   }
 }
@@ -105,4 +107,18 @@ class DurationsComparisonAction(uiFacade: UIFacade) :
   ChartComparisonAction(uiFacade, "chart.comparison.durations") {
   override val comparison = ChartComparison.DURATIONS
   override fun getLocalizedName(): String = forkText("fork.comparison.durations")
+}
+
+/**
+ * Both questions at once, in one band split into two halves.
+ *
+ * THE ENTRY'S NAME CARRIES THE ONLY EXPLANATION THERE IS of which half is which. The legend in
+ * the baseline dialog cannot say it: it explains colours, and "upper half" is not a colour; and
+ * it has to hold in all four views, so a sentence that is true only here does not belong in it.
+ * That is why this caption names the two axes in the order they appear, top first.
+ */
+class DatesAndDurationsComparisonAction(uiFacade: UIFacade) :
+  ChartComparisonAction(uiFacade, "chart.comparison.datesAndDurations") {
+  override val comparison = ChartComparison.DATES_AND_DURATIONS
+  override fun getLocalizedName(): String = forkText("fork.comparison.dates_and_durations")
 }
