@@ -331,14 +331,12 @@ class EffortDrivenTriggerTest : TestCase() {
     assertEquals("the holiday must be on the person", 1, person.daysOff.size)
 
     assertEquals(
-      "STILL PINNED AT FIVE, AND NOW FOR A KNOWN REASON. A2 derives the duration from inside "
-        + "SchedulerImpl.modifyTaskStart, and the scheduler never calls that for a task with "
-        + "neither a predecessor nor an earliest-begin constraint. THIS TASK HAS NEITHER -- it "
-        + "is the head case itself, so A2 does not reach it. Measured on 26 August 2026: with "
-        + "A2 in place this line still reads five. The tripwire for A2 is "
-        + "`a holiday inside a successor lengthens it` below; when the head case is closed, this "
-        + "one goes red and the expected value becomes SIX (see the comment).",
-      5, durationDays(task))
+      "THE HEAD CASE: this task has neither a predecessor nor an earliest-begin constraint, so "
+        + "the scheduler never calls modifyTaskStart for it and the first A2 hook does not reach "
+        + "it. The second entry point closes exactly that gap. Five working days of effort plus "
+        + "one day off is SIX -- six and not seven because GanttDaysOff's finish is EXCLUSIVE, so "
+        + "GanttDaysOff(Wed, Thu) is Wednesday alone.",
+      6, durationDays(task))
   }
 
   /**
@@ -399,6 +397,12 @@ class EffortDrivenTriggerTest : TestCase() {
     tasks.dependencyCollection.createDependency(task, predecessor)
     setEffortOn(tasks, task, 40.0)
     task.assignmentCollection.addAssignment(person).load = 100f
+    // A HEAD TASK as well -- no predecessor, no constraint. Since the second entry point exists,
+    // such a task is touched by the derivation on every single pass, so if anything is going to
+    // report a phantom movement it is this one.
+    val head = tasks.newTaskBuilder().withName("H").withStartDate(september(7)).build()
+    setEffortOn(tasks, head, 24.0)
+    head.assignmentCollection.addAssignment(person).load = 100f
     tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
     tasks.algorithmCollection.scheduler.run()
 

@@ -226,6 +226,27 @@ public class SchedulerImpl extends AlgorithmBase {
     debug(".. finally, start range={}", startRange);
     if (startRange.hasLowerBound()) {
       modifyTaskStart(node.getTask(), startRange.lowerEndpoint());
+    } else {
+      // [fork change] A2, second entry point -- the head case.
+      //
+      // WHY HERE AND NOT SOMEWHERE ELSE: this else is the exact complement of the branch above.
+      // The first hook hangs inside modifyTaskStart, and modifyTaskStart is called from there and
+      // nowhere else, so a task that lands in this else is precisely a task the first hook cannot
+      // reach. No new condition has to be invented, and none can drift apart from the other.
+      //
+      // "NO LOWER BOUND" AND "HEAD CASE" COINCIDE HERE, checked against the code above rather
+      // than assumed:
+      //   * a task with an incoming edge intersects startRange with that edge -- bounded;
+      //   * a weak edge alone still bounds it, through subtreeStartUpwards;
+      //   * an earliest-begin constraint bounds it explicitly;
+      //   * a CONTAINER intersects with subtasksSpan, a closed range, so it is always bounded and
+      //     never lands here -- which is what we want, because the model discards a duration
+      //     written onto a container anyway;
+      //   * a task whose range is contradictory has already returned further up.
+      // What is left is a leaf with no predecessor and no constraint. Exactly the head case.
+      //
+      // The task is not being moved, so the derivation is asked about the start it already has.
+      myDurationDerivation.accept(node.getTask(), node.getTask().getStart().getTime());
     }
     if (endRange.hasUpperBound()) {
       GPCalendarCalc cal = node.getTask().getManager().getCalendar();
