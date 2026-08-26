@@ -60,7 +60,38 @@ import kotlin.math.abs
 enum class ChartComparison {
   DATES,
   EFFORT,
-  DURATIONS
+  DURATIONS,
+
+  /**
+   * [DATES] and [DURATIONS] at once, in one band split into two halves: the upper one
+   * answers "am I on schedule", the lower one "did the work grow".
+   *
+   * WHY THIS IS A FOURTH VIEW AND NOT A REPLACEMENT FOR THE TWO, decided on 26 August 2026.
+   * The two halves keep the ANCHORS of their own views -- the date half starts where the task
+   * was PLANNED to start, the duration half where it starts TODAY. A single band could only
+   * have one anchor, and the anchors are the statement: only an anchor at today's start makes
+   * the overhang mean the difference in length. Merging the views would have taken that back.
+   */
+  DATES_AND_DURATIONS
+}
+
+/**
+ * [Fork change] Which of the two questions a band -- or a half of one -- is answering.
+ *
+ * IT NAMES THE AXIS, NOT THE COLOUR OR THE LOOK. Whether a band ends up hatched, and where in
+ * the row it sits, follows from the axis; the axis does not follow from either. Whoever reads
+ * `paintBand(…, ComparisonAxis.DATES, …)` should see that this is about schedule against length,
+ * and not about a particular shade.
+ */
+enum class ComparisonAxis {
+  /** End date now against end date in the baseline. Anchored at the PLANNED start. */
+  DATES,
+
+  /** Length now against length in the baseline. Anchored at TODAY'S start. */
+  DURATIONS,
+
+  /** Recorded hours against the original estimate. Needs no baseline and no anchor. */
+  EFFORT
 }
 
 /**
@@ -133,6 +164,34 @@ fun compareDurations(baselineDays: Int?, currentDays: Int): ComparisonResult = w
   else -> ComparisonResult.LESS
 }
 
+/**
+ * Both answers at once, for [ChartComparison.DATES_AND_DURATIONS].
+ *
+ * The two are kept apart rather than reduced to one value, because they are two questions.
+ * Whoever wants a single verdict has to decide what "later but shorter" should be called, and
+ * that decision does not exist -- it is exactly the ambiguity this view was built to remove.
+ */
+data class BothComparisons(val dates: ComparisonResult, val durations: ComparisonResult)
+
+/**
+ * [ChartComparison.DATES_AND_DURATIONS]: both rules, applied to the same task.
+ *
+ * WITHOUT A BASELINE BOTH HALVES ARE NEUTRAL, not just the duration one. Neither question has a
+ * yardstick then, and saying so twice is honest; drawing one grey half and leaving the other
+ * empty would suggest that the empty one had an answer.
+ *
+ * THIS IS THE FUNCTION THAT CLOSES THE GAP. `compareDates` alone reports MORE both for a task
+ * that has merely moved and for one that has merely grown -- seen red on 26 August 2026 before
+ * this existed. Here the two come out different.
+ */
+fun compareBoth(baselineEnd: Date?, currentEnd: Date,
+                baselineDays: Int?, currentDays: Int): BothComparisons =
+  if (baselineEnd == null || baselineDays == null) {
+    BothComparisons(ComparisonResult.NEUTRAL, ComparisonResult.NEUTRAL)
+  } else {
+    BothComparisons(compareDates(baselineEnd, currentEnd), compareDurations(baselineDays, currentDays))
+  }
+
 /** Below this many hours two efforts count as equal. One minute. */
 private const val HOURS_TOLERANCE = 1.0 / 60.0
 
@@ -180,6 +239,8 @@ fun ChartComparison.needsBandRoomWithoutBaseline(): Boolean = when (this) {
   ChartComparison.DATES -> false
   ChartComparison.EFFORT -> true
   ChartComparison.DURATIONS -> true
+  // Without a baseline this one draws a neutral band across both halves -- see [compareBoth].
+  ChartComparison.DATES_AND_DURATIONS -> true
 }
 
 /**
