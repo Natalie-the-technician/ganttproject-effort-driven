@@ -38,6 +38,7 @@ import net.sourceforge.ganttproject.task.algorithm.DependencyGraph.ImplicitSubSu
 import net.sourceforge.ganttproject.task.algorithm.DependencyGraph.Node;
 
 import java.util.Collection;
+import java.util.function.BiConsumer;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -55,9 +56,42 @@ public class SchedulerImpl extends AlgorithmBase {
   private boolean isRunning;
   private final Supplier<TaskContainmentHierarchyFacade> myTaskHierarchy;
 
+  /**
+   * [fork change] Derives the duration of a task the scheduler is about to place.
+   *
+   * The scheduler carries the dependency graph and the hierarchy and nothing else; effort and the
+   * daily availability of the people hang off the CustomPropertyManager, which lives on the other
+   * side of the model. Rather than teach this class about resources, it takes the derivation as a
+   * callback. It is a plain BiConsumer on purpose: no new type, no fork import in this file.
+   *
+   * The default does nothing, so the two-argument constructor -- the one the tests use -- behaves
+   * exactly as before.
+   */
+  private final BiConsumer<Task, Date> myDurationDerivation;
+
+  /** [fork change] Set by modifyTaskStart/modifyTaskEnd when they really change something. */
+  private boolean myTaskChanged;
+
+  /**
+   * [fork change] Upper bound for the passes in {@link #doRun()}.
+   *
+   * MEASURED: with finish-finish dependencies three passes are needed to reach a fixpoint, and
+   * that number does not depend on the order in which the nodes are visited. Mixed dependency
+   * types can produce configurations with no fixpoint at all, which is why a bound is mandatory
+   * rather than a nicety.
+   */
+  static final int MAX_PASSES = 3;
+
   public SchedulerImpl(DependencyGraph graph, Supplier<TaskContainmentHierarchyFacade> taskHierarchy) {
+    this(graph, taskHierarchy, (task, plannedStart) -> { });
+  }
+
+  /** [fork change] The three-argument form: same scheduler, plus the duration derivation. */
+  public SchedulerImpl(DependencyGraph graph, Supplier<TaskContainmentHierarchyFacade> taskHierarchy,
+                       BiConsumer<Task, Date> durationDerivation) {
     myGraph = graph;
     myTaskHierarchy = taskHierarchy;
+    myDurationDerivation = durationDerivation;
   }
 
   @Override
@@ -79,6 +113,25 @@ public class SchedulerImpl extends AlgorithmBase {
   }
 
   private void doRun() {
+    // [fork change] Repeat until nothing moves any more, at most MAX_PASSES times.
+    //
+    // A single walk over the layers was enough as long as the scheduler only shifted start dates.
+    // Once the duration is derived while placing a task, the end moves too, and with a
+    // finish-finish dependency that feeds back into tasks already visited in this very pass.
+    //
+    // Reaching the bound is NOT silently accepted: it means the plan has no fixpoint, and whoever
+    // is looking at it deserves to be told rather than left with a half-computed schedule.
+    for (int pass = 1; pass <= MAX_PASSES; pass++) {
+      myTaskChanged = false;
+      onePass();
+      if (!myTaskChanged) {
+        return;
+      }
+    }
+    reportUnsettled();
+  }
+
+  private void onePass() {
     int layers = myGraph.checkLayerValidity();
     for (int i = 0; i < layers; i++) {
       Collection<Node> layer = myGraph.getLayer(i);
@@ -93,6 +146,23 @@ public class SchedulerImpl extends AlgorithmBase {
           }
         }
       }
+    }
+  }
+
+  /**
+   * [fork change] Says out loud that the bound was reached.
+   *
+   * Both bounds this fork already had break off in silence. That is not continued here: the
+   * message goes to the log in every case, and additionally to the diagnostic when the caller
+   * provided one -- that is the channel the "the following tasks have moved" dialog reads.
+   */
+  private void reportUnsettled() {
+    IllegalStateException ex = new IllegalStateException(
+        "Scheduler did not settle within " + MAX_PASSES + " passes: tasks were still moving in the"
+            + " last one. The plan may contain a cycle of dependencies that has no fixpoint.");
+    GPLogger.create("SchedulerImpl").error(ex.getMessage(), new Object[0], Collections.emptyMap(), ex);
+    if (getDiagnostic() != null) {
+      getDiagnostic().logError(ex);
     }
   }
 
@@ -195,9 +265,20 @@ public class SchedulerImpl extends AlgorithmBase {
     TaskMutator mutator = task.createMutator();
     mutator.setEnd(newEndCalendar);
     mutator.commit();
+    myTaskChanged = true;
   }
 
   private void modifyTaskStart(Task task, Date newStart) {
+    // [fork change] A2: derive the duration BEFORE the equality check below.
+    //
+    // It has to sit before it, not after: the early return exists so that a task whose start does
+    // not move is not reported as modified, and a task can very well keep its start while its
+    // duration changes -- a day off falling inside it, for instance. After the return the
+    // derivation would never see that case.
+    //
+    // The early return itself is left exactly as it was. It carries the diagnostic when a project
+    // is opened; without it every task in the project would stand in the "these have moved" list.
+    myDurationDerivation.accept(task, newStart);
     if (task.getStart().getTime().equals(newStart)) {
       return;
     }
@@ -216,6 +297,7 @@ public class SchedulerImpl extends AlgorithmBase {
       mutator.shift(shift);
       mutator.commit();
     }
+    myTaskChanged = true;
   }
 
   private void debug(String message, Object... params) {

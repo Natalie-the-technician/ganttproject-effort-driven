@@ -331,10 +331,92 @@ class EffortDrivenTriggerTest : TestCase() {
     assertEquals("the holiday must be on the person", 1, person.daysOff.size)
 
     assertEquals(
-      "PINNED, AND WRONG: a person's holiday does not reach the duration today. If this line "
-        + "fails, days off have started to count -- change the expected value to 6 or 7 (see the "
-        + "comment) instead of changing the code back.",
+      "STILL PINNED AT FIVE, AND NOW FOR A KNOWN REASON. A2 derives the duration from inside "
+        + "SchedulerImpl.modifyTaskStart, and the scheduler never calls that for a task with "
+        + "neither a predecessor nor an earliest-begin constraint. THIS TASK HAS NEITHER -- it "
+        + "is the head case itself, so A2 does not reach it. Measured on 26 August 2026: with "
+        + "A2 in place this line still reads five. The tripwire for A2 is "
+        + "`a holiday inside a successor lengthens it` below; when the head case is closed, this "
+        + "one goes red and the expected value becomes SIX (see the comment).",
       5, durationDays(task))
+  }
+
+  /**
+   * A2 -- the tripwire for the days-off derivation.
+   *
+   * Same setup as P1, but the task has a PREDECESSOR. That is the whole difference, and it is the
+   * difference that matters: with a predecessor the scheduler calls `modifyTaskStart`, which is
+   * where A2 hangs. Without one it does not, which is why P1 above still reads five.
+   *
+   * Five working days of effort, one day off inside the task, so SIX. Six and not seven because
+   * `GanttDaysOff`'s finish is EXCLUSIVE -- `GanttDaysOff(Wed, Thu)` is Wednesday alone. That is
+   * not a decision taken here: it is what `DateInterval`, `GanttDialogPerson`,
+   * `ProjectFileImporterImpl` and `LoadDistribution` all do. `GanttDaysOff.isADayOff` reads it
+   * inclusively and contradicts them, but it has no caller (finding F24).
+   *
+   * Seen red before the fix, verbatim:
+   *
+   *     junit.framework.AssertionFailedError: a day off inside the successor must lengthen it
+   *     expected:<6> but was:<5>
+   */
+  fun testHolidayInsideASuccessorLengthensIt() {
+    val (tasks, resources) = weekendProject()
+    val person = resources.getById(1)
+    // Monday, 7 September 2026.
+    val predecessor = tasks.newTaskBuilder().withName("A").withStartDate(september(7)).build()
+    val task = tasks.newTaskBuilder().withName("B").withStartDate(september(7)).build()
+    tasks.dependencyCollection.createDependency(task, predecessor)
+
+    setEffortOn(tasks, task, 40.0)
+    task.assignmentCollection.addAssignment(person).load = 100f
+    tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
+    tasks.algorithmCollection.scheduler.run()
+    assertEquals("setup: 40 h at 8 h a day are five days", 5, durationDays(task))
+
+    // Inside the task and a working day: the Wednesday of the week the successor starts in.
+    person.addDaysOff(GanttDaysOff(september(9), september(10)))
+    assertEquals("the holiday must be on the person", 1, person.daysOff.size)
+    tasks.algorithmCollection.scheduler.run()
+
+    assertEquals("a day off inside the successor must lengthen it", 6, durationDays(task))
+  }
+
+  /**
+   * WHAT THE EARLY RETURN AT `modifyTaskStart` PROTECTS, and that A2 must not break.
+   *
+   * That return is what keeps the "the following tasks have moved" dialog quiet when a project is
+   * opened that has not moved at all. Without it every task in the project would stand in that
+   * list. A2's hook sits BEFORE the return, so it is exactly the place where such a regression
+   * would appear -- hence this check rather than an argument.
+   *
+   * A settled plan, a diagnostic hung on the scheduler, one more run: nothing may be reported.
+   */
+  fun testASettledPlanReportsNothingThroughTheDiagnostic() {
+    val (tasks, resources) = weekendProject()
+    val person = resources.getById(1)
+    val predecessor = tasks.newTaskBuilder().withName("A").withStartDate(september(7)).build()
+    val task = tasks.newTaskBuilder().withName("B").withStartDate(september(7)).build()
+    tasks.dependencyCollection.createDependency(task, predecessor)
+    setEffortOn(tasks, task, 40.0)
+    task.assignmentCollection.addAssignment(person).load = 100f
+    tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
+    tasks.algorithmCollection.scheduler.run()
+
+    // Everything has settled by now. From here on the scheduler must report nothing at all.
+    val reported = mutableListOf<String>()
+    val errors = mutableListOf<String>()
+    tasks.algorithmCollection.scheduler.setDiagnostic(object : AlgorithmBase.Diagnostic {
+      override fun addModifiedTask(t: Task, newStart: Date?, newEnd: Date?) {
+        reported.add(t.name)
+      }
+      override fun logError(ex: Exception) {
+        errors.add(ex.message ?: "")
+      }
+    })
+    tasks.algorithmCollection.scheduler.run()
+
+    assertEquals("a settled plan must not report a single moved task: $reported", 0, reported.size)
+    assertEquals("and it must not hit the pass limit either: $errors", 0, errors.size)
   }
 
   /** The effort column belongs to the task manager whose task it is. */

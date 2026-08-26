@@ -28,6 +28,11 @@ import net.sourceforge.ganttproject.gui.options.model.GP1XOptionConverter;
 import net.sourceforge.ganttproject.language.GanttLanguage;
 import net.sourceforge.ganttproject.resource.HumanResource;
 import net.sourceforge.ganttproject.resource.HumanResourceManager;
+// [fork change] A2: needed by deriveDurationWithDaysOff below.
+import biz.ganttproject.core.time.TimeDuration;
+import net.sourceforge.ganttproject.fork.DaysOffDurationKt;
+import net.sourceforge.ganttproject.fork.LegacyDatesKt;
+import net.sourceforge.ganttproject.fork.LevellingAdapterKt;
 import net.sourceforge.ganttproject.storage.ProjectDatabase.TaskUpdateBuilder;
 import net.sourceforge.ganttproject.task.algorithm.*;
 import net.sourceforge.ganttproject.task.dependency.*;
@@ -172,7 +177,12 @@ public class TaskManagerImpl implements TaskManager {
     myConfig = config;
     myScheduler = new SchedulerOptional(
         config.getSchedulerDisabledOption(),
-        new SchedulerImpl(myDependencyGraph, myHierarchySupplier)
+        // [fork change] A2: the third argument is new. It derives the duration from effort,
+        // daily availability and the days off of the assigned people, at the moment the
+        // scheduler places the task. The resource properties are resolved on every call for the
+        // same reason as in the effort algorithm below: the resource manager is wired up after
+        // the task manager and is null in tests.
+        new SchedulerImpl(myDependencyGraph, myHierarchySupplier, this::deriveDurationWithDaysOff)
     );
     myDependencyGraph.addListener(() -> {
       if (areEventsEnabled) {
@@ -982,6 +992,38 @@ public class TaskManagerImpl implements TaskManager {
 
   boolean areEventsEnabled() {
     return areEventsEnabled;
+  }
+
+  /**
+   * [fork change] A2 -- duration derived where the scheduler touches the task anyway.
+   *
+   * Deliberately silent when anything is missing: no resource manager, no effort recorded, nobody
+   * assigned, or an effort that cannot be worked off at all. In every one of those cases the task
+   * keeps the duration it has; this hook adds information, it never takes any away.
+   *
+   * It does NOT reach a task that has neither a predecessor nor an earliest-begin constraint --
+   * the scheduler never calls modifyTaskStart for such a task. That head case is a separate step.
+   */
+  private void deriveDurationWithDaysOff(Task task, java.util.Date plannedStart) {
+    HumanResourceManager resourceManager = getConfig().getResourceManager();
+    if (resourceManager == null || plannedStart == null) {
+      return;
+    }
+    Integer days = DaysOffDurationKt.durationDaysWithDaysOff(
+        task, getCustomPropertyManager(), resourceManager.getCustomPropertyManager(),
+        LegacyDatesKt.toModelLocalDate(plannedStart),
+        LevellingAdapterKt.workingDayTest(getCalendar()));
+    if (days == null) {
+      return;
+    }
+    TimeDuration newDuration = createLength(days.longValue());
+    TimeDuration current = task.getDuration();
+    if (current.getTimeUnit().equals(newDuration.getTimeUnit()) && current.getLength() == newDuration.getLength()) {
+      return;
+    }
+    TaskMutator mutator = task.createMutator();
+    mutator.setDuration(newDuration);
+    mutator.commit();
   }
 
   @Override
