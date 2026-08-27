@@ -42,6 +42,39 @@ public interface ResourceAssignment {
 
   boolean isCoordinator();
 
+  /**
+   * [fork change] Axis A: does this person's ABSENCE block the task?
+   *
+   * `false` is what the program does today: a day off of an assigned person removes that person's
+   * hours from the day, it does not stop the task (see DaysOffDuration.kt). The default therefore
+   * has to be `false`, and it is the plain Java default of a boolean field -- no constructor has
+   * to remember it.
+   *
+   * P1 only carries the value. Nothing reads it yet.
+   */
+  void setBlocking(boolean blocking);
+
+  boolean isBlocking();
+
+  /**
+   * [fork change] Axis B: does this person contribute NO work that counts towards the effort?
+   *
+   * Deliberately negated. Today every assigned person contributes, and `false` -- the plain Java
+   * default of a boolean field and the value Jackson leaves in place for an attribute that is not
+   * in the file -- means exactly that. A positive `contributesEffort` would have to default to
+   * `true`, and every one of the three ResourceAssignment implementations plus every copying path
+   * would have to remember to set it; a single forgotten spot would silently turn a person into a
+   * non-contributor.
+   *
+   * Independent of [isBlocking]: someone can block without contributing (a person who has to be
+   * present) and contribute without blocking.
+   *
+   * P1 only carries the value. Nothing reads it yet.
+   */
+  void setNoEffort(boolean noEffort);
+
+  boolean isNoEffort();
+
   Role getRoleForAssignment();
 
   void setRoleForAssignment(Role role);

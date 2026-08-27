@@ -51,6 +51,9 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
       ResourceAssignment copy = new ResourceAssignmentImpl(next.getResource());
       copy.setLoad(next.getLoad());
       copy.setCoordinator(next.isCoordinator());
+      // [fork change] The two axes travel with every copy, exactly like the coordinator flag.
+      copy.setBlocking(next.isBlocking());
+      copy.setNoEffort(next.isNoEffort());
       copy.setRoleForAssignment(next.getRoleForAssignment());
       addAssignment(copy);
     }
@@ -165,6 +168,28 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
       return myAssignmentToResource.isCoordinator();
     }
 
+    // [fork change] Both axes are stored on the resource side, like the load and the coordinator
+    // flag -- this object is only the task-side view of the same assignment.
+    @Override
+    public void setBlocking(boolean blocking) {
+      myAssignmentToResource.setBlocking(blocking);
+    }
+
+    @Override
+    public boolean isBlocking() {
+      return myAssignmentToResource.isBlocking();
+    }
+
+    @Override
+    public void setNoEffort(boolean noEffort) {
+      myAssignmentToResource.setNoEffort(noEffort);
+    }
+
+    @Override
+    public boolean isNoEffort() {
+      return myAssignmentToResource.isNoEffort();
+    }
+
     @Override
     public Role getRoleForAssignment() {
       return myAssignmentToResource.getRoleForAssignment();
@@ -189,6 +214,12 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
     private float myLoad;
 
     private boolean myCoordinator;
+
+    // [fork change] The two axes. No initialiser on purpose: `false` is what the program does
+    // today, and a field that is never assigned cannot be forgotten in a constructor.
+    private boolean myBlocking;
+
+    private boolean myNoEffort;
 
     private Role myRoleForAssignment;
 
@@ -230,6 +261,27 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
     @Override
     public boolean isCoordinator() {
       return myCoordinator;
+    }
+
+    // [fork change] The two axes.
+    @Override
+    public void setBlocking(boolean blocking) {
+      myBlocking = blocking;
+    }
+
+    @Override
+    public boolean isBlocking() {
+      return myBlocking;
+    }
+
+    @Override
+    public void setNoEffort(boolean noEffort) {
+      myNoEffort = noEffort;
+    }
+
+    @Override
+    public boolean isNoEffort() {
+      return myNoEffort;
     }
 
     @Override
@@ -290,6 +342,10 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
           ResourceAssignment result = auxAddAssignment(next.myResource);
           result.setLoad(next.myAssignment.getLoad());
           result.setCoordinator(next.myAssignment.isCoordinator());
+          // [fork change] Without these two lines the values entered in the dialog would be lost
+          // on commit -- the stub is thrown away and only what is copied here survives.
+          result.setBlocking(next.myAssignment.isBlocking());
+          result.setNoEffort(next.myAssignment.isNoEffort());
           result.setRoleForAssignment(next.myAssignment.getRoleForAssignment());
         }
         default:
@@ -364,6 +420,9 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
           ResourceAssignment copy = new ResourceAssignmentImpl(nextImportedResource);
           copy.setLoad(next.getLoad());
           copy.setCoordinator(next.isCoordinator());
+          // [fork change] The two axes.
+          copy.setBlocking(next.isBlocking());
+          copy.setNoEffort(next.isNoEffort());
           copy.setRoleForAssignment(next.getRoleForAssignment());
           addAssignment(copy);
         }

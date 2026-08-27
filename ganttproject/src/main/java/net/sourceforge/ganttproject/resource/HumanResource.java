@@ -353,6 +353,13 @@ public class HumanResource implements CustomPropertyHolder {
 
     private boolean myCoordinator;
 
+    // [fork change] The two axes of an assignment. THIS is where they are actually stored: the
+    // task-side ResourceAssignmentImpl delegates here, the same way load and coordinator do.
+    // No initialiser on purpose -- `false` is today's behaviour on both axes.
+    private boolean myBlocking;
+
+    private boolean myNoEffort;
+
     private Role myRoleForAssignment;
 
     private ResourceAssignmentImpl(ResourceAssignment assignmentToTask) {
@@ -395,6 +402,29 @@ public class HumanResource implements CustomPropertyHolder {
     @Override
     public boolean isCoordinator() {
       return myCoordinator;
+    }
+
+    // [fork change] The two axes. Like setCoordinator they do NOT fire an assignment change:
+    // nothing depends on them yet, and a redraw of the resource chart for a value nobody reads
+    // would only cost time.
+    @Override
+    public void setBlocking(boolean blocking) {
+      myBlocking = blocking;
+    }
+
+    @Override
+    public boolean isBlocking() {
+      return myBlocking;
+    }
+
+    @Override
+    public void setNoEffort(boolean noEffort) {
+      myNoEffort = noEffort;
+    }
+
+    @Override
+    public boolean isNoEffort() {
+      return myNoEffort;
     }
 
     @Override

@@ -339,12 +339,24 @@ data class XmlResources(
   }
 }
 
-@JsonPropertyOrder("task-id", "resource-id", "function", "responsible", "load")
+@JsonPropertyOrder("task-id", "resource-id", "function", "responsible", "blocking", "no-effort", "load")
 data class XmlAllocation(
   @get:JacksonXmlProperty(isAttribute = true, localName = "task-id") var taskId: Int = 0,
   @get:JacksonXmlProperty(isAttribute = true, localName = "resource-id") var resourceId: Int = 0,
   @get:JacksonXmlProperty(isAttribute = true, localName = "function") var role: String? = null,
   @get:JacksonXmlProperty(isAttribute = true, localName = "responsible") var isCoordinator: Boolean = false,
+  // [fork change] The two axes of an assignment, see ResourceAssignment.
+  //
+  //  * `blocking`  -- does this person's ABSENCE block the task?
+  //  * `no-effort` -- does this person contribute NO work that counts towards the effort?
+  //
+  // BOTH DEFAULT TO false, AND THAT IS THE POINT: a file written before this change has neither
+  // attribute, Jackson leaves the default in place (FAIL_ON_UNKNOWN_PROPERTIES is off and every
+  // parameter has a default), and `false`/`false` is exactly what the program did before. The
+  // negation in `no-effort` exists for this reason -- a positive `contributes-effort` would have
+  // to default to `true`, and today's behaviour would then hang on that default.
+  @get:JacksonXmlProperty(isAttribute = true, localName = "blocking") var isBlocking: Boolean = false,
+  @get:JacksonXmlProperty(isAttribute = true, localName = "no-effort") var isNoEffort: Boolean = false,
   @get:JacksonXmlProperty(isAttribute = true) var load: Float = 0.0f
 )
 @JsonPropertyOrder("start", "end", "resourceid")

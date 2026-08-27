@@ -974,6 +974,9 @@ public class TaskManagerImpl implements TaskManager {
           original2importedResource.get(resourceAssignment.getResource()));
         assignment.setLoad(resourceAssignment.getLoad());
         assignment.setCoordinator(resourceAssignment.isCoordinator());
+        // [fork change] The two axes travel with the import, like the coordinator flag.
+        assignment.setBlocking(resourceAssignment.isBlocking());
+        assignment.setNoEffort(resourceAssignment.isNoEffort());
       }
     }
   }

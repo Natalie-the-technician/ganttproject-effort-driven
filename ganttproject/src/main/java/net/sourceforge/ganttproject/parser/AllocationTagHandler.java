@@ -87,6 +87,10 @@ public class AllocationTagHandler extends AbstractTagHandler {
 
     assignment.setLoad(load);
     assignment.setCoordinator(coordinator);
+    // [fork change] The two axes. A file without the attributes leaves them at false, which is
+    // what the program did before -- see XmlAllocation.
+    assignment.setBlocking(xmlAllocation.isBlocking());
+    assignment.setNoEffort(xmlAllocation.isNoEffort());
   }
 
   private HumanResourceManager getResourceManager() {

@@ -213,6 +213,29 @@ class TaskResourcesPanel(
         prefWidth = 150.0
       }
 
+      // [fork change] Axis A: does this person's absence block the task? Two independent
+      // checkboxes and not one choice, because a person can block without contributing and
+      // contribute without blocking.
+      //
+      // P1 only writes the value into the assignment and into the file. Nothing reads it yet --
+      // the effect is P2 and P3.
+      val blockingCol = TableColumn2<ResourceAssignmentRow, Boolean>(AXIS_LABEL_BLOCKING).apply {
+        setCellValueFactory { cell -> axisProperty(cell.value.assignment, { it.isBlocking }, { a, v -> a.isBlocking = v }) }
+        cellFactory = CheckBoxTableCell.forTableColumn(this)
+        isEditable = true
+        prefWidth = 130.0
+      }
+
+      // [fork change] Axis B, NEGATED: ticked means this person contributes no work that counts
+      // towards the effort. Unticked is what the program does today, so an untouched checkbox
+      // and an old file mean the same thing.
+      val noEffortCol = TableColumn2<ResourceAssignmentRow, Boolean>(AXIS_LABEL_NO_EFFORT).apply {
+        setCellValueFactory { cell -> axisProperty(cell.value.assignment, { it.isNoEffort }, { a, v -> a.isNoEffort = v }) }
+        cellFactory = CheckBoxTableCell.forTableColumn(this)
+        isEditable = true
+        prefWidth = 110.0
+      }
+
       // [fork change] New column: shows the daily hours of the resource that the duration
       // calculation computes with. DISPLAY ONLY - the daily hours apply globally to all tasks of
       // this resource and are therefore edited in the resource manager, not here. A second editor
@@ -232,8 +255,10 @@ class TaskResourcesPanel(
         prefWidth = 90.0
       }
 
-      // [fork change] hoursPerDayCol is new, the remaining columns are the original ones.
-      columns.addAll(idCol, nameCol, unitCol, coordinatorCol, roleCol, hoursPerDayCol)
+      // [fork change] blockingCol, noEffortCol and hoursPerDayCol are new, the remaining columns
+      // are the original ones.
+      columns.addAll(idCol, nameCol, unitCol, coordinatorCol, roleCol,
+        blockingCol, noEffortCol, hoursPerDayCol)
     }
 
     // Create split layout with table and cost panel
@@ -405,6 +430,41 @@ private val EFFORT_LABEL_EFFORT_HOURS get() = forkText("fork.effort.hours")
 private val EFFORT_LABEL_HOURS_PER_DAY get() = forkText("fork.effort.hoursPerDay")
 private val EFFORT_LABEL_ACTUAL_HOURS get() = forkText("fork.effort.actualHours")
 
+// [fork change] Labels of the two assignment axes.
+private val AXIS_LABEL_BLOCKING get() = forkText("fork.assignment.blocking")
+private val AXIS_LABEL_NO_EFFORT get() = forkText("fork.assignment.noEffort")
+
+/**
+ * [fork change] The writable property behind an axis checkbox.
+ *
+ * WHY THIS AND NOT `setOnEditCommit`: `CheckBoxTableCell.forTableColumn(column)` does NOT start an
+ * edit. It takes whatever the cell value factory returned and, if that is a `BooleanProperty`,
+ * binds the checkbox to it BIDIRECTIONALLY -- `onEditCommit` is never fired. A factory that hands
+ * out a fresh `SimpleBooleanProperty` on every call therefore swallows the click: the tick lands
+ * in an object that nobody ever reads again.
+ *
+ * MEASURED ON 27.08.2026 in the running program: both ticks set in the dialog, Ok, save --
+ * `<allocation ... blocking="false" no-effort="false"/>`, and the ticks were gone when the dialog
+ * was reopened. With the listener below the same run writes `blocking="true"`.
+ *
+ * The write goes straight to the assignment, which is what the model's `setValueAt` does for the
+ * coordinator column as well. For an assignment that already exists this is the live object; for
+ * one just added in this dialog it is the mutator's stub, and the stub's values are copied over
+ * in `ResourceAssignmentCollectionImpl.commit`.
+ *
+ * THE SAME DEFECT SITS IN THE ORIGINAL COORDINATOR COLUMN, which is wired exactly like the two
+ * new ones were. It is NOT fixed here -- that is behaviour outside P1. Measured in the same run:
+ * ticking "Coordinator" for a second person and saving leaves `responsible="false"` in the file.
+ */
+private fun axisProperty(
+  assignment: net.sourceforge.ganttproject.task.ResourceAssignment?,
+  read: (net.sourceforge.ganttproject.task.ResourceAssignment) -> Boolean,
+  write: (net.sourceforge.ganttproject.task.ResourceAssignment, Boolean) -> Unit
+): SimpleBooleanProperty =
+  SimpleBooleanProperty(assignment?.let(read) ?: false).also { property ->
+    property.addListener { _, _, ticked -> assignment?.let { write(it, ticked) } }
+  }
+
 /**
  * [fork change] New helper: display hours without a superfluous decimal place, so that the table
  * shows "8" instead of "8.0".
@@ -460,11 +520,17 @@ private class ResourceAssignmentTableModel(task: Task) {
         } else if (value is HumanResource) {
           val load = assignment.load
           val coord = assignment.isCoordinator
+          // [fork change] Swapping the person replaces the assignment object. Without these two
+          // the ticks set a moment ago would silently disappear.
+          val blocking = assignment.isBlocking
+          val noEffort = assignment.isNoEffort
           assignment.delete()
           mutator.deleteAssignment(assignment.resource)
           val newAssignment = mutator.addAssignment(value)
           newAssignment.load = load
           newAssignment.isCoordinator = coord
+          newAssignment.isBlocking = blocking
+          newAssignment.isNoEffort = noEffort
           _assignments[row] = newAssignment
         }
       }

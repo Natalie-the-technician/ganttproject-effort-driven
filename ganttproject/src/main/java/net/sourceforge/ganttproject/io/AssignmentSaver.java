@@ -54,6 +54,10 @@ class AssignmentSaver extends SaverBase {
     addAttribute("resource-id", String.valueOf(next.getResource().getId()), attrs);
     addAttribute("function", roleForAssignment.getPersistentID(), attrs);
     addAttribute("responsible", String.valueOf(next.isCoordinator()), attrs);
+    // [fork change] The two axes, written unconditionally like "responsible". An older
+    // GanttProject reading this file ignores the two unknown attributes without a word.
+    addAttribute("blocking", String.valueOf(next.isBlocking()), attrs);
+    addAttribute("no-effort", String.valueOf(next.isNoEffort()), attrs);
     addAttribute("load", String.valueOf(next.getLoad()), attrs);
     emptyElement("allocation", attrs, handler);
   }

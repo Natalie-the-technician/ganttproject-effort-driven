@@ -146,6 +146,10 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
     val assignment = task.assignmentCollection.addAssignment(resource)
     assignment.load = it.load
     assignment.isCoordinator = it.isCoordinator
+    // [fork change] The two axes, the same as in AllocationTagHandler -- the desktop and the
+    // cloud read the same file and must not disagree about it.
+    assignment.isBlocking = it.isBlocking
+    assignment.isNoEffort = it.isNoEffort
     it.role?.let { function ->
       val role = findRole(function)
       if (role != null) {
