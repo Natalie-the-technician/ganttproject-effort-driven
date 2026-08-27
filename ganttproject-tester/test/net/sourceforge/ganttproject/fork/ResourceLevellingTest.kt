@@ -402,4 +402,234 @@ class ResourceLevellingTest : TestCase() {
     val gemeldet = r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>()
     assertEquals("nur der markierte Vorgang ist gemeint", listOf("a"), gemeldet.map { it.id })
   }
+
+  // ===========================================================================================
+  // P6: the OTHER half of the same fallback -- the capacity dead end -- is no longer silent.
+  // ===========================================================================================
+
+  /**
+   * A plan in which P is at work exactly on the days that are already booked solid, and away for
+   * ever afterwards. Used by most of the P6 tests below, because it is the shape the measurement
+   * found: 18 of 48 exhausted searches over a grid of 80 plans had BOTH reasons, and none had
+   * capacity alone.
+   */
+  private val pDaBisFreitag: (String, LocalDate) -> Boolean = { _, tag -> tag < montag.plusDays(5) }
+
+  /** The first five working days of the shared pool, booked to the brim and frozen there. */
+  private fun ersteWocheVoll(pool: String = SHARED_POOL) =
+    LevelTask(id = "voll", orderInPlan = 0, priority = 5, durationDays = 5,
+      fixedStart = montag, frozen = true, loads = mapOf(pool to 100))
+
+  /**
+   * THE RED TEST OF THIS STAGE: the capacity dead end is no longer silent, and the message says
+   * WHICH Task and WHOSE days were full.
+   *
+   * The search bounces off the first week because it is booked solid, and off everything after it
+   * because P is gone. Neither reason on its own would end the plan -- the same plan with the
+   * booking removed finds a date, which is what makes the capacity half worth saying at all.
+   *
+   * IN ITS RED RUN this test asserted only that ONE conflict beyond the overload and P5's message
+   * existed, and it failed with
+   *
+   *   junit.framework.AssertionFailedError: der Kapazitaetsgrund faellt stumm zurueck: die Suche
+   *   prallte an belegten Tagen ab und meldet davon nichts, gemeldet wurde
+   *   [BlockingIntersectionEmpty(id=a, blocking=[p]), Overload(day=2026-08-17, percent=200,
+   *   ids=[voll, a], resourceId=)] expected:<1> but was:<0>
+   *
+   * Recorded here because the weaker form is the one that shows the state before this stage; the
+   * stronger one below could not even be compiled against it.
+   */
+  fun testACapacityDeadEndIsReported() {
+    val plan = listOf(ersteWocheVoll(),
+      task("a", 1).copy(blocking = setOf("p")))
+
+    val r = levelTasks(plan, montag, werktags, isAvailable = pDaBisFreitag)
+
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>()
+    assertEquals("genau eine Meldung fuer den einen Vorgang, gemeldet wurde: ${r.conflicts}",
+      1, gemeldet.size)
+    assertEquals("die Meldung muss den Vorgang nennen", "a", gemeldet[0].id)
+    assertEquals("die Meldung muss nennen, wessen Tage voll waren",
+      listOf(SHARED_POOL), gemeldet[0].fullFor)
+  }
+
+  /**
+   * BOTH REASONS, BOTH SAID. The same plan reports P5's message as well, and that is the reading
+   * chosen on 27.08.2026 rather than an accident: an exhausted search can have had two reasons,
+   * and relieving either one is enough, so naming only one of them hides a remedy.
+   *
+   * This is the assertion that would go red first if somebody later turned the two into an
+   * `else` -- which is exactly why it is written down as an assertion and not as a comment. It has
+   * been seen to do so: with an `else` put in, it failed with
+   *
+   *   junit.framework.AssertionFailedError: P6s Meldung muss danebenstehen expected:<1> but was:<0>
+   */
+  fun testBothReasonsAreReportedWhenBothApplied() {
+    val plan = listOf(ersteWocheVoll(),
+      task("a", 1).copy(blocking = setOf("p")))
+
+    val r = levelTasks(plan, montag, werktags, isAvailable = pDaBisFreitag)
+
+    assertEquals("P5s Meldung muss stehen bleiben", 1,
+      r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>().size)
+    assertEquals("P6s Meldung muss danebenstehen", 1,
+      r.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>().size)
+  }
+
+  /**
+   * NACHWEIS 1, and the one the whole stage stands or falls by: the message changes NOTHING about
+   * where the Task lies.
+   *
+   * The same plan twice -- once so that the capacity dead end is reached, once with the booking
+   * moved out of the way so that it is not. What is compared is not the two dates against each
+   * other (they differ, and they should) but the reported date against the date the SAME plan
+   * produced before the report existed. Since that state cannot be run from inside a test, the
+   * date is written out: 2026-08-17, the earliest possible one, measured on the state before this
+   * stage and unchanged by it.
+   *
+   * IT COULD NOT BE RED AGAINST THE STATE BEFORE THIS STAGE, and that is not a gap but the point:
+   * what it asserts is that the state before this stage is still the state now. A check nobody has
+   * ever seen fail is worth nothing all the same, so it was made to fail on purpose -- with the
+   * fallback moved one working day to the right it failed with
+   *
+   *   junit.framework.AssertionFailedError: der Rueckfall legt den Vorgang auf den
+   *   fruehestmoeglichen Termin -- dieselbe Zahl wie vor der Meldung
+   *   expected:<2026-08-17> but was:<2026-08-18>
+   *
+   * and the same breakage took `testAnImpossibleIntersectionEndsInsteadOfHanging` and
+   * `testTheReportDoesNotMoveTheTask` down with it -- P5's date guards, untouched and still
+   * holding.
+   */
+  fun testTheCapacityReportDoesNotMoveTheTask() {
+    val plan = listOf(ersteWocheVoll(),
+      task("a", 1).copy(blocking = setOf("p")))
+
+    val r = levelTasks(plan, montag, werktags, isAvailable = pDaBisFreitag)
+
+    assertEquals("der Rueckfall legt den Vorgang auf den fruehestmoeglichen Termin -- " +
+      "dieselbe Zahl wie vor der Meldung", montag, r.starts["a"])
+    assertEquals("und mit derselben Dauer", 1, r.durations["a"])
+    assertEquals("die Meldung darf auch die eingefrorene Arbeit nicht bewegen",
+      montag, r.starts["voll"])
+  }
+
+  /**
+   * NACHWEIS 2, and without it the message would be worth nothing: a plan that CAN be laid says
+   * nothing about capacity.
+   *
+   * The same booked first week, the same person -- but P stays for good. The Task moves behind
+   * the booked week, and that is an ordinary result of levelling, not a conflict. A version that
+   * reported every plan with a busy day in it would pass the test above and fail here -- measured:
+   * with the `exhausted` guard dropped it failed with
+   *
+   *   junit.framework.AssertionFailedError: ein loesbarer Fall darf keine Sackgasse melden,
+   *   gemeldet wurde: [NoDayWithCapacity(id=a, fullFor=[])]
+   */
+  fun testAPlanWithRoomReportsNoCapacityDeadEnd() {
+    val plan = listOf(ersteWocheVoll(),
+      task("a", 1).copy(blocking = setOf("p")))
+
+    val r = levelTasks(plan, montag, werktags, isAvailable = { _, _ -> true })
+
+    assertEquals("hinter der belegten Woche ist Platz", montag.plusDays(7), r.starts["a"])
+    assertTrue("ein loesbarer Fall darf keine Sackgasse melden, gemeldet wurde: ${r.conflicts}",
+      r.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>().isEmpty())
+  }
+
+  /**
+   * NACHWEIS 3: only the people the search really bounced off are named, not everybody the Task
+   * claims capacity from.
+   *
+   * The Task needs X and Y; only X is booked solid. Naming Y as well would put a name in front of
+   * somebody who has nothing to change, in a message whose entire job is to say what to change.
+   * This is where P6's message deliberately differs from P5's, which names the whole marked set --
+   * the two make different statements, so they carry different sets.
+   *
+   * IN ITS RED RUN, in the weak form that could be compiled against the state before this stage,
+   * it failed with
+   *
+   *   junit.framework.AssertionFailedError: nur x ist voll, y hat Platz -- gemeldet wird gar
+   *   nichts: [BlockingIntersectionEmpty(id=a, blocking=[p]), Overload(day=2026-08-17,
+   *   percent=200, ids=[voll, a], resourceId=x)] expected:<1> but was:<0>
+   *
+   * And it has been seen to fail in its strong form too, which is the part that matters here:
+   * with `task.pools` reported instead of `search.fullFor` it failed with
+   *
+   *   junit.framework.AssertionFailedError: nur x war voll, y hatte Platz
+   *   expected:<[x]> but was:<[x, y]>
+   */
+  fun testOnlyTheFullPeopleAreNamed() {
+    val plan = listOf(ersteWocheVoll("x"),
+      LevelTask(id = "a", orderInPlan = 1, priority = 2, durationDays = 1,
+        loads = mapOf("x" to 100, "y" to 100), blocking = setOf("p")))
+
+    val r = levelTasks(plan, montag, werktags, isAvailable = pDaBisFreitag)
+
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>()
+    assertEquals("gemeldet wurde: ${r.conflicts}", 1, gemeldet.size)
+    assertEquals("nur x war voll, y hatte Platz", listOf("x"), gemeldet[0].fullFor)
+  }
+
+  /**
+   * THE CASE THE STAGE IS NAMED AFTER, and it is here although it is slow and although the
+   * measurement says it practically cannot happen: capacity ALONE, with not a marking in the
+   * plan.
+   *
+   * WHY IT TAKES SO ABSURD A PLAN, measured rather than assumed. A completely free day always
+   * fits, because the limit in `findEarliestWindow` is at least the Task's own load. So the search
+   * only gives up when every one of 50 000 working days is booked -- some 190 years. A single
+   * frozen Task cannot even do it: `workingDays` carries the same bound in CALENDAR days and tops
+   * out at 35 715 working days, measured. It takes three chained blocks, booking every working day
+   * into the 2260s.
+   *
+   * WHY IT IS WORTH THE SECONDS IT COSTS ANYWAY -- and it costs 5.5 of them, measured, against
+   * 0.05 for every other test in this file: this is the only test in which P5's message cannot be
+   * what fires, so it is the only one that proves P6's message stands on its own feet rather than
+   * riding along beside its neighbour. If the suite ever has to be made faster, this is a
+   * candidate; deleting it would leave the pure case unpinned, so it should be moved rather than
+   * dropped.
+   *
+   * IN ITS RED RUN it failed with
+   *
+   *   junit.framework.AssertionFailedError: kein Tag hat Platz, und die Verteilung sagt nichts
+   *   dazu expected:<1> but was:<0>
+   */
+  fun testAPureCapacityDeadEndIsReported() {
+    // Each block claims 21 000 working days (~29 400 calendar days) and the blocks start 28 000
+    // calendar days apart, so they overlap and leave no gap for the Task to slip into.
+    val plan = (0 until 3).map { i ->
+      LevelTask(id = "voll$i", orderInPlan = i, priority = 5, durationDays = 21_000,
+        fixedStart = montag.plusDays(28_000L * i), frozen = true,
+        loads = mapOf(SHARED_POOL to 100))
+    } + task("a", 1, reihe = 3)
+
+    val r = levelTasks(plan, montag, werktags)
+
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>()
+    assertEquals("ohne einen einzigen freien Tag muss die Sackgasse gemeldet werden", 1,
+      gemeldet.size)
+    assertEquals("a", gemeldet[0].id)
+    assertTrue("hier ist keine Markierung im Spiel, P5s Meldung darf nicht feuern",
+      r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>().isEmpty())
+    assertEquals("und der Vorgang liegt weiter auf dem fruehestmoeglichen Termin",
+      montag, r.starts["a"])
+  }
+
+  /**
+   * THE COUNTER-CHECK AGAINST REPORTING EVERY BUSY PLAN: an ordinary plan, in which Tasks queue
+   * up behind one another exactly as levelling is meant to make them, reports no dead end at all.
+   *
+   * Two full Tasks for one person: the second waits for the first. Days were rejected for
+   * capacity along the way -- that is what levelling does -- and none of it is a conflict,
+   * because the search found a window. The same breakage as above took this one down too:
+   *
+   *   junit.framework.AssertionFailedError: eine gewoehnliche Warteschlange ist keine Sackgasse:
+   *   [NoDayWithCapacity(id=b, fullFor=[])]
+   */
+  fun testAnOrdinaryQueueReportsNothing() {
+    val r = levelTasks(listOf(task("a", 3), task("b", 2, reihe = 1)), montag, werktags)
+
+    assertTrue("eine gewoehnliche Warteschlange ist keine Sackgasse: ${r.conflicts}",
+      r.conflicts.isEmpty())
+  }
 }

@@ -90,6 +90,43 @@ internal fun blockedIntersectionText(
   return text.toString()
 }
 
+/**
+ * The block of the preview that reports [LevelConflict.NoDayWithCapacity].
+ *
+ * BUILT LIKE [blockedIntersectionText] BESIDE IT AND NOT SHARED WITH IT, and that is a decision
+ * rather than duplication left lying about. The two do look alike -- a heading, up to five rows,
+ * "and n more" -- but they say different things about different sets, and the shared form they
+ * would need is a third abstraction over two callers. Worth noting: pulling the two together
+ * would mean reshaping P5's message, and P5's message was to stay exactly as it is. If a third
+ * block of this shape ever appears, this is the place to reconsider from.
+ *
+ * @param personName how a resource id becomes the name in the plan. [SHARED_POOL] is NOT passed
+ * through it -- that is not a person but the pool of the unassigned Tasks, and it has a text of
+ * its own. Handing an empty string to the name lookup would put a blank in the middle of a
+ * sentence and read as a bug.
+ */
+internal fun capacityWindowText(
+  conflicts: List<LevelConflict.NoDayWithCapacity>,
+  taskName: (String) -> String,
+  personName: (String) -> String
+): String {
+  if (conflicts.isEmpty()) {
+    return ""
+  }
+  val text = StringBuilder(forkText("fork.levelling.nocapacity", conflicts.size))
+  conflicts.take(5).forEach { conflict ->
+    text.append("\n  • ").append(forkText("fork.levelling.nocapacity.row",
+      taskName(conflict.id),
+      conflict.fullFor.joinToString(", ") {
+        if (it == SHARED_POOL) forkText("fork.levelling.nocapacity.shared") else personName(it)
+      }))
+  }
+  if (conflicts.size > 5) {
+    text.append("\n  … ").append(forkText("fork.levelling.more", conflicts.size - 5))
+  }
+  return text.toString()
+}
+
 /** Derive the effort from the duration and assign everything to one person. */
 class BackfillAction(
   private val taskManager: TaskManager,
@@ -294,6 +331,21 @@ class LevellingAction(
         { id -> taskManager.getTask(id.toIntOrNull() ?: 0)?.name ?: id },
         // The blocking people are named by resource id -- the same string the capacity pools use,
         // see `LevellingAdapter.toLevelTask`. Turning it back into a name is this side's job.
+        { id -> resourceManager.getById(id.toIntOrNull() ?: -1)?.name ?: id }))
+    }
+    // THE CAPACITY DEAD END, directly under the block above and for the same reason it stands
+    // where it stands: these two are the only entries in this list that report a date the
+    // calculation itself calls wrong. They belong together and above everything that is merely
+    // tight or merely late.
+    //
+    // THE SAME TASK CAN APPEAR IN BOTH BLOCKS. That is not a mistake in the preview: an exhausted
+    // search can have had both reasons, and then both are true and both are worth acting on --
+    // relieving either one is often enough. The measurement behind that sentence is in the P6
+    // report.
+    val ohnePlatz = result.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>()
+    if (ohnePlatz.isNotEmpty()) {
+      message.append("\n\n").append(capacityWindowText(ohnePlatz,
+        { id -> taskManager.getTask(id.toIntOrNull() ?: 0)?.name ?: id },
         { id -> resourceManager.getById(id.toIntOrNull() ?: -1)?.name ?: id }))
     }
     if (overloads.isNotEmpty()) {
