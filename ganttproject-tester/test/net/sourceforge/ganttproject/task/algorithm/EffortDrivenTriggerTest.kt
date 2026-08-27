@@ -423,6 +423,115 @@ class EffortDrivenTriggerTest : TestCase() {
     assertEquals("and it must not hit the pass limit either: $errors", 0, errors.size)
   }
 
+  /**
+   * W3 -- A2's correction has to reach the scheduler report, and today it does not.
+   *
+   * `ProjectOpenStrategy` hangs a real `ProjectOpenDiagnosticImpl` on the scheduler while a
+   * project is being opened, and everything the scheduler reports through `addModifiedTask` ends
+   * up in the "Scheduler report" dialog. A2 changes the duration from inside that same scheduler
+   * run and reports nothing, so the dialog says nothing -- measured on 27 August 2026: a project
+   * whose only correction comes from A2 opens without any dialog at all, while the same project
+   * opened on stock GanttProject, where the scheduler moves a task, does show one.
+   *
+   * The shape A2 needs is `addModifiedTask(task, null, newEnd)` -- no new start, only a new end.
+   * That is what sets `myHasOnlyEndDateChange` and produces the section the bundle already calls
+   * "Duration changed / The following tasks have changed their end date and duration".
+   * Measured with a throwaway probe against the built classes: the flag does become true for that
+   * shape.
+   */
+  fun testA2CorrectionIsReportedToTheDiagnostic() {
+    val (tasks, resources) = weekendProject()
+    val person = resources.getById(1)
+    val predecessor = tasks.newTaskBuilder().withName("A").withStartDate(september(7)).build()
+    val task = tasks.newTaskBuilder().withName("B").withStartDate(september(7)).build()
+    tasks.dependencyCollection.createDependency(task, predecessor)
+    setEffortOn(tasks, task, 40.0)
+    task.assignmentCollection.addAssignment(person).load = 100f
+    tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
+    tasks.algorithmCollection.scheduler.run()
+    assertEquals("setup: five working days before the holiday", 5, durationDays(task))
+
+    // The holiday arrives, and the plan is settled apart from it.
+    person.addDaysOff(GanttDaysOff(september(9), september(10)))
+    tasks.algorithmCollection.scheduler.run()
+    assertEquals("setup: A2 has corrected the duration", 6, durationDays(task))
+
+    // Now the same situation as when a project is opened: a diagnostic is hung on the scheduler
+    // and it runs once. Whatever it corrects has to show up there.
+    val ends = mutableMapOf<String, Date?>()
+    val starts = mutableMapOf<String, Date?>()
+    tasks.algorithmCollection.scheduler.setDiagnostic(object : AlgorithmBase.Diagnostic {
+      override fun addModifiedTask(t: Task, newStart: Date?, newEnd: Date?) {
+        if (newStart != null) starts[t.name] = newStart
+        if (newEnd != null) ends[t.name] = newEnd
+      }
+      override fun logError(ex: Exception) {}
+    })
+    // Put the duration back to what the file would carry, so the run has something to correct.
+    task.createMutator().let { it.setDuration(tasks.createLength(5)); it.commit() }
+    tasks.algorithmCollection.scheduler.run()
+
+    assertEquals("A2 corrected the duration, so it must say so", 6, durationDays(task))
+    assertTrue(
+      "the scheduler report must name the task whose duration A2 corrected -- it does not today, "
+        + "ends=$ends starts=$starts",
+      ends.containsKey("B"))
+  }
+
+  /**
+   * PINS UPSTREAM BEHAVIOUR, not ours: a task that the scheduler moves AND whose duration A2
+   * corrects in the same run is reported as moved only.
+   *
+   * `ProjectOpenDiagnosticImpl.addModifiedTask` merges every report about one task into a single
+   * entry, and `buildEndDateChangeTable` lists only entries whose start is null. So as soon as a
+   * start is recorded, the duration change drops out of the "Duration changed" section -- the
+   * task appears under "Moved tasks" with its new begin date and nothing says that it also got
+   * longer.
+   *
+   * That merging is deliberate upstream behaviour and is deliberately NOT worked around: making
+   * one entry appear in two tables would mean rebuilding an original file for a cosmetic gain.
+   * This test exists so the behaviour is recorded rather than asserted, and so that it shows up
+   * here if upstream ever changes the merging.
+   */
+  fun testAMovedAndLengthenedTaskIsReportedAsMovedOnly() {
+    val (tasks, resources) = weekendProject()
+    val person = resources.getById(1)
+    val predecessor = tasks.newTaskBuilder().withName("A").withStartDate(september(7)).build()
+    val task = tasks.newTaskBuilder().withName("B").withStartDate(september(7)).build()
+    tasks.dependencyCollection.createDependency(task, predecessor)
+    setEffortOn(tasks, task, 40.0)
+    task.assignmentCollection.addAssignment(person).load = 100f
+    person.addDaysOff(GanttDaysOff(september(9), september(10)))
+    tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
+    tasks.algorithmCollection.scheduler.run()
+
+    // Force BOTH: the start has to move (the task is put back before its predecessor's end) and
+    // the duration has to be wrong (put back to the value a file without days off would carry).
+    val starts = mutableMapOf<String, Date?>()
+    val ends = mutableMapOf<String, Date?>()
+    tasks.algorithmCollection.scheduler.setDiagnostic(object : AlgorithmBase.Diagnostic {
+      override fun addModifiedTask(t: Task, newStart: Date?, newEnd: Date?) {
+        if (newStart != null) starts[t.name] = newStart
+        if (newEnd != null) ends[t.name] = newEnd
+      }
+      override fun logError(ex: Exception) {}
+    })
+    task.createMutator().let {
+      it.setStart(CalendarFactory.createGanttCalendar(september(7)))
+      it.setDuration(tasks.createLength(5))
+      it.commit()
+    }
+    tasks.algorithmCollection.scheduler.run()
+
+    assertTrue("the scheduler had to move it: starts=$starts", starts.containsKey("B"))
+    assertEquals("and the duration was corrected as well", 6, durationDays(task))
+    // The diagnostic keeps ONE entry per task, and a recorded start wins the table.
+    // ProjectOpenDiagnosticImpl puts such a task into the start-date table only.
+    assertTrue(
+      "recorded as moved -- that is what decides the table it lands in",
+      starts["B"] != null)
+  }
+
   /** The effort column belongs to the task manager whose task it is. */
   private fun setEffortOn(manager: TaskManager, task: Task, hours: Double) {
     val def = EffortDrivenProperties.findOrCreateTaskEffort(manager.customPropertyManager)

@@ -1002,28 +1002,35 @@ public class TaskManagerImpl implements TaskManager {
    * keeps the duration it has; this hook adds information, it never takes any away.
    *
    * It does NOT reach a task that has neither a predecessor nor an earliest-begin constraint --
-   * the scheduler never calls modifyTaskStart for such a task. That head case is a separate step.
+   * the scheduler never calls modifyTaskStart for such a task. That head case is handled by the
+   * second entry point in SchedulerImpl.
+   *
+   * RETURNS the task's new end when it wrote a duration, and null when it wrote nothing. The
+   * scheduler uses that to report the change through its diagnostic; see
+   * SchedulerImpl.deriveDuration.
    */
-  private void deriveDurationWithDaysOff(Task task, java.util.Date plannedStart) {
+  private java.util.Date deriveDurationWithDaysOff(Task task, java.util.Date plannedStart) {
     HumanResourceManager resourceManager = getConfig().getResourceManager();
     if (resourceManager == null || plannedStart == null) {
-      return;
+      return null;
     }
     Integer days = DaysOffDurationKt.durationDaysWithDaysOff(
         task, getCustomPropertyManager(), resourceManager.getCustomPropertyManager(),
         LegacyDatesKt.toModelLocalDate(plannedStart),
         LevellingAdapterKt.workingDayTest(getCalendar()));
     if (days == null) {
-      return;
+      return null;
     }
     TimeDuration newDuration = createLength(days.longValue());
     TimeDuration current = task.getDuration();
     if (current.getTimeUnit().equals(newDuration.getTimeUnit()) && current.getLength() == newDuration.getLength()) {
-      return;
+      return null;
     }
     TaskMutator mutator = task.createMutator();
     mutator.setDuration(newDuration);
     mutator.commit();
+    // After the commit, so it is the end the task really has now.
+    return task.getEnd() == null ? null : task.getEnd().getTime();
   }
 
   @Override

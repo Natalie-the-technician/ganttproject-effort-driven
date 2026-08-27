@@ -38,7 +38,7 @@ import net.sourceforge.ganttproject.task.algorithm.DependencyGraph.ImplicitSubSu
 import net.sourceforge.ganttproject.task.algorithm.DependencyGraph.Node;
 
 import java.util.Collection;
-import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -62,12 +62,16 @@ public class SchedulerImpl extends AlgorithmBase {
    * The scheduler carries the dependency graph and the hierarchy and nothing else; effort and the
    * daily availability of the people hang off the CustomPropertyManager, which lives on the other
    * side of the model. Rather than teach this class about resources, it takes the derivation as a
-   * callback. It is a plain BiConsumer on purpose: no new type, no fork import in this file.
+   * callback. It is a plain BiFunction on purpose: no new type, no fork import in this file.
    *
-   * The default does nothing, so the two-argument constructor -- the one the tests use -- behaves
+   * It returns the task's NEW END when it changed the duration, and null when it changed nothing --
+   * no effort recorded, nobody assigned, or the duration was already right. The return value is
+   * evidence of what happened, not a request to write: the derivation itself does the writing.
+   *
+   * The default returns null, so the two-argument constructor -- the one the tests use -- behaves
    * exactly as before.
    */
-  private final BiConsumer<Task, Date> myDurationDerivation;
+  private final BiFunction<Task, Date, Date> myDurationDerivation;
 
   /** [fork change] Set by modifyTaskStart/modifyTaskEnd when they really change something. */
   private boolean myTaskChanged;
@@ -83,12 +87,12 @@ public class SchedulerImpl extends AlgorithmBase {
   static final int MAX_PASSES = 3;
 
   public SchedulerImpl(DependencyGraph graph, Supplier<TaskContainmentHierarchyFacade> taskHierarchy) {
-    this(graph, taskHierarchy, (task, plannedStart) -> { });
+    this(graph, taskHierarchy, (task, plannedStart) -> null);
   }
 
   /** [fork change] The three-argument form: same scheduler, plus the duration derivation. */
   public SchedulerImpl(DependencyGraph graph, Supplier<TaskContainmentHierarchyFacade> taskHierarchy,
-                       BiConsumer<Task, Date> durationDerivation) {
+                       BiFunction<Task, Date, Date> durationDerivation) {
     myGraph = graph;
     myTaskHierarchy = taskHierarchy;
     myDurationDerivation = durationDerivation;
@@ -246,7 +250,7 @@ public class SchedulerImpl extends AlgorithmBase {
       // What is left is a leaf with no predecessor and no constraint. Exactly the head case.
       //
       // The task is not being moved, so the derivation is asked about the start it already has.
-      myDurationDerivation.accept(node.getTask(), node.getTask().getStart().getTime());
+      deriveDuration(node.getTask(), node.getTask().getStart().getTime());
     }
     if (endRange.hasUpperBound()) {
       GPCalendarCalc cal = node.getTask().getManager().getCalendar();
@@ -275,6 +279,36 @@ public class SchedulerImpl extends AlgorithmBase {
     }
   }
 
+  /**
+   * [fork change] Runs the duration derivation and reports what it did, the same way
+   * {@link #modifyTaskEnd} reports an end it moved itself.
+   *
+   * WHY IT REPORTS AT ALL: while a project is being opened, ProjectOpenStrategy hangs a real
+   * diagnostic on this scheduler and shows everything it collected in the "Scheduler report"
+   * dialog afterwards. A correction that is applied silently there leaves the file and the screen
+   * disagreeing with nobody told. Outside of opening the diagnostic is either the DiagnosticStub,
+   * whose addModifiedTask is empty, or null -- so this cannot produce a dialog during normal work.
+   *
+   * WHY (task, null, newEnd) AND NOT A START: the derivation changes the duration, never the
+   * start. That shape is what sets ProjectOpenDiagnosticImpl.myHasOnlyEndDateChange and puts the
+   * task into the section the text bundle calls "Duration changed / The following tasks have
+   * changed their end date and duration".
+   *
+   * WHAT THIS DELIBERATELY DOES NOT REACH, so that nobody reads it as a defect in the derivation:
+   * a task that the scheduler MOVES in the same run does not appear in that section.
+   * ProjectOpenDiagnosticImpl.addModifiedTask merges both reports into ONE entry per task, and
+   * buildEndDateChangeTable only lists entries whose start is null. The task then shows up under
+   * "Moved tasks" with its new begin date, and the fact that its duration changed as well is not
+   * stated. That merging is deliberate upstream behaviour and is left alone; the test
+   * `a task that is moved and lengthened is reported as moved only` pins it.
+   */
+  private void deriveDuration(Task task, Date plannedStart) {
+    Date newEnd = myDurationDerivation.apply(task, plannedStart);
+    if (newEnd != null && getDiagnostic() != null) {
+      getDiagnostic().addModifiedTask(task, null, newEnd);
+    }
+  }
+
   private void modifyTaskEnd(Task task, Date newEnd) {
     if (task.getEnd().getTime().equals(newEnd)) {
       return;
@@ -299,7 +333,7 @@ public class SchedulerImpl extends AlgorithmBase {
     //
     // The early return itself is left exactly as it was. It carries the diagnostic when a project
     // is opened; without it every task in the project would stand in the "these have moved" list.
-    myDurationDerivation.accept(task, newStart);
+    deriveDuration(task, newStart);
     if (task.getStart().getTime().equals(newStart)) {
       return;
     }
