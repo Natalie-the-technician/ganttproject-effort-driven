@@ -21,6 +21,9 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject.task.algorithm
 
 import biz.ganttproject.core.calendar.AlwaysWorkingTimeCalendarImpl
+import biz.ganttproject.core.calendar.GanttDaysOff
+import biz.ganttproject.core.calendar.WeekendCalendarImpl
+import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.calendar.GPCalendarCalc
 import biz.ganttproject.core.option.BooleanOption
 import biz.ganttproject.core.option.ColorOption
@@ -40,6 +43,9 @@ import net.sourceforge.ganttproject.task.TaskManager
 import net.sourceforge.ganttproject.task.TaskManagerConfig
 import java.awt.Color
 import java.net.URL
+import java.text.DateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Tests that a change to the resources actually reaches the duration — the step that stock
@@ -54,6 +60,20 @@ class EffortDrivenTriggerTest : TestCase() {
   private lateinit var taskManager: TaskManager
   private lateinit var resourceManager: HumanResourceManager
   private lateinit var resourceProperties: CustomColumnsManager
+
+  init {
+    // GanttDaysOff builds GanttCalendars, and those need a locale. Same bootstrap as
+    // LevellingWriteBackTest.
+    object : CalendarFactory() {
+      init {
+        setLocaleApi(object : CalendarFactory.LocaleApi {
+          override fun getLocale(): Locale = Locale.GERMANY
+          override fun getShortDateFormat(): DateFormat =
+            DateFormat.getDateInstance(DateFormat.SHORT, Locale.GERMANY)
+        })
+      }
+    }
+  }
 
   override fun setUp() {
     super.setUp()
@@ -217,5 +237,304 @@ class EffortDrivenTriggerTest : TestCase() {
     assertTrue("typing the effort into the table must recalculate too",
       before != durationDays(task))
     assertEquals(10, durationDays(task))
+  }
+
+  // ---- P1: days off ------------------------------------------------------------------------
+
+  /** A day in September 2026. Month is zero-based, as everywhere in GanttCalendar. */
+  private fun september(day: Int): Date = CalendarFactory.createGanttCalendar(2026, 8, day).time
+
+  /**
+   * A second project of its own, with a REAL calendar instead of the always-working one: a day
+   * off has to fall on a day that is a working day to begin with, and the always-working calendar
+   * knows no weekends. Template: `LevellingWriteBackTest.calendarWithHolidayBlock`.
+   *
+   * It cannot reuse `setUp`'s manager -- the calendar is fixed when the manager is built.
+   */
+  private fun weekendProject(): Pair<TaskManager, HumanResourceManager> {
+    val properties = CustomColumnsManager()
+    val resources = HumanResourceManager(
+      RoleManager.Access.getInstance().defaultRole, properties)
+    resources.create("Person", 1)
+    val tasks = TaskManager.Access.newInstance(null, object : TaskManagerConfig {
+      override fun getDefaultColor(): Color? = null
+      override fun getDefaultColorOption(): ColorOption? = null
+      override fun getCalendar(): GPCalendarCalc = WeekendCalendarImpl()
+      override fun getTimeUnitStack(): TimeUnitStack = GPTimeUnitStack()
+      override fun getResourceManager(): HumanResourceManager = resources
+      override fun getProjectDocumentURL(): URL? = null
+      override fun getNotificationManager(): NotificationManager? = null
+      override fun getSchedulerDisabledOption(): BooleanOption =
+        DefaultBooleanOption("scheduler.disabled", false)
+    })
+    resources.addView(EffortDrivenTrigger(tasks))
+    // The hours per day live on the resource manager's property set, not on the task manager's.
+    val hours = properties.definitions.firstOrNull { it.name == "hours_per_day" }
+      ?: properties.createDefinition(CustomPropertyClass.DOUBLE, "hours_per_day", null)
+    resources.getById(1).setValue(hours, 8.0)
+    return tasks to resources
+  }
+
+  /**
+   * P1 FROM THE MAP OF 24 August 2026 -- the ground check of the whole days-off idea, and it
+   * PINS TODAY'S WRONG ANSWER ON PURPOSE. Read the last paragraph before changing anything.
+   *
+   * The setup is the one named in the map: one person at 8 h a day, one task of 40 h of effort
+   * starting on a Monday, so five days. Then that person books holiday in the middle of the task.
+   * The task must take longer. It does not.
+   *
+   * WHY IT DOES NOT. `getDaysOff()` has exactly one consumer in the whole tree,
+   * `LoadDistribution.processDaysOff`, and that one paints the load chart. NOTHING reads it while
+   * a duration is computed. `EffortDrivenDurationAlgorithm` divides the effort by the daily hours
+   * and asks the CALENDAR for weekends and public holidays -- a person's own absence is not among
+   * them. So the task stays at five days and the plan promises work on days on which nobody is
+   * there. Seen red on 25 August 2026, verbatim:
+   *
+   *     junit.framework.AssertionFailedError: a person's holiday must lengthen the task
+   *     -- it does not today, see the comment expected:<6> but was:<5>
+   *
+   * WHY IT IS PINNED AT 5 RATHER THAN LEFT RED OR SKIPPED. Skipping is not available here:
+   * measured on 25 August 2026 in this very class, `org.junit.Assume.assumeTrue` is reported as
+   * `<failure> org.junit.AssumptionViolatedException` and `Assumptions.assumeTrue` as
+   * `<failure> org.opentest4j.TestAbortedException`, with `skipped="0"` -- this class is a
+   * `junit.framework.TestCase` and its runner treats an aborted assumption as an error. A
+   * permanently red test would be worse still: it hides real failures and makes "N tests, 0 red"
+   * useless as a criterion.
+   *
+   * So it records what the program does today, and it is a TRIPWIRE ON THE FIX: the moment days
+   * off reach the duration, this test goes red and whoever did it has to come here and say which
+   * number is right. That cannot happen quietly.
+   *
+   * WHEN YOU TURN IT AROUND: the expected value becomes SIX if `GanttDaysOff`'s finish is
+   * exclusive -- that is what the map's P1 assumes -- and SEVEN if it is inclusive, because then
+   * `GanttDaysOff(Wed, Thu)` is two lost working days rather than one. THAT DECISION HAS NOT BEEN
+   * TAKEN; it is finding 1.3 of the map, and `isADayOff` has no caller to settle it. Today the
+   * measured value is five either way, so nothing here depends on it.
+   */
+  fun testHolidayDoesNotYetReachTheDuration() {
+    val (tasks, resources) = weekendProject()
+    val person = resources.getById(1)
+    // Monday, 7 September 2026.
+    val task = tasks.newTaskBuilder().withName("P1").withStartDate(september(7)).build()
+    setEffortOn(tasks, task, 40.0)
+    task.assignmentCollection.addAssignment(person).load = 100f
+    tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
+
+    assertEquals("setup: 40 h at 8 h a day are five days", 5, durationDays(task))
+
+    // Wednesday and Thursday of that same week -- inside the task, and working days.
+    person.addDaysOff(GanttDaysOff(september(9), september(10)))
+    tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
+
+    // Guard against passing for the wrong reason: the holiday has to have been registered at all.
+    // Without this the test would still be green if addDaysOff silently did nothing.
+    assertEquals("the holiday must be on the person", 1, person.daysOff.size)
+
+    assertEquals(
+      "THE HEAD CASE: this task has neither a predecessor nor an earliest-begin constraint, so "
+        + "the scheduler never calls modifyTaskStart for it and the first A2 hook does not reach "
+        + "it. The second entry point closes exactly that gap. Five working days of effort plus "
+        + "one day off is SIX -- six and not seven because GanttDaysOff's finish is EXCLUSIVE, so "
+        + "GanttDaysOff(Wed, Thu) is Wednesday alone.",
+      6, durationDays(task))
+  }
+
+  /**
+   * A2 -- the tripwire for the days-off derivation.
+   *
+   * Same setup as P1, but the task has a PREDECESSOR. That is the whole difference, and it is the
+   * difference that matters: with a predecessor the scheduler calls `modifyTaskStart`, which is
+   * where A2 hangs. Without one it does not, which is why P1 above still reads five.
+   *
+   * Five working days of effort, one day off inside the task, so SIX. Six and not seven because
+   * `GanttDaysOff`'s finish is EXCLUSIVE -- `GanttDaysOff(Wed, Thu)` is Wednesday alone. That is
+   * not a decision taken here: it is what `DateInterval`, `GanttDialogPerson`,
+   * `ProjectFileImporterImpl` and `LoadDistribution` all do. `GanttDaysOff.isADayOff` reads it
+   * inclusively and contradicts them, but it has no caller (finding F24).
+   *
+   * Seen red before the fix, verbatim:
+   *
+   *     junit.framework.AssertionFailedError: a day off inside the successor must lengthen it
+   *     expected:<6> but was:<5>
+   */
+  fun testHolidayInsideASuccessorLengthensIt() {
+    val (tasks, resources) = weekendProject()
+    val person = resources.getById(1)
+    // Monday, 7 September 2026.
+    val predecessor = tasks.newTaskBuilder().withName("A").withStartDate(september(7)).build()
+    val task = tasks.newTaskBuilder().withName("B").withStartDate(september(7)).build()
+    tasks.dependencyCollection.createDependency(task, predecessor)
+
+    setEffortOn(tasks, task, 40.0)
+    task.assignmentCollection.addAssignment(person).load = 100f
+    tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
+    tasks.algorithmCollection.scheduler.run()
+    assertEquals("setup: 40 h at 8 h a day are five days", 5, durationDays(task))
+
+    // Inside the task and a working day: the Wednesday of the week the successor starts in.
+    person.addDaysOff(GanttDaysOff(september(9), september(10)))
+    assertEquals("the holiday must be on the person", 1, person.daysOff.size)
+    tasks.algorithmCollection.scheduler.run()
+
+    assertEquals("a day off inside the successor must lengthen it", 6, durationDays(task))
+  }
+
+  /**
+   * WHAT THE EARLY RETURN AT `modifyTaskStart` PROTECTS, and that A2 must not break.
+   *
+   * That return is what keeps the "the following tasks have moved" dialog quiet when a project is
+   * opened that has not moved at all. Without it every task in the project would stand in that
+   * list. A2's hook sits BEFORE the return, so it is exactly the place where such a regression
+   * would appear -- hence this check rather than an argument.
+   *
+   * A settled plan, a diagnostic hung on the scheduler, one more run: nothing may be reported.
+   */
+  fun testASettledPlanReportsNothingThroughTheDiagnostic() {
+    val (tasks, resources) = weekendProject()
+    val person = resources.getById(1)
+    val predecessor = tasks.newTaskBuilder().withName("A").withStartDate(september(7)).build()
+    val task = tasks.newTaskBuilder().withName("B").withStartDate(september(7)).build()
+    tasks.dependencyCollection.createDependency(task, predecessor)
+    setEffortOn(tasks, task, 40.0)
+    task.assignmentCollection.addAssignment(person).load = 100f
+    // A HEAD TASK as well -- no predecessor, no constraint. Since the second entry point exists,
+    // such a task is touched by the derivation on every single pass, so if anything is going to
+    // report a phantom movement it is this one.
+    val head = tasks.newTaskBuilder().withName("H").withStartDate(september(7)).build()
+    setEffortOn(tasks, head, 24.0)
+    head.assignmentCollection.addAssignment(person).load = 100f
+    tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
+    tasks.algorithmCollection.scheduler.run()
+
+    // Everything has settled by now. From here on the scheduler must report nothing at all.
+    val reported = mutableListOf<String>()
+    val errors = mutableListOf<String>()
+    tasks.algorithmCollection.scheduler.setDiagnostic(object : AlgorithmBase.Diagnostic {
+      override fun addModifiedTask(t: Task, newStart: Date?, newEnd: Date?) {
+        reported.add(t.name)
+      }
+      override fun logError(ex: Exception) {
+        errors.add(ex.message ?: "")
+      }
+    })
+    tasks.algorithmCollection.scheduler.run()
+
+    assertEquals("a settled plan must not report a single moved task: $reported", 0, reported.size)
+    assertEquals("and it must not hit the pass limit either: $errors", 0, errors.size)
+  }
+
+  /**
+   * W3 -- A2's correction has to reach the scheduler report, and today it does not.
+   *
+   * `ProjectOpenStrategy` hangs a real `ProjectOpenDiagnosticImpl` on the scheduler while a
+   * project is being opened, and everything the scheduler reports through `addModifiedTask` ends
+   * up in the "Scheduler report" dialog. A2 changes the duration from inside that same scheduler
+   * run and reports nothing, so the dialog says nothing -- measured on 27 August 2026: a project
+   * whose only correction comes from A2 opens without any dialog at all, while the same project
+   * opened on stock GanttProject, where the scheduler moves a task, does show one.
+   *
+   * The shape A2 needs is `addModifiedTask(task, null, newEnd)` -- no new start, only a new end.
+   * That is what sets `myHasOnlyEndDateChange` and produces the section the bundle already calls
+   * "Duration changed / The following tasks have changed their end date and duration".
+   * Measured with a throwaway probe against the built classes: the flag does become true for that
+   * shape.
+   */
+  fun testA2CorrectionIsReportedToTheDiagnostic() {
+    val (tasks, resources) = weekendProject()
+    val person = resources.getById(1)
+    val predecessor = tasks.newTaskBuilder().withName("A").withStartDate(september(7)).build()
+    val task = tasks.newTaskBuilder().withName("B").withStartDate(september(7)).build()
+    tasks.dependencyCollection.createDependency(task, predecessor)
+    setEffortOn(tasks, task, 40.0)
+    task.assignmentCollection.addAssignment(person).load = 100f
+    tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
+    tasks.algorithmCollection.scheduler.run()
+    assertEquals("setup: five working days before the holiday", 5, durationDays(task))
+
+    // The holiday arrives, and the plan is settled apart from it.
+    person.addDaysOff(GanttDaysOff(september(9), september(10)))
+    tasks.algorithmCollection.scheduler.run()
+    assertEquals("setup: A2 has corrected the duration", 6, durationDays(task))
+
+    // Now the same situation as when a project is opened: a diagnostic is hung on the scheduler
+    // and it runs once. Whatever it corrects has to show up there.
+    val ends = mutableMapOf<String, Date?>()
+    val starts = mutableMapOf<String, Date?>()
+    tasks.algorithmCollection.scheduler.setDiagnostic(object : AlgorithmBase.Diagnostic {
+      override fun addModifiedTask(t: Task, newStart: Date?, newEnd: Date?) {
+        if (newStart != null) starts[t.name] = newStart
+        if (newEnd != null) ends[t.name] = newEnd
+      }
+      override fun logError(ex: Exception) {}
+    })
+    // Put the duration back to what the file would carry, so the run has something to correct.
+    task.createMutator().let { it.setDuration(tasks.createLength(5)); it.commit() }
+    tasks.algorithmCollection.scheduler.run()
+
+    assertEquals("A2 corrected the duration, so it must say so", 6, durationDays(task))
+    assertTrue(
+      "the scheduler report must name the task whose duration A2 corrected -- it does not today, "
+        + "ends=$ends starts=$starts",
+      ends.containsKey("B"))
+  }
+
+  /**
+   * PINS UPSTREAM BEHAVIOUR, not ours: a task that the scheduler moves AND whose duration A2
+   * corrects in the same run is reported as moved only.
+   *
+   * `ProjectOpenDiagnosticImpl.addModifiedTask` merges every report about one task into a single
+   * entry, and `buildEndDateChangeTable` lists only entries whose start is null. So as soon as a
+   * start is recorded, the duration change drops out of the "Duration changed" section -- the
+   * task appears under "Moved tasks" with its new begin date and nothing says that it also got
+   * longer.
+   *
+   * That merging is deliberate upstream behaviour and is deliberately NOT worked around: making
+   * one entry appear in two tables would mean rebuilding an original file for a cosmetic gain.
+   * This test exists so the behaviour is recorded rather than asserted, and so that it shows up
+   * here if upstream ever changes the merging.
+   */
+  fun testAMovedAndLengthenedTaskIsReportedAsMovedOnly() {
+    val (tasks, resources) = weekendProject()
+    val person = resources.getById(1)
+    val predecessor = tasks.newTaskBuilder().withName("A").withStartDate(september(7)).build()
+    val task = tasks.newTaskBuilder().withName("B").withStartDate(september(7)).build()
+    tasks.dependencyCollection.createDependency(task, predecessor)
+    setEffortOn(tasks, task, 40.0)
+    task.assignmentCollection.addAssignment(person).load = 100f
+    person.addDaysOff(GanttDaysOff(september(9), september(10)))
+    tasks.algorithmCollection.effortDrivenDurationAlgorithm.run()
+    tasks.algorithmCollection.scheduler.run()
+
+    // Force BOTH: the start has to move (the task is put back before its predecessor's end) and
+    // the duration has to be wrong (put back to the value a file without days off would carry).
+    val starts = mutableMapOf<String, Date?>()
+    val ends = mutableMapOf<String, Date?>()
+    tasks.algorithmCollection.scheduler.setDiagnostic(object : AlgorithmBase.Diagnostic {
+      override fun addModifiedTask(t: Task, newStart: Date?, newEnd: Date?) {
+        if (newStart != null) starts[t.name] = newStart
+        if (newEnd != null) ends[t.name] = newEnd
+      }
+      override fun logError(ex: Exception) {}
+    })
+    task.createMutator().let {
+      it.setStart(CalendarFactory.createGanttCalendar(september(7)))
+      it.setDuration(tasks.createLength(5))
+      it.commit()
+    }
+    tasks.algorithmCollection.scheduler.run()
+
+    assertTrue("the scheduler had to move it: starts=$starts", starts.containsKey("B"))
+    assertEquals("and the duration was corrected as well", 6, durationDays(task))
+    // The diagnostic keeps ONE entry per task, and a recorded start wins the table.
+    // ProjectOpenDiagnosticImpl puts such a task into the start-date table only.
+    assertTrue(
+      "recorded as moved -- that is what decides the table it lands in",
+      starts["B"] != null)
+  }
+
+  /** The effort column belongs to the task manager whose task it is. */
+  private fun setEffortOn(manager: TaskManager, task: Task, hours: Double) {
+    val def = EffortDrivenProperties.findOrCreateTaskEffort(manager.customPropertyManager)
+    task.customValues.setValue(def, hours)
   }
 }
