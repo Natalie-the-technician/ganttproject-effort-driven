@@ -226,6 +226,44 @@ fun workingDayTest(calendar: GPCalendar): (LocalDate) -> Boolean = { day ->
   calendar.getDayMask(day.toLegacyDate()) and GPCalendar.DayMask.WORKING != 0
 }
 
+/**
+ * The days off of the people as a function, for [levelTasks].
+ *
+ * THE PERSON IS NAMED BY THE RESOURCE ID, as a string -- the same key [toLevelTask] builds
+ * [LevelTask.loads] from, and hence the same one the capacity pools carry. That is the joint the
+ * whole pass-through hangs on: if one half spoke of ids and the other of names, the answer would
+ * be correct in itself and would be about nobody. `LevellingDaysOffTest` therefore does not write
+ * the key out but takes it from `collectLevelTasks`.
+ *
+ * READ ONCE, NOT PER QUESTION. The window search asks this per person and working day and runs
+ * over up to 50 000 days -- reading `daysOff` out of the model that often would turn levelling
+ * into a waiting game. The days off are therefore fetched here, once, and the returned function
+ * only looks things up. The price is that it does not see later changes; it is built anew for
+ * each run of levelling, which is exactly its lifetime.
+ *
+ * UNKNOWN KEYS COUNT AS AVAILABLE. Two of them actually occur: [SHARED_POOL], the shared pool of
+ * the unassigned Tasks, which is not a person and can have no holiday, and a resource deleted
+ * between conversion and calculation. Neither is an absence, and inventing one out of a gap in
+ * knowledge would be the worse answer.
+ *
+ * The interval end is EXCLUSIVE. That is not decided here -- [daysOffRanges] reads the model, and
+ * the reasoning, together with the five places it was measured at, is in `DaysOffDuration.kt`.
+ */
+fun availabilityTest(resourceManager: HumanResourceManager): (String, LocalDate) -> Boolean {
+  val daysOff: Map<String, List<Pair<LocalDate, LocalDate>>> = resourceManager.resources
+    .associate { it.id.toString() to it.daysOffRanges() }
+    .filterValues { it.isNotEmpty() }
+  if (daysOff.isEmpty()) {
+    // Nobody has anything entered -- then no lookup has to take place at all.
+    return { _, _ -> true }
+  }
+  return { person, day ->
+    daysOff[person]?.none { (from, toExclusive) ->
+      !day.isBefore(from) && day.isBefore(toExclusive)
+    } ?: true
+  }
+}
+
 // The conversion lives in LegacyDates.kt and EXPLICITLY does NOT use java.time: GanttProject
 // bends the default time zone at startup, and java.time does not see the bending. The reasoning
 // together with the measurement is there.

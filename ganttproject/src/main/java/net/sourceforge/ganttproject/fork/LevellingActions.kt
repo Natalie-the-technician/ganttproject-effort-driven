@@ -202,8 +202,14 @@ class LevellingAction(
     // The packing limit stays at 100 %: the utilisation acts on the available HOURS (see
     // availableHoursPerDay) and is therefore already contained in the durations. Applying it a
     // second time here would mean subtracting the same buffer twice.
+    //
+    // The days off of the people come in as of now -- and change NOTHING yet. The channel is laid
+    // so that the rule that is to use it later has something to be cut against; see
+    // [levelTasks]'s isAvailable. Passing it here and not at some point in the future is the
+    // point: a pass-through nobody fills is a pass-through nobody notices is broken.
     val result = levelTasks(tasks, abWann, workingDayTest(taskManager.calendar),
-      durationAtStart(taskManager, taskProperties, resourceProperties))
+      durationAtStart(taskManager, taskProperties, resourceProperties),
+      isAvailable = availabilityTest(resourceManager))
 
     val cycles = result.conflicts.filterIsInstance<LevelConflict.Cycle>()
     if (cycles.isNotEmpty()) {
