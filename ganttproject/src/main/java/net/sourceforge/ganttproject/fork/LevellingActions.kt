@@ -203,10 +203,15 @@ class LevellingAction(
     // availableHoursPerDay) and is therefore already contained in the durations. Applying it a
     // second time here would mean subtracting the same buffer twice.
     //
-    // The days off of the people come in as of now -- and change NOTHING yet. The channel is laid
-    // so that the rule that is to use it later has something to be cut against; see
-    // [levelTasks]'s isAvailable. Passing it here and not at some point in the future is the
-    // point: a pass-through nobody fills is a pass-through nobody notices is broken.
+    // The days off of the people come in here, and as of this stage they take effect -- but only
+    // for the people an assignment marks as BLOCKING (axis A). A Task is then laid only where
+    // every one of them is at work; several of them give the intersection of their time. For
+    // everybody else nothing changes: their day off takes their hours out of the day and leaves
+    // the Task where it is, exactly as before.
+    //
+    // NO SECOND SWITCH FOR IT. Whether absence moves a Task is decided at the assignment, where
+    // the person is, and not once more in the menu -- a global flag would silently overrule the
+    // markings entered in the plan.
     val result = levelTasks(tasks, abWann, workingDayTest(taskManager.calendar),
       durationAtStart(taskManager, taskProperties, resourceProperties),
       isAvailable = availabilityTest(resourceManager))

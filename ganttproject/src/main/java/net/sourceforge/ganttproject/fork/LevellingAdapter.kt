@@ -457,6 +457,27 @@ private fun Task.toLevelTask(
       proPerson.mapValues { 0 }.ifEmpty { mapOf(SHARED_POOL to 0) }
     else -> proPerson.ifEmpty { mapOf(SHARED_POOL to SHARED_POOL_LOAD) }
   }
+  // AXIS A: whose absence takes this Task with it. Read straight off the assignment; P1 carried
+  // the value and nobody read it, and this is the place where it starts to matter.
+  //
+  // READ SEPARATELY FROM THE LOADS ABOVE, not folded into them, and the case that motivates the
+  // whole undertaking is the reason: an assignment at load 0 is the person who has to be present
+  // without working on the Task -- supervision, an instruction, an acceptance. In [loads] they
+  // appear with a 0 and cost no capacity; in here they appear all the same and move the Task.
+  // Filtering by load first would drop exactly that person.
+  //
+  // THE SAME KEY AS THE CAPACITY POOLS, the resource id as a string. That is the joint the whole
+  // thing hangs on: `availabilityTest` is asked with these strings, and if this half spoke of
+  // ids while that one spoke of names, every answer would be correct in itself and about
+  // nobody.
+  //
+  // MILESTONES AND WAITING PERIODS KEEP THEIR MARKING, although they cost no working time. A
+  // milestone is typically an acceptance, and an acceptance without the person accepting is
+  // exactly the case axis A is for. They lose their LOAD above, not their people.
+  val blocking: Set<String> = this.assignments
+    .filter { it.isBlocking }
+    .mapNotNull { it.resource?.id?.toString() }
+    .toSet()
   // THREE CASES, and they are not the same thing. The rule for it, fixed on 17.08.2026:
   //
   //   A Task that has not been begun at all, that therefore carries no time, has to be deferred
@@ -504,6 +525,7 @@ private fun Task.toLevelTask(
     priority = this.priority.ordinal,
     durationDays = duration,
     loads = loads,
+    blocking = blocking,
     // A dependency on a group means: after ALL the leaves beneath it.
     predecessors = this.dependenciesAsDependant.toArray()
       .mapNotNull { it.dependee?.taskID?.toString() }

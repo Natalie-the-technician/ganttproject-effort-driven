@@ -97,6 +97,32 @@ data class LevelTask(
    */
   val loads: Map<String, Int> = emptyMap(),
   /**
+   * The people whose ABSENCE moves this Task -- axis A of an assignment.
+   *
+   * WHAT IT MEANS: the Task may only lie where EVERY person named here is at work. Several of
+   * them therefore give the INTERSECTION of their available time, not the union: whoever has to
+   * be there has to be there, and one person missing is enough.
+   *
+   * A SET OF ITS OWN AND NOT A FLAG INSIDE [loads], although both are about the same people.
+   * Blocking and occupying are two different questions, and the case that makes this fork worth
+   * building answers them differently: somebody who has to be present but does not work on the
+   * Task -- supervision, an instruction, an acceptance -- blocks at a load of 0. Hanging the
+   * marking on the load would tie the one to the other and lose exactly that person. The two
+   * axes are independent in the model (see `ResourceAssignment.setBlocking`), and they stay
+   * independent here.
+   *
+   * NOT NECESSARILY A SUBSET OF [loads]'s keys, even though the conversion in
+   * `LevellingAdapter.kt` only ever produces names that are in there too. Nothing in the
+   * calculation needs the two to agree: a name in here is asked about availability, a name in
+   * [loads] is booked capacity, and a name in only one of them is answerable either way.
+   *
+   * EMPTY IS THE DEFAULT, and the direction is chosen: an empty set means "nobody blocks", which
+   * is what the program did before this stage and what an unmarked assignment means. A Task that
+   * nobody blocks is laid exactly as it was laid before -- `ResourceLevellingTest` and
+   * `LevellingDaysOffTest` pin that down without a single expectation of theirs being touched.
+   */
+  val blocking: Set<String> = emptySet(),
+  /**
    * Finished or begun work: stays exactly where it lies.
    *
    * WHY THIS IS NECESSARY: without this field levelling was a ONE-OFF TOOL. On the second run it
@@ -178,12 +204,19 @@ data class LevelResult(
  * capacity pools are named after, that is by [LevelTask.loads]'s key, and that is the resource id
  * from the model.
  *
- * NOT USED IN THE CALCULATION YET, and that is not an oversight but the whole of this stage. Up
- * to here levelling did not know about days off AT ALL -- measured on 27.08.2026, `grep -ci
- * daysoff` gave 0 in this file, in `LevellingAdapter.kt` and in `LevellingActions.kt`. The rule
- * that is to grow out of it ("the absence of a blocking person moves the Task") cannot be built
- * against nothing: there has to be something to cut it against first. So the channel is laid, and
- * NOTHING is hung on it. `LevellingDaysOffTest` pins that the result stays the same either way.
+ * ASKED ONLY ABOUT THE PEOPLE IN [LevelTask.blocking], and only in the search for a free window.
+ * That is the whole of axis A: a day on which one of them is away is as unusable for this Task as
+ * a day that is full. For everybody else the day off keeps doing what it did before -- it takes
+ * that person's hours out of the day and leaves the Task where it is (see `DaysOffDuration.kt`).
+ *
+ * P0 laid this channel and hung nothing on it; this is the stage that hangs the rule on it. What
+ * did not change is the answer for an unmarked plan: with [LevelTask.blocking] empty this
+ * function is never asked, and `LevellingDaysOffTest` and `ResourceLevellingTest` still pin the
+ * result to be the same either way -- with "absent for everybody on every day" as the input.
+ *
+ * FIXED DATES AND FROZEN WORK ARE NOT ASKED, deliberately and for the reason already recorded
+ * above: a fixed date is kept even when it does not fit, and begun work is the past. Axis A can
+ * only act where levelling is allowed to choose, and that is the window search.
  *
  * A FUNCTION AND NOT A LIST OF DATES, for the same reason as [isWorkingDay] beside it: this file
  * deliberately knows no GanttProject types, so that the calculation stays checkable without a
@@ -257,7 +290,8 @@ fun levelTasks(
       }
       days = workingDays(start, durationAt(task, start), isWorkingDay)
     } else {
-      days = findEarliestWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf)
+      days = findEarliestWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf,
+        isAvailable)
     }
 
     task.pools.forEach { pool ->
@@ -397,6 +431,10 @@ private fun workingDays(
  * It is NOT broken into pieces: a Task runs on consecutive working days. An interruption would be
  * packed more densely, but a plan in which one job appears three times for two days each is no
  * longer readable -- and staying readable is the point of the exercise.
+ *
+ * TWO REASONS A DAY CAN FAIL, and they are asked side by side: it is too full for somebody, or a
+ * person marked as blocking is away on it. The second is axis A. Both are properties OF THE DAY,
+ * which is what lets the search skip forward the way it does below.
  */
 private fun findEarliestWindow(
   earliest: LocalDate,
@@ -404,7 +442,8 @@ private fun findEarliestWindow(
   durationAt: (LevelTask, LocalDate) -> Int,
   used: Map<String, MutableMap<LocalDate, Int>>,
   isWorkingDay: (LocalDate) -> Boolean,
-  capacityOf: (String) -> Int
+  capacityOf: (String) -> Int,
+  isAvailable: (String, LocalDate) -> Boolean
 ): List<LocalDate> {
   var candidate = nextWorkingDay(earliest, isWorkingDay)
   var schutz = 0
@@ -417,6 +456,17 @@ private fun findEarliestWindow(
     // The bound is the second safeguard; the first is the limit below, which always lets a Task
     // fit on its own. Both together, because an endless loop is the most expensive failure mode:
     // no dialog, no message, only a program that hangs.
+    //
+    // AXIS A ADDS A SECOND WAY TO NEVER FIND A WINDOW, and this bound is what catches it: several
+    // blocking people whose available times never overlap for long enough leave no day for the
+    // Task at all. Unlike the capacity case there is no limit that could rescue it -- "everybody
+    // has to be there" cannot be relaxed without saying the opposite of what was marked. So the
+    // search runs into the bound and the Task is laid at its earliest possible date, blocking
+    // people or no.
+    //
+    // THAT FALLBACK IS DELIBERATELY THE SAME ONE AS FOR THE CAPACITY CASE and deliberately silent
+    // -- a report of its own would be a new kind of message and therefore a decision, not a piece
+    // of building work. It is written down in the stage report as an open question.
     if (schutz++ > MAX_SEARCH_DAYS) {
       return workingDays(nextWorkingDay(earliest, isWorkingDay), durationAt(task, earliest),
         isWorkingDay)
@@ -424,8 +474,13 @@ private fun findEarliestWindow(
     // The duration depends on the starting day as soon as the daily rate is time-dependent -- it
     // therefore has to be asked anew FOR EVERY CANDIDATE, not once in advance.
     val window = workingDays(candidate, durationAt(task, candidate), isWorkingDay)
-    // A day blocks as soon as it is too full for ONE of the people involved.
+    // A day blocks as soon as it is too full for ONE of the people involved -- or as soon as ONE
+    // of the people marked as blocking is away on it.
     val blockedAt = window.firstOrNull { day ->
+      // AXIS A, and "any absent" is the same statement as "all present must be present": several
+      // blocking people give the INTERSECTION of their time, not the union. Asked first because
+      // it is the cheaper question and, in an unmarked plan, an empty loop.
+      task.blocking.any { !isAvailable(it, day) } ||
       task.pools.any { pool ->
         // THE DEMAND IS THE ONE ON THIS PERSON, not the sum over everybody on the Task. Asking
         // the sum here was the defect: two people at 50 % each blocked a day on which each of

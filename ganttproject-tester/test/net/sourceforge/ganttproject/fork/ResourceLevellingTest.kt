@@ -222,4 +222,61 @@ class ResourceLevellingTest : TestCase() {
     assertEquals("keine Dauer darf sich aendern", ohne.durations, mit.durations)
     assertEquals("keine Meldung darf entstehen", ohne.conflicts, mit.conflicts)
   }
+
+  /**
+   * AXIS A, MEASURED ON THE BARE CALCULATION: the marking, and only the marking, makes a day off
+   * count. The same plan, the same answer "everybody is always away", once without a marking and
+   * once with -- the second one has to move, the first one must not.
+   *
+   * The two halves stand in ONE test on purpose. Separately they would both be satisfied by a
+   * program that always moves or by one that never moves; it is the difference between them that
+   * says what axis A is.
+   *
+   * The tests against the REAL model, with real assignments and real holidays, are in
+   * `LevellingBlockingTest`. This one checks what the calculation does with the field, not
+   * whether the field arrives.
+   */
+  fun testOnlyABlockingPersonIsMovedByADayOff() {
+    // Away on the Monday and the Tuesday, at work from the Wednesday on.
+    val abWennMittwoch: (String, LocalDate) -> Boolean = { _, tag -> tag >= montag.plusDays(2) }
+    val ohneMarkierung = task("a", 3)
+    val mitMarkierung = ohneMarkierung.copy(blocking = setOf(SHARED_POOL))
+
+    assertEquals("ohne Markierung aendert die Abwesenheit nichts", montag,
+      levelTasks(listOf(ohneMarkierung), montag, werktags,
+        isAvailable = abWennMittwoch).starts["a"])
+    assertEquals("mit Markierung liegen die drei Tage hinter der Abwesenheit",
+      montag.plusDays(2),
+      levelTasks(listOf(mitMarkierung), montag, werktags,
+        isAvailable = abWennMittwoch).starts["a"])
+  }
+
+  /**
+   * THE STOP CONDITION, and it is the reason this test exists rather than a nicer expectation:
+   * two blocking people whose available times NEVER overlap describe a plan that can never be
+   * laid. "Everybody has to be there" cannot be relaxed -- relaxing it would say the opposite of
+   * what was marked -- so there is no right date to compute.
+   *
+   * WHAT IS PINNED HERE IS THAT LEVELLING COMES BACK. The bound in `findEarliestWindow`
+   * (MAX_SEARCH_DAYS) catches the case and lays the Task at its earliest possible date. That is a
+   * visibly wrong date, and a visibly wrong date is the cheapest of the possible failures: an
+   * endless loop shows nothing at all -- no dialog, no message, only a menu item that seems to do
+   * nothing. That failure mode has been measured on this machine twice already, and both
+   * measurements are recorded in `ResourceLevelling.kt`.
+   *
+   * WHETHER THIS SHOULD ALSO BE REPORTED is an open question and deliberately not answered here:
+   * a new kind of message is a decision, not a piece of building work.
+   */
+  fun testAnImpossibleIntersectionEndsInsteadOfHanging() {
+    // P is there on even days only, Q on odd ones -- never both.
+    val abwechselnd: (String, LocalDate) -> Boolean = { person, tag ->
+      if (person == "p") tag.toEpochDay() % 2 == 0L else tag.toEpochDay() % 2 != 0L
+    }
+    val vorgang = task("a", 2).copy(blocking = setOf("p", "q"))
+
+    val r = levelTasks(listOf(vorgang), montag, werktags, isAvailable = abwechselnd)
+
+    assertNotNull("die Verteilung muss zurueckkommen, statt zu haengen", r.starts["a"])
+    assertEquals("ohne moeglichen Termin bleibt der frueheste", montag, r.starts["a"])
+  }
 }
