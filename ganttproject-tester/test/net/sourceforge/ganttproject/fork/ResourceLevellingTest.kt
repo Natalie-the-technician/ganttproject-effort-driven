@@ -279,4 +279,127 @@ class ResourceLevellingTest : TestCase() {
     assertNotNull("die Verteilung muss zurueckkommen, statt zu haengen", r.starts["a"])
     assertEquals("ohne moeglichen Termin bleibt der frueheste", montag, r.starts["a"])
   }
+
+  /**
+   * THE RED TEST OF THIS STAGE, since tightened: the impossible case is no longer silent, and the
+   * message says WHICH Task and WHICH people.
+   *
+   * The same setup as the test above -- two blocking people whose available times never overlap.
+   * That one pins that levelling comes back at all; this one answers the question left open
+   * there. The two halves it asserts are the two halves a person needs in order to act: without
+   * the Task there is nothing to look at, without the people there is nothing to change.
+   *
+   * IN ITS RED RUN THIS TEST ASSERTED ONLY `conflicts.isEmpty()` to be false, and it failed with
+   * "der unmoegliche Fall faellt stumm zurueck: die Konfliktliste bleibt leer, obwohl es keinen
+   * Tag gibt, an dem beide blockierenden Personen da sind". Recorded here because the weaker form
+   * is the one that shows the state before this stage; the stronger one below could not even be
+   * compiled against it.
+   */
+  fun testAnImpossibleIntersectionIsReported() {
+    // P is there on even days only, Q on odd ones -- never both.
+    val abwechselnd: (String, LocalDate) -> Boolean = { person, tag ->
+      if (person == "p") tag.toEpochDay() % 2 == 0L else tag.toEpochDay() % 2 != 0L
+    }
+    val vorgang = task("a", 2).copy(blocking = setOf("p", "q"))
+
+    val r = levelTasks(listOf(vorgang), montag, werktags, isAvailable = abwechselnd)
+
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>()
+    assertEquals(
+      "genau eine Meldung fuer den einen unmoeglichen Vorgang, gemeldet wurde: ${r.conflicts}",
+      1, gemeldet.size)
+    assertEquals("die Meldung muss den Vorgang nennen", "a", gemeldet[0].id)
+    assertEquals("die Meldung muss die beteiligten Personen nennen",
+      listOf("p", "q"), gemeldet[0].blocking)
+  }
+
+  /**
+   * NACHWEIS 2: the message changes NOTHING about where the Task lies.
+   *
+   * The same plan twice -- once with the two impossible people, once with the same absences and
+   * no marking at all, which is the calculation as it stood before axis A existed. The dates and
+   * the durations have to agree; only the conflict list may differ.
+   *
+   * WHY IT IS COMPARED AGAINST A SECOND RUN and not against a date written out by hand: a written
+   * date would have to be corrected the moment anything else about the fallback changes, and the
+   * test would then stop saying what it is here to say. The test
+   * `testAnImpossibleIntersectionEndsInsteadOfHanging` above holds the written date and was
+   * not touched by this stage -- between the two of them the claim is covered from both sides.
+   */
+  fun testTheReportDoesNotMoveTheTask() {
+    val abwechselnd: (String, LocalDate) -> Boolean = { person, tag ->
+      if (person == "p") tag.toEpochDay() % 2 == 0L else tag.toEpochDay() % 2 != 0L
+    }
+    val ohneMarkierung = task("a", 2)
+    val mitMarkierung = ohneMarkierung.copy(blocking = setOf("p", "q"))
+
+    val ohne = levelTasks(listOf(ohneMarkierung), montag, werktags, isAvailable = abwechselnd)
+    val mit = levelTasks(listOf(mitMarkierung), montag, werktags, isAvailable = abwechselnd)
+
+    assertEquals("der Termin darf sich durch die Meldung nicht bewegen", ohne.starts, mit.starts)
+    assertEquals("die Dauer darf sich durch die Meldung nicht aendern",
+      ohne.durations, mit.durations)
+    assertTrue("ohne Markierung gibt es nach wie vor nichts zu melden", ohne.conflicts.isEmpty())
+  }
+
+  /**
+   * NACHWEIS 3, and without it the message would be worth nothing: a plan that CAN be laid says
+   * nothing.
+   *
+   * The same two blocking people, the same kind of absence -- but their free times do overlap:
+   * both are away on the Monday and there from the Tuesday on. The Task moves to the Tuesday, and
+   * that is an ordinary result of axis A, not a conflict. A version that reported every marked
+   * plan would pass the test above and fail here.
+   */
+  fun testASolvableIntersectionIsNotReported() {
+    val abDienstag: (String, LocalDate) -> Boolean = { _, tag -> tag > montag }
+    val vorgang = task("a", 2).copy(blocking = setOf("p", "q"))
+
+    val r = levelTasks(listOf(vorgang), montag, werktags, isAvailable = abDienstag)
+
+    assertEquals("die zwei Tage liegen hinter dem gemeinsamen freien Montag",
+      montag.plusDays(1), r.starts["a"])
+    assertTrue("ein loesbarer Fall darf nichts melden, gemeldet wurde: ${r.conflicts}",
+      r.conflicts.isEmpty())
+  }
+
+  /**
+   * One blocking person who is NEVER there is the same impossibility with one name in it, and it
+   * is reported the same way.
+   *
+   * Worth its own test because "intersection" invites the reading that two people are needed for
+   * the case. They are not: what cannot be satisfied is the SET, and a set of one that is never
+   * satisfiable is exactly as unplannable -- and exactly as silent before this stage.
+   */
+  fun testASinglePersonWhoIsNeverThereIsReportedToo() {
+    val vorgang = task("a", 2).copy(blocking = setOf("p"))
+
+    val r = levelTasks(listOf(vorgang), montag, werktags, isAvailable = { _, _ -> false })
+
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>()
+    assertEquals("auch eine einzige nie anwesende Person ist ein unloesbarer Plan",
+      1, gemeldet.size)
+    assertEquals(listOf("p"), gemeldet[0].blocking)
+  }
+
+  /**
+   * The report stays ON the Task it belongs to. An unmarked Task beside an impossible one is not
+   * mentioned, even though it lies in the same plan and shares the same pool.
+   *
+   * This is the counter-check against reporting per RUN rather than per Task -- a version that
+   * appended one conflict for the whole levelling would look right in every test above.
+   */
+  fun testOnlyTheMarkedTaskIsNamed() {
+    val abwechselnd: (String, LocalDate) -> Boolean = { person, tag ->
+      if (person == "p") tag.toEpochDay() % 2 == 0L else tag.toEpochDay() % 2 != 0L
+    }
+    val plan = listOf(
+      task("a", 2).copy(blocking = setOf("p", "q")),
+      task("b", 2, reihe = 1))
+
+    val r = levelTasks(plan, montag, werktags, isAvailable = abwechselnd)
+
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>()
+    assertEquals("nur der markierte Vorgang ist gemeint", listOf("a"), gemeldet.map { it.id })
+  }
 }

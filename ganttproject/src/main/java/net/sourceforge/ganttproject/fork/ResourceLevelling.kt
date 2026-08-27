@@ -167,6 +167,38 @@ sealed interface LevelConflict {
   data class DeadlineMissed(
     val id: String, val deadline: LocalDate, val actualEnd: LocalDate, val missingDays: Int
   ) : LevelConflict
+
+  /**
+   * There is no stretch of time in which EVERY person marked as blocking is at work for as long
+   * as the Task lasts. The Task is laid at its earliest possible date all the same -- that date is
+   * wrong, and this is what says so.
+   *
+   * WHY THIS EXISTS AS A KIND OF ITS OWN, and it is a decision rather than a piece of building
+   * work. The case was measured and left silent when axis A was built: the window search runs into
+   * [MAX_SEARCH_DAYS] and falls back, and nobody learns why the Task sits where it sits. Unlike
+   * every other conflict here there is nothing to weigh up afterwards -- "everybody has to be
+   * there" cannot be relaxed without saying the opposite of what was marked in the plan. So the
+   * only useful answer is to name the Task and the people and let a person decide which marking or
+   * which day off is the one to change.
+   *
+   * IT REPORTS, IT DOES NOT RESOLVE. The Task lies exactly where it lay before this conflict
+   * existed -- pinned by `testAnImpossibleIntersectionEndsInsteadOfHanging`, which was written one
+   * stage earlier, still asserts the same date and was not touched.
+   *
+   * THE CAPACITY FALLBACK BESIDE IT STAYS SILENT, deliberately and untouched: that is a second
+   * decision and it has not been taken. The two share the bound in [findEarliestWindow] but not
+   * this message -- see `absenceBlocked` there for the joint that keeps them apart.
+   *
+   * @property blocking the people whose joint presence the Task demands, ALL of them and not only
+   * those seen to be away. The statement being made is "no day satisfies this set", and that is a
+   * statement about the whole set: with `P` and `Q` never overlapping and `R` always there, `R` is
+   * not the culprit but is part of what could not be satisfied, and dropping them would hide one
+   * of the two markings a person may want to change. Sorted, so the same plan always yields the
+   * same message.
+   */
+  data class BlockingIntersectionEmpty(
+    val id: String, val blocking: List<String>
+  ) : LevelConflict
 }
 
 data class LevelResult(
@@ -290,8 +322,25 @@ fun levelTasks(
       }
       days = workingDays(start, durationAt(task, start), isWorkingDay)
     } else {
-      days = findEarliestWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf,
+      val search = findEarliestWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf,
         isAvailable)
+      days = search.days
+      // THE ONE PLACE THE SILENT FALLBACK BECOMES A MESSAGE. Both halves of the condition are
+      // needed and neither is decoration:
+      //
+      //  - `exhausted` alone would also catch the CAPACITY fallback beside it, and that one is to
+      //    stay as silent as it is today. Reporting it would be a second decision, and it has not
+      //    been taken.
+      //  - `absenceBlocked` alone would fire on every plan in which a marked person is away for a
+      //    day, which is the ordinary case axis A was built for and no conflict at all.
+      //
+      // Together they say exactly one thing: the search gave up, AND an absence was among the
+      // reasons it kept failing. In a plan with no marking `absenceBlocked` cannot become true --
+      // the loop over `task.blocking` runs zero times -- so nothing about the state before this
+      // stage can reach this line.
+      if (search.exhausted && search.absenceBlocked) {
+        conflicts.add(LevelConflict.BlockingIntersectionEmpty(id, task.blocking.sorted()))
+      }
     }
 
     task.pools.forEach { pool ->
@@ -426,6 +475,37 @@ private fun workingDays(
 }
 
 /**
+ * What the window search found, and how it ended.
+ *
+ * A TYPE OF ITS OWN INSTEAD OF THE BARE LIST OF DAYS that stood here before, and the reason is
+ * that the two ways of ending look identical from the outside: a Task laid in a window it fits
+ * and a Task laid at its earliest date because no window exists carry the same kind of answer, a
+ * list of dates. The caller could not tell them apart, which is precisely why the impossible case
+ * used to pass unnoticed.
+ *
+ * [days] IS UNCHANGED BY THIS, in both cases and by construction -- the two return statements
+ * below compute exactly what the two return statements before them computed. This type adds
+ * knowledge about the answer, not a different answer.
+ */
+private data class WindowSearch(
+  /** The days the Task is to be laid on. */
+  val days: List<LocalDate>,
+  /**
+   * The search ran into [MAX_SEARCH_DAYS] instead of finding room, and [days] is the fallback:
+   * the Task at its earliest possible date.
+   */
+  val exhausted: Boolean,
+  /**
+   * At least one candidate day failed because a person marked as blocking was away on it.
+   *
+   * ALWAYS FALSE FOR A PLAN WITHOUT MARKINGS, and that is what keeps the capacity fallback exactly
+   * as silent as it was: with [LevelTask.blocking] empty the loop that could set this runs zero
+   * times.
+   */
+  val absenceBlocked: Boolean
+)
+
+/**
  * The earliest window from [earliest] on in which the Task has room throughout.
  *
  * It is NOT broken into pieces: a Task runs on consecutive working days. An interruption would be
@@ -444,9 +524,12 @@ private fun findEarliestWindow(
   isWorkingDay: (LocalDate) -> Boolean,
   capacityOf: (String) -> Int,
   isAvailable: (String, LocalDate) -> Boolean
-): List<LocalDate> {
+): WindowSearch {
   var candidate = nextWorkingDay(earliest, isWorkingDay)
   var schutz = 0
+  // Whether an absence was ever the reason a day was rejected. Read only when the search gives up
+  // below; it is what tells the two ways of giving up apart. See [WindowSearch.absenceBlocked].
+  var absenceBlocked = false
   while (true) {
     // PREVENT AN ENDLESS LOOP. MEASURED ON THE MACHINE: at a utilisation of 80 % and a Task with
     // 100 % load the condition "fits here" was false on EVERY day -- even on completely empty
@@ -464,12 +547,16 @@ private fun findEarliestWindow(
     // search runs into the bound and the Task is laid at its earliest possible date, blocking
     // people or no.
     //
-    // THAT FALLBACK IS DELIBERATELY THE SAME ONE AS FOR THE CAPACITY CASE and deliberately silent
-    // -- a report of its own would be a new kind of message and therefore a decision, not a piece
-    // of building work. It is written down in the stage report as an open question.
+    // THAT FALLBACK IS STILL THE SAME ONE AS FOR THE CAPACITY CASE -- the same date, the same
+    // days, not a line of it changed. What has changed since is that it is no longer silent: the
+    // open question recorded here has been decided, and the caller turns an exhausted search with
+    // `absenceBlocked` into `LevelConflict.BlockingIntersectionEmpty`. The CAPACITY half of this
+    // same fallback stays silent, and stays silent on purpose -- see the caller.
     if (schutz++ > MAX_SEARCH_DAYS) {
-      return workingDays(nextWorkingDay(earliest, isWorkingDay), durationAt(task, earliest),
-        isWorkingDay)
+      return WindowSearch(
+        workingDays(nextWorkingDay(earliest, isWorkingDay), durationAt(task, earliest),
+          isWorkingDay),
+        exhausted = true, absenceBlocked = absenceBlocked)
     }
     // The duration depends on the starting day as soon as the daily rate is time-dependent -- it
     // therefore has to be asked anew FOR EVERY CANDIDATE, not once in advance.
@@ -480,7 +567,15 @@ private fun findEarliestWindow(
       // AXIS A, and "any absent" is the same statement as "all present must be present": several
       // blocking people give the INTERSECTION of their time, not the union. Asked first because
       // it is the cheaper question and, in an unmarked plan, an empty loop.
-      task.blocking.any { !isAvailable(it, day) } ||
+      //
+      // The answer is remembered because a day rejected for this reason is the only thing that
+      // can turn the fallback above into a message. One boolean, no allocation, and false for
+      // ever in a plan with no marking.
+      val absent = task.blocking.any { !isAvailable(it, day) }
+      if (absent) {
+        absenceBlocked = true
+      }
+      absent ||
       task.pools.any { pool ->
         // THE DEMAND IS THE ONE ON THIS PERSON, not the sum over everybody on the Task. Asking
         // the sum here was the defect: two people at 50 % each blocked a day on which each of
@@ -495,7 +590,7 @@ private fun findEarliestWindow(
       }
     }
     if (blockedAt == null) {
-      return window
+      return WindowSearch(window, exhausted = false, absenceBlocked = absenceBlocked)
     }
     // Continue searching only after the blocking day: everything before it fails for the same reason.
     candidate = nextWorkingDay(blockedAt.plusDays(1), isWorkingDay)

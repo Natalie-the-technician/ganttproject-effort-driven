@@ -54,6 +54,42 @@ fun interface AskBeforeWriting {
   fun ask(message: String, answer: (Boolean) -> Unit)
 }
 
+/**
+ * The block of the preview that reports [LevelConflict.BlockingIntersectionEmpty].
+ *
+ * A FUNCTION OF ITS OWN, while the blocks beside it are woven straight into the message builder,
+ * and the reason is not tidiness. This is the one message of levelling that has to turn TWO kinds
+ * of id into names -- the Task and the people -- and a report that says "12: 3, 7 all have to be
+ * there" is worthless in exactly the situation it is written for. The blocks beside it have no
+ * test at all, because the builder they sit in needs a whole running project; this one can be
+ * measured on its own, and that is the state it does not copy.
+ *
+ * @param taskName how an id becomes the name in the plan. Falls back to the id, because a report
+ * with an ugly name still says more than no report.
+ * @param personName the same for the people.
+ */
+internal fun blockedIntersectionText(
+  conflicts: List<LevelConflict.BlockingIntersectionEmpty>,
+  taskName: (String) -> String,
+  personName: (String) -> String
+): String {
+  if (conflicts.isEmpty()) {
+    return ""
+  }
+  val text = StringBuilder(forkText("fork.levelling.blocked", conflicts.size))
+  // The same five as everywhere else in this preview, and the same "and n more" behind it: a
+  // dialog that lists two hundred rows is a dialog nobody reads to the end.
+  conflicts.take(5).forEach { conflict ->
+    text.append("\n  • ").append(forkText("fork.levelling.blocked.row",
+      taskName(conflict.id),
+      conflict.blocking.joinToString(", ") { personName(it) }))
+  }
+  if (conflicts.size > 5) {
+    text.append("\n  … ").append(forkText("fork.levelling.more", conflicts.size - 5))
+  }
+  return text.toString()
+}
+
 /** Derive the effort from the duration and assign everything to one person. */
 class BackfillAction(
   private val taskManager: TaskManager,
@@ -246,6 +282,19 @@ class LevellingAction(
       if (unreachable.size > 5) {
         message.append("\n  … ").append(forkText("fork.levelling.more", unreachable.size - 5))
       }
+    }
+    // THE IMPOSSIBLE INTERSECTION, and it stands here rather than further down for a reason: it is
+    // the only entry in this list that reports a date the calculation itself calls wrong. An
+    // overload is a plan that is tight, a missed deadline is a plan that is late -- this one is a
+    // plan that cannot be laid at all, and burying it under the others would be the same silence
+    // in a longer form.
+    val blockiert = result.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>()
+    if (blockiert.isNotEmpty()) {
+      message.append("\n\n").append(blockedIntersectionText(blockiert,
+        { id -> taskManager.getTask(id.toIntOrNull() ?: 0)?.name ?: id },
+        // The blocking people are named by resource id -- the same string the capacity pools use,
+        // see `LevellingAdapter.toLevelTask`. Turning it back into a name is this side's job.
+        { id -> resourceManager.getById(id.toIntOrNull() ?: -1)?.name ?: id }))
     }
     if (overloads.isNotEmpty()) {
       message.append("\n\n").append(forkText("fork.levelling.overload", overloads.size))
