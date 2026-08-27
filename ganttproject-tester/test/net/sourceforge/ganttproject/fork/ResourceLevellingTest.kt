@@ -194,4 +194,32 @@ class ResourceLevellingTest : TestCase() {
     assertTrue(r.starts.isEmpty())
     assertTrue(r.conflicts.isEmpty())
   }
+
+  /**
+   * DAYS OFF ARRIVE AND CHANGE NOTHING -- the contract of this stage, stated as sharply as it can
+   * be stated: the answer is "absent" for EVERY person on EVERY day, the harshest input the
+   * channel accepts, and the plan comes out identical.
+   *
+   * This is not a placeholder. Up to here levelling did not know about days off at all, and the
+   * rule that is to use them ("the absence of a blocking person moves the Task") needs something
+   * to be cut against. What is pinned here is that laying the channel did not already move
+   * something quietly -- the version that computes with it will be measured against exactly this
+   * comparison.
+   *
+   * IT ALSO STAYS TRUE AFTERWARDS, and that is deliberate: the coming rule takes hold on people
+   * marked as BLOCKING, and none of the Tasks here carries such a marking. Whoever builds the
+   * rule may leave this test as it stands; if it goes red, the rule has taken hold on somebody it
+   * was not supposed to take hold on.
+   */
+  fun testDaysOffArriveWithoutMovingAnything() {
+    val plan = listOf(
+      task("a", 3), task("b", 2, reihe = 1), task("c", 4, last = 50, reihe = 2),
+      task("d", 2, reihe = 3, vorgaenger = listOf("a")))
+    val ohne = levelTasks(plan, montag, werktags)
+    val mit = levelTasks(plan, montag, werktags, isAvailable = { _, _ -> false })
+
+    assertEquals("kein Termin darf sich bewegen", ohne.starts, mit.starts)
+    assertEquals("keine Dauer darf sich aendern", ohne.durations, mit.durations)
+    assertEquals("keine Meldung darf entstehen", ohne.conflicts, mit.conflicts)
+  }
 }

@@ -172,6 +172,27 @@ data class LevelResult(
  * has their main job plans differently from somebody working full time. The value affects ONLY
  * the search for a free window; fixed dates and frozen work stay where they are.
  */
+/**
+ * @param isAvailable whether this person is at work on this day -- `false` means a day off:
+ * holiday, an illness recorded, a training course. The person is named by the same string the
+ * capacity pools are named after, that is by [LevelTask.loads]'s key, and that is the resource id
+ * from the model.
+ *
+ * NOT USED IN THE CALCULATION YET, and that is not an oversight but the whole of this stage. Up
+ * to here levelling did not know about days off AT ALL -- measured on 27.08.2026, `grep -ci
+ * daysoff` gave 0 in this file, in `LevellingAdapter.kt` and in `LevellingActions.kt`. The rule
+ * that is to grow out of it ("the absence of a blocking person moves the Task") cannot be built
+ * against nothing: there has to be something to cut it against first. So the channel is laid, and
+ * NOTHING is hung on it. `LevellingDaysOffTest` pins that the result stays the same either way.
+ *
+ * A FUNCTION AND NOT A LIST OF DATES, for the same reason as [isWorkingDay] beside it: this file
+ * deliberately knows no GanttProject types, so that the calculation stays checkable without a
+ * running program. Where the answer comes from is the conversion's business.
+ *
+ * THE DEFAULT SAYS "AVAILABLE", not "absent", and the direction is chosen and not accidental. A
+ * channel left unwired must not silently declare everybody absent -- an unfilled parameter has to
+ * mean the state of things as they were.
+ */
 /** Upper bound of the window search in working days -- about 200 years. Reaching it means not a
  * rounding error but an endless loop. */
 private const val MAX_SEARCH_DAYS = 50_000
@@ -181,7 +202,8 @@ fun levelTasks(
   projectStart: LocalDate,
   isWorkingDay: (LocalDate) -> Boolean,
   durationAt: (LevelTask, LocalDate) -> Int = { task, _ -> task.durationDays },
-  capacityOf: (String) -> Int = { 100 }
+  capacityOf: (String) -> Int = { 100 },
+  isAvailable: (String, LocalDate) -> Boolean = { _, _ -> true }
 ): LevelResult {
   val byId = tasks.associateBy { it.id }
   val conflicts = mutableListOf<LevelConflict>()
