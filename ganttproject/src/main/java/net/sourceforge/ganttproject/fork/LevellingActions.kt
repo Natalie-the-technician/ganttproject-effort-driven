@@ -55,7 +55,8 @@ fun interface AskBeforeWriting {
 }
 
 /**
- * The block of the preview that reports [LevelConflict.BlockingIntersectionEmpty].
+ * The block of the preview that reports [LevelConflict.NoPossibleDate] -- the Tasks for which the
+ * window search found no date at all.
  *
  * A FUNCTION OF ITS OWN, while the blocks beside it are woven straight into the message builder,
  * and the reason is not tidiness. This is the one message of levelling that has to turn TWO kinds
@@ -64,62 +65,57 @@ fun interface AskBeforeWriting {
  * test at all, because the builder they sit in needs a whole running project; this one can be
  * measured on its own, and that is the state it does not copy.
  *
+ * ONE ENTRY PER TASK, WITH A LINE PER REASON UNDER IT. Two functions stood here before 27.08.2026,
+ * `blockedIntersectionText` and `capacityWindowText`, one per conflict kind -- and a Task that hit
+ * both reasons got an entry in each, in two blocks, about one date. What replaced them is this
+ * one, and the two-level shape is what makes the merge readable: a single line carrying both
+ * reasons runs past three hundred characters, which in an option dialog is a wall rather than an
+ * answer.
+ *
+ * THE REMEDY MOVED FROM THE HEADING INTO THE REASON LINES, and that is the correction of a real
+ * defect rather than a rearrangement. The old headings each ended in a way out -- "what has to
+ * change is the markings or the days off" over P5's block, "the workload or the length" over P6's.
+ * With one block over Tasks that failed for different reasons, any remedy in the heading is wrong
+ * for some of them; and for the frequent double case BOTH are true and either one on its own
+ * suffices. So each reason line now carries its own way out, and the heading says only that
+ * relieving either is enough. P6's report named that sentence as the thing a merge would have to
+ * put right.
+ *
  * @param taskName how an id becomes the name in the plan. Falls back to the id, because a report
  * with an ugly name still says more than no report.
- * @param personName the same for the people.
+ * @param personName the same for the people. [SHARED_POOL] is NOT passed through it -- that is not
+ * a person but the pool of the unassigned Tasks, and it has a text of its own. Handing an empty
+ * string to the name lookup would put a blank in the middle of a sentence and read as a bug.
  */
-internal fun blockedIntersectionText(
-  conflicts: List<LevelConflict.BlockingIntersectionEmpty>,
+internal fun noPossibleDateText(
+  conflicts: List<LevelConflict.NoPossibleDate>,
   taskName: (String) -> String,
   personName: (String) -> String
 ): String {
   if (conflicts.isEmpty()) {
     return ""
   }
-  val text = StringBuilder(forkText("fork.levelling.blocked", conflicts.size))
+  val text = StringBuilder(forkText("fork.levelling.nodate", conflicts.size))
   // The same five as everywhere else in this preview, and the same "and n more" behind it: a
-  // dialog that lists two hundred rows is a dialog nobody reads to the end.
+  // dialog that lists two hundred rows is a dialog nobody reads to the end. Counted in TASKS and
+  // not in lines, so a Task with two reasons still costs one of the five: the cut is there to
+  // bound how many Tasks are named, and a Task named half is worse than a Task not named.
   conflicts.take(5).forEach { conflict ->
-    text.append("\n  • ").append(forkText("fork.levelling.blocked.row",
-      taskName(conflict.id),
-      conflict.blocking.joinToString(", ") { personName(it) }))
-  }
-  if (conflicts.size > 5) {
-    text.append("\n  … ").append(forkText("fork.levelling.more", conflicts.size - 5))
-  }
-  return text.toString()
-}
-
-/**
- * The block of the preview that reports [LevelConflict.NoDayWithCapacity].
- *
- * BUILT LIKE [blockedIntersectionText] BESIDE IT AND NOT SHARED WITH IT, and that is a decision
- * rather than duplication left lying about. The two do look alike -- a heading, up to five rows,
- * "and n more" -- but they say different things about different sets, and the shared form they
- * would need is a third abstraction over two callers. Worth noting: pulling the two together
- * would mean reshaping P5's message, and P5's message was to stay exactly as it is. If a third
- * block of this shape ever appears, this is the place to reconsider from.
- *
- * @param personName how a resource id becomes the name in the plan. [SHARED_POOL] is NOT passed
- * through it -- that is not a person but the pool of the unassigned Tasks, and it has a text of
- * its own. Handing an empty string to the name lookup would put a blank in the middle of a
- * sentence and read as a bug.
- */
-internal fun capacityWindowText(
-  conflicts: List<LevelConflict.NoDayWithCapacity>,
-  taskName: (String) -> String,
-  personName: (String) -> String
-): String {
-  if (conflicts.isEmpty()) {
-    return ""
-  }
-  val text = StringBuilder(forkText("fork.levelling.nocapacity", conflicts.size))
-  conflicts.take(5).forEach { conflict ->
-    text.append("\n  • ").append(forkText("fork.levelling.nocapacity.row",
-      taskName(conflict.id),
-      conflict.fullFor.joinToString(", ") {
-        if (it == SHARED_POOL) forkText("fork.levelling.nocapacity.shared") else personName(it)
-      }))
+    text.append("\n  • ").append(forkText("fork.levelling.nodate.task", taskName(conflict.id)))
+    // Both `if`s, and never an `else` between them: where both reasons applied, both are said.
+    // That is the whole point of the merge, and an `else` here would rebuild the silence it was
+    // built to end. The order is fixed -- absence first -- so that the same plan always renders
+    // the same message.
+    if (conflict.blocking.isNotEmpty()) {
+      text.append("\n      - ").append(forkText("fork.levelling.nodate.blocked",
+        conflict.blocking.joinToString(", ") { personName(it) }))
+    }
+    if (conflict.fullFor.isNotEmpty()) {
+      text.append("\n      - ").append(forkText("fork.levelling.nodate.full",
+        conflict.fullFor.joinToString(", ") {
+          if (it == SHARED_POOL) forkText("fork.levelling.nodate.shared") else personName(it)
+        }))
+    }
   }
   if (conflicts.size > 5) {
     text.append("\n  … ").append(forkText("fork.levelling.more", conflicts.size - 5))
@@ -320,32 +316,23 @@ class LevellingAction(
         message.append("\n  … ").append(forkText("fork.levelling.more", unreachable.size - 5))
       }
     }
-    // THE IMPOSSIBLE INTERSECTION, and it stands here rather than further down for a reason: it is
-    // the only entry in this list that reports a date the calculation itself calls wrong. An
-    // overload is a plan that is tight, a missed deadline is a plan that is late -- this one is a
-    // plan that cannot be laid at all, and burying it under the others would be the same silence
-    // in a longer form.
-    val blockiert = result.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>()
-    if (blockiert.isNotEmpty()) {
-      message.append("\n\n").append(blockedIntersectionText(blockiert,
+    // THE TASKS WITH NO POSSIBLE DATE, and this block stands here rather than further down for a
+    // reason: it is the only entry in this list that reports a date the calculation itself calls
+    // wrong. An overload is a plan that is tight, a missed deadline is a plan that is late -- this
+    // one is a plan that cannot be laid at all, and burying it under the others would be the same
+    // silence in a longer form.
+    //
+    // ONE BLOCK, AND EVERY AFFECTED TASK IN IT EXACTLY ONCE. Two blocks stood here until
+    // 27.08.2026, one per reason, and a Task whose search failed for both reasons appeared in
+    // both -- twice in the preview, two sentences about one date, and the reader left to work out
+    // that it was one fallback and not two problems. Both reasons now stand under one entry, and
+    // where both apply, relieving either one is enough; the reason lines say which.
+    val ohneTermin = result.conflicts.filterIsInstance<LevelConflict.NoPossibleDate>()
+    if (ohneTermin.isNotEmpty()) {
+      message.append("\n\n").append(noPossibleDateText(ohneTermin,
         { id -> taskManager.getTask(id.toIntOrNull() ?: 0)?.name ?: id },
         // The blocking people are named by resource id -- the same string the capacity pools use,
         // see `LevellingAdapter.toLevelTask`. Turning it back into a name is this side's job.
-        { id -> resourceManager.getById(id.toIntOrNull() ?: -1)?.name ?: id }))
-    }
-    // THE CAPACITY DEAD END, directly under the block above and for the same reason it stands
-    // where it stands: these two are the only entries in this list that report a date the
-    // calculation itself calls wrong. They belong together and above everything that is merely
-    // tight or merely late.
-    //
-    // THE SAME TASK CAN APPEAR IN BOTH BLOCKS. That is not a mistake in the preview: an exhausted
-    // search can have had both reasons, and then both are true and both are worth acting on --
-    // relieving either one is often enough. The measurement behind that sentence is in the P6
-    // report.
-    val ohnePlatz = result.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>()
-    if (ohnePlatz.isNotEmpty()) {
-      message.append("\n\n").append(capacityWindowText(ohnePlatz,
-        { id -> taskManager.getTask(id.toIntOrNull() ?: 0)?.name ?: id },
         { id -> resourceManager.getById(id.toIntOrNull() ?: -1)?.name ?: id }))
     }
     if (overloads.isNotEmpty()) {

@@ -304,13 +304,18 @@ class ResourceLevellingTest : TestCase() {
 
     val r = levelTasks(listOf(vorgang), montag, werktags, isAvailable = abwechselnd)
 
-    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>()
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoPossibleDate>()
     assertEquals(
       "genau eine Meldung fuer den einen unmoeglichen Vorgang, gemeldet wurde: ${r.conflicts}",
       1, gemeldet.size)
     assertEquals("die Meldung muss den Vorgang nennen", "a", gemeldet[0].id)
     assertEquals("die Meldung muss die beteiligten Personen nennen",
       listOf("p", "q"), gemeldet[0].blocking)
+    // Since P7 one report carries both reasons, so the absence-only case has to be recognisable
+    // as such: no full day was hit here, and the report must not invent one. The counter-check to
+    // this stands in `testAPureCapacityDeadEndIsReported`, where the other list is the empty one.
+    assertTrue("hier war kein Tag voll, der Kapazitaetsgrund darf nicht mitgenannt werden: " +
+      "${gemeldet[0]}", gemeldet[0].fullFor.isEmpty())
   }
 
   /**
@@ -376,7 +381,7 @@ class ResourceLevellingTest : TestCase() {
 
     val r = levelTasks(listOf(vorgang), montag, werktags, isAvailable = { _, _ -> false })
 
-    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>()
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoPossibleDate>()
     assertEquals("auch eine einzige nie anwesende Person ist ein unloesbarer Plan",
       1, gemeldet.size)
     assertEquals(listOf("p"), gemeldet[0].blocking)
@@ -399,7 +404,7 @@ class ResourceLevellingTest : TestCase() {
 
     val r = levelTasks(plan, montag, werktags, isAvailable = abwechselnd)
 
-    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>()
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoPossibleDate>()
     assertEquals("nur der markierte Vorgang ist gemeint", listOf("a"), gemeldet.map { it.id })
   }
 
@@ -445,7 +450,7 @@ class ResourceLevellingTest : TestCase() {
 
     val r = levelTasks(plan, montag, werktags, isAvailable = pDaBisFreitag)
 
-    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>()
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoPossibleDate>()
     assertEquals("genau eine Meldung fuer den einen Vorgang, gemeldet wurde: ${r.conflicts}",
       1, gemeldet.size)
     assertEquals("die Meldung muss den Vorgang nennen", "a", gemeldet[0].id)
@@ -454,26 +459,39 @@ class ResourceLevellingTest : TestCase() {
   }
 
   /**
-   * BOTH REASONS, BOTH SAID. The same plan reports P5's message as well, and that is the reading
-   * chosen on 27.08.2026 rather than an accident: an exhausted search can have had two reasons,
-   * and relieving either one is enough, so naming only one of them hides a remedy.
+   * BOTH REASONS, BOTH SAID, IN ONE REPORT -- and the last three words are the change of P7.
    *
-   * This is the assertion that would go red first if somebody later turned the two into an
-   * `else` -- which is exactly why it is written down as an assertion and not as a comment. It has
-   * been seen to do so: with an `else` put in, it failed with
+   * The statement this test made before is unchanged and still asserted: an exhausted search can
+   * have had two reasons, relieving either one is enough, so naming only one of them hides a
+   * remedy. What P7 added is the other half of the same claim -- that both are said ONCE, about
+   * one Task and one date, rather than in two reports the reader has to recognise as one fallback.
+   * Under P5 and P6 the same plan produced two conflict objects in two blocks of the preview.
+   *
+   * IT WOULD GO RED FIRST if somebody later split the two apart again or turned them into an
+   * `else`, which is why it is an assertion and not a comment. Its predecessor was seen to fail
+   * with an `else` put in:
    *
    *   junit.framework.AssertionFailedError: P6s Meldung muss danebenstehen expected:<1> but was:<0>
+   *
+   * IN ITS RED RUN AGAINST 08a3244b8, in the weakest form that could be compiled against the two
+   * kinds standing there then, it failed with
+   *
+   *   junit.framework.AssertionFailedError: beide Gruende trafen zu, also steht der Vorgang in
+   *   ZWEI Meldungen statt in einer: [BlockingIntersectionEmpty(id=a, blocking=[p]),
+   *   NoDayWithCapacity(id=a, fullFor=[])] expected:<1> but was:<2>
    */
-  fun testBothReasonsAreReportedWhenBothApplied() {
+  fun testBothReasonsStandInOneReport() {
     val plan = listOf(ersteWocheVoll(),
       task("a", 1).copy(blocking = setOf("p")))
 
     val r = levelTasks(plan, montag, werktags, isAvailable = pDaBisFreitag)
 
-    assertEquals("P5s Meldung muss stehen bleiben", 1,
-      r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>().size)
-    assertEquals("P6s Meldung muss danebenstehen", 1,
-      r.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>().size)
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoPossibleDate>()
+    assertEquals("ein Vorgang, eine Meldung -- auch wenn beide Gruende zutrafen, gemeldet " +
+      "wurde: ${r.conflicts}", 1, gemeldet.size)
+    assertEquals("P5s Grund muss in ihr stehen", listOf("p"), gemeldet[0].blocking)
+    assertEquals("und P6s Grund daneben, in derselben Meldung",
+      listOf(SHARED_POOL), gemeldet[0].fullFor)
   }
 
   /**
@@ -533,7 +551,7 @@ class ResourceLevellingTest : TestCase() {
 
     assertEquals("hinter der belegten Woche ist Platz", montag.plusDays(7), r.starts["a"])
     assertTrue("ein loesbarer Fall darf keine Sackgasse melden, gemeldet wurde: ${r.conflicts}",
-      r.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>().isEmpty())
+      r.conflicts.filterIsInstance<LevelConflict.NoPossibleDate>().isEmpty())
   }
 
   /**
@@ -542,8 +560,9 @@ class ResourceLevellingTest : TestCase() {
    *
    * The Task needs X and Y; only X is booked solid. Naming Y as well would put a name in front of
    * somebody who has nothing to change, in a message whose entire job is to say what to change.
-   * This is where P6's message deliberately differs from P5's, which names the whole marked set --
-   * the two make different statements, so they carry different sets.
+   * This is where `fullFor` deliberately differs from `blocking` beside it in the same report,
+   * which names the whole marked set -- the two make different statements, so they carry different
+   * sets, and putting them in one kind in P7 did not make them one list.
    *
    * IN ITS RED RUN, in the weak form that could be compiled against the state before this stage,
    * it failed with
@@ -565,7 +584,7 @@ class ResourceLevellingTest : TestCase() {
 
     val r = levelTasks(plan, montag, werktags, isAvailable = pDaBisFreitag)
 
-    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>()
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoPossibleDate>()
     assertEquals("gemeldet wurde: ${r.conflicts}", 1, gemeldet.size)
     assertEquals("nur x war voll, y hatte Platz", listOf("x"), gemeldet[0].fullFor)
   }
@@ -583,13 +602,24 @@ class ResourceLevellingTest : TestCase() {
    * into the 2260s.
    *
    * WHY IT IS WORTH THE SECONDS IT COSTS ANYWAY -- and it costs 5.5 of them, measured, against
-   * 0.05 for every other test in this file: this is the only test in which P5's message cannot be
-   * what fires, so it is the only one that proves P6's message stands on its own feet rather than
-   * riding along beside its neighbour. If the suite ever has to be made faster, this is a
-   * candidate; deleting it would leave the pure case unpinned, so it should be moved rather than
-   * dropped.
+   * 0.05 for every other test in this file: this is the only test in which the absence reason
+   * cannot be what fires, so it is the only one that proves the capacity reason stands on its own
+   * feet rather than riding along beside its neighbour. Since P7 merged the two kinds into
+   * [LevelConflict.NoPossibleDate] that job grew rather than shrank: with one kind carrying both
+   * lists, this is what keeps `fullFor` from becoming decoration on a report that only ever fires
+   * for an absence. If the suite ever has to be made faster, this is a candidate; deleting it
+   * would leave the pure case unpinned, so it should be moved rather than dropped.
    *
-   * IN ITS RED RUN it failed with
+   * TOGETHER WITH `testAnImpossibleIntersectionIsReported` IT ALSO PINS THE MERGE. Both look for
+   * the same kind, one for a plan that can only fail on capacity and one for a plan that can only
+   * fail on absence. Splitting the kind apart again takes one of the two down whichever way it is
+   * split. In the red run against 08a3244b8 that pairing, written as a comparison of the two
+   * reported classes because the merged kind did not exist yet, failed with
+   *
+   *   junit.framework.ComparisonFailure: beide gehoeren in denselben Block der Vorschau, also in
+   *   dieselbe Meldungsart expected:<[BlockingIntersectionEmp]ty> but was:<[NoDayWithCapaci]ty>
+   *
+   * IN ITS OWN RED RUN, one stage earlier, it failed with
    *
    *   junit.framework.AssertionFailedError: kein Tag hat Platz, und die Verteilung sagt nichts
    *   dazu expected:<1> but was:<0>
@@ -605,12 +635,17 @@ class ResourceLevellingTest : TestCase() {
 
     val r = levelTasks(plan, montag, werktags)
 
-    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoDayWithCapacity>()
+    val gemeldet = r.conflicts.filterIsInstance<LevelConflict.NoPossibleDate>()
     assertEquals("ohne einen einzigen freien Tag muss die Sackgasse gemeldet werden", 1,
       gemeldet.size)
     assertEquals("a", gemeldet[0].id)
-    assertTrue("hier ist keine Markierung im Spiel, P5s Meldung darf nicht feuern",
-      r.conflicts.filterIsInstance<LevelConflict.BlockingIntersectionEmpty>().isEmpty())
+    assertEquals("und sie muss nennen, wessen Tage voll waren",
+      listOf(SHARED_POOL), gemeldet[0].fullFor)
+    // The same sentence as before P7, only where the answer now lives: P5's reason used to be a
+    // conflict kind of its own that must not fire, and is now the other list of the one report,
+    // which must stay empty. Nothing is marked in this plan, so nothing may be named.
+    assertTrue("hier ist keine Markierung im Spiel, der Abwesenheitsgrund darf nicht mitgenannt " +
+      "werden: ${gemeldet[0]}", gemeldet[0].blocking.isEmpty())
     assertEquals("und der Vorgang liegt weiter auf dem fruehestmoeglichen Termin",
       montag, r.starts["a"])
   }

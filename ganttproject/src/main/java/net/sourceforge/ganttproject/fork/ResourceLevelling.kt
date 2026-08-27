@@ -169,74 +169,53 @@ sealed interface LevelConflict {
   ) : LevelConflict
 
   /**
-   * There is no stretch of time in which EVERY person marked as blocking is at work for as long
-   * as the Task lasts. The Task is laid at its earliest possible date all the same -- that date is
-   * wrong, and this is what says so.
+   * The window search found no date for this Task at all, and [id] therefore sits on its earliest
+   * possible date rather than on a date the calculation chose. That date is wrong, and this is
+   * what says so -- together with EVERY reason the search had for giving up.
    *
-   * WHY THIS EXISTS AS A KIND OF ITS OWN, and it is a decision rather than a piece of building
-   * work. The case was measured and left silent when axis A was built: the window search runs into
-   * [MAX_SEARCH_DAYS] and falls back, and nobody learns why the Task sits where it sits. Unlike
-   * every other conflict here there is nothing to weigh up afterwards -- "everybody has to be
-   * there" cannot be relaxed without saying the opposite of what was marked in the plan. So the
-   * only useful answer is to name the Task and the people and let a person decide which marking or
-   * which day off is the one to change.
+   * ONE REPORT PER TASK, CARRYING BOTH REASONS, and that is the decision of 27.08.2026. Two kinds
+   * stood here before it, `BlockingIntersectionEmpty` (P5, the impossible intersection) and
+   * `NoDayWithCapacity` (P6, the capacity dead end), and a Task that hit both appeared in BOTH --
+   * twice in the preview, saying two things about ONE date. The measurement behind the merge is
+   * P6's: over a grid of 80 constructed plans 48 searches gave up, 30 on absence alone, 18 on
+   * both, and NOT ONE on capacity alone. The frequent case was therefore exactly the one the
+   * split served worst.
    *
-   * IT REPORTS, IT DOES NOT RESOLVE. The Task lies exactly where it lay before this conflict
-   * existed -- pinned by `testAnImpossibleIntersectionEndsInsteadOfHanging`, which was written one
-   * stage earlier, still asserts the same date and was not touched.
+   * WHY THE TWO REASONS ARE TWO FIELDS AND NOT A KIND EACH. They are not alternatives: relieving
+   * EITHER of them can be enough, and in all 18 measured double cases removing the booking alone
+   * made the plan layable without touching a single marking. A reader who is shown one reason
+   * cannot know that; a reader shown both can pick the cheaper way out. Keeping them apart inside
+   * one report is what lets the text name a remedy PER REASON -- which is the other thing the
+   * split could not do, because P5's remedy sentence sat in a heading that also stood over Tasks
+   * whose real way out was capacity.
    *
-   * THE CAPACITY FALLBACK BESIDE IT NO LONGER STAYS SILENT. It did when this comment was first
-   * written -- that was a second decision, and it was taken on 27.08.2026: see
-   * [NoDayWithCapacity]. This message itself is untouched by that, in its condition, its content
-   * and its text; what changed is only that a second message can now stand next to it for the same
-   * Task. The two still share the bound in [findEarliestWindow] and are still told apart by
-   * `absenceBlocked` and `fullFor` there.
+   * IT REPORTS, IT DOES NOT RESOLVE. The Task lies exactly where it lay before any of these three
+   * kinds existed -- pinned from both sides by `testAnImpossibleIntersectionEndsInsteadOfHanging`
+   * and `testTheCapacityReportDoesNotMoveTheTask`, both of which hold written-out dates, and
+   * neither of which was touched when the two kinds were merged into this one.
+   *
+   * AT LEAST ONE OF THE TWO LISTS IS NON-EMPTY. An exhausted search with neither reason recorded
+   * produces no conflict at all, exactly as it produced none before -- see [findEarliestWindow]'s
+   * caller. Which list is filled is what the two old kinds used to encode in their type.
    *
    * @property blocking the people whose joint presence the Task demands, ALL of them and not only
-   * those seen to be away. The statement being made is "no day satisfies this set", and that is a
-   * statement about the whole set: with `P` and `Q` never overlapping and `R` always there, `R` is
-   * not the culprit but is part of what could not be satisfied, and dropping them would hide one
-   * of the two markings a person may want to change. Sorted, so the same plan always yields the
-   * same message.
-   */
-  data class BlockingIntersectionEmpty(
-    val id: String, val blocking: List<String>
-  ) : LevelConflict
-
-  /**
-   * The window search gave up, and days that nobody's absence spoke against were rejected because
-   * somebody's working day was already fully booked. The Task is laid at its earliest possible
-   * date all the same -- that date is wrong, and this is what says so.
-   *
-   * THE SECOND HALF OF THE SAME SILENCE. [BlockingIntersectionEmpty] beside it made ONE of the two
-   * reasons audible; this one is the other. Both come out of the same fallback in
-   * [findEarliestWindow] and both leave the Task on a visibly wrong date, so leaving one of them
-   * silent means the same damage in half the cases.
-   *
-   * IT REPORTS, IT DOES NOT RESOLVE, exactly as its neighbour does. Nothing about where the Task
-   * lies changes -- `testTheCapacityReportDoesNotMoveTheTask` compares the dates of a run with the
-   * report against a run without it and pins them to be equal.
-   *
-   * IT CAN STAND BESIDE ITS NEIGHBOUR FOR THE SAME TASK, and that is a decision taken on
-   * 27.08.2026 rather than an oversight. An exhausted search can have had both reasons, and it
-   * usually does: measured over a grid of 80 constructed plans, 48 searches gave up and 18 of them
-   * had BOTH an absence and a full day among the rejections -- while not one gave up on capacity
-   * alone. In all 18 the capacity was co-causal: the same plan with the booking removed finds a
-   * date. Reporting only the intersection would therefore hide, in a good third of the cases, a
-   * remedy that is often the cheaper one. The numbers and the two readings that were weighed
-   * against this one are in the stage report of P6.
+   * those seen to be away, and EMPTY when no absence was among the reasons. The statement being
+   * made is "no day satisfies this set", and that is a statement about the whole set: with `P` and
+   * `Q` never overlapping and `R` always there, `R` is not the culprit but is part of what could
+   * not be satisfied, and dropping them would hide one of the two markings a person may want to
+   * change. Sorted, so the same plan always yields the same message.
    *
    * @property fullFor the people whose booked-up days the search bounced off -- ONLY those, not
-   * every person the Task claims capacity from. This differs from its neighbour on purpose, and
-   * the difference follows from what the two statements are. "No day satisfies this SET" is a
-   * statement about the whole set of blocking people, so all of them are named there. "This day
-   * was full" is a statement about ONE person on ONE day, so naming a person the search never
-   * bounced off would put a name in front of somebody who has nothing to change. Sorted, so the
-   * same plan always yields the same message. [SHARED_POOL] can be in here: it is the pool of the
-   * Tasks nobody is assigned to, and the text names it as such.
+   * every person the Task claims capacity from, and EMPTY when no full day was among the reasons.
+   * This differs from [blocking] beside it on purpose, and the difference follows from what the
+   * two statements are. "No day satisfies this SET" is a statement about the whole set of blocking
+   * people, so all of them are named there. "This day was full" is a statement about ONE person on
+   * ONE day, so naming a person the search never bounced off would put a name in front of somebody
+   * who has nothing to change. Sorted, for the same reason. [SHARED_POOL] can be in here: it is
+   * the pool of the Tasks nobody is assigned to, and the text names it as such.
    */
-  data class NoDayWithCapacity(
-    val id: String, val fullFor: List<String>
+  data class NoPossibleDate(
+    val id: String, val blocking: List<String>, val fullFor: List<String>
   ) : LevelConflict
 }
 
@@ -364,30 +343,30 @@ fun levelTasks(
       val search = findEarliestWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf,
         isAvailable)
       days = search.days
-      // THE ONE PLACE THE SILENT FALLBACK BECOMES A MESSAGE. `exhausted` is the half both
-      // messages share: it says the search gave up and the date below is the fallback, not a
-      // result. What the second half of each condition adds is WHY it gave up.
+      // THE ONE PLACE THE SILENT FALLBACK BECOMES A MESSAGE, and since 27.08.2026 it produces AT
+      // MOST ONE report per Task. `exhausted` says the search gave up and the date below is the
+      // fallback, not a result; the two lists say WHY it gave up, and a Task can have both.
       //
-      // Neither second half is decoration. `exhausted` alone would say "this date is wrong" and
-      // stop there, which is the one thing a person cannot act on. `absenceBlocked` or `fullFor`
-      // alone would fire on every ordinary plan in which somebody is away for a day or a day is
-      // busy -- the everyday case, and no conflict at all.
+      // Neither list is decoration. `exhausted` alone would say "this date is wrong" and stop
+      // there, which is the one thing a person cannot act on. Either list alone would fire on
+      // every ordinary plan in which somebody is away for a day or a day is busy -- the everyday
+      // case, and no conflict at all.
+      //
+      // WHAT CHANGED WHEN THE TWO KINDS WERE MERGED, precisely: nothing about WHEN something is
+      // reported, only about HOW MANY objects carry it. `absenceBlocked` gave one conflict and a
+      // non-empty `fullFor` gave a second; the same two conditions now fill two fields of the
+      // same conflict. A Task with one reason yields one report as it did before, a Task with two
+      // yields one where it used to yield two. See [LevelConflict.NoPossibleDate].
       if (search.exhausted) {
-        // P5's message, unchanged in condition and in content: `exhausted && absenceBlocked`
-        // produces this and nothing else produces it. The `if` around it moved, the rule did not.
-        if (search.absenceBlocked) {
-          conflicts.add(LevelConflict.BlockingIntersectionEmpty(id, task.blocking.sorted()))
-        }
-        // P6's message, and it stands BESIDE the one above rather than in an `else`. An exhausted
-        // search can have had both reasons, and measured it usually did: of 48 give-ups over a
-        // grid of 80 constructed plans, 18 had both -- and in all 18 the booking alone was enough
-        // to make the Task unplannable, since the same plan without it finds a date. An `else`
-        // here would keep exactly those 18 quiet about the remedy that is often the cheaper one.
-        //
-        // The price is that one Task can appear in two blocks of the preview. That is the reading
-        // taken on 27.08.2026; the two it was weighed against are written up in the P6 report.
-        if (search.fullFor.isNotEmpty()) {
-          conflicts.add(LevelConflict.NoDayWithCapacity(id, search.fullFor.sorted()))
+        // `absenceBlocked` is set only inside `task.blocking.any { … }` below, so it implies a
+        // non-empty `task.blocking` -- the emptiness of this list is therefore the same statement
+        // as `!absenceBlocked`, and one flag is enough to carry it into the message.
+        val blocking = if (search.absenceBlocked) task.blocking.sorted() else emptyList()
+        val fullFor = search.fullFor.sorted()
+        // Exhausted with neither reason recorded stays silent, exactly as it did when these were
+        // two kinds: there would be nothing to name and nothing to change.
+        if (blocking.isNotEmpty() || fullFor.isNotEmpty()) {
+          conflicts.add(LevelConflict.NoPossibleDate(id, blocking, fullFor))
         }
       }
     }
@@ -621,9 +600,9 @@ private fun findEarliestWindow(
     //
     // THAT FALLBACK IS STILL THE SAME ONE AS FOR THE CAPACITY CASE -- the same date, the same
     // days, not a line of it changed. What has changed since is that neither half of it is silent
-    // any more: the caller turns an exhausted search with `absenceBlocked` into
-    // `LevelConflict.BlockingIntersectionEmpty` and one with a non-empty `fullFor` into
-    // `LevelConflict.NoDayWithCapacity`, and both at once when both applied.
+    // any more: the caller turns an exhausted search into ONE `LevelConflict.NoPossibleDate`,
+    // whose `blocking` list is filled when `absenceBlocked` was set and whose `fullFor` list is
+    // filled when a full day was hit -- both lists at once when both applied.
     //
     // WORTH KNOWING ABOUT THE CAPACITY HALF, because the bound is what makes it rare: a day that
     // is completely free ALWAYS fits, since the limit just below is at least the Task's own load.
