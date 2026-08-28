@@ -54,8 +54,19 @@ class ViewSaver extends SaverBase {
     writeTimelineTasks(facade, handler);
     new OptionSaver().saveOptionList(handler, facade.getGanttChart().getTaskLabelOptions().getOptions());
     new OptionSaver().saveOptionList(handler, ganttViewProvider.getOptions());
-    writeFilters(handler, taskFilterManager);
+    // The recent colours are written HERE and no longer after <filters>.
+    //
+    // MEASURED, not guessed: the Jackson reader keeps only the LAST uninterrupted run of <option>
+    // elements inside a <view>. Anything before an element of a different kind is dropped without a
+    // word. With `color.recent` standing after <filters>, every option written above it was lost on
+    // loading -- the four task label options, the four filter options and the divider position.
+    // Seen in HouseBuildingSample.gan, where a <timeline> stands between: six options in the file,
+    // one read back. Files without recent colours were spared only because <filters> happened to be
+    // the last element there.
+    //
+    // One run, filters last: nothing is lost, and no reader has to change.
     writeRecentColors(handler);
+    writeFilters(handler, taskFilterManager);
     endElement("view", handler);
 
     addAttribute("id", "resource-table", attrs);

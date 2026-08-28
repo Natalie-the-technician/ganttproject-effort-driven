@@ -22,6 +22,7 @@ import biz.ganttproject.app.MenuBuilder
 import biz.ganttproject.app.RootLocalizer
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.action.GPAction
+import net.sourceforge.ganttproject.fork.forkText
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import java.awt.event.ActionEvent
 
@@ -117,3 +118,89 @@ internal fun TaskFilter.getLocalizedDescription(): String =
     val suffix = if (this.title == "filter.completedTasks") "filter.uncompletedTasks" else this.title
     RootLocalizer.createWithRootKey("taskTable", RootLocalizer).formatText("$suffix.help")
   } else this.description
+
+// ---------------------------------------------------------------------------------------------
+// Named views. Built after the filter action set above, with two deliberate differences, both
+// noted where they occur.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * One menu entry per named view, with a check mark. Switching a view on switches the previous one
+ * off -- a view is a place to stand in, not something to stack.
+ */
+class TaskViewAction(
+  private val viewManager: TaskViewManager,
+  private val taskView: NamedTaskView
+) : GPAction(taskView.title) {
+
+  init {
+    // The title is user text, so it is no i18n key. GPAction has already asked the localizer in its
+    // constructor and got null; the name is put in here afterwards, as TaskFilterAction does for a
+    // custom filter.
+    putValue(NAME, taskView.title)
+    putValue(HELP_TEXT, forkText("fork.view.hiddenCount", taskView.hiddenCount))
+    super.putValue(SELECTED_KEY, viewManager.isActive(taskView))
+  }
+
+  override fun actionPerformed(e: ActionEvent?) {
+    val isChecked = getValue(SELECTED_KEY)
+    if (isChecked is Boolean) {
+      setChecked(isChecked)
+    }
+  }
+
+  override fun putValue(key: String?, newValue: Any?) {
+    if (SELECTED_KEY == key && newValue is Boolean) {
+      super.putValue(key, if (newValue) java.lang.Boolean.TRUE else java.lang.Boolean.FALSE)
+    } else {
+      super.putValue(key, newValue)
+    }
+  }
+
+  internal fun setChecked(value: Boolean) {
+    putValue(SELECTED_KEY, value)
+    if (value) {
+      viewManager.activeView = taskView
+    } else if (viewManager.isActive(taskView)) {
+      viewManager.showAll()
+    }
+  }
+}
+
+/**
+ * The drop-down of the views button in the toolbar above the task table.
+ *
+ * DIFFERENCE FROM TaskFilterActionSet, on purpose: the entries are cached per view instead of being
+ * created afresh every time the menu opens. Every GPAction registers itself with GanttLanguage in
+ * its constructor and is never unregistered, so building them again on each click would let that
+ * list grow without end. The filter set does exactly that today; there is no reason to copy it.
+ */
+class TaskViewActionSet(private val viewManager: TaskViewManager) {
+
+  private val actionCache = mutableMapOf<NamedTaskView, TaskViewAction>()
+
+  private val manageAction = GPAction.create("fork.view.manage") {
+    showViewDialog(viewManager)
+  }.also { it.putValue(javax.swing.Action.NAME, forkText("fork.view.manage")) }
+
+  /** THE RETURN PATH, always present and always enabled, whatever a view hides. */
+  private val showAllAction = GPAction.create("fork.view.showAll") {
+    viewManager.showAll()
+  }.also { it.putValue(javax.swing.Action.NAME, forkText("fork.view.showAll")) }
+
+  fun tableViewActions(builder: MenuBuilder) {
+    val viewActions = viewManager.views.map { view ->
+      actionCache.getOrPut(view) { TaskViewAction(viewManager, view) }.also {
+        it.putValue(javax.swing.Action.SELECTED_KEY, viewManager.isActive(view))
+      }
+    }
+    actionCache.keys.retainAll(viewManager.views.toSet())
+    builder.apply {
+      items(viewActions)
+      if (viewActions.isNotEmpty()) {
+        separator()
+      }
+      items(showAllAction, manageAction)
+    }
+  }
+}
