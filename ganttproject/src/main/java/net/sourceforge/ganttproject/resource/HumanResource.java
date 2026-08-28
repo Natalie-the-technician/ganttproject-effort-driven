@@ -437,12 +437,31 @@ public class HumanResource implements CustomPropertyHolder {
       return myCoordinator;
     }
 
-    // [fork change] The two axes. Like setCoordinator they do NOT fire an assignment change:
-    // nothing depends on them yet, and a redraw of the resource chart for a value nobody reads
-    // would only cost time.
+    // [fork change] The two axes, and they REPORT. Until 28.08.2026 they did not, with the note
+    // "nothing depends on them yet" -- and since P1/A2 that is no longer true. Axis A steers the
+    // window search of the levelling (built into `blocking` in `LevellingAdapter.toLevelTask` and
+    // asked per candidate day in `ResourceLevelling`), axis B steers the effort-driven duration
+    // (`ResourceAssignment.contributesEffort` in `EffortDrivenDurationAlgorithm`). A silent setter
+    // meant the plan was recomputed from a value nobody had been told about.
+    //
+    // fireAssignmentsChanged() AND NOT fireAssignmentChanged(): the latter drops the cached
+    // LoadDistribution first, and no axis takes part in it -- `LoadDistribution` is built from the
+    // load, the task activities and the days off, and none of the three reads an axis. A
+    // resetLoads() here would throw away a valid cache for nothing.
+    //
+    // ONLY WHEN THE VALUE REALLY MOVES. Every copying path writes both axes unconditionally -- the
+    // two copying constructors and `importData` in `ResourceAssignmentCollectionImpl`, its
+    // `commit()`, `ClipboardTaskProcessor`, `TaskManagerImpl.importData` and the file parser.
+    // Without the guard each of them would fire two extra events per assignment for values that
+    // did not change. The guard also closes the re-entry: a listener that writes back the value it
+    // was just told about produces no second event.
     @Override
     public void setBlocking(boolean blocking) {
+      if (myBlocking == blocking) {
+        return;
+      }
       myBlocking = blocking;
+      HumanResource.this.fireAssignmentsChanged();
     }
 
     @Override
@@ -452,7 +471,11 @@ public class HumanResource implements CustomPropertyHolder {
 
     @Override
     public void setNoEffort(boolean noEffort) {
+      if (myNoEffort == noEffort) {
+        return;
+      }
       myNoEffort = noEffort;
+      HumanResource.this.fireAssignmentsChanged();
     }
 
     @Override
