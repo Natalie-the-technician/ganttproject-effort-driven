@@ -21,6 +21,9 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject.fork
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -57,19 +60,21 @@ import java.util.Locale
  *    - every german key has an english counterpart
  *    - a translated column name does not stop the column being found
  *
- *  still further down, on toggl-import (keys: fork.toggl.*, fork.split.*)
+ *  added here (keys: fork.toggl.*, fork.split.*)
  *    - german toggl texts come from the german file
- *    - umlauts survive being read from the file
+ *    - umlauts survive in the toggl texts too
  *    - a rejected split explains itself with its numbers   (placeholder substitution)
  *    - no english exception text reaches the connection check message
  *    - the successful check names the person and the count
  *    - unreadable entries are mentioned in the message
+ *    - the token field explains where the token comes from   (also an umlaut probe)
+ *    - the help address is not carried in the translation files
  *    - button labels are short enough not to be cut off
  *    - the dialog text still names what each choice costs
  *
- * The fallback to English becomes assertable exactly here, with the first defined key — on
- * fork-base it could only be shown structurally. The placeholder substitution still cannot: the
- * one message of this fork that carries arguments belongs to toggl-import.
+ * With this branch the bundle is complete again: the fallback to English arrived with
+ * effort-planning, and the placeholder substitution is assertable here — `a rejected split
+ * explains itself with its numbers` is the one message of this fork that carries arguments.
  */
 class ForkI18nTest {
 
@@ -214,6 +219,188 @@ class ForkI18nTest {
     assertEquals(1, manager.definitions.count { it.id == "effort_hours" },
       "the column was created a second time instead of being found")
   }
+
+
+  @Test
+  fun `german toggl texts come from the german file`() {
+    assertEquals("Zeiterfassung", ForkI18n.textOrNull("fork.toggl.section", german))
+  }
+
+  /**
+   * The same umlaut probe as on effort-planning, but over a key of THIS branch.
+   *
+   * Not a duplicate: the two assert different files' worth of text. effort-planning's German file
+   * and the keys added here are separate bodies of text, and a decoding fault could hit either on
+   * its own — the bundle is merged from whatever the branch happens to ship.
+   */
+  @Test
+  fun `umlauts survive in the toggl texts too`() {
+    assertEquals("Toggl-Verbindung prüfen", ForkI18n.textOrNull("fork.toggl.checkConnection", german))
+  }
+
+  /**
+   * The reason a split was rejected must arrive as a real sentence with the numbers filled in,
+   * not as a bare key. This is the one message of the fork that carries arguments, so it is also
+   * the one where a broken pattern would show up as literal "{0}" on screen.
+   *
+   * It is therefore the only place where the PLACEHOLDER SUBSTITUTION of the bundle can be
+   * asserted at all — neither fork-base nor effort-planning defines a key that takes arguments.
+   */
+  @Test
+  fun `a rejected split explains itself with its numbers`() {
+    val rejected = net.sourceforge.ganttproject.timetracking.validateSplit(
+      4.0,
+      listOf(
+        net.sourceforge.ganttproject.timetracking.SplitPart(1, 2.0),
+        net.sourceforge.ganttproject.timetracking.SplitPart(2, 1.0)))
+        as net.sourceforge.ganttproject.timetracking.SplitResult.Invalid
+
+    val message = rejected.message
+    assertNotEquals(rejected.reasonKey, message, "the message is still the bare key")
+    // Both figures have to appear, otherwise the sentence does not say what is wrong. The decimal
+    // separator depends on the language, so only the digits are asserted.
+    assertTrue(Regex("3[.,]00").containsMatchIn(message), "the sum is missing from: $message")
+    assertTrue(Regex("4[.,]00").containsMatchIn(message), "the total is missing from: $message")
+  }
+
+  /**
+   * The result of the connection check is built from the failure KIND, never from the exception
+   * message. That message is English prose written for the log; showing it would put
+   * "Toggl refused the token…" into a German dialog.
+   *
+   * Every failure kind is walked, so a new one added to the enum without a text shows up here as
+   * a bare key rather than in front of the user.
+   */
+  @Test
+  fun `no english exception text reaches the connection check message`() {
+    val developerText = "Toggl refused the token. Note that the token goes into the USERNAME field"
+
+    net.sourceforge.ganttproject.timetracking.TogglFailure.entries.forEach { failure ->
+      val message = net.sourceforge.ganttproject.timetracking.connectionCheckMessage(
+        net.sourceforge.ganttproject.timetracking.ConnectionCheckResult.Failed(
+          "Nati", failure, developerText))
+
+      assertFalse(message.contains("USERNAME"),
+        "the english developer text reached the user for $failure: $message")
+      assertFalse(message.startsWith("fork."), "no text is defined for $failure: $message")
+    }
+  }
+
+  /**
+   * The successful case has to name the person and the count -- a bare "it works" would not tell
+   * the user whether the right account was reached.
+   */
+  @Test
+  fun `the successful check names the person and the count`() {
+    val message = net.sourceforge.ganttproject.timetracking.connectionCheckMessage(
+      net.sourceforge.ganttproject.timetracking.ConnectionCheckResult.Ok("Nati", 7, listOf()))
+
+    assertTrue(message.contains("Nati"), "the person is missing from: $message")
+    assertTrue(message.contains("7"), "the count is missing from: $message")
+  }
+
+  /**
+   * Entries the code could not read must be mentioned. On a first run against the real service
+   * that is the interesting part, and swallowing it would hide the surprise the check exists for.
+   */
+  @Test
+  fun `unreadable entries are mentioned in the message`() {
+    val quiet = net.sourceforge.ganttproject.timetracking.connectionCheckMessage(
+      net.sourceforge.ganttproject.timetracking.ConnectionCheckResult.Ok("Nati", 7, listOf()))
+    val noisy = net.sourceforge.ganttproject.timetracking.connectionCheckMessage(
+      net.sourceforge.ganttproject.timetracking.ConnectionCheckResult.Ok(
+        "Nati", 7, listOf("entry #3 skipped: missing start")))
+
+    assertNotEquals(quiet, noisy, "the unreadable entry left no trace in the message")
+    assertTrue(noisy.contains("entry #3"), "the entry is not named in: $noisy")
+  }
+
+  /**
+   * Button labels have to stay short.
+   *
+   * Found on screen, not by reasoning: "Neuen behalten (bisherigen verwerfen)" was rendered as
+   * "Neuen behalten (bisherigen verwerf…" — the buttons have a fixed width and truncate, even with
+   * the window maximised. The one thing that must not be cut off is what the button costs you.
+   *
+   * The consequence now lives in the dialog text; the labels only name the action. 24 characters
+   * is well under the ~36 at which truncation was observed, and covers translations being longer
+   * than the German original.
+   */
+  @Test
+  fun `button labels are short enough not to be cut off`() {
+    val labels = listOf("fork.toggl.collision.overwrite", "fork.toggl.collision.discard")
+
+    listOf(Locale.GERMANY, Locale.US).forEach { locale ->
+      labels.forEach { key ->
+        val label = ForkI18n.textOrNull(key, locale)
+        assertNotNull(label, "no text for $key in $locale")
+        assertTrue(label!!.length <= 24,
+          "the label would be truncated on the button and the consequence unreadable: " +
+            "$key in $locale is ${label.length} characters: $label")
+      }
+    }
+  }
+
+  /**
+   * The hint at the token field has to say WHERE the token comes from, in both languages. Without
+   * it the field is a blank box asking for a secret, which is the state this hint was added to end.
+   *
+   * The German text carries an umlaut of its own, so a decoding fault in this line shows up here
+   * rather than in a screenshot.
+   */
+  @Test
+  fun `the token field explains where the token comes from`() {
+    assertEquals(
+      "Persönliches Toggl-API-Token einfügen. Es steht unten auf deiner Toggl-Profilseite.",
+      ForkI18n.textOrNull("fork.toggl.token.hint", german))
+    assertEquals(
+      "Paste your personal Toggl API token. You find it at the bottom of your Toggl profile page.",
+      ForkI18n.textOrNull("fork.toggl.token.hint", english))
+
+    listOf(german, english).forEach { locale ->
+      val link = ForkI18n.textOrNull("fork.toggl.token.link", locale)
+      assertNotNull(link, "the link has no label in $locale")
+    }
+  }
+
+  /**
+   * The address of the help article is a CONSTANT in MainPropertiesPanel.kt, deliberately not a
+   * translated text: it is the same in every language, and a copy per language is a copy nobody
+   * updates when Toggl moves the page.
+   *
+   * Asserted over the files rather than over the keys, because the mistake this guards against is
+   * someone pasting the address into a translation as the visible link text.
+   */
+  @Test
+  fun `the help address is not carried in the translation files`() {
+    listOf("/language/fork/i18n.properties", "/language/fork/i18n_de.properties").forEach { path ->
+      val values = valuesOf(path)
+      assertNotNull(values.firstOrNull(), "$path was not read, so this test proves nothing")
+      assertTrue(values.none { it.contains("toggl.com") },
+        "$path carries the help address; it belongs in the code, as a constant")
+    }
+  }
+
+  /**
+   * Whatever the buttons no longer say has to be said in the dialog text instead, otherwise
+   * shortening them quietly removed the very information the dialog exists for.
+   */
+  @Test
+  fun `the dialog text still names what each choice costs`() {
+    val text = ForkI18n.textOrNull("fork.toggl.collision.choice", Locale.GERMANY)
+
+    assertNotNull(text, "the explanation of the two choices is missing")
+    assertTrue(text!!.contains("Neuen behalten"), "the first choice is not explained: $text")
+    assertTrue(text.contains("Bisherigen behalten"), "the second choice is not explained: $text")
+    assertTrue(text.contains("verwirft"), "the text does not say that something is discarded: $text")
+  }
+
+  private fun valuesOf(path: String): List<String> =
+    java.util.Properties().also { properties ->
+      ForkI18n::class.java.getResourceAsStream(path)?.use {
+        it.reader(Charsets.UTF_8).use(properties::load)
+      }
+    }.let { properties -> properties.stringPropertyNames().map { properties.getProperty(it) } }
 
   private fun keysOf(path: String): Set<String> =
     java.util.Properties().also { properties ->
