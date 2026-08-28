@@ -26,6 +26,7 @@ import biz.ganttproject.customproperty.CustomPropertyDefinition
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.fork.forkText
 import net.sourceforge.ganttproject.resource.HumanResource
+import net.sourceforge.ganttproject.task.ResourceAssignment
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskContainmentHierarchyFacade
 import net.sourceforge.ganttproject.task.TaskManager
@@ -188,13 +189,36 @@ fun HumanResource.capacitySchedule(manager: CustomPropertyManager): CapacityPars
 }
 
 /**
+ * [fork change] AXIS B -- does this assignment contribute working hours at all?
+ *
+ * `isNoEffort` is carried by every assignment and stored as the XML attribute `no-effort`. It is
+ * NEGATED on purpose: `false` means "contributes", so a file that has never seen this fork, and
+ * every assignment made before the tick existed, computes exactly as it did before. Do not turn
+ * the name around -- the default has to stay `false`.
+ *
+ * WHAT IT IS FOR: the person who attends the review, holds the budget or has to sign the result
+ * belongs on the task -- they are part of the plan, they show up in the load chart and in the
+ * reports. But they do no work that eats into the effort, so they must not shorten the task.
+ * Without the tick the only way to say that was to leave them off the task altogether, which
+ * loses the information.
+ *
+ * This is the ONE place the question is asked, so that the three readers of the assignments
+ * ([Task.availableHoursPerDay], [Task.capacitySchedule] and
+ * [net.sourceforge.ganttproject.fork.durationDaysWithDaysOff]) cannot drift apart. If they did,
+ * the duration would depend on which of them happened to run -- on whether an hours schedule was
+ * filled in, or whether anyone had booked a day off.
+ */
+val ResourceAssignment.contributesEffort: Boolean get() = !this.isNoEffort
+
+/**
  * [fork change] The hours schedule a Task sees through its assignments.
  *
  * Several people are added together, each with their share -- exactly as
- * [Task.availableHoursPerDay] does for the fixed value.
+ * [Task.availableHoursPerDay] does for the fixed value. Assignments that carry axis B are left
+ * out here as well; see [contributesEffort].
  */
 fun Task.capacitySchedule(resourceProperties: CustomPropertyManager): CapacityParseResult {
-  val parts = this.assignments.mapNotNull { assignment ->
+  val parts = this.assignments.filter { it.contributesEffort }.mapNotNull { assignment ->
     assignment.resource?.let { it.capacitySchedule(resourceProperties) to assignment.load / 100.0 }
   }
   if (parts.isEmpty()) {
@@ -216,9 +240,18 @@ fun Task.capacitySchedule(resourceProperties: CustomPropertyManager): CapacityPa
 /**
  * Hours per day available to a task through its assignments, weighted by the assignment load.
  * Returns 0.0 when nothing is assigned.
+ *
+ * [fork change] Assignments that carry axis B contribute nothing; see [contributesEffort]. When
+ * EVERY assignment carries it the result is 0.0, the same answer as for a task with nobody on it
+ * -- and the callers already treat that as "there is nothing to derive a duration from" and leave
+ * the task alone. A task attended only by onlookers keeps the duration it has, which is the only
+ * honest answer.
  */
 fun Task.availableHoursPerDay(resourceProperties: CustomPropertyManager): Double =
   this.assignments.sumOf { assignment ->
+    if (!assignment.contributesEffort) {
+      return@sumOf 0.0
+    }
     val resource = assignment.resource as? HumanResource ?: return@sumOf 0.0
     // [fork change] The utilisation takes effect HERE, on the available hours -- not as a
     // packing limit in levelling.

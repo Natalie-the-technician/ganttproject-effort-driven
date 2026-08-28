@@ -24,6 +24,7 @@ import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.algorithm.capacitySchedule
+import net.sourceforge.ganttproject.task.algorithm.contributesEffort
 import net.sourceforge.ganttproject.task.algorithm.effortHours
 import java.time.LocalDate
 
@@ -91,7 +92,15 @@ fun Task.durationDaysWithDaysOff(
   if (effort <= 0.0) {
     return 1
   }
-  val shares = this.assignments.mapNotNull { assignment ->
+  // [fork change] AXIS B. An assignment marked `no-effort` is dropped whole, not merely set to
+  // zero hours -- and dropping it whole is what also takes that person's days off out of the
+  // walk. That is the same answer either way, and it is the RIGHT one: somebody who contributes
+  // no hours cannot have hours taken away from them by a holiday. Their absence changes nothing
+  // about how long the work takes, because they were not doing the work.
+  //
+  // Whether that person's absence should STOP the task is a different question entirely, and it
+  // is not asked here -- that is axis A (`blocking`), and it is not built on this branch.
+  val shares = this.assignments.filter { it.contributesEffort }.mapNotNull { assignment ->
     (assignment.resource as? HumanResource)?.let { resource ->
       Share(
         resource.capacitySchedule(resourceProperties).schedule,
