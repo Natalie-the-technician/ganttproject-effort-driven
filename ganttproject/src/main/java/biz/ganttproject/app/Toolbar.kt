@@ -23,6 +23,7 @@ import biz.ganttproject.core.option.FontSpec
 import biz.ganttproject.walkTree
 import javafx.application.Platform
 import javafx.beans.property.SimpleObjectProperty
+import javafx.beans.value.ObservableValue
 import javafx.collections.FXCollections
 import javafx.embed.swing.JFXPanel
 import javafx.event.EventHandler
@@ -104,7 +105,27 @@ private class ButtonVisitor(val action: GPAction, val appFont: SimpleObjectPrope
   }
 }
 
-private class DropdownVisitor(val actions: List<GPAction>, val appFont: SimpleObjectProperty<Font>?) {
+/**
+ * [Fork change] `selectedIndex` was added on 25 August 2026. Before that this class always
+ * preselected entry 0 and never touched the selection again, which is correct as long as the
+ * dropdown is a pure command list -- the navigation dropdown is one, it has no state to be out of
+ * sync with.
+ *
+ * The comparison dropdown does have such a state: which view the chart is showing. That state can
+ * ALSO be changed from somewhere else, namely the settings page. So the selection is not a
+ * starting value but an observable one, and the box follows it.
+ *
+ * MEASURED ON 25 August 2026, and this is why it is an observable rather than an `Int`: with a
+ * fixed starting value, switching the view on the settings page left the box reading
+ * "Compare: dates" while the chart was already drawing durations. A caption that contradicts what
+ * is on screen is exactly the ambiguity this control exists to avoid.
+ *
+ * Reordering the list so that the current value comes first would have avoided the parameter, but
+ * then the order of the entries would depend on the setting -- the same list would read
+ * differently on two machines. A stable order is worth one parameter.
+ */
+private class DropdownVisitor(val actions: List<GPAction>, val appFont: SimpleObjectProperty<Font>?,
+                              val selectedIndex: ObservableValue<Number>? = null) {
   fun visit(toolbar: FXToolbar) {
     if (actions.isEmpty()) {
       return
@@ -115,7 +136,13 @@ private class DropdownVisitor(val actions: List<GPAction>, val appFont: SimpleOb
           actions[comboBox.selectionModel.selectedIndex].actionPerformed(null)
         }
       }
-      comboBox.selectionModel.select(0)
+      comboBox.selectionModel.select((selectedIndex?.value?.toInt() ?: 0).coerceIn(actions.indices))
+      // Selecting programmatically fires onAction, so the action for the entry now shown runs
+      // again. That is harmless as long as an action asked for the state it is already in does
+      // nothing -- ChartComparisonAction returns early in that case.
+      selectedIndex?.addListener { _, _, value ->
+        Platform.runLater { comboBox.selectionModel.select(value.toInt().coerceIn(actions.indices)) }
+      }
       comboBox.onAction = EventHandler { actionHandler() }
       comboBox.cellFactory = Callback {listView ->
         ComboBoxListCellImpl().also {
@@ -195,6 +222,15 @@ class FXToolbarBuilder {
 
   fun addDropdown(actions: List<GPAction>): FXToolbarBuilder {
     visitors.add(DropdownVisitor(actions, appFont)::visit)
+    return this
+  }
+
+  /**
+   * [Fork change] A dropdown whose selection follows [selectedIndex] instead of standing on entry
+   * 0 forever. See [DropdownVisitor].
+   */
+  fun addDropdown(actions: List<GPAction>, selectedIndex: ObservableValue<Number>): FXToolbarBuilder {
+    visitors.add(DropdownVisitor(actions, appFont, selectedIndex)::visit)
     return this
   }
 

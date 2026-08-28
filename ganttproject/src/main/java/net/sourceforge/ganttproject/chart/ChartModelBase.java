@@ -263,6 +263,10 @@ public abstract class ChartModelBase implements /* TimeUnitStack.Listener, */Cha
     myChartGridOptions = new ChartOptionGroup("ganttChartGridDetails",
         new GPOption[] {
           projectConfig.getRedlineOption(),
+          // [Fork change] Which comparison the band underneath a task bar shows at startup.
+          // Same group as the today line, and for the same reason: this is the group that
+          // GanttOptions persists. See UIConfiguration#getComparisonAtStartupOption.
+          projectConfig.getComparisonAtStartupOption(),
           projectConfig.getProjectBoundariesOption(),
           projectConfig.getWeekendAlphaRenderingOption(),
           myChartUIConfiguration.getChartStylesOption(),

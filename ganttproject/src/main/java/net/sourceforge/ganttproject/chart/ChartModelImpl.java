@@ -24,6 +24,7 @@ import net.sourceforge.ganttproject.chart.item.TaskRegularAreaChartItem;
 import net.sourceforge.ganttproject.gui.UIConfiguration;
 import net.sourceforge.ganttproject.gui.options.OptionsPageBuilder;
 import net.sourceforge.ganttproject.task.Task;
+import net.sourceforge.ganttproject.fork.ChartComparison;
 import net.sourceforge.ganttproject.task.TaskManager;
 
 import java.util.Arrays;
@@ -53,6 +54,13 @@ public class ChartModelImpl extends ChartModelBase {
   private Set<Task> myHiddenTasks;
 
   private List<GanttPreviousStateTask> myBaseline;
+
+  /**
+   * [Fork change] What the band underneath a task bar compares. See {@link ChartComparison}. The
+   * default is the date comparison, so that a project which knows nothing about the effort
+   * columns behaves exactly like the original.
+   */
+  private ChartComparison myComparison = ChartComparison.DATES;
 
   public ChartModelImpl(TaskManager taskManager, TimeUnitStack timeUnitStack, final UIConfiguration projectConfig) {
     super(taskManager, timeUnitStack, projectConfig);
@@ -225,12 +233,28 @@ public class ChartModelImpl extends ChartModelBase {
     return myBaseline;
   }
 
+  /** [Fork change] The selected comparison view. */
+  public ChartComparison getComparison() {
+    return myComparison;
+  }
+
+  /**
+   * [Fork change] Sets the comparison view and returns the new row height, just like
+   * {@link #setBaseline}: the effort view needs the same room for its band as a baseline does,
+   * even when no baseline is selected at all.
+   */
+  public int setComparison(ChartComparison comparison) {
+    myComparison = comparison;
+    return calculateRowHeight();
+  }
+
   @Override
   public ChartModelBase createCopy() {
     ChartModelImpl result = new ChartModelImpl(getTaskManager(), getTimeUnitStack(), getProjectConfig());
     super.setupCopy(result);
     result.setVisibleTasks(getVisibleTasks());
     result.setBaseline(getBaseline());
+    result.setComparison(getComparison());
     return result;
   }
 

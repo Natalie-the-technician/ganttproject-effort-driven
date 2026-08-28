@@ -206,15 +206,7 @@ public class StyledPainterImpl implements Painter {
       @Override
       public void paint(Rectangle next) {
         Graphics g = myGraphics;
-        final Color c;
-        if (next.hasStyle("earlier")) {
-          c = myConfig.getEarlierPreviousTaskColor();
-        } else if (next.hasStyle("later")) {
-          c = myConfig.getLaterPreviousTaskColor();
-        } else {
-          c = myConfig.getPreviousTaskColor();
-        }
-        g.setColor(c);
+        applyComparisonBandPaint(next);
 
         if (next.hasStyle("milestone")) {
           int middleX = (next.getWidth() <= next.getHeight()) ? next.getRightX() - next.getWidth() / 2 : next.getLeftX()
@@ -237,15 +229,28 @@ public class StyledPainterImpl implements Painter {
           int rightx = next.getLeftX() + next.getWidth();
           g.fillPolygon(new int[]{rightx - 3, rightx, rightx}, new int[]{topy, topy, topy + 3}, 3);
         } else {
-          g.fillRect(next.getLeftX(), next.getTopY(), next.getWidth(), next.getHeight());
+          // [Fork change] In the combined view a band occupies only one of two tracks -- the
+          // date half on top, the duration half below. Which one follows from the style the
+          // scene builder set; see GanttChartSceneBuilder.renderBothBands.
+          int topY = next.getTopY();
+          int height = next.getHeight();
+          if (next.hasStyle("band.upper")) {
+            height = height / 2;
+          } else if (next.hasStyle("band.lower")) {
+            int upperHeight = height / 2;
+            topY = topY + upperHeight;
+            height = height - upperHeight;
+          }
+          int bottomY = topY + height;
+          g.fillRect(next.getLeftX(), topY, next.getWidth(), height);
           g.setColor(Color.black);
-          g.drawLine(next.getLeftX(), next.getTopY(), next.getRightX(), next.getTopY());
-          g.drawLine(next.getLeftX(), next.getBottomY(), next.getRightX(), next.getBottomY());
+          g.drawLine(next.getLeftX(), topY, next.getRightX(), topY);
+          g.drawLine(next.getLeftX(), bottomY, next.getRightX(), bottomY);
           if (next.hasStyle("start")) {
-            g.drawLine(next.getLeftX(), next.getTopY(), next.getLeftX(), next.getBottomY());
+            g.drawLine(next.getLeftX(), topY, next.getLeftX(), bottomY);
           }
           if (next.hasStyle("end")) {
-            g.drawLine(next.getRightX(), next.getTopY(), next.getRightX(), next.getBottomY());
+            g.drawLine(next.getRightX(), topY, next.getRightX(), bottomY);
           }
         }
       }
@@ -280,6 +285,62 @@ public class StyledPainterImpl implements Painter {
   public void prePaint() {
     myGraphics.setStroke(defaultStroke);
     myGraphics.setFont(myConfig.getChartFont());
+  }
+
+  /**
+   * The colour of the comparison band underneath a task bar.
+   *
+   * [Fork change] Pulled out of the rectangle painter because it is now needed in two places: for
+   * the band of an ordinary task and for the rhombus of a milestone. The rhombus takes a
+   * different route through the painter, see {@link #paint(Canvas.Rhombus)}.
+   */
+  /**
+   * [Fork change] The ground the date comparison is hatched onto. It marks the DATE AXIS, not a
+   * result: wherever this ground appears, the band is answering "am I on schedule" -- in the
+   * dates view and in the upper half of the combined one. The duration and effort bands stay
+   * plain, because a shift plays no part in what they say.
+   *
+   * WHY A HATCH AND WHY THIS ONE, measured on 26 August 2026:
+   *
+   *   A PATTERN WITH COVERAGE d STRETCHES EVERY COLOUR SEPARATION TO THE FACTOR d -- no matter
+   *   which ground lies underneath. The area mean of a tiled texture is
+   *       d x comparisonColour + (1 - d) x ground,
+   *   so the ground cancels out of the difference between two cases.
+   *
+   *   THICK_BACKSLASH covers 8 of 16 cells, so exactly half: the distances between red, green
+   *   and grey fall from 253 / 204 / 204 units to 126 / 101 / 102. That price is known and
+   *   accepted.
+   *
+   *   CHANGING THE LILAC CHANGES NOTHING about that -- measured with a light and a medium lilac,
+   *   the same numbers came out both times. Whoever wants more separation has to raise the
+   *   COVERAGE, not swap the ground. THICK_GRID with 12 of 16 would give 0.75 instead of 0.5.
+   *
+   * The weakest case is grey on lilac: 47 units from the unhatched ground, against 99 for red
+   * and 114 for green. With a lighter lilac it would drop to 26 and become invisible.
+   */
+  private static final Color COMPARISON_DATES_GROUND = new Color(147, 112, 219);
+
+  /**
+   * [Fork change] Sets the fill for a comparison band: hatched over the lilac ground when the
+   * date axis is speaking, a plain colour otherwise. See {@link #COMPARISON_DATES_GROUND}.
+   */
+  private void applyComparisonBandPaint(Canvas.Rectangle next) {
+    Color colour = getComparisonBandColor(next);
+    if (next.hasStyle("axis.dates")) {
+      myGraphics.setPaint(new ShapePaint(ShapeConstants.THICK_BACKSLASH, colour, COMPARISON_DATES_GROUND));
+    } else {
+      myGraphics.setColor(colour);
+    }
+  }
+
+  private Color getComparisonBandColor(Canvas.Shape shape) {
+    if (shape.hasStyle("earlier")) {
+      return myConfig.getEarlierPreviousTaskColor();
+    }
+    if (shape.hasStyle("later")) {
+      return myConfig.getLaterPreviousTaskColor();
+    }
+    return myConfig.getPreviousTaskColor();
   }
 
   @Override
@@ -348,6 +409,33 @@ public class StyledPainterImpl implements Painter {
 
   @Override
   public void paint(Canvas.Rhombus rhombus) {
+    // [Fork change] ---- begin ----
+    //
+    // A MILESTONE IS A RHOMBUS, NOT A RECTANGLE. TaskActivitySceneBuilder creates a
+    // Canvas.Rhombus for it, and that used to land at the PolygonRenderer unchecked -- which
+    // never consults myStyle2painter. A milestone's comparison band was therefore painted in the
+    // TASK'S OWN COLOUR instead of one of the three comparison colours, and the milestone branch
+    // in the band painter above was dead code: it can never receive a rectangle.
+    //
+    // Measured on a real plan on 20 August 2026: the rhombus of a shifted milestone came out as
+    // srgb(255,51,51) -- that is the task colour, none of the comparison colours
+    // (192,192,192 / 229,50,50 / 50,229,50). 27 rhombi were affected, 20 of which looked red
+    // without a single one being a red of the comparison.
+    //
+    // This is a defect OF THE ORIGINAL, not of this fork: e523bedc6 carries the same rhombus
+    // creation and the same route through the painter.
+    //
+    // [Fork change] ---- end ----
+    // CAREFUL, there was a failed attempt here already: `setStyle` and `addStyle` fill TWO
+    // DIFFERENT fields in Canvas.Shape. `hasStyle` only sees what `addStyle` put there; the main
+    // style from `setStyle` lives in `getStyle()`. A query via hasStyle("previousStateTask") is
+    // therefore always wrong.
+    if ("previousStateTask".equals(rhombus.getStyle())) {
+      Graphics g = myGraphics;
+      g.setColor(getComparisonBandColor(rhombus));
+      g.fillPolygon(rhombus.getPointsX(), rhombus.getPointsY(), rhombus.getPointCount());
+      return;
+    }
     myPolygonRenderer.render(rhombus);
   }
 }

@@ -19,6 +19,7 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject.chart;
 
 import net.sourceforge.ganttproject.GanttPreviousState;
+import net.sourceforge.ganttproject.fork.ChartComparison;
 import biz.ganttproject.core.option.ColorOption;
 import biz.ganttproject.core.option.EnumerationOption;
 import biz.ganttproject.core.option.GPOptionGroup;
@@ -27,6 +28,12 @@ public interface GanttChart extends TimelineChart {
   void setBaseline(GanttPreviousState ganttPreviousState);
 
   GanttPreviousState getBaseline();
+
+  /** [Fork change] What the band underneath a task bar compares. */
+  ChartComparison getComparison();
+
+  /** [Fork change] Sets the comparison view and adjusts the row height. */
+  void setComparison(ChartComparison comparison);
 
   GPOptionGroup getBaselineColorOptions();
   ColorOption getTaskDefaultColorOption();

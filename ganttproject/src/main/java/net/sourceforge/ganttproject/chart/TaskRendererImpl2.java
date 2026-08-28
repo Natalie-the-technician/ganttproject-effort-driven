@@ -32,6 +32,10 @@ import biz.ganttproject.core.time.TimeUnit;
 import biz.ganttproject.customproperty.CustomPropertyManager;
 import com.google.common.collect.ImmutableList;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
+import net.sourceforge.ganttproject.fork.ChartComparison;
+import net.sourceforge.ganttproject.fork.ChartComparisonKt;
+import net.sourceforge.ganttproject.fork.LevellingAdapterKt;
+import net.sourceforge.ganttproject.task.algorithm.EffortDrivenDurationAlgorithmKt;
 import net.sourceforge.ganttproject.chart.gantt.*;
 import net.sourceforge.ganttproject.task.*;
 
@@ -121,6 +125,30 @@ public class TaskRendererImpl2 extends ChartRendererBase {
     }
 
     @Override
+    public ChartComparison getComparison() {
+      return myModel.getComparison();
+    }
+
+    /**
+     * [Fork change] The renderer fetches the effort numbers here rather than in the scene
+     * builder: only here are the real task and the column manager available. A task that no
+     * longer exists yields null -- the effort comparison then draws nothing.
+     */
+    @Override
+    public Double getOriginalEffortHours(int rowId) {
+      Task task = myModel.getTaskManager().getTask(rowId);
+      return task == null ? null
+        : LevellingAdapterKt.originalEffortHours(task, myModel.getTaskManager().getCustomPropertyManager());
+    }
+
+    @Override
+    public Double getActualEffortHours(int rowId) {
+      Task task = myModel.getTaskManager().getTask(rowId);
+      return task == null ? null
+        : EffortDrivenDurationAlgorithmKt.actualEffortHours(task, myModel.getTaskManager().getCustomPropertyManager());
+    }
+
+    @Override
     public TaskActivitySceneBuilder.ChartApi getChartApi(TaskLabelSceneBuilder<ITaskSceneTask> labelsRenderer) {
       return new TaskActivitySceneChartApi(myModel) {
         @Override
@@ -189,7 +217,12 @@ public class TaskRendererImpl2 extends ChartRendererBase {
 
   public int calculateRowHeight() {
     int rowHeight = chartRenderer.myLabelsRenderer.calculateRowHeight();
-    if (myModel.getBaseline() != null) {
+    // [Fork change] The effort view needs the same room for its band even though it works
+    // without a baseline. Without this line it draws into the row below. The durations view was
+    // added to the same condition on 25 August 2026 for the same reason: without a baseline it
+    // draws a NEUTRAL band rather than staying empty, so it needs the room too.
+    if (myModel.getBaseline() != null
+        || ChartComparisonKt.needsBandRoomWithoutBaseline(myModel.getComparison())) {
       rowHeight = rowHeight + 8;
     }
     return rowHeight;

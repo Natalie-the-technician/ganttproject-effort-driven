@@ -30,6 +30,11 @@ import biz.ganttproject.core.time.TimeDuration;
 import biz.ganttproject.core.time.TimeUnit;
 import biz.ganttproject.customproperty.CustomPropertyManager;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
+import net.sourceforge.ganttproject.fork.ChartComparison;
+import net.sourceforge.ganttproject.fork.ComparisonAxis;
+import net.sourceforge.ganttproject.fork.BothComparisons;
+import net.sourceforge.ganttproject.fork.ChartComparisonKt;
+import net.sourceforge.ganttproject.fork.ComparisonResult;
 import net.sourceforge.ganttproject.gui.options.OptionsPageBuilder;
 import net.sourceforge.ganttproject.task.*;
 
@@ -56,6 +61,18 @@ public class GanttChartSceneBuilder {
     List<ITaskSceneTask> getVisibleTaskSceneTasks();
     List<ITaskSceneTask> getTasksInDocumentOrder();
     List<GanttPreviousStateTask> getBaseline();
+
+    /** [Fork change] What the band underneath the bar compares. See {@link ChartComparison}. */
+    ChartComparison getComparison();
+
+    /**
+     * [Fork change] The task's original effort estimate in hours, or null. By row id rather than
+     * by task, because ITaskSceneTask deliberately knows nothing about custom columns.
+     */
+    Double getOriginalEffortHours(int rowId);
+
+    /** [Fork change] The task's recorded hours, or null. */
+    Double getActualEffortHours(int rowId);
     TaskActivitySceneBuilder.ChartApi getChartApi(TaskLabelSceneBuilder<ITaskSceneTask> labelsRenderer);
     GPCalendarCalc getCalendar();
     Date getStartDate();
@@ -207,7 +224,7 @@ public class GanttChartSceneBuilder {
         }
       }
       renderLabels(boundPolygons);
-      renderBaseline(t, rowNum, defaultUnitOffsets);
+      renderComparisonBand(t, rowNum, defaultUnitOffsets);
       rowNum++;
       Canvas.Line nextLine = getPrimitiveContainer().createLine(0, rowNum * getRowHeight(),
           input.getWidth(), rowNum * getRowHeight());
@@ -219,81 +236,332 @@ public class GanttChartSceneBuilder {
     return myChartApi.getRowHeight();
   }
 
+  /**
+   * [Fork change] Draws the band underneath the task bar -- depending on the selected view the
+   * date comparison, the effort comparison or the duration comparison. See {@link ChartComparison}
+   * for why there is more than one of them.
+   *
+   * EXACTLY ONE BAND IS EVER DRAWN. The dropdown in the chart toolbar says which, and it always
+   * names the view currently on screen.
+   */
+  private void renderComparisonBand(ITaskSceneTask t, int rowNum, OffsetList defaultUnitOffsets) {
+    switch (input.getComparison()) {
+      case EFFORT:
+        renderEffortBand(t, rowNum, defaultUnitOffsets);
+        break;
+      case DURATIONS:
+        renderDurationBand(t, rowNum, defaultUnitOffsets);
+        break;
+      case DATES_AND_DURATIONS:
+        renderBothBands(t, rowNum, defaultUnitOffsets);
+        break;
+      default:
+        renderBaseline(t, rowNum, defaultUnitOffsets);
+        break;
+    }
+  }
+
+  /**
+   * [Fork change] The duration band: today's length against the length in the baseline.
+   *
+   * WHY THIS BAND HANGS OFF TODAY'S START AND NOT OFF THE PLANNED ONE, unlike
+   * {@link #renderBaseline}. This is deliberate and it is not an oversight -- if the two views
+   * ever get the same anchor, the test
+   * `a merely shifted task -- the dates view reports a deviation, the durations view does not`
+   * in `ChartComparisonTest` fails on purpose.
+   *
+   * The dates view asks "am I on schedule". Its band therefore lies where the task was PLANNED to
+   * lie: it starts at the baseline's start and ends at the baseline's end, and the overhang shows
+   * the whole displacement between plan and reality.
+   *
+   * The durations view asks something else: "does the work still take as long as it was planned
+   * to". A shift is not part of that answer. So this band starts flush with the task bar and is
+   * as long as the task was planned to be -- the overhang is then EXCLUSIVELY the difference in
+   * length. A task that starts a week later but still runs five days shows a band exactly as long
+   * as its bar: no overhang, no colour, nothing to see. That is the point of the view.
+   *
+   * Each view thus has precisely one anchor, and it is the one its question needs. Which of the
+   * two is on screen is never in doubt: the dropdown in the toolbar names it, one entry apart.
+   *
+   * WITHOUT A BASELINE it draws a NEUTRAL band under the bar rather than staying empty, because
+   * empty would be indistinguishable from "no deviation". See {@link ChartComparisonKt#compareDurations}.
+   */
+  private void renderDurationBand(ITaskSceneTask t, int rowNum, OffsetList defaultUnitOffsets) {
+    List<ITaskActivity<ITaskSceneTask>> activities = t.getActivities();
+    if (activities.isEmpty()) {
+      return;
+    }
+    Integer baselineDuration = findBaselineDuration(t);
+    ComparisonResult result = ChartComparisonKt.compareDurations(
+        baselineDuration, t.getDuration().getLength());
+    if (result == ComparisonResult.NO_BAND) {
+      return;
+    }
+    if (baselineDuration == null) {
+      // No yardstick. The band lies under the bar and carries no colour -- the same device the
+      // effort view uses for "estimated but nothing recorded yet".
+      paintBand(rowNum, defaultUnitOffsets, mySplitter.split(activities, Integer.MAX_VALUE),
+          result, t.isMilestone(), ComparisonAxis.DURATIONS, false);
+      return;
+    }
+    // The bar's own start, not a model value: the band has to be flush with what is actually
+    // drawn, and that is where the first activity begins.
+    Date startDate = activities.get(0).getStart();
+    Date endDate = input.getCalendar().shiftDate(startDate, input.createLength(baselineDuration));
+    List<ITaskActivity<ITaskSceneTask>> bandActivities = new ArrayList<ITaskActivity<ITaskSceneTask>>();
+    if (t.isMilestone()) {
+      bandActivities.add(new TaskSceneMilestoneActivity(t, startDate, endDate, input.createLength(1)));
+    } else {
+      TaskActivitiesSceneAlgorithm alg = new TaskActivitiesSceneAlgorithm(
+        input.getCalendar(),
+        (Date s, Date e) -> input.createLength(t.getDuration().getTimeUnit(), s, e)
+      );
+      alg.recalculateActivities(t, bandActivities, startDate, endDate);
+    }
+    paintBand(rowNum, defaultUnitOffsets, bandActivities, result, t.isMilestone(),
+        ComparisonAxis.DURATIONS, false);
+  }
+
+  /** [Fork change] The task's duration in the baseline, or null if it is not in one. */
+  private Integer findBaselineDuration(ITaskSceneTask t) {
+    GanttPreviousStateTask taskBaseline = findBaselineTask(t);
+    return taskBaseline == null ? null : taskBaseline.getDuration();
+  }
+
+  /** [Fork change] The task's entry in the selected baseline, or null if it has none. */
+  private GanttPreviousStateTask findBaselineTask(ITaskSceneTask t) {
+    List<GanttPreviousStateTask> baseline = input.getBaseline();
+    if (baseline == null) {
+      return null;
+    }
+    for (GanttPreviousStateTask taskBaseline : baseline) {
+      if (taskBaseline.getId() == t.getRowId()) {
+        return taskBaseline;
+      }
+    }
+    return null;
+  }
+
+  /** [Fork change] The activities a band covers between two dates -- a milestone is one rhombus. */
+  private List<ITaskActivity<ITaskSceneTask>> bandActivities(ITaskSceneTask t, Date startDate, Date endDate) {
+    List<ITaskActivity<ITaskSceneTask>> result = new ArrayList<ITaskActivity<ITaskSceneTask>>();
+    if (t.isMilestone()) {
+      result.add(new TaskSceneMilestoneActivity(t, startDate, endDate, input.createLength(1)));
+    } else {
+      new TaskActivitiesSceneAlgorithm(
+        input.getCalendar(),
+        (Date s, Date e) -> input.createLength(t.getDuration().getTimeUnit(), s, e)
+      ).recalculateActivities(t, result, startDate, endDate);
+    }
+    return result;
+  }
+
+  /**
+   * [Fork change] Both questions in one row: the date comparison in the upper half of the band,
+   * the duration comparison in the lower one.
+   *
+   * EACH HALF KEEPS THE ANCHOR OF ITS OWN VIEW. The date half begins where the task was PLANNED
+   * to begin, the duration half where it begins TODAY -- and both are as long as the task was
+   * planned to be. That is why this is a fourth view and not a replacement: a single band could
+   * only have one anchor.
+   *
+   * THE CONSEQUENCE, measured on 26 August 2026: the two halves are NOT one rectangle split in
+   * two. They are congruent and offset by exactly the shift, and in three of five measured cases
+   * they did not overlap at all -- in the widest, 476 pixels apart. "Half" describes where a
+   * strip sits in the row, not that it is half of something visible.
+   *
+   * WHICH HALF A LONE STRIP BELONGS TO IS NEVERTHELESS DECIDABLE, and this follows from the two
+   * rules rather than from the drawing:
+   *
+   *   a lone DURATION strip is anchored at today's start, so it is FLUSH with the bar;
+   *   a lone DATE strip means equal lengths and different ends, which forces different starts,
+   *   so it can NEVER be flush with the bar.
+   *
+   * `ChartComparisonTest` pins that. Whoever gives the two halves the same anchor breaks it.
+   *
+   * A HALF WITH NOTHING TO SAY IS NOT DRAWN AT ALL. Drawing it in some fourth colour would need
+   * a fourth colour; leaving a hole would read as a gap. A strip that occupies only one of the
+   * two tracks is itself the statement.
+   */
+  private void renderBothBands(ITaskSceneTask t, int rowNum, OffsetList defaultUnitOffsets) {
+    List<ITaskActivity<ITaskSceneTask>> activities = t.getActivities();
+    if (activities.isEmpty()) {
+      return;
+    }
+    GanttPreviousStateTask taskBaseline = findBaselineTask(t);
+    Integer baselineDuration = taskBaseline == null ? null : taskBaseline.getDuration();
+    Date baselineStart = taskBaseline == null ? null : taskBaseline.getStart().getTime();
+    Date baselineEnd = taskBaseline == null ? null
+        : input.getCalendar().shiftDate(baselineStart, input.createLength(baselineDuration));
+    BothComparisons both = ChartComparisonKt.compareBoth(
+        baselineEnd, t.getEnd().getTime(), baselineDuration, t.getDuration().getLength());
+
+    if (taskBaseline == null) {
+      // No yardstick for EITHER question. Both halves neutral, which together look exactly like
+      // the full grey band the durations view draws in the same situation -- saying it once per
+      // question is honest, and it keeps the row height rule the same for both views.
+      List<ITaskActivity<ITaskSceneTask>> bar = mySplitter.split(activities, Integer.MAX_VALUE);
+      paintBand(rowNum, defaultUnitOffsets, bar, both.getDates(), t.isMilestone(),
+          ComparisonAxis.DATES, true);
+      paintBand(rowNum, defaultUnitOffsets, bar, both.getDurations(), t.isMilestone(),
+          ComparisonAxis.DURATIONS, true);
+      return;
+    }
+
+    // A SUMMARY TASK KEEPS THE DATE AXIS AND LOSES THE DURATION ONE, decided on 26 August 2026.
+    // Its band is three pixels high (see StyledPainterImpl, the "super" branch) and cannot be
+    // split; and for a package of work the question that matters is whether it is on schedule,
+    // not whether it grew. It is drawn at full height, exactly as in the dates view.
+    if (t.getHasNestedTasks()) {
+      if (both.getDates() != ComparisonResult.NO_BAND) {
+        paintBand(rowNum, defaultUnitOffsets, bandActivities(t, baselineStart, baselineEnd),
+            both.getDates(), t.isMilestone(), ComparisonAxis.DATES, false);
+      }
+      return;
+    }
+
+    if (both.getDates() != ComparisonResult.NO_BAND) {
+      paintBand(rowNum, defaultUnitOffsets, bandActivities(t, baselineStart, baselineEnd),
+          both.getDates(), t.isMilestone(), ComparisonAxis.DATES, true);
+    }
+    if (both.getDurations() != ComparisonResult.NO_BAND) {
+      Date startDate = activities.get(0).getStart();
+      Date endDate = input.getCalendar().shiftDate(startDate, input.createLength(baselineDuration));
+      paintBand(rowNum, defaultUnitOffsets, bandActivities(t, startDate, endDate),
+          both.getDurations(), t.isMilestone(), ComparisonAxis.DURATIONS, true);
+    }
+  }
+
+  /**
+   * [Fork change] The effort band: recorded hours against the original estimate.
+   *
+   * It needs NO baseline -- both numbers sit on the task itself. The band therefore lies exactly
+   * underneath the task bar and is exactly as long as it is; the statement is carried by the
+   * colour alone. A length of its own would be a second statement and would only confuse: how
+   * long a task takes in the calendar has nothing to do with the hours spent on it -- and that
+   * separation is the whole reason this view exists.
+   */
+  private void renderEffortBand(ITaskSceneTask t, int rowNum, OffsetList defaultUnitOffsets) {
+    ComparisonResult result = ChartComparisonKt.compareEffort(
+        input.getOriginalEffortHours(t.getRowId()),
+        input.getActualEffortHours(t.getRowId()));
+    if (result == ComparisonResult.NO_BAND) {
+      return;
+    }
+    List<ITaskActivity<ITaskSceneTask>> activities = t.getActivities();
+    if (activities.isEmpty()) {
+      return;
+    }
+    paintBand(rowNum, defaultUnitOffsets, mySplitter.split(activities, Integer.MAX_VALUE),
+        result, t.isMilestone(), ComparisonAxis.EFFORT, false);
+  }
+
+  /**
+   * The dates band: today's end date against the end date in the baseline.
+   *
+   * [Fork change] ---- begin ----
+   *
+   * THIS METHOD CARRIED A DIFFERENT RULE FOR A WHILE. From 17 to 20 August 2026 it compared
+   * DURATIONS instead of end dates, because the legend in the baseline dialog talks about the
+   * duration and a merely shifted task would otherwise turn red.
+   *
+   * WHY THAT WAS WITHDRAWN, measured on 20 August 2026: in this fork a task's duration is not an
+   * input but a computed value derived from effort and daily availability. On a real plan the
+   * availability was set from 8 to 1.8 hours a day -- 163 of 163 tasks carrying an effort grew by
+   * the factor 4.44, 194 of 276 rows turned red, and not a single effort had changed by so much
+   * as an hour. A duration comparison therefore answers neither "am I on schedule" nor "did I
+   * misjudge the work".
+   *
+   * Both questions now have a view of their own. HERE the original's rule applies again -- the
+   * end date -- and with it the legend in the dialog is correct again, which talks about
+   * finishing.
+   *
+   * What stays: a band is drawn as soon as the end date is a different one. The same end date
+   * means on schedule and leaves the row empty.
+   *
+   * [Fork change] ---- end ----
+   */
   private void renderBaseline(ITaskSceneTask t, int rowNum, OffsetList defaultUnitOffsets) {
     TaskActivitiesSceneAlgorithm alg = new TaskActivitiesSceneAlgorithm(
       input.getCalendar(),
       (Date s, Date e) -> input.createLength(t.getDuration().getTimeUnit(), s, e)
     );
     List<GanttPreviousStateTask> baseline = input.getBaseline();
-    if (baseline != null) {
-      for (GanttPreviousStateTask taskBaseline : baseline) {
-        if (taskBaseline.getId() == t.getRowId()) {
-          Date startDate = taskBaseline.getStart().getTime();
-          TimeDuration duration = input.createLength(taskBaseline.getDuration());
-          Date endDate = input.getCalendar().shiftDate(startDate, duration);
-          // [fork change] ---- start ----
-          //
-          // THE ORIGINAL COMPARES END DATES, but the label in the baseline dialog speaks of the
-          // DURATION ("Vorgang dauert laenger"). The two come apart as soon as a Task is merely
-          // moved: same duration, later end -- and it gets coloured red as if it took longer.
-          //
-          // THE RULE, fixed on 17.08.2026: a bar turns red when the Task takes LONGER; a
-          // different colour when it takes the same time or less; not red when it merely lies
-          // elsewhere. The reason is not taste: in this fork the capacity levelling MOVES very
-          // many Tasks without changing their Duration. Under the old rule almost everything
-          // would be red afterwards -- and a colour that is always lit says nothing any more.
-          //
-          // The second difference: the original draws NO baseline bar at all when the end dates
-          // are equal. A Task that starts earlier and ends the same, and therefore lasts longer,
-          // stayed invisible that way. It is now drawn as soon as the start OR the duration has
-          // changed.
-          int baselineDays = taskBaseline.getDuration();
-          int currentDays = t.getDuration().getLength();
-          // Same end AND same duration means: the Task lies unchanged. Compared via the end and
-          // not via the start, because ITaskSceneTask does not expose a start -- with equal
-          // duration that is the same statement.
-          boolean sameEnd = endDate.equals(t.getEnd().getTime());
-          if (sameEnd && baselineDays == currentDays) {
-            return;
-          }
-          List<String> styles = new ArrayList<String>();
-          if (t.isMilestone()) {
-            styles.add("milestone");
-          }
-          if (currentDays > baselineDays) {
-            styles.add("later");    // rot: braucht laenger
-          } else if (currentDays < baselineDays) {
-            styles.add("earlier");  // gruen: geht schneller
-          }
-          // Same duration: neither of the two colours. The bar stays neutral and only shows
-          // that the Task lies elsewhere -- that is a shift, not a deviation in effort.
-          // [fork change] ---- end ----
-          List<ITaskActivity<ITaskSceneTask>> baselineActivities = new ArrayList<ITaskActivity<ITaskSceneTask>>();
-          if (t.isMilestone()) {
-            baselineActivities.add(
-              new TaskSceneMilestoneActivity(t, startDate, endDate, input.createLength(1))
-            );
-          } else {
-            alg.recalculateActivities(t, baselineActivities, startDate, endDate);
-          }
-          List<Polygon> baselineRectangles = myBaselineActivityRenderer.renderActivities(rowNum, baselineActivities,
-              defaultUnitOffsets);
-          for (int i = 0; i < baselineRectangles.size(); i++) {
-            Polygon r = baselineRectangles.get(i);
-            r.setStyle("previousStateTask");
-            for (String s : styles) {
-              r.addStyle(s);
-            }
-            if (i == 0) {
-              r.addStyle("start");
-            }
-            if (i == baselineRectangles.size() - 1) {
-              r.addStyle("end");
-            }
-          }
-          return;
-        }
+    if (baseline == null) {
+      return;
+    }
+    for (GanttPreviousStateTask taskBaseline : baseline) {
+      if (taskBaseline.getId() != t.getRowId()) {
+        continue;
       }
+      Date startDate = taskBaseline.getStart().getTime();
+      TimeDuration duration = input.createLength(taskBaseline.getDuration());
+      Date endDate = input.getCalendar().shiftDate(startDate, duration);
+      ComparisonResult result = ChartComparisonKt.compareDates(endDate, t.getEnd().getTime());
+      if (result == ComparisonResult.NO_BAND) {
+        return;
+      }
+      List<ITaskActivity<ITaskSceneTask>> baselineActivities = new ArrayList<ITaskActivity<ITaskSceneTask>>();
+      if (t.isMilestone()) {
+        baselineActivities.add(
+          new TaskSceneMilestoneActivity(t, startDate, endDate, input.createLength(1))
+        );
+      } else {
+        alg.recalculateActivities(t, baselineActivities, startDate, endDate);
+      }
+      paintBand(rowNum, defaultUnitOffsets, baselineActivities, result, t.isMilestone(),
+          ComparisonAxis.DATES, false);
+      return;
+    }
+  }
+
+  /**
+   * [Fork change] Shared painting of the two bands. This block used to sit inside the baseline
+   * branch only; it was pulled out so that the effort view does not have to spell out the same
+   * chain of styles a second time -- two copies would be two chances for them to drift apart.
+   */
+  private void paintBand(int rowNum, OffsetList defaultUnitOffsets,
+                         List<ITaskActivity<ITaskSceneTask>> activities,
+                         ComparisonResult result, boolean isMilestone,
+                         ComparisonAxis axis, boolean halfHeight) {
+    List<Polygon> bandRectangles = myBaselineActivityRenderer.renderActivities(rowNum, activities,
+        defaultUnitOffsets);
+    String colourStyle = ChartComparisonKt.styleName(result);
+    for (int i = 0; i < bandRectangles.size(); i++) {
+      Polygon r = bandRectangles.get(i);
+      r.setStyle("previousStateTask");
+      r.addStyle(axisStyle(axis));
+      if (halfHeight) {
+        // WHICH half follows from the axis and from nothing else -- see renderBothBands.
+        r.addStyle(axis == ComparisonAxis.DATES ? "band.upper" : "band.lower");
+      }
+      if (isMilestone) {
+        r.addStyle("milestone");
+      }
+      if (colourStyle != null) {
+        r.addStyle(colourStyle);
+      }
+      if (i == 0) {
+        r.addStyle("start");
+      }
+      if (i == bandRectangles.size() - 1) {
+        r.addStyle("end");
+      }
+    }
+  }
+
+  /**
+   * [Fork change] The style that names the axis a band is answering for.
+   *
+   * The painter reads it for one thing only: the DATE axis gets a lilac ground with the
+   * comparison colour hatched over it, so that "here the schedule is speaking" is visible
+   * wherever it happens -- in the dates view and in the upper half of the combined one.
+   */
+  private static String axisStyle(ComparisonAxis axis) {
+    switch (axis) {
+      case DATES: return "axis.dates";
+      case DURATIONS: return "axis.durations";
+      default: return "axis.effort";
     }
   }
 

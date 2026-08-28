@@ -35,6 +35,7 @@ import net.sourceforge.ganttproject.gui.TextFieldAndFileChooserComponent;
 import net.sourceforge.ganttproject.gui.UIFacade;
 import net.sourceforge.ganttproject.gui.UIFacade.Dialog;
 import net.sourceforge.ganttproject.gui.UIUtil;
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.language.GanttLanguage;
 import org.jdesktop.swingx.JXDatePicker;
 import org.jdesktop.swingx.JXHyperlink;
@@ -725,11 +726,25 @@ public class OptionsPageBuilder {
     }
 
     protected static boolean hasValue(String key) {
-      return GanttLanguage.getInstance().getText(key) != null;
+      return lookup(key) != null;
     }
     protected static String getValue(String key) {
-      String result = GanttLanguage.getInstance().getText(key);
+      String result = lookup(key);
       return result == null ? key : result;
+    }
+
+    /**
+     * [Fork change] The settings pages look their labels up in the main bundle. That bundle lives
+     * in the `biz.ganttproject.app.localization` submodule, which this fork deliberately does not
+     * track -- see the comment in `ForkI18n`. A key added there would never be committed.
+     *
+     * So a key the main bundle does not know is offered to the fork's own bundle before the raw
+     * key is put on screen. Nothing changes for the original's keys: they are found in the first
+     * step and the fork's bundle is never asked.
+     */
+    private static String lookup(String key) {
+      String result = GanttLanguage.getInstance().getText(key);
+      return result != null ? result : ForkI18nKt.forkTextOrNull(key);
     }
 
     public static String getValue(GPOptionGroup group, String canonicalKey) {

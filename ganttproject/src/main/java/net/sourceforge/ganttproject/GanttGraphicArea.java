@@ -34,7 +34,9 @@ import net.sourceforge.ganttproject.chart.gantt.GanttChartController;
 import net.sourceforge.ganttproject.chart.item.CalendarChartItem;
 import net.sourceforge.ganttproject.chart.item.ChartItem;
 import net.sourceforge.ganttproject.document.Document;
+import net.sourceforge.ganttproject.fork.ChartComparison;
 import net.sourceforge.ganttproject.gui.UIConfiguration;
+import net.sourceforge.ganttproject.gui.options.OptionsPageBuilder;
 import net.sourceforge.ganttproject.gui.zoom.ZoomManager;
 import net.sourceforge.ganttproject.language.GanttLanguage;
 import biz.ganttproject.customproperty.CustomPropertyEvent;
@@ -104,6 +106,25 @@ public class GanttGraphicArea extends ChartComponentBase implements GanttChart, 
     myPublicHolidayDialogAction = new ProjectCalendarDialogAction(getProject(), getUIFacade());
     getProject().getTaskCustomColumnManager().addListener(this);
     initMouseListeners();
+
+    // [Fork change] The saved comparison view. The option is read out of ~/.ganttproject long
+    // after this constructor has run, so the value is not fetched here but followed: whatever
+    // GanttOptions loads fires this listener, and the chart follows it.
+    //
+    // The listener stays alive afterwards, so changing the setting on the settings page takes
+    // effect at once rather than only at the next start. The dropdown in the toolbar follows the
+    // same option, so both stay in step -- WITHOUT that, and this was seen on 25 August 2026, the
+    // dropdown kept reading "Compare: dates" while the chart already drew durations.
+    //
+    // The reverse does NOT happen: switching the view in the toolbar changes the chart for this
+    // session and deliberately does not write back here. This is what the program starts with.
+    app.getUIConfiguration().getComparisonAtStartupOption().addChangeValueListener(event -> {
+      ChartComparison value = app.getUIConfiguration().getComparisonAtStartupOption().getSelectedValue();
+      if (value != null && value != getComparison()) {
+        setComparison(value);
+        getUIFacade().refresh();
+      }
+    });
   }
 
   @Override
@@ -245,6 +266,23 @@ public class GanttGraphicArea extends ChartComponentBase implements GanttChart, 
   }
 
   @Override
+  public ChartComparison getComparison() {
+    return myChartModel.getComparison();
+  }
+
+  /**
+   * [Fork change] Like {@link #setBaseline}: the new row height has to be handed through to the
+   * table, otherwise the effort band draws into the row below.
+   */
+  @Override
+  public void setComparison(ChartComparison comparison) {
+    int rowHeight = myChartModel.setComparison(comparison);
+    taskTableChartConnector.getRowHeight().setValue(Math.max(
+        rowHeight + 0.0, taskTableChartConnector.getMinRowHeight().getValue()
+    ));
+  }
+
+  @Override
   protected AbstractChartImplementation getImplementation() {
     return getChartImplementation();
   }
@@ -315,7 +353,45 @@ public class GanttGraphicArea extends ChartComponentBase implements GanttChart, 
     final ColorOption myTaskOnScheduleColor = new DefaultColorOption("ganttChartStateDiffColors.taskOnScheduleColor", Color.LIGHT_GRAY);
     myTaskOnScheduleColor.addChangeValueListener(evt -> projectConfig.setPreviousTaskColor(myTaskOnScheduleColor.getValue()));
     //
-    return new ChartOptionGroup("ganttChartStateDiffColors", new GPOption[] { myTaskOnScheduleColor,
+    ChartOptionGroup result = new ChartOptionGroup("ganttChartStateDiffColors", new GPOption[] { myTaskOnScheduleColor,
         myTaskAheadOfScheduleColor, myTaskBehindScheduleColor }, chartModel.getOptionEventDispatcher());
+    redirectLegendToForkBundle(result, myTaskOnScheduleColor, myTaskAheadOfScheduleColor, myTaskBehindScheduleColor);
+    return result;
+  }
+
+  /**
+   * [Fork change] Points the three legend labels at this fork's own bundle.
+   *
+   * WHY THE LABELS HAD TO CHANGE. The dialog shows one legend, and it does not know which
+   * comparison view is on screen -- it never asks (see {@link BaselineDialogAction}), and this
+   * group is built once, here, in the constructor. But the band means something different in
+   * each view: red is "ends later" under DATES, "takes longer" under DURATIONS and "more hours
+   * spent" under EFFORT. Measured on 25 August 2026: of the twelve cases (three views times four
+   * outcomes) the original's three labels described exactly two correctly, both of them under
+   * DATES. The grey one was wrong in all three -- and in DATES the case it describes cannot
+   * occur at all, because `compareDates` never returns NEUTRAL.
+   *
+   * The new labels therefore name no quantity, only the DIRECTION: the measured value lies above
+   * or below the planned one. That holds in every view. The grey line says "one of the two
+   * values", not "the comparison value", because in DURATIONS the PLANNED value is the missing
+   * one and in EFFORT the CURRENT one.
+   *
+   * WHY THIS DETOUR RATHER THAN A KEY IN THE FORK BUNDLE. `OptionsPageBuilder.I18N` asks the
+   * main bundle first and this fork's bundle only when that comes up empty. The original's keys
+   * ARE in the main bundle, so the fork would never be asked. That bundle lives in the
+   * `biz.ganttproject.app.localization` submodule, which this fork deliberately does not track,
+   * so editing it there is not an option either -- the change would never be committed.
+   *
+   * {@link GPOptionGroup#setI18Nkey} is the original's own mechanism for exactly this: it maps
+   * the canonical key to one of our choosing. The main bundle does not know THAT one, so the
+   * fork's bundle answers. The original's three keys stay untouched and are simply no longer
+   * asked for.
+   */
+  private static void redirectLegendToForkBundle(ChartOptionGroup group, ColorOption onSchedule,
+                                                 ColorOption aheadOfSchedule, ColorOption behindSchedule) {
+    OptionsPageBuilder.I18N i18n = new OptionsPageBuilder.I18N();
+    group.setI18Nkey(i18n.getCanonicalOptionLabelKey(onSchedule), "fork.baseline.legend.missing");
+    group.setI18Nkey(i18n.getCanonicalOptionLabelKey(aheadOfSchedule), "fork.baseline.legend.below");
+    group.setI18Nkey(i18n.getCanonicalOptionLabelKey(behindSchedule), "fork.baseline.legend.above");
   }
 }
