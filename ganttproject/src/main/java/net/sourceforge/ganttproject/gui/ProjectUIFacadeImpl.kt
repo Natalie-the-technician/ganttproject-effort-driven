@@ -47,6 +47,8 @@ import net.sourceforge.ganttproject.document.ProxyDocument
 import net.sourceforge.ganttproject.document.webdav.WebDavStorageImpl
 import net.sourceforge.ganttproject.gui.projectopen.OpenOnlineDocumentChoice
 import net.sourceforge.ganttproject.gui.projectopen.showForkDialog
+// [fork change] a conflict text of its own outside the cloud.
+import net.sourceforge.ganttproject.fork.ForkLocalizer
 import net.sourceforge.ganttproject.gui.projectopen.showOfflineIsAheadDialog
 import net.sourceforge.ganttproject.gui.projectopen.signinDialog
 import net.sourceforge.ganttproject.gui.projectwizard.createNewProject
@@ -425,9 +427,33 @@ class ProjectSaveFlow(
     } catch (e: VersionMismatchException) {
       done(success = false)
       val onlineDoc = document.asOnlineDocument()
-      if (onlineDoc != null) {
+      // [fork change] The dialog also appears WITHOUT a cloud document.
+      //
+      // BUG IN THE ORIGINAL: `if (onlineDoc != null) { … }` stood here without an else. A
+      // version conflict on a document that is not a GanttProject cloud file — on a WebDAV
+      // server, say — was thereby swallowed silently: no dialog, no message, and saving counted
+      // as done although nothing had been written.
+      //
+      // "Overwrite" stays tied to the cloud document, because only that one knows
+      // write(force=true). For WebDAV the button is therefore not offered at all — a button that
+      // does nothing would be worse than none.
+      run {
         OptionPaneBuilder<VersionMismatchChoice>().also {
-          it.i18n = RootLocalizer.createWithRootKey(rootKey = "cloud.versionMismatch", baseLocalizer = RootLocalizer)
+          // [fork change] A text of its own when there is no cloud document.
+          //
+          // "cloud.versionMismatch" is written for the GanttProject cloud and explains the
+          // conflict with "a version from the project history". On a WebDAV server that is not
+          // true: there somebody else has simply changed the file. Observed on screen -- the
+          // dialog named a reason that did not exist in this case, and a wrong reason leads to
+          // a wrong decision.
+          it.i18n = when {
+            // Nobody changed anything -- the server cannot answer the question. A text of its
+            // own, otherwise the user goes looking for a colleague who does not exist.
+            e.versioningUnavailable -> noVersioningLocalizer
+            onlineDoc != null ->
+              RootLocalizer.createWithRootKey(rootKey = "cloud.versionMismatch", baseLocalizer = RootLocalizer)
+            else -> foreignChangeLocalizer
+          }
           it.styleClass = "dlg-lock"
           it.styleSheets.add("/biz/ganttproject/storage/cloud/GPCloudStorage.css")
           it.styleSheets.add("/biz/ganttproject/storage/StorageDialog.css")
@@ -437,7 +463,7 @@ class ProjectSaveFlow(
           it.elements = Lists.newArrayList(
             OptionElementData("document.option.makeCopy", VersionMismatchChoice.MAKE_COPY, true)
           ).also { list ->
-            if (e.canOverwrite) {
+            if (e.canOverwrite && onlineDoc != null) {
               list.add(OptionElementData("option.overwrite", VersionMismatchChoice.OVERWRITE, false))
             }
           }
@@ -445,7 +471,10 @@ class ProjectSaveFlow(
             SwingUtilities.invokeLater {
               when (choice) {
                 VersionMismatchChoice.OVERWRITE -> {
-                  onlineDoc.write(force = true)
+                  // Only reachable when the button was offered -- and that presupposes
+                  // onlineDoc. The safe access pins the condition down in the code instead of
+                  // having it only in the button list.
+                  onlineDoc?.write(force = true)
                 }
                 VersionMismatchChoice.MAKE_COPY -> {
                   saveProjectAs(project)
@@ -480,3 +509,32 @@ class ProjectSaveFlow(
 }
 
 private val DOCUMENT_LOGGER = GPLogger.create("Document.Info")
+
+/**
+ * [fork change] Texts for a write conflict outside the GanttProject cloud.
+ *
+ * Puts `fork.webdav.versionMismatch.` in front of the key and otherwise falls back to the global
+ * key. The fallback is needed because the button labels (`document.option.makeCopy`) live
+ * globally and should not be maintained twice here.
+ */
+private val foreignChangeLocalizer = forkPrefixedLocalizer("fork.webdav.versionMismatch.")
+
+/**
+ * [fork change] Texts for "the server cannot answer a version check".
+ *
+ * A text of its own, because NOBODY changed the file here. The conflict text would simply be
+ * wrong.
+ */
+private val noVersioningLocalizer = forkPrefixedLocalizer("fork.webdav.noVersioning.")
+
+/**
+ * Puts [prefix] in front of the key and otherwise falls back to the global key. The fallback is
+ * needed because the button labels (`document.option.makeCopy`) live globally and should not be
+ * maintained twice here.
+ */
+private fun forkPrefixedLocalizer(prefix: String) = object : Localizer {
+  override fun create(key: String): LocalizedString = LocalizedString(key, this)
+  override fun formatTextOrNull(key: String, vararg args: Any): String? =
+    ForkLocalizer.formatTextOrNull("$prefix$key", *args)
+      ?: RootLocalizer.formatTextOrNull(key, *args)
+}

@@ -57,7 +57,21 @@ public class HttpDocument extends AbstractURLDocument {
   private final int myTimeout;
 
   public HttpDocument(String url, String username, String password, StringOption proxyOption) throws IOException, WebDavException {
-    this(new MiltonResourceFactory(username, password, proxyOption).createResource(new WebDavUri(url)), username, password, -1);
+    this(url, username, password, proxyOption, NO_LOCK);
+  }
+
+  /**
+   * [fork change] As above, but with a lock timeout.
+   *
+   * BUG IN THE ORIGINAL: the overload above set a fixed {@code -1}, and it is the path through
+   * which GanttProject opens WebDAV documents at all. The setting {@code webdav.lockTimeout}
+   * therefore never reached the document — it only went to the open dialog. Setting it to 120
+   * changed nothing, without that being noticeable anywhere.
+   */
+  public HttpDocument(String url, String username, String password, StringOption proxyOption, int lockTimeout)
+      throws IOException, WebDavException {
+    this(new MiltonResourceFactory(username, password, proxyOption).createResource(new WebDavUri(url)),
+        username, password, lockTimeout);
   }
 
   public HttpDocument(WebDavResource webdavResource, String username, String password, int lockTimeout) throws IOException {
@@ -128,7 +142,24 @@ public class HttpDocument extends AbstractURLDocument {
 
   @Override
   public boolean acquireLock() {
-    if (locked || myTimeout < 0) {
+    if (locked) {
+      return true;
+    }
+    if (myTimeout < 0) {
+      // [fork change] D2: say that nothing is being locked here.
+      //
+      // The return value stays true -- the caller should not warn, because nobody failed: the
+      // setting says "never lock". But reporting "success" without having done anything was
+      // completely silent up to now. Whoever once set the lock timeout negative has been working
+      // without a lock ever since and finds no evidence of it anywhere.
+      //
+      // The handover asked for this label on the "open without lock" button. That button no
+      // longer exists: its dialog hangs off CloudProjectActionBase, and that class has no
+      // subclass and no further reference in the whole repository -- dead code. Today the choice
+      // is reachable only through this setting, so the hint belongs here.
+      GPLogger.log("WebDAV: keine Sperre fuer " + getFileName()
+          + " -- die Sperrdauer steht auf \"nie sperren\". Gegen versehentliches Ueberschreiben"
+          + " schuetzt weiterhin If-Match beim Speichern.");
       return true;
     }
     if (null == getWebdavResource()) {

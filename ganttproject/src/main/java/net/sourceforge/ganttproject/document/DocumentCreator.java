@@ -113,7 +113,11 @@ public class DocumentCreator implements DocumentManager {
             pass = server.getPassword();
           }
         }
-        return new HttpDocument(path, user, pass, myWebDavStorage.getProxyOption());
+        // [fork change] Pass the configured lock timeout through. Previously a fixed -1 ended
+        // up here, so that HttpDocument.acquireLock() never did anything at all -- see there.
+        Integer lockTimeout = myWebDavStorage.getWebDavLockTimeoutOption().getValue();
+        return new HttpDocument(path, user, pass, myWebDavStorage.getProxyOption(),
+            lockTimeout == null ? HttpDocument.NO_LOCK : lockTimeout.intValue());
       } catch (IOException e) {
         GPLogger.log(e);
         return null;

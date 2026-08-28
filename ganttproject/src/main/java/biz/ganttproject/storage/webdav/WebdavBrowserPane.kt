@@ -42,7 +42,9 @@ import java.util.function.Consumer
 class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
                         private val myMode: StorageDialogBuilder.Mode,
                         private val myOpenDocument: (Document) -> Unit,
-                        private val myDialogUi: StorageDialogBuilder.DialogUi) {
+                        private val myDialogUi: StorageDialogBuilder.DialogUi,
+                        /** [fork change] lock timeout in minutes; negative means "do not lock". */
+                        private val myLockTimeout: Int) {
   private lateinit var path: Path
   private val myLoadService: WebdavLoadService = WebdavLoadService(myServer)
   private val myState = State(server = myServer, resource = null, filename = null, folder = null)
@@ -65,7 +67,7 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
       if (myMode == StorageDialogBuilder.Mode.SAVE) {
         myState.filename = myState.filename!!.withGanExtension()
       }
-      myOpenDocument(createDocument(myState.server, createResource(myState)))
+      myOpenDocument(createDocument(myState.server, createResource(myState), myLockTimeout))
     }
     builder.apply {
       withI18N(RootLocalizer.createWithRootKey("storageService.webdav", BROWSE_PANE_LOCALIZER))
@@ -81,7 +83,7 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
             }
           },
           onLaunch = {
-            myOpenDocument(createDocument(myState.server, createResource(myState)))
+            myOpenDocument(createDocument(myState.server, createResource(myState), myLockTimeout))
           },
           onNameTyped = { filename, _, withEnter, withControl ->
             myState.filename = filename
@@ -165,7 +167,23 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
       }
       onFailed = EventHandler {
         showMaskPane.accept(false)
-        dialogUi.error("WebdavService failed!", "", null)
+        // [fork change] Name the reason instead of throwing it away.
+        //
+        // BUG IN THE ORIGINAL: dialogUi.error("WebdavService failed!", "", null) stood here. The
+        // service's exception was neither shown nor logged -- the user got a red box with empty
+        // text, and the log said nothing. Observed on screen: the server was unreachable, and
+        // there was no way to tell whether it was down to the password, the address, the
+        // certificate or the network.
+        //
+        // A wrong password and an unreachable server otherwise look the same to the user, but
+        // lead to completely different next steps.
+        val cause = myLoadService.exception
+        GPLogger.log(cause ?: RuntimeException("WebdavService failed, aber ohne Ausnahme"))
+        // Show the BOTTOM cause, not the top one. Seen on screen: at the top stands
+        // "I/O problems when accessing <Servername>" -- that names neither host nor reason and
+        // is worthless to the user. At the bottom stands "Der angegebene Host ist unbekannt
+        // (beispiel.ungueltig)", and that is something they can act on.
+        dialogUi.error("WebdavService failed!", describeCause(cause), cause)
       }
       onCancelled = EventHandler {
         showMaskPane.accept(false)
@@ -175,6 +193,24 @@ class WebdavBrowserPane(private val myServer: WebDavServerDescriptor,
     }
     showMaskPane.accept(true)
   }
+}
+
+/**
+ * [fork change] The bottom cause of an exception chain as text.
+ *
+ * The topmost message here is regularly the uninformative one: "I/O problems when accessing
+ * <Servername>". The server name stands there because `WebdavLoadService` deliberately puts it
+ * into the WebDavUri as a display name -- so it says nothing about host or address. Only the
+ * bottom cause names what was really going on: unknown host, rejected login, timeout.
+ */
+private fun describeCause(failure: Throwable?): String {
+  var current = failure ?: return ""
+  while (true) {
+    val next = current.cause ?: break
+    if (next === current) break
+    current = next
+  }
+  return current.message ?: current.javaClass.simpleName
 }
 
 /**
@@ -222,6 +258,11 @@ private data class State(
         var folder: WebDavResource?
 )
 
-private fun createDocument(server: WebDavServerDescriptor, resource: WebDavResource): Document {
-  return HttpDocument(resource, server.username, server.password, HttpDocument.NO_LOCK)
+private fun createDocument(server: WebDavServerDescriptor, resource: WebDavResource,
+                           lockTimeout: Int): Document {
+  // [fork change] A fixed HttpDocument.NO_LOCK stood here. This is the path a person actually
+  // uses -- the storage chooser -- and projects opened through it were therefore NEVER locked,
+  // no matter what the settings said. Demonstrated against the server: a write attempt from
+  // outside returned 204 instead of 423, although the project was open.
+  return HttpDocument(resource, server.username, server.password, lockTimeout)
 }

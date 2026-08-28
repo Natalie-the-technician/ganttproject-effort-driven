@@ -38,6 +38,41 @@ public interface WebDavResource {
       super(message, cause);
     }
   }
+  /**
+   * [fork change] Somebody else has changed the file since it was read.
+   *
+   * A class of its own and not a general error, because the caller has to do something different
+   * here than for a network problem: nothing is broken, there is a second version. The user
+   * needs the choice between "save under another name" and "overwrite anyway" -- and can only
+   * get it if this case arrives at the top distinguishably.
+   */
+  class WebDavConflictException extends WebDavException {
+    public WebDavConflictException(String message) {
+      super(message);
+    }
+    public WebDavConflictException(String message, Throwable cause) {
+      super(message, cause);
+    }
+  }
+  /**
+   * [fork change] The server cannot answer a version check: it delivers weak ETags exclusively,
+   * and no If-Match can be formed against a weak tag.
+   *
+   * Has to be distinguishable from {@link WebDavConflictException}, because the cause is a
+   * completely different one. In a conflict somebody has changed the file; here nobody has done
+   * anything, the server merely cannot answer the question. Showing the user "somebody else has
+   * changed it" here sends them looking for a colleague who does not exist.
+   *
+   * The case is not theoretical: RFC 9110 REQUIRES a weak validator as soon as the
+   * representation is transformed in transit -- mod_deflate, nginx with gzip, any compressing
+   * proxy, any CDN. Then the tag never becomes strong.
+   */
+  class WebDavVersioningUnavailableException extends WebDavException {
+    public WebDavVersioningUnavailableException(String message) {
+      super(message);
+    }
+  }
+
   class WebDavRuntimeException extends RuntimeException {
     public WebDavRuntimeException(String message) {
       super(message);

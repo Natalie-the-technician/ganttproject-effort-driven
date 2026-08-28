@@ -31,6 +31,10 @@ import io.milton.httpclient.Folder;
 import io.milton.httpclient.Host;
 import io.milton.httpclient.HttpException;
 import io.milton.httpclient.IfMatchCheck;
+import io.milton.httpclient.PropFindResponse;
+import javax.xml.namespace.QName;
+// [fork change] for D3: conditional writing and reporting a genuine conflict.
+import net.sourceforge.ganttproject.GPLogger;
 import io.milton.httpclient.ProgressListener;
 import io.milton.httpclient.Resource;
 import io.milton.httpclient.Utils.CancelledException;
@@ -53,6 +57,27 @@ import java.util.List;
 public class MiltonResourceImpl implements WebDavResource {
   private static final ProgressListener PROGRESS_LISTENER_STUB = null;
   private Resource myImpl;
+
+  /**
+   * [fork change] The ETag the file carried when it was read — the version the unsaved changes
+   * are based on. Null as long as nothing has been read.
+   */
+  private String myEtagAtRead;
+
+  /**
+   * [fork change] The ETag has to be requested explicitly in the PROPFIND.
+   *
+   * THE BUG THIS FIXES: on its own Milton asks only for creationdate, getlastmodified,
+   * getcontentlength, displayname, resourcetype, iscollection and lockdiscovery -- getetag is not
+   * among them. {@code File.getEtag()} therefore ALWAYS returned null, no matter what the server
+   * sends, and D3 thereby fell back silently to "write unconditionally". Measured against the
+   * server: "WebDAV: gelesen /haus.gan, ETag=null", and the write attempt from outside was
+   * overwritten without comment.
+   *
+   * The unit check of {@code resolveIfMatch} was correct and did not help here: it checks the
+   * decision, not the input.
+   */
+  private static final QName ETAG_PROPERTY = new QName("DAV:", "getetag");
   private final WebDavUri myUrl;
   private final Host myHost;
   private Boolean myExistance;
@@ -269,6 +294,29 @@ public class MiltonResourceImpl implements WebDavResource {
     return Path.path(myUrl.path).getName();
   }
 
+  /**
+   * [fork change] Asks the server for the ETag the file carries RIGHT NOW.
+   *
+   * A request of its own instead of {@code myImpl.getEtag()}: the remembered object carries the
+   * value from the last fetch, and that is precisely not what matters here — the question is
+   * about the current state.
+   *
+   * Returns null when the question cannot be answered. That is deliberate: the caller handles
+   * "do not know" explicitly, and an invented version would be worse than none.
+   */
+  private String fetchCurrentEtag() {
+    try {
+      List<PropFindResponse> responses =
+          getHost().propFind(Path.path(myUrl.path), 0, Collections.singletonList(ETAG_PROPERTY));
+      return (responses == null || responses.isEmpty()) ? null : responses.get(0).getEtag();
+    } catch (Exception e) {
+      // RuntimeException too: this method must never make saving crash, it is only an
+      // additional question.
+      GPLogger.log(e);
+      return null;
+    }
+  }
+
   @Override
   public void write(byte[] byteArray) throws WebDavException {
     MiltonResourceImpl parent = (MiltonResourceImpl) getParent();
@@ -280,16 +328,58 @@ public class MiltonResourceImpl implements WebDavResource {
     try {
       InputStream is = new BufferedInputStream(new ByteArrayInputStream(byteArray));
       if (myImpl != null && myImpl.getLockToken() != null) {
+        // With a lock the case is already covered: the token goes out as an If: header.
+        // IfMatchCheck carries exactly ONE string, so token and ETag cannot be sent together
+        // anyway -- If-Match is needed precisely when no token is present.
         parentFolder.upload(getName(), is, Long.valueOf(byteArray.length),
             "application/xml", new IfMatchCheck(myImpl.getLockToken(), false, true), null);
       } else {
-        parentFolder.upload(getName(), is, Long.valueOf(byteArray.length), null);
+        // [fork change] D3: write conditionally instead of unconditionally.
+        //
+        // Previously a bare upload(...) stood here without any condition — without a lock, after
+        // the lock timeout had expired, against a server without lock support, or after "open
+        // without lock" the desktop overwrote other people's changes silently.
+        IfMatchDecision decision = IfMatchResolutionKt.resolveIfMatch(myEtagAtRead, this::fetchCurrentEtag);
+        GPLogger.log("WebDAV: schreibe " + myUrl.path + ", gemerkter ETag=" + myEtagAtRead
+            + ", Entscheidung=" + decision);
+        if (decision instanceof IfMatchDecision.Conflict) {
+          throw new WebDavConflictException(MessageFormat.format(
+              "The file {0} was changed by somebody else since it was read", myUrl.path));
+        }
+        if (decision instanceof IfMatchDecision.VersioningUnavailable) {
+          // [fork change] Better not to write than to write blind. Formerly a fallback to
+          // "unconditional" stood here, justified with Apache's one-second window. If the server
+          // delivers weak ETags permanently -- compression, proxy, CDN -- that was no longer an
+          // edge case but every single write, and D3 would have been switched off silently.
+          throw new WebDavVersioningUnavailableException(MessageFormat.format(
+              "The server does not provide a strong ETag for {0}, so no write can be made"
+                  + " conditional", myUrl.path));
+        }
+        if (decision instanceof IfMatchDecision.Send) {
+          String etag = ((IfMatchDecision.Send) decision).getEtag();
+          parentFolder.upload(getName(), is, Long.valueOf(byteArray.length),
+              "application/xml", new IfMatchCheck(etag, true, false), null);
+        } else {
+          parentFolder.upload(getName(), is, Long.valueOf(byteArray.length), null);
+        }
       }
+      // Fetch the new version after writing. Apache returns no ETag on PUT, so it has to be
+      // asked for. If that fails the value stays null: better to write unconditionally next time
+      // than to invent a version against which every comparison then fails.
+      myEtagAtRead = fetchCurrentEtag();
     } catch (NotAuthorizedException e) {
       throw new WebDavException(MessageFormat.format("User {0} is probably not authorized to access {1}", getUsername(), myUrl.hostName), e);
     } catch (BadRequestException e) {
       throw new WebDavException(MessageFormat.format("Bad request when accessing {0}", myUrl.hostName), e);
     } catch (HttpException e) {
+      // [fork change] 412 is not a network problem but the server's answer to If-Match: the
+      // file has changed since it was read. Milton maps 412 onto GenericHttpException --
+      // processResultCode treats only 400/401/404/409 separately -- the status is in
+      // getResult().
+      if (e.getResult() == 412) {
+        throw new WebDavConflictException(MessageFormat.format(
+            "The file {0} was changed by somebody else since it was read", myUrl.path), e);
+      }
       throw new WebDavException(MessageFormat.format("HTTP problems when accessing {0}", myUrl.hostName), e);
     } catch (ConflictException e) {
       throw new WebDavException(MessageFormat.format("Conflict when accessing {0}", myUrl.hostName), e);
@@ -309,7 +399,22 @@ public class MiltonResourceImpl implements WebDavResource {
     File file = (File) myImpl;
     ByteArrayOutputStream content = new ByteArrayOutputStream();
     try {
+      // [fork change] Remember the version the coming changes are based on. It is exactly this
+      // value -- not one fetched freshly later -- that If-Match requires when writing: the
+      // question is "has anything changed since MY read".
+      //
+      // BEFORE downloading, not after, and that is no accident. If the file changes in between,
+      // the remembered ETag is older than the content that was read: saving then reports a
+      // conflict that strictly speaking does not exist. The other way round -- ETag newer than
+      // content -- would silently overwrite somebody else's change. Of the two errors, a
+      // superfluous query is the harmless one.
+      myEtagAtRead = fetchCurrentEtag();
       file.download(content, PROGRESS_LISTENER_STUB);
+      // [fork change] Without this line there is no way to tell whether the protection takes
+      // effect: if the server returns no ETag, D3 silently writes unconditionally -- that is,
+      // exactly as unsafe as before, only invisible. Measured against the server: T3 overwrote
+      // silently, and only this line showed why.
+      GPLogger.log("WebDAV: gelesen " + myUrl.path + ", ETag=" + myEtagAtRead);
       return new ByteArrayInputStream(content.toByteArray());
     } catch (CancelledException e) {
       throw new WebDavException("File download has been canceled", e);
@@ -347,6 +452,21 @@ public class MiltonResourceImpl implements WebDavResource {
     }
     if (!myImpl.getSupportedLock().exclusive) {
       return CanLockStatus.LOCK_UNSUPPORTED;
+    }
+    // [fork change] A lock WE hold does not make the file unwritable.
+    //
+    // THE BUG D1 EXPOSED: in the PROPFIND Milton sets lockToken AND lockOwner together, but after
+    // a lock() of its own only the token -- the owner stays null. getLockOwners() then returns
+    // the placeholder "Unknown user", which never matches one's own user name, and doCanLock
+    // reports LOCK_UNAVAILABLE. isWritable() is thereby false, and the desktop refuses to save
+    // the very file it has just locked itself.
+    //
+    // In the original this could not show up: acquireLock() had no caller there, so the desktop
+    // never held a lock. Seen against the server as soon as the lock timeout really took effect
+    // -- "Dokument kann nicht geschrieben werden" (document cannot be written), without it ever
+    // getting as far as the PUT.
+    if (myImpl.getLockToken() != null) {
+      return CanLockStatus.LOCK_AVAILABLE;
     }
     List<String> lockOwners = getLockOwners();
     if (lockOwners.isEmpty() || lockOwners.equals(ImmutableList.of(getUsername()))) {

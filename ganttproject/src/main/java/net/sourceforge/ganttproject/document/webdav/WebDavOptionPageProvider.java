@@ -12,6 +12,8 @@ import net.sourceforge.ganttproject.gui.EditableList;
 import net.sourceforge.ganttproject.gui.options.OptionPageProviderBase;
 import net.sourceforge.ganttproject.gui.options.OptionsPageBuilder;
 import net.sourceforge.ganttproject.language.GanttLanguage;
+// [fork change] hint text for the lock timeout.
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
 
 import javax.swing.*;
 import java.awt.*;
@@ -26,11 +28,29 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     // TODO Auto-generated constructor stub
   }
 
+  /**
+   * [fork change] The groups of this page, so that "Uebernehmen" actually applies them.
+   *
+   * BUG IN THE ORIGINAL: `return new GPOptionGroup[0];` stood here with the comment
+   * "TODO Auto-generated method stub". {@link OptionPageProviderBase#commit()} runs over exactly
+   * this list -- if it was empty, NOTHING was applied: neither address nor user name, password
+   * or lock timeout. A newly created server was left without an address, and the next connection
+   * attempt failed with "I/O problems when accessing <Servername>" -- the name stood where the
+   * host name should have been. Seen on screen exactly like that.
+   *
+   * The fields are only filled in {@link #buildPageComponent()}. Returning an empty list until
+   * then is correct and not a fallback: before the page is built there is nothing to apply.
+   */
   @Override
   public GPOptionGroup[] getOptionGroups() {
-    // TODO Auto-generated method stub
-    return new GPOptionGroup[0];
+    if (myServerOptions == null || myLockingOptions == null) {
+      return new GPOptionGroup[0];
+    }
+    return new GPOptionGroup[] {myServerOptions, myLockingOptions};
   }
+
+  private GPOptionGroup myServerOptions;
+  private GPOptionGroup myLockingOptions;
 
   @Override
   public boolean hasCustomComponent() {
@@ -123,6 +143,8 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     });
 
     GPOptionGroup optionGroup = new GPOptionGroup("webdav.server", urlOption, usernameOption, passwordOption, savePasswordOption);
+    // [fork change] remember them, so getOptionGroups() returns them and "Uebernehmen" works.
+    myServerOptions = optionGroup;
 
     serverList.getTableAndActions().addSelectionListener(new SelectionListener<WebDavServerDescriptor>() {
       @Override
@@ -142,21 +164,59 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     }
     //Box result = Box.createHorizontalBox();
     JPanel serversPanel = new JPanel(new BorderLayout());
-    serversPanel.add(serverList.createDefaultComponent(), BorderLayout.CENTER);
+    final JComponent listComponent = serverList.createDefaultComponent();
+    serversPanel.add(listComponent, BorderLayout.CENTER);
 
     OptionsPageBuilder builder = new OptionsPageBuilder();
     GPOptionGroup lockingGroup = new GPOptionGroup("webdav.lock", webdavStorage.getWebDavLockTimeoutOption(), webdavStorage.getWebDavReleaseLockOption());
     lockingGroup.setI18Nkey(builder.getI18N().getCanonicalOptionLabelKey(webdavStorage.getWebDavLockTimeoutOption()), "webdav.lockTimeout.label");
     lockingGroup.setI18Nkey(builder.getI18N().getCanonicalOptionLabelKey(webdavStorage.getWebDavReleaseLockOption()), "option.webdav.lock.releaseOnProjectClose.label");
-    serversPanel.add(builder.buildPlanePage(new GPOptionGroup[] {lockingGroup}), BorderLayout.SOUTH);
+    myLockingOptions = lockingGroup;
+    // [fork change] D2: name what a negative lock timeout switches off.
+    //
+    // "Timeout (Minuten)" does not say that a value below 0 means "never lock" -- and
+    // HttpDocument.acquireLock() reports success while doing nothing. Whoever once set the value
+    // negative has been working without a lock ever since, and nothing on this page says so.
+    //
+    // The hint also names what STILL protects in that case. Without that half-sentence the line
+    // reads like "you are unprotected", and since D3 that would simply be wrong.
+    JPanel lockingPanel = new JPanel(new BorderLayout());
+    final JComponent lockingOptions = builder.buildPlanePage(new GPOptionGroup[] {lockingGroup});
+    lockingPanel.add(lockingOptions, BorderLayout.CENTER);
+    JLabel lockingHint = new JLabel(ForkI18nKt.forkText("fork.webdav.lockTimeout.hint"));
+    lockingHint.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+    lockingPanel.add(lockingHint, BorderLayout.SOUTH);
+    serversPanel.add(lockingPanel, BorderLayout.SOUTH);
 
     builder = new OptionsPageBuilder(null, OptionsPageBuilder.ONE_COLUMN_LAYOUT);
-    JPanel result = new JPanel(new BorderLayout());
-    result.add(serversPanel, BorderLayout.WEST);
     JComponent serverDetails = builder.buildPlanePage(new GPOptionGroup[] {optionGroup});
     serverDetails.setPreferredSize(new Dimension(300, 300));
-    result.add(serverDetails, BorderLayout.CENTER);
-    //result.add(Box.createHorizontalGlue());
-    return OptionPageProviderBase.wrapContentComponent(result, getCanonicalPageTitle(), null);
+
+    // [fork change] A split area instead of BorderLayout WEST/CENTER.
+    //
+    // BUG IN THE ORIGINAL: BorderLayout gives WEST its full preferred width and the centre only
+    // the remainder -- even when that is negative. Measured on screen with the built-in
+    // diagnostic:
+    //
+    //   page           width= 591
+    //   server list    x=  5  width= 656   (sticks out by 70 px)
+    //   server details x=661  width= -75   (negative, so not present)
+    //
+    // Servers could thereby be created, but address, user and password never seen or changed.
+    // That is precisely what "the server settings are broken" meant.
+    //
+    // JSplitPane instead of fixed pixel values: it divides what is there and gives neither side
+    // a negative width. If the space is not enough, the divider can be dragged -- a hard-coded
+    // width would be wrong again at a different font size or screen scaling.
+    JSplitPane result = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, serversPanel, serverDetails);
+    result.setResizeWeight(0.5);
+    result.setBorder(BorderFactory.createEmptyBorder());
+    // NO setDividerLocation(double) here. The proportion is computed against the CURRENT size,
+    // and at this point that is still zero -- the divider then lands at the edge and one side
+    // gets width 0. resizeWeight alone divides correctly on the first layout.
+    final JComponent page = OptionPageProviderBase.wrapContentComponent(result, getCanonicalPageTitle(), null);
+
+    return page;
   }
+
 }

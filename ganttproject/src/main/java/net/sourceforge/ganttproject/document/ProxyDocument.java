@@ -24,6 +24,8 @@ import biz.ganttproject.core.table.ColumnList;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import net.sourceforge.ganttproject.IGanttProject;
+// [fork change] for the named read errors instead of "Failed to parse document".
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.gui.GPColorChooser;
 import net.sourceforge.ganttproject.gui.UIFacade;
 import net.sourceforge.ganttproject.io.GPSaver;
@@ -161,11 +163,41 @@ public class ProxyDocument implements Document {
       getHumanResourceManager().setEventsEnabled(false);
       doParse();
     } catch (Exception e) {
-      throw new DocumentException("Failed to parse document", e);
+      // [fork change] Name the reason instead of calling everything "Failed to parse document".
+      //
+      // BUG IN THE ORIGINAL: this catch catches EVERYTHING -- including a rejected login and an
+      // unreachable server -- and then claims the file is not readable. Observed on screen: at
+      // startup GanttProject reported exactly that, while in truth a 401 came back because no
+      // password is stored for the WebDAV server. Whoever believes the message looks for the
+      // fault in their project file instead of in the credentials.
+      throw new DocumentException(describeReadFailure(e), e);
     } finally {
       getTaskManager().setEventsEnabled(true);
       getHumanResourceManager().setEventsEnabled(true);
     }
+  }
+
+  /**
+   * [fork change] Searches the cause chain for a reason that is NOT a read error of the file,
+   * and names it.
+   *
+   * Only two cases are distinguished, and both deliberately: a rejected login and an unreachable
+   * server lead to completely different next steps than a broken file. Everything else keeps the
+   * existing text -- a message that lists every possibility helps nobody.
+   */
+  private static String describeReadFailure(Throwable failure) {
+    for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+      if (cause instanceof io.milton.http.exceptions.NotAuthorizedException) {
+        return ForkI18nKt.forkText("fork.document.notAuthorized");
+      }
+      if (cause instanceof java.net.UnknownHostException || cause instanceof java.net.ConnectException) {
+        return ForkI18nKt.forkText("fork.document.unreachable");
+      }
+      if (cause == cause.getCause()) {
+        break;
+      }
+    }
+    return "Failed to parse document";
   }
 
   public void createContents() throws IOException {

@@ -45,6 +45,9 @@ import javafx.stage.FileChooser
 import net.sourceforge.ganttproject.document.Document
 import net.sourceforge.ganttproject.document.DocumentManager
 import net.sourceforge.ganttproject.document.ReadOnlyProxyDocument
+// [fork change] for the lock timeout of the WebDAV storage.
+import net.sourceforge.ganttproject.document.webdav.HttpDocument
+import net.sourceforge.ganttproject.document.webdav.WebDavStorageImpl
 import net.sourceforge.ganttproject.document.webdav.WebDavServerDescriptor
 import net.sourceforge.ganttproject.gui.AuthenticationFlow
 import java.io.File
@@ -209,11 +212,37 @@ class StoragePane internal constructor(
         openDocument)
     val cloudStorage = GPCloudStorage(dialogUi, mode, currentDocument, openDocument, documentManager)
     storageUiList.addAll(listOf(localStorage, recentProjects, cloudStorage))
+    // [fork change] Pass the configured lock timeout through to the storage chooser.
+    //
+    // Previously WebdavBrowserPane set a fixed NO_LOCK. Since this is the path a person actually
+    // uses, projects opened over WebDAV were NEVER locked -- regardless of what the settings
+    // said. Demonstrated against the server: writing from outside returned 204 instead of 423,
+    // although the project was open.
+    val webdavLockTimeout =
+      (documentManager.webDavStorageUi as? WebDavStorageImpl)?.webDavLockTimeoutOption?.value
+        ?: HttpDocument.NO_LOCK
     cloudStorageOptions.webdavServers.mapTo(storageUiList) {
-      WebdavStorage(it, mode, openDocument, dialogUi, cloudStorageOptions)
+      WebdavStorage(it, mode, openDocument, dialogUi, cloudStorageOptions, webdavLockTimeout)
     }
 
-    val initialStorageId = selectedId ?: if (mode == StorageDialogBuilder.Mode.OPEN) recentProjects.id else localStorage.id
+    // [fork change] When saving, preselect the storage the project actually LIVES in.
+    //
+    // BUG IN THE ORIGINAL: a fixed `localStorage.id` stood here for the save case. Anyone with a
+    // project open from a WebDAV server who chose "Speichern unter" therefore landed on
+    // "Dieser Computer" -- with the full WebDAV address as a local path in the name field and a
+    // red error message "Uebergeordnetes Verzeichnis existiert nicht". Seen on screen right
+    // after a write conflict: at exactly the moment when "save as a copy" is the only way out,
+    // the preselection leads astray.
+    //
+    // The path worked, one only had to click the server on the left. But the preselection is an
+    // assertion about what the person probably wants, and here it was wrong.
+    val currentStorageId = storageUiList.filterIsInstance<WebdavStorage>()
+      .map { it.id }
+      .firstOrNull { rootUrl -> rootUrl.isNotBlank() && currentDocument.uri?.toString()?.startsWith(rootUrl) == true }
+    val initialStorageId = selectedId ?: when {
+      mode == StorageDialogBuilder.Mode.OPEN -> recentProjects.id
+      else -> currentStorageId ?: localStorage.id
+    }
 
     // Iterate the list of available storages and create for each storage:
     // - a list item with optional settings button if settings are available

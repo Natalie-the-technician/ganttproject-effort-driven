@@ -193,7 +193,19 @@ interface LockableDocument {
 }
 
 class NetworkUnavailableException(cause: Exception) : RuntimeException(cause)
-class VersionMismatchException(val canOverwrite: Boolean = true) : RuntimeException()
+/**
+ * [fork change] [versioningUnavailable] distinguishes two cases that otherwise look the same and
+ * have nothing to do with each other from the user's point of view:
+ *
+ * - false: somebody has changed the file. A genuine conflict.
+ * - true: the server cannot answer a version check (weak ETags only). Nobody has done anything;
+ *   the question is unanswerable. Showing "somebody else has changed it" here sends the user
+ *   looking for a colleague who does not exist.
+ */
+class VersionMismatchException @JvmOverloads constructor(
+  val canOverwrite: Boolean = true,
+  val versioningUnavailable: Boolean = false
+) : RuntimeException()
 class PaymentRequiredException(msg: String) : RuntimeException(msg) {
   constructor() : this("It appears that your team on GanttProject Cloud have run out of credits. Please contact the team owner to resolve this issue.")
 }

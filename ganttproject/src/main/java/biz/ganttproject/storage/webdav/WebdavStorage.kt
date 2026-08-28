@@ -21,7 +21,16 @@ class WebdavStorage(
     private val myMode: StorageDialogBuilder.Mode,
     private val myOpenDocument: (Document) -> Unit,
     private val myDialogUi: StorageDialogBuilder.DialogUi,
-    private val myOptions: GPCloudStorageOptions
+    private val myOptions: GPCloudStorageOptions,
+    /**
+     * [fork change] Lock timeout in minutes, negative means "do not lock".
+     *
+     * Has to be passed through here, because this is the path a person actually uses: the
+     * storage chooser. Previously a fixed NO_LOCK stood in [WebdavBrowserPane], so that projects
+     * opened this way were NEVER locked -- regardless of the setting. Demonstrated against the
+     * server: a write attempt from outside returned 204 instead of 423.
+     */
+    private val myLockTimeout: Int
 ) : StorageUi {
 
   private val myBorderPane = BorderPane()
@@ -43,7 +52,7 @@ class WebdavStorage(
   override fun createUi(): Pane = myBorderPane.apply { center = doCreateUi() }
 
   private fun createStorageUi(): Pane {
-    val serverUi = WebdavBrowserPane(myServer, myMode, myOpenDocument, myDialogUi)
+    val serverUi = WebdavBrowserPane(myServer, myMode, myOpenDocument, myDialogUi, myLockTimeout)
     return serverUi.createStorageUi()
   }
 

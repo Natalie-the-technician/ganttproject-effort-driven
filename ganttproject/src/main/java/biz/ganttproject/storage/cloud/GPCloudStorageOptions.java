@@ -5,6 +5,8 @@ import biz.ganttproject.core.option.EnumerationOption;
 import biz.ganttproject.core.option.GPAbstractOption;
 import biz.ganttproject.core.option.ListOption;
 import com.google.common.base.Strings;
+// [fork change] no longer store passwords in plain text.
+import net.sourceforge.ganttproject.fork.SecretStore;
 import com.google.common.collect.ImmutableSet;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -108,7 +110,19 @@ public class GPCloudStorageOptions extends GPAbstractOption<WebDavServerDescript
     for (WebDavServerDescriptor server : myServers) {
       result.append("\n").append(server.getName()).append("\t").append(server.getRootUrl()).append("\t").append(server.getUsername());
       if (server.getSavePassword()) {
-        result.append("\t").append(server.getPassword());
+        // [fork change] Encrypted instead of in plain text.
+        //
+        // BUG IN THE ORIGINAL: the password stood here unchanged in the file. Every program
+        // under the same user could read it, and it went into every backup of ~/.ganttproject.
+        // The checkbox was therefore left unset and the password typed anew on every start
+        // instead -- security that costs effort gets switched off sooner or later.
+        //
+        // If protect() returns null (not Windows, or DPAPI unavailable), nothing is stored.
+        // Better to keep asking than to write plain text silently.
+        String protectedPassword = SecretStore.INSTANCE.protect(server.getPassword());
+        if (protectedPassword != null) {
+          result.append("\t").append(protectedPassword);
+        }
       }
     }
     return result.toString();
@@ -130,7 +144,9 @@ public class GPCloudStorageOptions extends GPAbstractOption<WebDavServerDescript
           server.setUsername(parts[2]);
         }
         if (parts.length >= 4) {
-          server.setPassword(parts[3]);
+          // [fork change] Decrypt. A value without a marker dates from before this change and
+          // is taken over unchanged -- at the next save it will be encrypted.
+          server.setPassword(SecretStore.INSTANCE.reveal(parts[3]));
           server.setSavePassword(true);
         }
         if (!server.getRootUrl().isEmpty()) {

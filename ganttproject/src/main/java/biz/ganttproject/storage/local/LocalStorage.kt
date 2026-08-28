@@ -185,7 +185,14 @@ class LocalStorage(
 
     val listViewHint = SimpleStringProperty(i18n.formatText("${myMode.name.lowercase()}.listViewHint"))
 
-    val filePath = Paths.get(currentDocument.filePath) ?: Paths.get("/")
+    // [fork change] Do NOT take the raw path of the document.
+    //
+    // For a WebDAV document `filePath` is an ADDRESS ("https://server/pfad/plan.gan"). Under
+    // Windows `Paths.get` makes an impossible path out of that -- the breadcrumbs showed half
+    // the URL, the field a red error message. Seen on screen after a write conflict offered
+    // "Speichern unter": the offer led into a dead end.
+    val filePath = localBreadcrumbPath(
+      currentDocument.filePath, currentDocument.fileName, getDefaultLocalFolder())
     this.paneElements = builder.apply {
       withI18N(i18n)
       withBreadcrumbs(
@@ -247,3 +254,29 @@ class LocalStorage(
 }
 
 private val i18n = RootLocalizer.createWithRootKey("storageService.local", BROWSE_PANE_LOCALIZER)
+
+/**
+ * [fork change] The path the local storage opens with.
+ *
+ * For a local document its own path, for everything else -- WebDAV, cloud -- the default folder
+ * together with the file name. Setting an ADDRESS as a path yields an impossible path under
+ * Windows and a red error message in the field.
+ *
+ * TAKES STRINGS, NOT A DOCUMENT: that way the rule is checkable without JavaFX AND without a
+ * mock -- the module has no Mockito, and building a `Document` by hand would be more test
+ * scaffolding than test.
+ */
+internal fun localBreadcrumbPath(
+  rawPath: String?, fileName: String?, defaultFolder: File
+): java.nio.file.Path {
+  val roh = rawPath
+  if (!roh.isNullOrBlank()) {
+    val alsPfad = runCatching { Paths.get(roh) }.getOrNull()
+    // Only take absolute, local paths. "https://..." yields, depending on the operating system,
+    // either an exception or a relative nonsense path -- both would be wrong here.
+    if (alsPfad != null && alsPfad.isAbsolute && !roh.contains("://")) {
+      return alsPfad
+    }
+  }
+  return defaultFolder.toPath().resolve(fileName ?: "project.gan")
+}

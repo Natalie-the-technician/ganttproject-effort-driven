@@ -37,6 +37,11 @@ import com.google.common.base.Objects;
 import net.sourceforge.ganttproject.GPLogger;
 import net.sourceforge.ganttproject.IGanttProject;
 import net.sourceforge.ganttproject.ProjectEventListener;
+// [fork change] for D1: take the lock when opening and warn on failure.
+import biz.ganttproject.app.BarrierEntrance;
+import biz.ganttproject.app.Barrier;
+import net.sourceforge.ganttproject.gui.NotificationChannel;
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.action.CancelAction;
 import net.sourceforge.ganttproject.action.OkAction;
 import net.sourceforge.ganttproject.document.Document;
@@ -58,7 +63,17 @@ public class WebDavStorageImpl implements DocumentStorageUi {
   private final GPCloudStorageOptions myServers = new GPCloudStorageOptions();
   private final StringOption myLegacyLastWebDAVDocument = new DefaultStringOption("last-webdav-document", "");
   private final StringOption myLastWebDavDocumentOption = new DefaultStringOption("lastDocument", null);
-  private final IntegerOption myWebDavLockTimeoutOption = new DefaultIntegerOption("webdav.lockTimeout", -1);
+  /**
+   * [fork change] Default changed from -1 to 120 minutes.
+   *
+   * -1 means "never lock", and {@link HttpDocument#acquireLock()} nevertheless reported success.
+   * A protective feature that is off as shipped AND keeps quiet about it is worse than none at
+   * all: it creates trust that is not backed by anything.
+   *
+   * 120 minutes: long enough for a working session, short enough that a lock forgotten after a
+   * crash expires by itself and does not lock anybody out permanently.
+   */
+  private final IntegerOption myWebDavLockTimeoutOption = new DefaultIntegerOption("webdav.lockTimeout", 120);
   private final BooleanOption myReleaseLockOption = new DefaultBooleanOption("lockRelease", true);
   private final StringOption myUsername = new DefaultStringOption("username", "");
   private final StringOption myPassword = new DefaultStringOption("password", "");
@@ -71,6 +86,31 @@ public class WebDavStorageImpl implements DocumentStorageUi {
     myProject = project;
     myUiFacade = uiFacade;
     project.addProjectEventListener(new ProjectEventListener.Stub() {
+      /**
+       * [fork change] The lock is now actually taken.
+       *
+       * BUG IN THE ORIGINAL: NOBODY in the whole program called {@code acquireLock()} — only
+       * {@code releaseLock()} below was used. So what was released had never been taken. Together
+       * with the lock timeout that never reached the document this meant: GanttProject ran
+       * against a lock-capable server and never locked, without a message and without a log line.
+       *
+       * If the lock fails, a warning is shown and the file is opened anyway. Reading thereby
+       * stays possible, and accidental overwriting is caught by If-Match since D3 in any case.
+       * Refusing to open would turn a lock forgotten after a crash into a lockout.
+       */
+      @Override
+      public void projectOpened(BarrierEntrance barrierRegistry, Barrier<IGanttProject> barrier) {
+        barrier.await(result -> {
+          Document document = project.getDocument();
+          if (document != null && !document.acquireLock()) {
+            GPLogger.log("Could not acquire a WebDAV lock for " + document.getFileName());
+            myUiFacade.showNotificationDialog(NotificationChannel.WARNING,
+                ForkI18nKt.forkText("fork.webdav.lockFailed", document.getFileName()));
+          }
+          return kotlin.Unit.INSTANCE;
+        });
+      }
+
       @Override
       public void projectClosed() {
         if (myReleaseLockOption.isChecked() && project.getDocument() != null) {
