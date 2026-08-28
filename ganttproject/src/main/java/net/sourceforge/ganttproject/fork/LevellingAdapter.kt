@@ -539,11 +539,17 @@ private fun Task.toLevelTask(
 }
 
 /**
- * Writes the levelled dates, as ONE undo step.
+ * Writes the levelled dates, as ONE undo step, and reports afterwards that a levelling run has
+ * ended -- see [LevellingRunNotifier] for why the report has to come after the writing and not
+ * from inside it.
+ *
+ * The write-back itself is unchanged and lives in [writeLevellingBack]; this function only puts the
+ * notification around it, so that the ordering cannot be got wrong at a call site.
  *
  * @return the number of Tasks actually moved. Nothing to move means: no entry in the undo list.
  * An empty step that looks as though something had happened is worse than none -- the same rule
- * as in the Toggl import.
+ * as in the Toggl import. The run is reported in that case too: a levelling that found nothing to
+ * move still leaves a plan that agrees with the calculation.
  */
 fun applyLevellingAsSingleEdit(
   starts: Map<String, LocalDate>,
@@ -558,7 +564,20 @@ fun applyLevellingAsSingleEdit(
    * an end that does not match the computed occupancy -- and levelling would be worthless for the
    * days affected.
    */
-  durations: Map<String, Int> = emptyMap()
+  durations: Map<String, Int> = emptyMap(),
+  /** Defaults to the shared instance; a test passes its own so that no state travels between tests. */
+  notifier: LevellingRunNotifier = levellingRunNotifier
+): Int = notifier.runAndReport {
+  writeLevellingBack(starts, taskManager, undoManager, editName, durations)
+}
+
+/** The write-back proper. Unchanged; only the notification in [applyLevellingAsSingleEdit] is new. */
+private fun writeLevellingBack(
+  starts: Map<String, LocalDate>,
+  taskManager: TaskManager,
+  undoManager: GPUndoManager,
+  editName: String,
+  durations: Map<String, Int>
 ): Int {
   val isWorkingDay = workingDayTest(taskManager.calendar)
   val moves = starts.mapNotNull { (id, newStart) ->
