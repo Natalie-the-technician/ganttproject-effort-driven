@@ -70,6 +70,22 @@ data class OptionPageItem(
   }
 }
 
+/**
+ * [fork change] Triggers the layout and painting of the embedded Swing content.
+ *
+ * A [SwingNode] does not recompute the size of its content by itself when that content is set
+ * after the user interface has been built. Without this nudge the page stays empty until
+ * something else triggers a resize -- on maximising the window everything then appeared at once.
+ */
+private fun refreshSwingContent(node: javafx.scene.Node) {
+  (node as? SwingNode)?.content?.let { swingContent ->
+    SwingUtilities.invokeLater {
+      swingContent.revalidate()
+      swingContent.repaint()
+    }
+  }
+}
+
 class OptionPageUi(editItem: ObservableObject<OptionPageItem?>, var resize: ()->Unit): ItemEditorPane {
   private val borderPane = BorderPane()
   override val node: Node
@@ -83,6 +99,24 @@ class OptionPageUi(editItem: ObservableObject<OptionPageItem?>, var resize: ()->
             FXUtil.runLater(500) {
               resize()
               it.fxNode.requestFocus()
+              // [fork change] Nudge the embedded Swing content into painting.
+              //
+              // BUG: resize() is disabled just below after the first page. Every further page is
+              // a SwingNode whose content is neither laid out again nor painted without a nudge:
+              // the page looked empty.
+              //
+              // Demonstrated on screen, and the asymmetry was the clue: "Allgemein" (the first
+              // page) was complete, WebDAV showed only the topmost button, the untouched FTP
+              // page a single field instead of four. The log reported for WebDAV a JSplitPane
+              // 581x462 and server details 194x214, all set to visible -- so the parts were
+              // there and correctly sized, merely unpainted.
+              // Enlarging the window brought everything into view at once.
+              //
+              // DELIBERATELY NOT letting resize() run permanently: that fixes it too, but makes
+              // the dialog grow on every page change until "Uebernehmen" sticks out past the
+              // edge of the screen. Seen on screen. A nudge to repaint is enough and does not
+              // change the window size.
+              refreshSwingContent(it.fxNode)
               if (borderPane.width != 0.0) {
                 resize = {}
               }

@@ -231,18 +231,43 @@ public class GanttChartSceneBuilder {
           Date startDate = taskBaseline.getStart().getTime();
           TimeDuration duration = input.createLength(taskBaseline.getDuration());
           Date endDate = input.getCalendar().shiftDate(startDate, duration);
-          if (endDate.equals(t.getEnd().getTime())) {
+          // [fork change] ---- start ----
+          //
+          // THE ORIGINAL COMPARES END DATES, but the label in the baseline dialog speaks of the
+          // DURATION ("Vorgang dauert laenger"). The two come apart as soon as a Task is merely
+          // moved: same duration, later end -- and it gets coloured red as if it took longer.
+          //
+          // THE RULE, fixed on 17.08.2026: a bar turns red when the Task takes LONGER; a
+          // different colour when it takes the same time or less; not red when it merely lies
+          // elsewhere. The reason is not taste: in this fork the capacity levelling MOVES very
+          // many Tasks without changing their Duration. Under the old rule almost everything
+          // would be red afterwards -- and a colour that is always lit says nothing any more.
+          //
+          // The second difference: the original draws NO baseline bar at all when the end dates
+          // are equal. A Task that starts earlier and ends the same, and therefore lasts longer,
+          // stayed invisible that way. It is now drawn as soon as the start OR the duration has
+          // changed.
+          int baselineDays = taskBaseline.getDuration();
+          int currentDays = t.getDuration().getLength();
+          // Same end AND same duration means: the Task lies unchanged. Compared via the end and
+          // not via the start, because ITaskSceneTask does not expose a start -- with equal
+          // duration that is the same statement.
+          boolean sameEnd = endDate.equals(t.getEnd().getTime());
+          if (sameEnd && baselineDays == currentDays) {
             return;
           }
           List<String> styles = new ArrayList<String>();
           if (t.isMilestone()) {
             styles.add("milestone");
           }
-          if (endDate.compareTo(t.getEnd().getTime()) < 0) {
-            styles.add("later");
-          } else {
-            styles.add("earlier");
+          if (currentDays > baselineDays) {
+            styles.add("later");    // rot: braucht laenger
+          } else if (currentDays < baselineDays) {
+            styles.add("earlier");  // gruen: geht schneller
           }
+          // Same duration: neither of the two colours. The bar stays neutral and only shows
+          // that the Task lies elsewhere -- that is a shift, not a deviation in effort.
+          // [fork change] ---- end ----
           List<ITaskActivity<ITaskSceneTask>> baselineActivities = new ArrayList<ITaskActivity<ITaskSceneTask>>();
           if (t.isMilestone()) {
             baselineActivities.add(

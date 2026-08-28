@@ -59,6 +59,11 @@ import javax.swing.text.html.HTMLEditorKit;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+// [fork change] for reportBrokenLayout.
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
+import java.util.ArrayList;
+import net.sourceforge.ganttproject.GPLogger;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.io.File;
@@ -382,8 +387,90 @@ public abstract class UIUtil {
     center.setAlignmentX(Component.LEFT_ALIGNMENT);
     planePageWrapper.add(center, BorderLayout.NORTH);
     result.add(planePageWrapper, BorderLayout.CENTER);
+    reportBrokenLayout(result);
     return result;
 
+  }
+
+  /**
+   * [fork change] Reports parts of a settings page that cannot possibly be visible.
+   *
+   * WHAT FOR: on the WebDAV page the server details had a width of MINUS 75. BorderLayout gives
+   * WEST its full preferred width and the centre only the remainder -- even when that is
+   * negative. Servers could be created, but address, user and password never seen. Nothing in
+   * the log, no exception; the page simply looked half empty, and nobody could say why.
+   *
+   * This check hangs off {@link #createTopAndCenter}, because ALL settings pages pass through
+   * there -- the alternative would have been to look at every page individually and to miss the
+   * next one.
+   *
+   * Only what is broken beyond doubt is reported: negative size, or a part that sticks out past
+   * the edge of the page. Zero width stays unreported -- filler elements have it for good reason.
+   * A report that also comes in the healthy case is soon read by nobody.
+   */
+  private static void reportBrokenLayout(final JComponent page) {
+    page.addComponentListener(new ComponentAdapter() {
+      private boolean alreadyChecked = false;
+
+      @Override
+      public void componentResized(ComponentEvent event) {
+        if (alreadyChecked || page.getWidth() <= 0) {
+          return;
+        }
+        alreadyChecked = true;
+        // After the event, so that the layout really is complete.
+        SwingUtilities.invokeLater(() -> {
+          List<String> broken = new ArrayList<>();
+          collectBroken(page, page, 0, 0, broken);
+          if (!broken.isEmpty()) {
+            GPLogger.log("Einstellungsseite " + page.getWidth() + "x" + page.getHeight()
+                + ": Teile ausserhalb des Darstellbaren:" + String.join("", broken));
+          }
+        });
+      }
+    });
+  }
+
+  /** A container with children that itself has no area: its content is unreachable. */
+  private static boolean isEmptyContainer(Component c) {
+    return (c.getWidth() == 0 || c.getHeight() == 0)
+        && c instanceof Container
+        && ((Container) c).getComponentCount() > 0;
+  }
+
+  private static void collectBroken(Component c, JComponent page, int x, int y, List<String> out) {
+    // Inside a scroll pane, content that is too large is the normal case, not an error.
+    if (c instanceof JScrollPane) {
+      return;
+    }
+    if (c != page) {
+      int right = x + c.getWidth();
+      int bottom = y + c.getHeight();
+      String problem = null;
+      if (c.getWidth() < 0 || c.getHeight() < 0) {
+        problem = "negative Groesse";
+      } else if (isEmptyContainer(c)) {
+        // ADDED AFTERWARDS, because without it the check let a real bug through:
+        // setDividerLocation(0.5) on a JSplitPane that has not been measured yet pushes the
+        // divider to the edge, one side gets width 0 -- not negative, not sticking out, so
+        // silent. A container WITH content and WITHOUT size is always a bug; an empty filler
+        // element with size 0 is not. That is why content is checked, not only the size.
+        problem = "Groesse 0, obwohl Inhalt vorhanden";
+      } else if (right > page.getWidth() || bottom > page.getHeight()) {
+        problem = "ragt hinaus";
+      }
+      if (problem != null) {
+        out.add(String.format("%n  %-28s x=%4d y=%4d breite=%5d hoehe=%5d  -- %s",
+            c.getClass().getSimpleName(), x, y, c.getWidth(), c.getHeight(), problem));
+        // Do not additionally report children: they inherit the bug and would only be noise.
+        return;
+      }
+    }
+    if (c instanceof Container) {
+      for (Component child : ((Container) c).getComponents()) {
+        collectBroken(child, page, x + child.getX(), y + child.getY(), out);
+      }
+    }
   }
 
   public static JMenu createTooltiplessJMenu(Action action) {

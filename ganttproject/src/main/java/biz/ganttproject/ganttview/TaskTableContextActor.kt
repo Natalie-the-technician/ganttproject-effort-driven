@@ -106,9 +106,38 @@ class NewTaskActor<T> {
   private var newTask: T? = null
   private var newTreeItem: TreeItem<T>? = null
 
+  /**
+   * [fork change] A misstep of the state machine no longer paralyses the task table.
+   *
+   * BUG IN THE ORIGINAL, demonstrated on screen: clicking rapidly several times in the toolbar
+   * led to
+   * `IllegalStateException: this must be error: editing completed when state is SCROLLING`
+   * (the `error(...)` line further down, upstream's own safeguard for a state that the comment
+   * two lines above it holds to be impossible). After that the window stopped responding.
+   *
+   * WHY IT HUNG, and why a SupervisorJob alone would not have been enough: the exception ends
+   * the loop here. The actor then reads no further message, and editing as well as creating in
+   * the table are dead -- regardless of whether the scope survives. The catch therefore has to
+   * go INTO the loop.
+   *
+   * The actual state error is left untouched and is still logged loudly. Fixing it would mean
+   * rebuilding upstream's state machine; that would be a larger intervention with a risk of its
+   * own. The point here is only that a single misstep does not cost the whole table.
+   */
   fun start() = ourCoroutineScope.launch {
     for (msg in inboxChannel) {
-      processMessage(msg)
+      try {
+        processMessage(msg)
+      } catch (e: Exception) {
+        LOG.error("The new-task actor could not process a message; returning to IDLE",
+          exception = e)
+        // Reset to the same state that the regular completion establishes (branch
+        // EDIT_COMPLETING). Without this the actor would stay in a state in which it rejects
+        // every further message -- that is, just as unusable as before, only quieter.
+        newTask = null
+        newTreeItem = null
+        state = IDLE
+      }
     }
   }
 

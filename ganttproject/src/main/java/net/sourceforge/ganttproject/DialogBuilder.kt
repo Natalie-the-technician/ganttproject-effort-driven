@@ -216,6 +216,33 @@ class DialogImplSwingInFx(content: JComponent, private val buttonActions: Array<
               }
               dlg.layout()
               dlg.scene.window.sizeToScene()
+              // [fork change] ---- start ----
+              //
+              // BRING THE SWING CONTENT TO PAINT. MEASURED ON SCREEN: the baseline dialog
+              // appeared as a BLACK AREA and only painted itself once it was dragged with the
+              // mouse. A dialog that looks empty is indistinguishable from a broken one -- it
+              // was at first taken for a defect.
+              //
+              // The cause lies in the SwingNode: its content is set on the Swing thread while
+              // the JavaFX window is already up. Without a nudge the area stays empty until a
+              // resize reassembles it.
+              //
+              // WHY EXACTLY LIKE THIS: three earlier attempts came to nothing because they sat
+              // in the WRONG dialog -- DialogBuilder.java builds a pure Swing dialog, but the
+              // one that is used is this one here. That only became apparent when a probe
+              // (changing the title) did not take effect. Anyone changing something here:
+              // check first whether the code runs at all.
+              SwingUtilities.invokeLater {
+                contentPane.invalidate()
+                contentPane.validate()
+                contentPane.repaint()
+                Platform.runLater {
+                  val fenster = dlg.scene.window
+                  fenster.width += 1.0
+                  fenster.width -= 1.0
+                }
+              }
+              // [fork change] ---- end ----
             }
           }
         }
