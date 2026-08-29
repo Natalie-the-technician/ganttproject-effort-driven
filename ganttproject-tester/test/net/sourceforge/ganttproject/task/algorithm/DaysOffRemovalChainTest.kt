@@ -178,9 +178,15 @@ class DaysOffRemovalChainTest : TestCase() {
    * the way in and out is stable — `createFromModelDates` keeps the model end untouched in `end`,
    * and that is the field `applyChanges` reads — so passing the original intervals straight
    * through is what the dialog would hand over.
+   *
+   * THE CLEAR IS THE ONE THE DIALOG CALLS. It used to be `getDaysOff().clear()`, reaching into the
+   * handed-out list; since the removal methods were added it is [HumanResource.clearDaysOff]. Both
+   * routes were measured here and both give the same three durations -- the method calls the very
+   * same `DefaultListModel.clear()` -- but the mirror follows the dialog rather than picking the
+   * one that suits it, because a mirror that has drifted pins nothing.
    */
   private fun pressOkInThePersonDialog(person: HumanResource, remaining: List<GanttDaysOff>) {
-    person.daysOff.clear()
+    person.clearDaysOff()
     for (interval in remaining) {
       person.addDaysOff(GanttDaysOff(interval.start.time, interval.finish.time))
     }
