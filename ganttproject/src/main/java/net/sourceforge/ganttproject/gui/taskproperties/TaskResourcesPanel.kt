@@ -181,13 +181,15 @@ class TaskResourcesPanel(
       }
 
       // Coordinator column
+      // [fork change] F29: this column had the defect that `axisProperty` was written for, so it
+      // now goes through THAT SAME helper instead of handing out a throwaway property. The former
+      // `setOnEditCommit` handler is gone with it: `CheckBoxTableCell` never fires `onEditCommit`
+      // (measured -- `javap -c` finds no `commitEdit` in the class at all), so the handler was
+      // unreachable, and what it did -- `setValueAt(.., 3)` -- is exactly the write the listener
+      // in `axisProperty` performs.
       val coordinatorCol = TableColumn2<ResourceAssignmentRow, Boolean>(i18n.formatText("coordinator")).apply {
-        setCellValueFactory { SimpleBooleanProperty(it.value.assignment?.isCoordinator ?: false) }
+        setCellValueFactory { cell -> axisProperty(cell.value.assignment, { it.isCoordinator }, { a, v -> a.isCoordinator = v }) }
         cellFactory = CheckBoxTableCell.forTableColumn(this)
-        setOnEditCommit { event ->
-          model.setValueAt(event.newValue, event.tablePosition.row, 3)
-          model.refreshTable()
-        }
         isEditable = true
         prefWidth = 100.0
       }
@@ -435,7 +437,11 @@ private val AXIS_LABEL_BLOCKING get() = forkText("fork.assignment.blocking")
 private val AXIS_LABEL_NO_EFFORT get() = forkText("fork.assignment.noEffort")
 
 /**
- * [fork change] The writable property behind an axis checkbox.
+ * [fork change] The writable property behind a checkbox column of this table.
+ *
+ * Written for the two axis columns; since F29 the original coordinator column is on it too, so
+ * ALL THREE checkbox columns of this tab take this one path. A new checkbox column belongs here as
+ * well -- see `TaskResourcesPanelTest`, which pins that.
  *
  * WHY THIS AND NOT `setOnEditCommit`: `CheckBoxTableCell.forTableColumn(column)` does NOT start an
  * edit. It takes whatever the cell value factory returned and, if that is a `BooleanProperty`,
@@ -447,14 +453,15 @@ private val AXIS_LABEL_NO_EFFORT get() = forkText("fork.assignment.noEffort")
  * `<allocation ... blocking="false" no-effort="false"/>`, and the ticks were gone when the dialog
  * was reopened. With the listener below the same run writes `blocking="true"`.
  *
- * The write goes straight to the assignment, which is what the model's `setValueAt` does for the
+ * The write goes straight to the assignment, which is what the model's `setValueAt` did for the
  * coordinator column as well. For an assignment that already exists this is the live object; for
  * one just added in this dialog it is the mutator's stub, and the stub's values are copied over
- * in `ResourceAssignmentCollectionImpl.commit`.
+ * in `ResourceAssignmentCollectionImpl.commit`. The last row of the table is the one for adding a
+ * new assignment and has no assignment behind it, so the write is a no-op there.
  *
- * THE SAME DEFECT SITS IN THE ORIGINAL COORDINATOR COLUMN, which is wired exactly like the two
- * new ones were. It is NOT fixed here -- that is behaviour outside P1. Measured in the same run:
- * ticking "Coordinator" for a second person and saving leaves `responsible="false"` in the file.
+ * F29, the same defect in the ORIGINAL COORDINATOR COLUMN, was measured on 27.08.2026 in the same
+ * run: ticking "Coordinator" for a second person and saving left `responsible="false"` in the
+ * file. It is repaired since 28.08.2026 -- through this helper, not through a second one.
  */
 private fun axisProperty(
   assignment: net.sourceforge.ganttproject.task.ResourceAssignment?,
