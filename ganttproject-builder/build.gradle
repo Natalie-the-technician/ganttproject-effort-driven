@@ -76,14 +76,14 @@ task distBin(dependsOn: [
     }
 }
 
-// [Fork-Aenderung] Kurz-Commit fuer den Paketnamen.
+// [fork change] Short commit hash for the package name.
 //
-// 3.4.3394 ist die Versionszaehlung des ORIGINALS; dieser Fork fuehrt keine eigene. Der Commit ist
-// damit das Einzige, was den Stand eines Pakets eindeutig benennt.
+// 3.4.3394 is the version count of the ORIGINAL; this fork keeps none of its own. The commit is
+// therefore the only thing that names the state of a package unambiguously.
 //
-// Faellt git aus (Bau aus einem Tarball, kein git im Pfad), bleibt "nocommit" stehen, statt den Bau
-// abzubrechen. Ueber ProcessBuilder statt ueber die Gradle-exec-API, weil der Name schon zur
-// Konfigurationszeit feststehen muss.
+// If git fails (build from a tarball, no git on the path), "nocommit" stays in place instead of
+// aborting the build. Through ProcessBuilder rather than the Gradle exec API, because the name has
+// to be settled at configuration time already.
 def forkCommit = {
     try {
         def proc = new ProcessBuilder('git', 'rev-parse', '--short=8', 'HEAD')
@@ -96,52 +96,50 @@ def forkCommit = {
 }()
 
 tasks.register('distZip', Zip) {
-    // [Fork-Aenderung] Name nach dem Schema dieses Forks statt "ganttproject-<version>.zip".
+    // [fork change] Name after this fork's scheme instead of "ganttproject-<version>.zip".
     //
-    // Sonst muss jeder Bau von Hand umbenannt werden, und irgendwann vergisst es jemand -- dann
-    // haengt an einem Release ein Paket, dem man weder den Fork noch den Stand ansieht.
+    // Otherwise every build has to be renamed by hand, and at some point someone forgets -- then a
+    // release carries a package whose fork and whose state cannot be told from it.
     archiveFileName = "ganttproject-effort-driven-${version}-generic-${forkCommit}.zip"
     destinationDirectory = rootProject.layout.buildDirectory.dir("distributions")
     from 'dist-bin'
-    // [Fork-Aenderung] Protokolldateien gehoeren nicht ins Paket.
+    // [fork change] Log files do not belong in the package.
     //
-    // logback.xml schreibt <file>${log_path:-ganttproject.log}</file>, also ins ARBEITS-
-    // VERZEICHNIS. Wer aus dist-bin startet (ganttproject.bat, runApp), legt die Datei damit
-    // genau dort ab, und distZip kopiert dist-bin vollstaendig -- die Datei landet im Archiv.
-    // Einmal passiert; sie war leer, haette aber Pfade und Projektnamen enthalten koennen.
-    // Die Falle schaerft sich bei jedem Start neu, deshalb der Stern statt nur ganttproject.log.
+    // logback.xml writes <file>${log_path:-ganttproject.log}</file>, that is, into the WORKING
+    // DIRECTORY. Whoever starts from dist-bin (ganttproject.bat, runApp) puts the file exactly
+    // there, and distZip copies dist-bin completely -- the file ends up in the archive. Happened
+    // once; it was empty, but it could have contained paths and project names. The trap arms itself
+    // anew on every start, hence the star instead of just ganttproject.log.
     exclude '*.log'
-    // [Fork-Aenderung] Die eingecheckte ganttproject.exe gehoert NICHT ins generische Zip.
+    // [fork change] The checked-in ganttproject.exe does NOT belong in the generic zip.
     //
-    // Sie ist 32-Bit -- PE-Machine 0x014c (i386), nachgemessen am Kopf der Datei -- und laedt die
-    // JVM im eigenen Prozess. Eine 64-Bit-JRE kann sie damit nicht laden. Beim Doppelklick
-    // passiert deshalb NICHTS: kein Fenster, keine Meldung, weil <errTitle> in
-    // ganttproject-launch4j.xml leer ist. Genau diese Datei klickt ein Windows-Nutzer aber als
-    // Erstes an. Eine fehlende Datei ist besser als eine stumme; der Weg im generischen Paket ist
-    // ganttproject.bat.
+    // It is 32-bit -- PE machine 0x014c (i386), measured at the head of the file -- and loads the
+    // JVM in its own process. It therefore cannot load a 64-bit JRE. On a double click NOTHING
+    // happens: no window, no message, because <errTitle> in ganttproject-launch4j.xml is empty. But
+    // that is exactly the file a Windows user clicks first. A missing file is better than a mute
+    // one; the way into the generic package is ganttproject.bat.
     //
-    // NUR hier ausgeschlossen, nicht aus distBin entfernt: ganttproject.nsi.tpl (Installer) und
-    // ganttproject-launch4j.xml verweisen weiterhin auf sie. Beide Bauwege sind in diesem Fork
-    // auskommentiert und nicht benutzbar, sollen aber nicht stillschweigend kaputtgehen.
+    // Excluded ONLY here, not removed from distBin: ganttproject.nsi.tpl (installer) and
+    // ganttproject-launch4j.xml still point at it. Both build paths are commented out in this fork
+    // and not usable, but they are not meant to break silently.
     exclude 'ganttproject.exe'
 }
 tasks.distZip.dependsOn distBin
 
-// [Fork-Aenderung] Das Windows-Paket als Archiv, statt es von Hand zu packen.
+// [fork change] The Windows package as an archive, instead of packing it by hand.
 //
-// distApp erzeugt nur das VERZEICHNIS dist-app/GanttProject. Bis hierher wurde daraus von Hand
-// ein Zip gemacht -- zweimal nachweislich, in zwei Sitzungen, und beide Male ohne dass es im
-// Bauskript stand. Ein Bauweg, der einen Handgriff braucht, ist keiner: der Dateiname war nicht
-// garantiert, der Kurz-Commit im Namen erst recht nicht, und niemand konnte das Paket
-// nachbauen.
+// distApp produces only the DIRECTORY dist-app/GanttProject. Up to here a zip was made from it by
+// hand -- twice on the record, in two sessions, and both times without it being written down in the
+// build script. A build path that needs a manual step is none: the file name was not guaranteed,
+// the short commit in it even less so, and nobody could rebuild the package.
 //
-// Dasselbe Namensschema und derselbe Log-Ausschluss wie beim generischen Zip. Die 32-Bit-exe
-// muss hier nicht ausgeschlossen werden -- distApp nimmt sie schon nicht in den Zwischenstand
-// auf (siehe exclude weiter unten im distApp-Task).
+// The same naming scheme and the same log exclusion as for the generic zip. The 32-bit exe does not
+// have to be excluded here -- distApp does not take it into the intermediate state in the first
+// place (see the exclude further down in the distApp task).
 tasks.register('distWin64Zip', Zip) {
-    // Als Zeichenkette und nicht als Verweis: distApp wird weiter unten in dieser Datei
-    // definiert, hier oben gibt es die Eigenschaft noch nicht. Gradle bricht sonst schon beim
-    // Auswerten ab -- "Could not get unknown property 'distApp'".
+    // As a string and not as a reference: distApp is defined further down in this file, up here
+    // the property does not exist yet. Gradle would otherwise abort during evaluation already --
+    // "Could not get unknown property 'distApp'".
     dependsOn 'distApp'
     archiveFileName = "ganttproject-effort-driven-${version}-win64-${forkCommit}.zip"
     destinationDirectory = rootProject.layout.buildDirectory.dir("distributions")
