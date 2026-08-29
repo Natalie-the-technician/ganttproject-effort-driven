@@ -13,6 +13,11 @@ GanttProject is a free project management app for desktops. It comes with:
 
 Visit http://ganttproject.biz to learn more.
 
+## This fork
+
+This is a fork adding effort-driven scheduling, capacity levelling and recurring
+tasks. See [FORK.md](FORK.md).
+
 
 ## License
 GanttProject is free and open-source software, distributed under GNU General Public License v3.
