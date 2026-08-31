@@ -138,11 +138,23 @@ jobs:
       # ZIP; a release attaches the APK directly, installs with one tap from
       # the GitHub mobile app, and does not expire after 90 days.
       #
-      # Only on a manual run, so ordinary pushes do not litter the release
-      # list. Uses the preinstalled gh CLI rather than a third-party action,
-      # to keep the supply chain of a public repository as small as possible.
+      # Uses the preinstalled gh CLI rather than a third-party action, to keep
+      # the supply chain of a public repository as small as possible.
+      #
+      # Published on a manual run, and also on every push to the app branch.
+      # The second half is a deliberate relaxation of the original rule ("only
+      # on a manual run, so ordinary pushes do not litter the release list"):
+      # while one person is the only user of this branch, a cluttered release
+      # list costs nothing and a manual step every time costs something real --
+      # the artifact alone cannot be installed from a phone.
+      #
+      # Scoped to the one branch on purpose. Every other branch keeps the old
+      # behaviour, so the day somebody else works here the rule is still there.
       - name: Publish release with the APK
-        if: github.event_name == 'workflow_dispatch' && inputs.create_release
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.create_release) ||
+          (github.event_name == 'push' &&
+           github.ref == 'refs/heads/claude/gantt-android-app-wxxu9o')
         env:
           GH_TOKEN: ${{ github.token }}
           # Passed as environment variables, never interpolated into the
