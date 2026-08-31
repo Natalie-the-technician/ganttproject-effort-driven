@@ -59,10 +59,19 @@ jobs:
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
+        # A report is a convenience, not the result. The tests had already
+        # passed when this step took the whole job down because the artifact
+        # storage quota was full -- a build reporting failure while the thing
+        # it builds is fine is worse than no report at all.
+        continue-on-error: true
         with:
           name: core-test-report
           path: android/gantt-core/build/reports/tests/test
           if-no-files-found: ignore
+          # Default is 90 days. A report nobody looked at within a week is one
+          # nobody will, and every stale one eats the same quota that stopped
+          # this build.
+          retention-days: 7
 
   app:
     name: Build APK
@@ -117,7 +126,12 @@ jobs:
         run: ./gradlew :app:lintDebug
         continue-on-error: true
 
+      # Skipped when a release is going to be published anyway: the same APK
+      # would be stored twice, and at ~18 MB a run that is what filled the
+      # artifact quota in the first place. A release does not count against it
+      # and is the copy that can actually be installed from a phone.
       - name: Upload APK
+        if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/claude/gantt-android-app-wxxu9o') }}
         uses: actions/upload-artifact@v4
         with:
           # Download this from the run's summary page and install it on the
@@ -125,14 +139,17 @@ jobs:
           name: ganttproject-mobile-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 14
 
       - name: Upload lint report
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: android-lint-report
           path: android/app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
+          retention-days: 7
 
       # Artifacts can only be downloaded through a browser and arrive as a
       # ZIP; a release attaches the APK directly, installs with one tap from
