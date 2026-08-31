@@ -151,10 +151,11 @@ jobs:
       # Scoped to the one branch on purpose. Every other branch keeps the old
       # behaviour, so the day somebody else works here the rule is still there.
       - name: Publish release with the APK
-        if: >-
-          (github.event_name == 'workflow_dispatch' && inputs.create_release) ||
-          (github.event_name == 'push' &&
-           github.ref == 'refs/heads/claude/gantt-android-app-wxxu9o')
+        # One line on purpose. Written as a folded block it picked up a stray
+        # newline from the deeper-indented continuation, which YAML keeps
+        # verbatim rather than folding -- the expression then contained a line
+        # break in the middle.
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.create_release) || (github.event_name == 'push' && github.ref == 'refs/heads/claude/gantt-android-app-wxxu9o') }}
         env:
           GH_TOKEN: ${{ github.token }}
           # Passed as environment variables, never interpolated into the
