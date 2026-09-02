@@ -26,6 +26,7 @@ import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.control.Button
 import javafx.scene.control.Label
+import javafx.scene.control.Tooltip
 import javafx.scene.layout.HBox
 
 /**
@@ -38,6 +39,25 @@ import javafx.scene.layout.HBox
  * and were already found unreadable once (`GanttProject.java`, the comment on
  * `EstimateQualityAction`), and the settings dialog is wider than a 1024x768 screen, so its Ok
  * button cannot be reached.
+ *
+ * WHY IT IS STILL THERE AND NOT IN A TOOLBAR. Re-measured on 02.09.2026 in the running program
+ * (`2026-09-02-merker-leiste.md`), because the status bar had turned out unreadable at 1024 px:
+ *
+ *  * The CHART toolbar cannot carry it. At 1024 px BOTH of its halves already show the overflow
+ *    chevron, and what stands behind that chevron today is `Basispläne …` and the comparison
+ *    dropdown — photographed. At 1920 px the right-hand half still overflows. Anything added
+ *    there lands in a popup nobody opens, and it would only ever be visible in the Gantt tab.
+ *  * The MAIN toolbar has no forced minimum width, which is its one real advantage, but it has
+ *    only about 158 px of slack at a 1024 px window: measured, its own items start dropping into
+ *    the overflow between 861 and 870 px of window width. The shortened message needs about
+ *    224 px for its first statement alone. Putting it there pushes the search box off the
+ *    toolbar on exactly the screen this fork is used on — a working control of the original,
+ *    traded for one of ours. Not worth it.
+ *
+ * So the message stays, and what was fixed is what could be fixed without touching a rule that
+ * belongs to the original: the texts became SIGNALS and the sentences moved into tooltips. That
+ * lifts the window width needed to read the whole message from 2400 px to about 1790, and it
+ * gives the 1024 px case the first route it has ever had to the reason — see [kurzhinweis].
  *
  * WHAT IT LOOKS LIKE WHEN THERE IS NOTHING TO SAY: exactly like today. [node] is both invisible
  * and UNMANAGED when the mark is clear, so it takes no width at all and the status bar keeps the
@@ -90,10 +110,15 @@ class LevellingStalenessBar(
    */
   private val runCatchUp: (onDone: () -> Unit) -> Unit = { it() }
 ) {
-  val label: Label = Label(forkText("fork.staleness.message"))
+  val label: Label = Label(forkText("fork.staleness.message")).also {
+    it.tooltip = kurzhinweis(forkText("fork.staleness.message.tooltip"))
+  }
 
   val button: Button = Button(forkText("fork.staleness.button")).also {
     it.setOnAction { runLevelling() }
+    // The button gets its OWN hint, not a copy of the label's: what it has to explain is what
+    // pressing it would do, which is a question a button raises and a label does not.
+    it.tooltip = kurzhinweis(forkText("fork.staleness.button.tooltip"))
   }
 
   /**
@@ -104,6 +129,11 @@ class LevellingStalenessBar(
   val baselineLabel: Label = Label(forkText("fork.baseline.missing.none")).also {
     // A little air, so the two statements do not read as one sentence.
     it.padding = Insets(0.0, 0.0, 0.0, 8.0)
+    // The hint has to FOLLOW the text: this label says two different things -- "n tasks with no
+    // baseline" while baselines exist, "no baseline" while none does -- and they need different
+    // explanations. One set here once would explain the wrong state half the time, so
+    // [zeigeLuecke] rewrites it along with the text.
+    it.tooltip = kurzhinweis(forkText("fork.baseline.missing.none.tooltip"))
   }
 
   /**
@@ -113,6 +143,7 @@ class LevellingStalenessBar(
    */
   val baselineButton: Button = Button(forkText("fork.baseline.missing.button")).also {
     it.setOnAction { runCatchUp { FXUtil.runLater { refreshBaselineGap() } } }
+    it.tooltip = kurzhinweis(forkText("fork.baseline.missing.button.tooltip"))
   }
 
   /**
@@ -168,8 +199,19 @@ class LevellingStalenessBar(
       // beside it do -- one key, both numbers.
       is BaselineGap.Missing -> forkText("fork.baseline.missing", gap.count)
     }
+    val hinweis: String? = when (gap) {
+      null, is BaselineGap.Covered -> null
+      is BaselineGap.NoBaseline -> forkText("fork.baseline.missing.none.tooltip")
+      is BaselineGap.Missing -> forkText("fork.baseline.missing.tooltip", gap.count)
+    }
     if (text != null) {
       baselineLabel.text = text
+    }
+    // Rewritten in step with the text, never left over from the previous state. The last hint
+    // stays put while the statement is off, for the same reason the last text does: nobody can
+    // read either of them then.
+    if (hinweis != null) {
+      baselineLabel.tooltip.text = hinweis
     }
     baselineLabel.isVisible = text != null
     baselineLabel.isManaged = text != null
@@ -179,4 +221,21 @@ class LevellingStalenessBar(
     baselineButton.isVisible = mitKnopf
     baselineButton.isManaged = mitKnopf
   }
+
+  /**
+   * A hint that WRAPS. The explanations are whole sentences, and an unwrapped tooltip is laid out
+   * as a single line: on the 1024 px screen this fork is built for, the sentence that was cut off
+   * in the status bar would be cut off again in the very thing meant to make it readable.
+   *
+   * [HINWEIS_BREITE] is deliberately narrower than that screen rather than equal to it, so that a
+   * hint opening near the right edge still has room to fall inwards.
+   */
+  private fun kurzhinweis(text: String): Tooltip = Tooltip(text).also {
+    it.isWrapText = true
+    it.maxWidth = HINWEIS_BREITE
+    it.prefWidth = HINWEIS_BREITE
+  }
 }
+
+/** See [LevellingStalenessBar.kurzhinweis]. */
+private const val HINWEIS_BREITE = 360.0
