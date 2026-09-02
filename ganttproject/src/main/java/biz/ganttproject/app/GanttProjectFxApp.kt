@@ -73,8 +73,13 @@ class GanttProjectFxApp : Application() {
             // The spacer stays, and it is still the only child that grows. The message does not:
             // two growing children would share the free width and the message would sit in a box
             // wider than its text, moving with the window instead of staying next to the lock.
+            // The second statement -- "tasks are not in any baseline" -- rides INSIDE the same
+            // node. It has no occasion of its own to appear, and the expensive baseline question
+            // is asked only when the message switches itself on; see LevellingStalenessBar.
             val stalenessBar = LevellingStalenessBar(
-              ganttProject.levellingStaleness, ganttProject::runLevellingFromMessage)
+              ganttProject.levellingStaleness, ganttProject::runLevellingFromMessage,
+              { ganttProject.baselineGap },
+              { onDone -> ganttProject.runBaselineCatchUpFromMessage(Runnable { onDone() }) })
             it.children.add(stalenessBar.node)
             val filler = Pane()
             it.children.add(filler)

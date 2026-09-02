@@ -82,7 +82,7 @@ class LevellingStalenessBarTest {
   fun `with a clear mark the message is invisible and takes no space`() = runBlocking {
     withContext(Dispatchers.JavaFx) {
       val staleness = LevellingStaleness(LevellingRunNotifier())
-      val bar = LevellingStalenessBar(staleness) { }
+      val bar = LevellingStalenessBar(staleness, { })
       try {
         assertFalse(staleness.isStale, "Aufbau: nothing has happened")
         assertFalse(bar.node.isVisible, "with nothing to say the message is not shown")
@@ -106,7 +106,7 @@ class LevellingStalenessBarTest {
       val taskManager = taskManager()
       val staleness = LevellingStaleness(LevellingRunNotifier())
       taskManager.addTaskListener(staleness.taskListener)
-      val bar = LevellingStalenessBar(staleness) { }
+      val bar = LevellingStalenessBar(staleness, { })
       try {
         taskManager.newTaskBuilder().withName("Angebot").withStartDate(MONTAG.toModelDate())
           .withDuration(taskManager.createLength(5L)).build()
@@ -131,7 +131,7 @@ class LevellingStalenessBarTest {
   fun `the message disappears when the mark is cleared`() = runBlocking {
     withContext(Dispatchers.JavaFx) {
       val staleness = LevellingStaleness(LevellingRunNotifier())
-      val bar = LevellingStalenessBar(staleness) { }
+      val bar = LevellingStalenessBar(staleness, { })
       try {
         staleness.markStale()
         assertTrue(bar.node.isVisible, "Aufbau: the message is up")
@@ -158,7 +158,7 @@ class LevellingStalenessBarTest {
     withContext(Dispatchers.JavaFx) {
       val staleness = LevellingStaleness(LevellingRunNotifier())
       var laeufe = 0
-      val bar = LevellingStalenessBar(staleness) { laeufe++ }
+      val bar = LevellingStalenessBar(staleness, { laeufe++ })
       try {
         staleness.markStale()
         bar.button.fire()
@@ -183,7 +183,7 @@ class LevellingStalenessBarTest {
   fun `the message and the button carry real texts`() = runBlocking {
     withContext(Dispatchers.JavaFx) {
       val staleness = LevellingStaleness(LevellingRunNotifier())
-      val bar = LevellingStalenessBar(staleness) { }
+      val bar = LevellingStalenessBar(staleness, { })
       try {
         assertEquals(forkText("fork.staleness.message"), bar.label.text,
           "the message text comes out of the fork bundle")
@@ -210,7 +210,7 @@ class LevellingStalenessBarTest {
   fun `a detached bar no longer follows the mark`() = runBlocking {
     withContext(Dispatchers.JavaFx) {
       val staleness = LevellingStaleness(LevellingRunNotifier())
-      val bar = LevellingStalenessBar(staleness) { }
+      val bar = LevellingStalenessBar(staleness, { })
       try {
         bar.detach()
         staleness.markStale()

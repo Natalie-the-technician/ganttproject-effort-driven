@@ -36,6 +36,10 @@ import net.sourceforge.ganttproject.fork.AskBeforeWriting;
 import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.fork.BackfillAction;
 import net.sourceforge.ganttproject.fork.LevellingAction;
+import net.sourceforge.ganttproject.fork.AutoBaselinesKt;
+import net.sourceforge.ganttproject.fork.BaselineCatchUp;
+import net.sourceforge.ganttproject.fork.BaselineCoverageKt;
+import net.sourceforge.ganttproject.fork.BaselineGap;
 import net.sourceforge.ganttproject.fork.LevellingStaleness;
 import net.sourceforge.ganttproject.fork.LevellingRunNotifierKt;
 import net.sourceforge.ganttproject.fork.EstimateQualityAction;
@@ -157,6 +161,47 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
       if (myLevellingAction != null) {
         myLevellingAction.actionPerformed(null);
       }
+    });
+  }
+
+  /**
+   * [fork change] The supplement behind the second statement of the status-bar message. Built in
+   * {@link #getMenuBar()} because that is where the question dialog and the message sink live;
+   * null until then.
+   */
+  private BaselineCatchUp myBaselineCatchUp;
+
+  /**
+   * [fork change] "Are there tasks in NO baseline at all?" -- the answer the status-bar message
+   * needs.
+   *
+   * NOT CHEAP, and the caller knows it: {@link net.sourceforge.ganttproject.GanttPreviousState#load()}
+   * re-parses every baseline's temporary file, measured at 2.3 ms for one baseline and 29.0 ms for
+   * fifteen on a plan of 276 tasks. The display therefore asks only when it switches itself on --
+   * see {@code LevellingStalenessBar}.
+   */
+  public BaselineGap getBaselineGap() {
+    return BaselineCoverageKt.baselineGap(getTaskManager(), getBaselines());
+  }
+
+  /**
+   * [fork change] Runs the supplement for the button in the status-bar message and reports back
+   * when it is over.
+   *
+   * ON THE SWING THREAD, for the same reason as {@link #runLevellingFromMessage()}: the caller is
+   * JavaFX and the action opens Swing dialogs. {@code onDone} arrives in EVERY case -- yes, no and
+   * nothing-to-do -- because the display recomputes on it.
+   */
+  public void runBaselineCatchUpFromMessage(Runnable onDone) {
+    SwingUtilities.invokeLater(() -> {
+      if (myBaselineCatchUp == null) {
+        onDone.run();
+        return;
+      }
+      myBaselineCatchUp.run(() -> {
+        onDone.run();
+        return Unit.INSTANCE;
+      });
     });
   }
 
@@ -303,6 +348,21 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         (isProblem, message) -> { capacityMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting);
     mHuman.add(myLevellingAction);
+
+    // [fork change] The supplement behind the second statement of the status-bar message. It has
+    // NO menu item of its own on purpose: it is only ever reached from that message, and the
+    // message only appears when there is something to supplement. Built here because this is where
+    // the question dialog and the capacity message sink are.
+    //
+    // The baselines are fetched FRESH EVERY TIME for the reason the levelling action documents
+    // above: the field behind getBaselines() is replaced when a project is closed.
+    myBaselineCatchUp = new BaselineCatchUp(
+        getTaskManager(),
+        () -> (java.util.List<net.sourceforge.ganttproject.GanttPreviousState>) getBaselines(),
+        java.time.LocalDateTime::now,
+        (isProblem, message) -> { capacityMessages.show(isProblem, message); return Unit.INSTANCE; },
+        askBeforeWriting,
+        AutoBaselinesKt.MAX_AUTO_BASELINES_PER_KIND);
 
     // [fork change] The estimating-quality evaluation. Writes NOTHING and therefore does not ask
     // either.
