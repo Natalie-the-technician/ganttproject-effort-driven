@@ -361,6 +361,24 @@ fun levelTasks(
         // `absenceBlocked` is set only inside `task.blocking.any { … }` below, so it implies a
         // non-empty `task.blocking` -- the emptiness of this list is therefore the same statement
         // as `!absenceBlocked`, and one flag is enough to carry it into the message.
+        //
+        // NO TEST HOLDS THIS CONDITION. Drop the `if` -- write `task.blocking.sorted()`
+        // unconditionally -- and the whole suite stays green. That is measured, not assumed.
+        //
+        // What breaks without it: a Task whose search ran out on CAPACITY alone would be reported
+        // with a list of blocking people who have nothing to do with it, and a reader would go
+        // looking for absences that are not there. The plan stays correct; the message lies.
+        //
+        // The check that would catch it needs a search that exhausts on capacity alone, and that
+        // takes three chained blocks reaching into the 2260s -- a free day always fits, so giving
+        // up on capacity costs 50 000 solidly booked working days. Roughly 5.5 s, which would
+        // double the slowest test in this file. The cheap route -- adding an always-present
+        // blocking person to the existing plan -- was rejected because it waters down
+        // `testAPureCapacityDeadEndIsReported`, the one check that proves the pure capacity case
+        // is reachable at all.
+        //
+        // Decided on 02.09.2026: leave the gap, name it here. Whoever removes this `if` because
+        // it looks redundant has now been told why it is not.
         val blocking = if (search.absenceBlocked) task.blocking.sorted() else emptyList()
         val fullFor = search.fullFor.sorted()
         // Exhausted with neither reason recorded stays silent, exactly as it did when these were
