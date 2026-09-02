@@ -36,6 +36,8 @@ import net.sourceforge.ganttproject.fork.AskBeforeWriting;
 import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.fork.BackfillAction;
 import net.sourceforge.ganttproject.fork.LevellingAction;
+import net.sourceforge.ganttproject.fork.LevellingStaleness;
+import net.sourceforge.ganttproject.fork.LevellingRunNotifierKt;
 import net.sourceforge.ganttproject.fork.EstimateQualityAction;
 import net.sourceforge.ganttproject.fork.RecurrenceAction;
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions;
@@ -116,6 +118,47 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
   private final GanttOptions options;
 
   private ArrayList<GanttPreviousState> myPreviousStates = new ArrayList<>();
+
+  /**
+   * [fork change] The levelling menu item, kept so that the status-bar message can run the very
+   * same one. Filled in {@link #getMenuBar()}; null until then.
+   */
+  private LevellingAction myLevellingAction;
+
+  /**
+   * [fork change] "Something has changed since the levelling last ran."
+   *
+   * A plain boolean fed by three listeners -- see {@link LevellingStaleness} for why it observes
+   * events rather than computing, and for the feedback loop it has to survive. The three listeners
+   * are registered in the constructor, where the task manager, the resource manager and the
+   * calendar exist.
+   *
+   * ONE PER WINDOW, NOT ONE PER PROCESS. It is constructed here rather than taken from a shared
+   * top-level value: a second window would otherwise share the mark and pile its listeners on top
+   * of the first window's. The RUN NOTIFIER on the other hand IS the shared one -- that is the
+   * instance `applyLevellingAsSingleEdit` reports through by default, so a mark hung on any other
+   * instance would never be cleared.
+   */
+  private final LevellingStaleness myLevellingStaleness =
+      new LevellingStaleness(LevellingRunNotifierKt.getLevellingRunNotifier());
+
+  public LevellingStaleness getLevellingStaleness() {
+    return myLevellingStaleness;
+  }
+
+  /**
+   * [fork change] Runs the levelling menu item, for the button in the status-bar message.
+   *
+   * ON THE SWING THREAD, and that is the point of the method: the caller is JavaFX, the action
+   * opens Swing dialogs. Doing the hop here keeps the JavaFX side from having to know that.
+   */
+  public void runLevellingFromMessage() {
+    SwingUtilities.invokeLater(() -> {
+      if (myLevellingAction != null) {
+        myLevellingAction.actionPerformed(null);
+      }
+    });
+  }
 
   private final GanttChartTabContentPanel myGanttChartTabContent;
 
@@ -241,7 +284,12 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         getUndoManager(),
         (isProblem, message) -> { capacityMessages.show(isProblem, message); return Unit.INSTANCE; },
         askBeforeWriting));
-    mHuman.add(new LevellingAction(
+    // [fork change] KEPT IN A FIELD, and not only hung in the menu. The message in the status bar
+    // carries a button that has to run THE SAME levelling -- one path, one set of questions before
+    // writing, one undo step. Copying the action's body into the button would be a second levelling
+    // that drifts from the first. getMenuBar() is called once at startup, but nothing says so, so
+    // the field is filled here rather than depending on that.
+    myLevellingAction = new LevellingAction(
         getTaskManager(),
         getHumanResourceManager(),
         getProject().getTaskCustomColumnManager(),
@@ -253,7 +301,8 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         () -> (java.util.List<net.sourceforge.ganttproject.GanttPreviousState>) getBaselines(),
         java.time.LocalDate::now,
         (isProblem, message) -> { capacityMessages.show(isProblem, message); return Unit.INSTANCE; },
-        askBeforeWriting));
+        askBeforeWriting);
+    mHuman.add(myLevellingAction);
 
     // [fork change] The estimating-quality evaluation. Writes NOTHING and therefore does not ask
     // either.
@@ -299,6 +348,16 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
 
     getProjectImpl().getHumanResourceManager().addView(this);
     myCalendar.addListener(GanttProject.this::setModified);
+
+    // [fork change] The three listeners of the "levelling is out of date" mark, next to the two
+    // that already stand here and for the same reason: this is where the managers exist.
+    //
+    // The mark WRITES NOTHING; it only reads its own events. It is deliberately registered
+    // alongside the existing views rather than inside LevellingStaleness, so that everything the
+    // program listens to stays visible in one place.
+    getTaskManager().addTaskListener(myLevellingStaleness.getTaskListener());
+    getProjectImpl().getHumanResourceManager().addView(myLevellingStaleness.getResourceView());
+    myCalendar.addListener(myLevellingStaleness.getCalendarListener());
 
     startupLogger.debug("1. loading look'n'feels");
     options = new GanttOptions(getRoleManager(), getDocumentManager(), false);

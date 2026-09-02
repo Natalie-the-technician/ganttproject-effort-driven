@@ -19,6 +19,7 @@
 package biz.ganttproject.app
 
 import biz.ganttproject.FXUtil
+import net.sourceforge.ganttproject.fork.LevellingStalenessBar
 import biz.ganttproject.lib.fx.installDockIcon
 import biz.ganttproject.lib.fx.vbox
 import javafx.application.Application
@@ -63,6 +64,18 @@ class GanttProjectFxApp : Application() {
         add(
           HBox().also {
             it.children.add(ganttProject.createStatusBar().lockPanel)
+            // [fork change] The "capacity has to be redistributed" message, in front of the
+            // spacer. Measured on 28.08.2026: the middle of the status bar is the only permanently
+            // visible area of the window that is empty. The message is invisible AND unmanaged
+            // while the mark is clear, so it takes no width at all and the status bar looks exactly
+            // as it does today until there is something to say.
+            //
+            // The spacer stays, and it is still the only child that grows. The message does not:
+            // two growing children would share the free width and the message would sit in a box
+            // wider than its text, moving with the window instead of staying next to the lock.
+            val stalenessBar = LevellingStalenessBar(
+              ganttProject.levellingStaleness, ganttProject::runLevellingFromMessage)
+            it.children.add(stalenessBar.node)
             val filler = Pane()
             it.children.add(filler)
             HBox.setHgrow(filler, Priority.ALWAYS)
