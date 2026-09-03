@@ -794,3 +794,59 @@ fun findOrCreateUtilisation(manager: CustomPropertyManager): CustomPropertyDefin
 /** The daily rate of the person that the derivation relies on. */
 fun HumanResource.dailyHours(resourceProperties: CustomPropertyManager): Double =
   this.hoursPerDay(resourceProperties)
+
+/**
+ * The working week of a person, as a property of the person. [fork change]
+ *
+ * WHAT FOR: until now ONE working calendar applied to everybody, `taskManager.calendar`. Whoever
+ * works Mon, Tue, Fri, Sat is planned by it as though they worked Mon to Fri -- two days of work
+ * that do not exist, and two days off that are not taken. The distinction has to be made per
+ * person, and it has to be able to change over time: from 1 March somebody works three days only.
+ *
+ * STORED AS TEXT, in the format of [WorkWeekSchedule]: `1,2,5,6; 2026-03-01: 1,2,3`. ISO weekday
+ * numbers and nothing else -- the same file is opened with `ui.language=de_DE` and with `en_US`,
+ * and „Mo,Di,Fr" would be nonsense in the second session.
+ *
+ * NOTHING ENTERED DOES NOT MEAN „MONDAY TO FRIDAY". It means „no statement -- the project calendar
+ * applies", and that is why the query is `Boolean?`. Anything else would change the behaviour of
+ * every existing plan the moment somebody swaps the version, without anybody having entered
+ * anything. What a fresh entry is PRESET to is a matter for the user interface and does not belong
+ * here.
+ *
+ * This is the storage and nothing else. Nothing in this fork asks the question yet; the place
+ * where the answer meets `isWorkingDay` is a separate piece of work.
+ */
+const val RESOURCE_WORK_WEEK = "work_week"
+
+fun findOrCreateWorkWeek(manager: CustomPropertyManager): CustomPropertyDefinition =
+  manager.findEffortDefinition(RESOURCE_WORK_WEEK)
+    ?: manager.createDefinition(RESOURCE_WORK_WEEK, CustomPropertyClass.TEXT.iD,
+                                forkText("fork.column.workWeek"), null)
+
+/**
+ * The working week of this person, together with whatever could not be read.
+ *
+ * The errors are DELIVERED ALONG and not swallowed, exactly as in
+ * [net.sourceforge.ganttproject.task.algorithm.capacitySchedule]: a column display can carry on
+ * with the usable remainder, a computation should be able to refuse the work over a typo instead
+ * of quietly planning with a week nobody entered.
+ */
+fun HumanResource.workWeek(manager: CustomPropertyManager): WorkWeekParseResult {
+  val def = manager.findEffortDefinition(RESOURCE_WORK_WEEK)
+    ?: return WorkWeekParseResult(WorkWeekSchedule(), emptyList())
+  return WorkWeekSchedule.parse(this.getCustomField(def)?.toString())
+}
+
+/**
+ * Does this person work on [day]?
+ *
+ * `null` means NO STATEMENT: nothing is entered for that day, and the project calendar decides.
+ * Neither `false` nor `true` -- see [RESOURCE_WORK_WEEK].
+ */
+fun HumanResource.worksOn(manager: CustomPropertyManager, day: LocalDate): Boolean? =
+  this.workWeek(manager).schedule.worksOn(day)
+
+/** Writes the working week back in the format [WorkWeekSchedule.toString] produces. */
+fun HumanResource.setWorkWeek(manager: CustomPropertyManager, schedule: WorkWeekSchedule) {
+  this.setValue(findOrCreateWorkWeek(manager), schedule.toString())
+}

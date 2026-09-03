@@ -56,6 +56,7 @@ import net.sourceforge.ganttproject.fork.findOrCreateRecurrence
 import net.sourceforge.ganttproject.fork.findOrCreateRecurrenceOf
 import net.sourceforge.ganttproject.fork.findOrCreateUtilisation
 import net.sourceforge.ganttproject.fork.findOrCreateWaitOnly
+import net.sourceforge.ganttproject.fork.findOrCreateWorkWeek
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenTrigger
 import net.sourceforge.ganttproject.storage.ProjectDatabase
@@ -143,6 +144,9 @@ open class GanttProjectImpl(
     EffortDrivenProperties.findOrCreateResourceHours(ressourcen)
     EffortDrivenProperties.findOrCreateResourceSchedule(ressourcen)
     findOrCreateUtilisation(ressourcen)
+    // [fork change] The working week -- for the same reason the four above are listed here:
+    // a property nobody can see is a property nobody can fill in either.
+    findOrCreateWorkWeek(ressourcen)
     // ALL of this fork's columns, and all of them at that. MEASURED ON 17.08.2026: four of them
     // -- "Finish by", "Utilisation (%)", "Waiting", "Date fixed" -- were created NOWHERE. They
     // existed in the code but could not be filled in by anybody; levelling read them dutifully
