@@ -36,6 +36,20 @@ import java.time.LocalDate
  * day off still occupies a day of the task but contributes no hours. Five days of work with one
  * day off in the middle is six days long, not five.
  *
+ * [fork change] AXIS A REACHES IN HERE AS WELL, since 03.09.2026: on a day on which somebody
+ * marked `isBlocking` is away, NOBODY contributes to this task. The hours of everybody else go
+ * back into their own pot instead of being spent on work that cannot proceed without the missing
+ * person. Such a day still occupies a day of the task, exactly as any other day off does.
+ *
+ * THE BOUNDARY MATTERS MORE THAN THE RULE. This holds for `isBlocking` and for nothing else: the
+ * ordinary holiday of a person who is not indispensable works as it always did -- their hours drop
+ * out, the day stays, the task grows -- and the sentence about the six days above is unchanged by
+ * it. Were the two lumped together, every holiday would stop every task.
+ *
+ * SAFE FOR EVERY PLAN THAT EXISTS TODAY: `isBlocking` defaults to `false` and no file written
+ * before this fork carries the attribute, so the blocking set is empty and the rule never fires.
+ * Measured, together with the boundary, in `BlockingAbsenceDurationTest`.
+ *
  * THE END OF AN INTERVAL IS EXCLUSIVE. This is not a decision taken here, it is what the
  * surrounding code does, measured in four independent places:
  *
@@ -92,14 +106,36 @@ fun Task.durationDaysWithDaysOff(
   if (effort <= 0.0) {
     return 1
   }
+  // [fork change] AXIS A: whose ABSENCE takes the whole task with it, as opposed to whose hours
+  // it removes. Flattened into ONE list of ranges, because the only question asked of it is
+  // "is any of them away on this day" -- two indispensable people away on the same day therefore
+  // cost that day once, not twice.
+  //
+  // "any absent" is the same statement as "all present must be present", and it is the same
+  // sentence `ResourceLevelling.findEarliestWindow` already makes about the same set. Until
+  // 03.09.2026 the two disagreed: levelling knew axis A and this computation did not.
+  //
+  // READ BEFORE THE AXIS B FILTER BELOW, AND THAT ORDER IS THE POINT. The person who has to be
+  // present without doing any of the work -- supervision, an acceptance, a hand-over -- carries
+  // axis B as well, and the filter below drops their assignment whole. Asking axis A afterwards
+  // would drop exactly the case that justifies the axis. The two are independent, which is what
+  // `ResourceAssignment` says of them.
+  //
+  // EMPTY IN EVERY PLAN THAT HAS NEVER TICKED THE BOX, and then it costs one empty `any` per
+  // working day.
+  val blockingDaysOff: List<Pair<LocalDate, LocalDate>> = this.assignments
+    .filter { it.isBlocking }
+    .mapNotNull { it.resource as? HumanResource }
+    .flatMap { it.daysOffRanges() }
   // [fork change] AXIS B. An assignment marked `no-effort` is dropped whole, not merely set to
   // zero hours -- and dropping it whole is what also takes that person's days off out of the
-  // walk. That is the same answer either way, and it is the RIGHT one: somebody who contributes
-  // no hours cannot have hours taken away from them by a holiday. Their absence changes nothing
-  // about how long the work takes, because they were not doing the work.
+  // walk. That is the same answer either way, and it is the RIGHT one FOR THE HOURS: somebody who
+  // contributes no hours cannot have hours taken away from them by a holiday, so their day off
+  // does not lengthen the task on that account.
   //
-  // Whether that person's absence should STOP the task is a different question entirely, and it
-  // is not asked here -- that is axis A (`blocking`), and it is not built on this branch.
+  // Whether that person's absence should STOP the task is a different question entirely -- that
+  // is axis A -- and it IS asked, a few lines above, on the assignment list before this filter
+  // has touched it.
   val shares = this.assignments.filter { it.contributesEffort }.mapNotNull { assignment ->
     (assignment.resource as? HumanResource)?.let { resource ->
       Share(
@@ -122,7 +158,13 @@ fun Task.durationDaysWithDaysOff(
   while (guard++ < CapacitySchedule.MAX_DAYS * 2) {
     if (isWorkingDay(day)) {
       days++
-      remaining -= shares.sumOf { it.hoursOn(day) }
+      // [fork change] AXIS A, and it takes the WHOLE day: a task that is missing somebody it
+      // cannot proceed without makes no progress on that day, not through the other people
+      // either. The day is counted all the same -- it occupies a day of the task, as every day
+      // off has always done. What it no longer does is eat the others' hours.
+      if (!blockingDaysOff.covers(day)) {
+        remaining -= shares.sumOf { it.hoursOn(day) }
+      }
       if (remaining <= 1e-9) {
         return days
       }
