@@ -21,6 +21,7 @@ package net.sourceforge.ganttproject.parser;
 import biz.ganttproject.core.io.XmlProject;
 import biz.ganttproject.core.table.ColumnList;
 import biz.ganttproject.customproperty.CustomPropertyManager;
+import net.sourceforge.ganttproject.fork.VacationProblems;
 import net.sourceforge.ganttproject.gui.zoom.ZoomManager;
 import net.sourceforge.ganttproject.resource.HumanResourceManager;
 import net.sourceforge.ganttproject.roles.RoleManager;
@@ -43,9 +44,22 @@ public class ResourceTagHandler {
     myResourceColumns = resourceColumns;
   }
 
+  /**
+   * [fork change] The contradictory vacations of the last {@link #process} call. Kept here because
+   * the ResourceLoader is built and dropped inside that method, and the caller -- the one with a
+   * user interface -- has no other way to reach what it collected.
+   */
+  private VacationProblems myVacationProblems = new VacationProblems();
+
   public void process(XmlProject xmlProject) {
     var resourceLoader = new ResourceLoader(myResourceManager, myRoleManager, myCustomPropertyManager);
     resourceLoader.loadResources(xmlProject);
+    myVacationProblems = resourceLoader.getVacationProblems();
     ResourceLoaderKt.loadResourceView(xmlProject, myZoomManager, myResourceColumns);
+  }
+
+  /** [fork change] Empty before the first {@link #process}, never null. */
+  public VacationProblems getVacationProblems() {
+    return myVacationProblems;
   }
 }

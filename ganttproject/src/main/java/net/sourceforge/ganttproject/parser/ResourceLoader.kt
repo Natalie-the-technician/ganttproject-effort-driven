@@ -18,12 +18,13 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.parser
 
-import biz.ganttproject.core.calendar.GanttDaysOff
 import biz.ganttproject.core.io.XmlProject
 import biz.ganttproject.core.table.ColumnList
 import biz.ganttproject.core.time.GanttCalendar
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.ResourceDefaultColumn
+import net.sourceforge.ganttproject.fork.VacationProblems
+import net.sourceforge.ganttproject.fork.daysOffFromFile
 import net.sourceforge.ganttproject.gui.zoom.ZoomManager
 import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.roles.Role
@@ -33,6 +34,12 @@ import net.sourceforge.ganttproject.roles.RoleSet
 
 class ResourceLoader(private val resourceManager: HumanResourceManager, private val roleManager: RoleManager,
                      private val customPropertyManager: CustomPropertyManager) {
+  /**
+   * [fork change] The vacations of THIS load that contradicted themselves. Read after
+   * [loadResources] by whoever has a user interface -- the parser itself has none.
+   */
+  val vacationProblems = VacationProblems()
+
   fun loadResources(xmlProject: XmlProject) {
     loadCustomPropertyDefinitions(xmlProject)
     xmlProject.resources.resources.forEach { xmlResource ->
@@ -73,7 +80,14 @@ class ResourceLoader(private val resourceManager: HumanResourceManager, private 
         val startDate = xmlVacation.startDate
         val endDate = xmlVacation.endDate
         if (startDate.isNotBlank() && endDate.isNotBlank()) {
-          it.addDaysOff(GanttDaysOff(GanttCalendar.parseXMLDate(startDate), GanttCalendar.parseXMLDate(endDate)))
+          // [fork change] The end of a vacation is exclusive, so an interval covering no day would
+          // silently drop out of the plan. daysOffFromFile turns it into the single day it names
+          // and collects the contradictory ones so that ONE message can be shown for the file. The
+          // cloud reader, XmlProjectImporter, calls the same function, so the two readers cannot
+          // disagree about the same file.
+          it.addDaysOff(daysOffFromFile(
+            GanttCalendar.parseXMLDate(startDate), GanttCalendar.parseXMLDate(endDate),
+            xmlVacation.resourceid, it.name, vacationProblems))
         }
       } ?: run {
         // LOG
