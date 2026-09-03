@@ -295,7 +295,10 @@ fun collectLevelTasks(
   moveUnstartedPast: Boolean = true
 ): List<LevelTask> {
   val hierarchy = taskManager.taskHierarchy
-  val isWorkingDay = workingDayTest(taskManager.calendar)
+  // [fork change] PER TASK, not once for everybody -- see [WorkWeekWorkingDays]. Built here and
+  // not per task on purpose: it reads each person's working week once and remembers it, and this
+  // object's lifetime is exactly one pass.
+  val workingDays = WorkWeekWorkingDays(taskManager.calendar, resourceProperties)
 
   // Id -> the leaves beneath it. For a leaf itself, for a group all of its leaves.
   //
@@ -334,7 +337,7 @@ fun collectLevelTasks(
     val nested = hierarchy.getNestedTasks(task)
     if (nested.isEmpty()) {
       result.add(task.toLevelTask(order++, taskProperties, resourceProperties, leavesUnder, today,
-        isWorkingDay, moveUnstartedPast))
+        workingDays.forTask(task), moveUnstartedPast))
     } else {
       nested.forEach { walk(it) }
     }
@@ -373,7 +376,8 @@ fun capacityProblems(
       errors[resource.name ?: resource.id.toString()] = result.errors
     }
   }
-  val isWorkingDay = workingDayTest(taskManager.calendar)
+  // [fork change] per task; see [WorkWeekWorkingDays].
+  val workingDays = WorkWeekWorkingDays(taskManager.calendar, resourceProperties)
   val unreachable = mutableListOf<String>()
   if (errors.isEmpty()) {
     taskManager.tasks.forEach { task ->
@@ -381,7 +385,8 @@ fun capacityProblems(
       val schedule = task.capacitySchedule(resourceProperties)
       if (schedule.schedule.isConstant) return@forEach
       val start = task.start?.time?.toModelLocalDate() ?: return@forEach
-      if (daysNeeded(effort, start, schedule.schedule, isWorkingDay = isWorkingDay) == null) {
+      if (daysNeeded(effort, start, schedule.schedule,
+          isWorkingDay = workingDays.forTask(task)) == null) {
         unreachable.add(task.name ?: task.taskID.toString())
       }
     }
@@ -401,7 +406,8 @@ fun durationAtStart(
   taskProperties: CustomPropertyManager,
   resourceProperties: CustomPropertyManager
 ): (LevelTask, LocalDate) -> Int {
-  val isWorkingDay = workingDayTest(taskManager.calendar)
+  // [fork change] per task; see [WorkWeekWorkingDays].
+  val workingDays = WorkWeekWorkingDays(taskManager.calendar, resourceProperties)
   return fabrik@{ levelTask, start ->
     val task = taskManager.getTask(levelTask.id.toIntOrNull() ?: return@fabrik levelTask.durationDays)
       ?: return@fabrik levelTask.durationDays
@@ -410,7 +416,7 @@ fun durationAtStart(
     if (schedule.hasErrors || schedule.schedule.isConstant) {
       return@fabrik levelTask.durationDays
     }
-    daysNeeded(effort, start, schedule.schedule, isWorkingDay = isWorkingDay)
+    daysNeeded(effort, start, schedule.schedule, isWorkingDay = workingDays.forTask(task))
       ?: levelTask.durationDays
   }
 }
@@ -567,9 +573,24 @@ fun applyLevellingAsSingleEdit(
    */
   durations: Map<String, Int> = emptyMap(),
   /** Defaults to the shared instance; a test passes its own so that no state travels between tests. */
-  notifier: LevellingRunNotifier = levellingRunNotifier
+  notifier: LevellingRunNotifier = levellingRunNotifier,
+  /**
+   * [fork change] Where the working weeks are read from. `null` means: the project calendar alone,
+   * exactly as before this parameter existed.
+   *
+   * WHY IT HAS TO BE HERE AT ALL, and why it is not scope for its own sake: [durationAtStart]
+   * computes the DURATION on the day grid of the people on the task. The write-back turns that
+   * duration into an END, and it did so on the project calendar. For somebody who works Mon, Tue,
+   * Fri, Sat those are two different grids -- four working days from Monday end on Saturday by the
+   * one and on Thursday by the other. Levelling would then compute correctly and write a date that
+   * does not match. The two have to read the same grid or neither should.
+   *
+   * LAST IN THE PARAMETER LIST, and optional, so that every existing positional call site keeps
+   * compiling and keeps its old behaviour.
+   */
+  resourceProperties: CustomPropertyManager? = null
 ): Int = notifier.runAndReport {
-  writeLevellingBack(starts, taskManager, undoManager, editName, durations)
+  writeLevellingBack(starts, taskManager, undoManager, editName, durations, resourceProperties)
 }
 
 /** The write-back proper. Unchanged; only the notification in [applyLevellingAsSingleEdit] is new. */
@@ -578,9 +599,13 @@ private fun writeLevellingBack(
   taskManager: TaskManager,
   undoManager: GPUndoManager,
   editName: String,
-  durations: Map<String, Int>
+  durations: Map<String, Int>,
+  resourceProperties: CustomPropertyManager? = null
 ): Int {
-  val isWorkingDay = workingDayTest(taskManager.calendar)
+  // [fork change] The project calendar alone when no working weeks are to hand -- the behaviour
+  // this function had before working weeks existed.
+  val projectOnly = workingDayTest(taskManager.calendar)
+  val workingDays = resourceProperties?.let { WorkWeekWorkingDays(taskManager.calendar, it) }
   val moves = starts.mapNotNull { (id, newStart) ->
     val task = taskManager.getTask(id.toIntOrNull() ?: return@mapNotNull null)
       ?: return@mapNotNull null
@@ -623,7 +648,8 @@ private fun writeLevellingBack(
         // only moved.
         if (!task.isMilestone) {
           mutator.setEnd(CalendarFactory.createGanttCalendar(
-            endAfterWorkingDays(newStart, keepDays, isWorkingDay).toLegacyDate()))
+            endAfterWorkingDays(newStart, keepDays,
+              workingDays?.forTask(task) ?: projectOnly).toLegacyDate()))
         }
         // THE START ALONE DOES NOT SURVIVE THE SCHEDULER. SchedulerImpl places every Task as
         // early as the dependencies allow, and runs on every open and every change. A levelled
