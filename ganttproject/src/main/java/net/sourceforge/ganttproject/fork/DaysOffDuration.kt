@@ -79,33 +79,68 @@ fun HumanResource.daysOffRanges(): List<Pair<LocalDate, LocalDate>> {
 private fun List<Pair<LocalDate, LocalDate>>.covers(day: LocalDate): Boolean =
   this.any { (from, toExclusive) -> !day.isBefore(from) && day.isBefore(toExclusive) }
 
-/** One assignment, prepared for the day-by-day walk. */
-private class Share(
+/**
+ * One assignment, prepared for the day-by-day walk.
+ *
+ * [fork change] INTERNAL RATHER THAN PRIVATE since 03.09.2026, and that is not a loosening for
+ * its own sake: levelling asks for the duration of the same task once per candidate day, and
+ * building this list anew every time would read every person's days off out of the model tens of
+ * thousands of times per run. `LevellingAdapter.durationAtStart` therefore builds it ONCE per
+ * task and per run and hands it to [daysNeededWithDaysOff]. See there for the measurement.
+ */
+internal class Share(
   val schedule: CapacitySchedule,
   val load: Double,
   val daysOff: List<Pair<LocalDate, LocalDate>>,
 ) {
   fun hoursOn(day: LocalDate): Double =
     if (daysOff.covers(day)) 0.0 else schedule.hoursOn(day) * load
+
+  /**
+   * The MOST this share can deliver on any one day -- its highest daily rate, days off aside.
+   *
+   * [fork change] AN UPPER BOUND, not an answer, and that is what it is for: with it the walk
+   * below can tell in one multiplication whether the effort is deliverable AT ALL, instead of
+   * finding it out by taking ten thousand steps. See there.
+   *
+   * THE LOAD IS PART OF IT. An assignment at 0 % -- the person who has to be present without
+   * working, supervision or an acceptance -- carries a perfectly ordinary daily rate and still
+   * contributes nothing. A bound that read the daily rate alone would call that share able to
+   * deliver and would have to walk after all, in what is an everyday case rather than an exotic
+   * one.
+   */
+  val bestHoursPerDay: Double
+    get() = load * maxOf(schedule.base, schedule.changes.maxOfOrNull { it.hoursPerDay } ?: 0.0)
 }
 
 /**
- * The duration this task needs when the days off of its people are taken into account, or `null`
- * when nothing can be derived: no effort recorded, nobody assigned, or no availability at all.
+ * [fork change] Everything the day-by-day walk needs out of the model, BOTH AXES TOGETHER.
  *
- * Returns `null` as well when the effort cannot be worked off within [CapacitySchedule.MAX_DAYS]
- * working days — an empty plan is a better answer than an arbitrary number.
+ * They travel together because they are read from the SAME assignment list and the ORDER of the
+ * two readings is the point -- see [Task.effortInputs]. A caller who could take the shares alone
+ * would silently lose axis A, and every check on either side would stay green; the type is what
+ * stops that.
  */
-fun Task.durationDaysWithDaysOff(
-  taskProperties: CustomPropertyManager,
-  resourceProperties: CustomPropertyManager,
-  start: LocalDate,
-  isWorkingDay: (LocalDate) -> Boolean,
-): Int? {
-  val effort = this.effortHours(taskProperties) ?: return null
-  if (effort <= 0.0) {
-    return 1
-  }
+internal class EffortInputs(
+  /** AXIS B: who contributes how many hours, and when are they away. */
+  val shares: List<Share>,
+  /** AXIS A: whose ABSENCE stops the whole day, flattened into one list of ranges. */
+  val blockingDaysOff: List<Pair<LocalDate, LocalDate>>,
+)
+
+/**
+ * [fork change] The inputs of a task: who contributes how many hours, when are they away, and
+ * whose absence stops the task outright.
+ *
+ * READ ONCE, NOT PER QUESTION -- the same rule, and for the same reason, as
+ * `LevellingAdapter.availabilityTest`. Everything in here comes out of the model and none of it
+ * depends on the day the task starts, so a caller who asks for the duration many times over may
+ * and should keep the result.
+ *
+ * THE TWO AXES ARE READ IN THIS ORDER, AND THE ORDER IS THE POINT. See the two comments in the
+ * body: axis A is taken off the UNFILTERED assignment list, before axis B has dropped anybody.
+ */
+internal fun Task.effortInputs(resourceProperties: CustomPropertyManager): EffortInputs {
   // [fork change] AXIS A: whose ABSENCE takes the whole task with it, as opposed to whose hours
   // it removes. Flattened into ONE list of ranges, because the only question asked of it is
   // "is any of them away on this day" -- two indispensable people away on the same day therefore
@@ -144,14 +179,52 @@ fun Task.durationDaysWithDaysOff(
         resource.daysOffRanges())
     }
   }
-  if (shares.isEmpty()) {
+  return EffortInputs(shares, blockingDaysOff)
+}
+
+/**
+ * [fork change] The day-by-day walk itself, separated from the model on 03.09.2026.
+ *
+ * Kept apart from [durationDaysWithDaysOff] for one reason only: levelling has to ask this
+ * question once per candidate starting day, and it must not pay for [effortInputs] each time. The
+ * arithmetic is not touched by the separation -- the loop below is the loop that stood in
+ * [durationDaysWithDaysOff] before, line for line.
+ *
+ * @return the number of working days, at least 1, or `null` when nothing can be derived: nobody
+ * who could contribute, or an effort that cannot be worked off within [CapacitySchedule.MAX_DAYS]
+ * working days. An empty answer is better than an invented number.
+ */
+internal fun daysNeededWithDaysOff(
+  effortHours: Double,
+  inputs: EffortInputs,
+  start: LocalDate,
+  isWorkingDay: (LocalDate) -> Boolean,
+): Int? {
+  // WHAT CANNOT BE DELIVERED AT ALL IS ANSWERED WITHOUT WALKING. Everybody at their highest
+  // daily rate, every day a working day, nobody ever away: if even that best of all cases does
+  // not work the effort off within [CapacitySchedule.MAX_DAYS], no walk can do better.
+  //
+  // THE ANSWER IS UNCHANGED, only its price. The loop below lowers `remaining` by at most
+  // `best` per working day -- days off, a blocked day and lower sections only lower it by less --
+  // so after MAX_DAYS days something would be left over and the loop would return the same
+  // `null`. The comparison is written against the same tolerance the loop uses, so that the two
+  // cannot disagree about a case that lands exactly on the boundary.
+  //
+  // AXIS A IS NOT IN THE BOUND, on purpose: a blocked day takes hours away, so ignoring it here
+  // can only make the bound MORE generous, and a generous upper bound never turns a walkable
+  // effort into a `null`. A day on which somebody indispensable is away is found out by walking,
+  // which is what keeps `eine unbegrenzte abwesenheit gibt auf statt endlos zu laufen` answering
+  // `null` rather than a number.
+  //
+  // TWO CASES IT COVERS, and both are everyday ones rather than exotic: nobody who could deliver
+  // anything -- an assignment at 0 %, a person with no hours entered, nobody assigned at all --
+  // and an effort too large for the plan. Before 03.09.2026 the first was found out by ten
+  // thousand steps and the second was never asked here at all, because levelling did not walk.
+  val best = inputs.shares.sumOf { it.bestHoursPerDay }
+  if (best <= 0.0 || effortHours - best * CapacitySchedule.MAX_DAYS > 1e-9) {
     return null
   }
-  // Nobody can contribute anything on any day -- do not invent a duration for that.
-  if (shares.all { it.schedule.base <= 0.0 && it.schedule.changes.all { c -> c.hoursPerDay <= 0.0 } }) {
-    return null
-  }
-  var remaining = effort
+  var remaining = effortHours
   var day = start
   var days = 0
   var guard = 0
@@ -162,8 +235,8 @@ fun Task.durationDaysWithDaysOff(
       // cannot proceed without makes no progress on that day, not through the other people
       // either. The day is counted all the same -- it occupies a day of the task, as every day
       // off has always done. What it no longer does is eat the others' hours.
-      if (!blockingDaysOff.covers(day)) {
-        remaining -= shares.sumOf { it.hoursOn(day) }
+      if (!inputs.blockingDaysOff.covers(day)) {
+        remaining -= inputs.shares.sumOf { it.hoursOn(day) }
       }
       if (remaining <= 1e-9) {
         return days
@@ -175,4 +248,25 @@ fun Task.durationDaysWithDaysOff(
     day = day.plusDays(1)
   }
   return null
+}
+
+/**
+ * The duration this task needs when the days off of its people are taken into account, or `null`
+ * when nothing can be derived: no effort recorded, nobody assigned, or no availability at all.
+ *
+ * Returns `null` as well when the effort cannot be worked off within [CapacitySchedule.MAX_DAYS]
+ * working days — an empty plan is a better answer than an arbitrary number.
+ */
+fun Task.durationDaysWithDaysOff(
+  taskProperties: CustomPropertyManager,
+  resourceProperties: CustomPropertyManager,
+  start: LocalDate,
+  isWorkingDay: (LocalDate) -> Boolean,
+): Int? {
+  val effort = this.effortHours(taskProperties) ?: return null
+  if (effort <= 0.0) {
+    return 1
+  }
+  return daysNeededWithDaysOff(
+    effort, this.effortInputs(resourceProperties), start, isWorkingDay)
 }
