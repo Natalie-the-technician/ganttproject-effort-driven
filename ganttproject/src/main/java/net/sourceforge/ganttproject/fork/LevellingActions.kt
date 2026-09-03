@@ -393,7 +393,8 @@ class LevellingAction(
           }
         }
         val written = applyLevellingAsSingleEdit(result.starts, taskManager, undoManager,
-          forkText("fork.levelling.undo"), result.durations)
+          forkText("fork.levelling.undo"), result.durations,
+          resourceProperties = resourceProperties)
         report(false, meldung.append(forkText("fork.levelling.done", written)).toString())
       }
     }
