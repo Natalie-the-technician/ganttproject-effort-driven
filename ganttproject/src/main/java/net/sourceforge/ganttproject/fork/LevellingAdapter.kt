@@ -25,6 +25,7 @@ import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.customproperty.CustomPropertyClass
 import biz.ganttproject.customproperty.CustomPropertyDefinition
 import biz.ganttproject.customproperty.CustomPropertyManager
+import net.sourceforge.ganttproject.GPLogger
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.storage.ProjectDatabase
@@ -741,29 +742,124 @@ fun applyBackfillAsSingleEdit(
 }
 
 /**
+ * Upper bound of the day search in [endAfterWorkingDays] -- 50 000 calendar days, some 136 years.
+ * [fork change]
+ *
+ * THE SAME NUMBER AS `MAX_SEARCH_DAYS` IN `ResourceLevelling`, and the equality is the point, not
+ * a coincidence. This function exists to repeat levelling's own date arithmetic on the write-back
+ * side, so that "both sides occupy the same days" (see the doc comment below). A tighter bound
+ * here would cut a plan that levelling itself had legitimately placed far out, and the two sides
+ * would then disagree about the very days they are supposed to agree on; a wider one buys nothing,
+ * because levelling never hands out a date beyond its own bound. Reaching it means not a rounding
+ * error but an endless loop.
+ *
+ * A SEPARATE CONSTANT AND NOT A SHARED ONE, because `MAX_SEARCH_DAYS` is private to its file and
+ * making it public would suggest the two bounds must move together. They need not; they only
+ * happen to be right at the same value today, and this comment is where that is written down.
+ */
+private const val MAX_END_SEARCH_DAYS = 50_000
+
+/**
+ * The log channel of the levelling write-back. [fork change]
+ *
+ * THE LOGGER AND NOT `System.err`: GanttProject redirects the error stream, so a line written
+ * there is seen by nobody -- the same trap that made the endless loop recorded below invisible in
+ * the first place.
+ */
+private val LOG = GPLogger.create("Fork.Levelling.WriteBack")
+
+/**
  * The end of a Task that begins on [start] and lasts [days] working days.
  *
  * GanttProject keeps the end EXCLUSIVE: the first day after. The same calculation as in
  * levelling, so that both sides occupy the same days.
+ *
+ * ALL THREE LOOPS ARE BOUNDED [fork change], and this is the whole reason the function looks as busy as it
+ * does. An [isWorkingDay] that never says true -- a person whose working week has a section with
+ * no day ticked, a broken weekend setting, an empty holiday calendar -- lets every one of them
+ * run for ever, and the write-back is called from the levelling menu item: the program would hang
+ * with no dialog and no message. The same failure has already been measured on this machine, and
+ * `ResourceLevelling.nextWorkingDay` records it: "the test runner was cleared away by the
+ * operating system, without a single message". The rule taken from it holds here too -- better a
+ * visibly wrong date than a hanging program.
+ *
+ * THE MIDDLE LOOP IS THE ONE THAT LOOKS SAFE AND IS NOT. It carries a `break`, but the condition
+ * it breaks on is `counted`, and `counted` only ever grows on a working day. Without working days
+ * the break is unreachable, exactly like the two `while (!isWorkingDay(...))` loops around it.
+ *
+ * EACH BOUND RETURNS ITS OWN FALLBACK rather than one shared one, because the three loops fail
+ * having learned different amounts, and each fallback is the smallest end that is still an end:
+ *  - the first loop found no working day at all, so nothing is known beyond [start]: one day.
+ *  - the middle loop found some working days but not enough, so the last one it did find is the
+ *    best answer available: the day after it.
+ *  - the last loop already has the Task's days and only fails to push the exclusive end onto a
+ *    working day, so the unpushed end is returned unchanged -- the same choice
+ *    `ResourceLevelling.nextWorkingDay` makes when it returns `from`.
+ *
+ * WHY NOT THE DAY THE SEARCH GAVE UP ON, which would be the more literal answer: it lies 50 000
+ * days out, and `mutator.setEnd` of a date 136 years away is precisely the disaster the long
+ * comment at the call site records -- Tasks that occupied years instead of days and produced 1204
+ * overloaded days at 600 %. A fallback must not be worse than the bug it guards against.
+ *
+ * VISIBLE INSTEAD OF `private`, AND THAT IS A DELIBERATE WIDENING [fork change]. A bound nobody
+ * has watched bite is not a bound, it is a comment; and the only way to make all three of these
+ * loops bite is to hand in an `isWorkingDay` that never says true, which no reachable public
+ * caller can be talked into doing -- the write-back takes its calendar from the TaskManager.
+ * `internal` was tried first and is not enough: `ganttproject-tester` is a Gradle project of its
+ * own, hence a Kotlin module of its own, and the compiler answered "Cannot access
+ * 'endAfterWorkingDays': it is internal in file". So the choice was between a test that cannot
+ * reach the loops and a name in the fork package that one test uses. The wider name is the
+ * cheaper of the two: `EndAfterWorkingDaysTest` is the only caller besides the write-back.
  */
-private fun endAfterWorkingDays(
+fun endAfterWorkingDays(
   start: LocalDate, days: Int, isWorkingDay: (LocalDate) -> Boolean): LocalDate {
   var day = start
+  var guard = 0
   while (!isWorkingDay(day)) {
+    if (guard++ > MAX_END_SEARCH_DAYS) {
+      LOG.error(
+        "Levelling write-back: no working day at all within $MAX_END_SEARCH_DAYS days after " +
+          "$start, so the end of a Task of $days working days cannot be computed. Falling back " +
+          "to a one-day Task ending ${start.plusDays(1)}. The calendar or a working week is " +
+          "empty -- the plan is wrong, not just this date.")
+      return start.plusDays(1)
+    }
     day = day.plusDays(1)
   }
   var counted = 0
+  // The last day that actually counted. A working day by construction: the loop above only ends
+  // on one, and every later assignment happens under the same test.
+  var lastWorking = day
+  guard = 0
   while (true) {
     if (isWorkingDay(day)) {
       counted++
+      lastWorking = day
     }
     if (counted >= maxOf(days, 1)) {
       break
     }
+    if (guard++ > MAX_END_SEARCH_DAYS) {
+      LOG.error(
+        "Levelling write-back: only $counted of ${maxOf(days, 1)} working days found within " +
+          "$MAX_END_SEARCH_DAYS days after $start. Falling back to an end of " +
+          "${lastWorking.plusDays(1)}, after the last working day there was. The calendar or a " +
+          "working week is empty -- the plan is wrong, not just this date.")
+      return lastWorking.plusDays(1)
+    }
     day = day.plusDays(1)
   }
   var end = day.plusDays(1)
+  guard = 0
   while (!isWorkingDay(end)) {
+    if (guard++ > MAX_END_SEARCH_DAYS) {
+      LOG.error(
+        "Levelling write-back: the end after $start plus ${maxOf(days, 1)} working days cannot " +
+          "be moved onto a working day within $MAX_END_SEARCH_DAYS days. Keeping the unmoved " +
+          "end ${day.plusDays(1)}. The calendar or a working week is empty -- the plan is " +
+          "wrong, not just this date.")
+      return day.plusDays(1)
+    }
     end = end.plusDays(1)
   }
   return end
