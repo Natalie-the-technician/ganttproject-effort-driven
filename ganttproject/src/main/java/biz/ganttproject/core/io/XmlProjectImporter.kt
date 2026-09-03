@@ -28,6 +28,7 @@ import net.sourceforge.ganttproject.GanttPreviousState
 import net.sourceforge.ganttproject.GanttPreviousStateTask
 import net.sourceforge.ganttproject.GanttProjectImpl
 import net.sourceforge.ganttproject.IGanttProject
+import net.sourceforge.ganttproject.fork.VacationProblems
 import net.sourceforge.ganttproject.fork.daysOffFromFile
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RolePersistentID
@@ -55,6 +56,12 @@ import java.util.*
 class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProjectImpl(),
                          private val debugId: String = "") {
   private lateinit var xmlProject: XmlProject
+
+  /**
+   * [fork change] The vacations of THIS import that contradicted themselves. Per importer instance,
+   * because one process imports many projects and a message must belong to its own file.
+   */
+  val vacationProblems = VacationProblems()
   private val fixedStartTasks = mutableSetOf<Task>()
   private val taskManager
     get() = ganttProject.taskManager
@@ -126,15 +133,22 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
     calendar.setWeekDayType(1, if (defaultWeek.sun == 1) GPCalendar.DayType.WEEKEND else GPCalendar.DayType.WORKING)
   }
 
-  private fun importVacations() = xmlProject.vacations.forEach {
-    val resource = resourceManager.getById(it.resourceid)
-    // [fork change] The end of a vacation is exclusive, so a file with start == end would be zero
-    // days of absence and would silently drop out of the plan. daysOffFromFile turns that into the
-    // single day it names. The desktop reader, ResourceLoader, calls the same function, so the two
-    // readers cannot disagree about the same file.
-    val daysOff = daysOffFromFile(
-      GanttCalendar.parseXMLDate(it.startDate), GanttCalendar.parseXMLDate(it.endDate), it.resourceid)
-    resource.addDaysOff(daysOff)
+  private fun importVacations() {
+    xmlProject.vacations.forEach {
+      val resource = resourceManager.getById(it.resourceid)
+      // [fork change] The end of a vacation is exclusive, so an interval covering no day would
+      // silently drop out of the plan. daysOffFromFile turns it into the single day it names and
+      // collects the contradictory ones. The desktop reader, ResourceLoader, calls the same
+      // function, so the two readers cannot disagree about the same file.
+      val daysOff = daysOffFromFile(
+        GanttCalendar.parseXMLDate(it.startDate), GanttCalendar.parseXMLDate(it.endDate),
+        it.resourceid, resource?.name, vacationProblems)
+      resource.addDaysOff(daysOff)
+    }
+    // [fork change] ONE line for the whole file, not one per interval. This reader serves the
+    // cloud, where there is no screen to show a box on -- so here the summary goes to the log, and
+    // the collected problems stay readable through vacationProblems for whoever does have one.
+    vacationProblems.message()?.let { LOGGER.warn("@project={} {}", debugId, it) }
   }
 
   private fun importAllocations() = xmlProject.allocations.forEach {

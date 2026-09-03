@@ -26,7 +26,9 @@ import com.google.common.collect.ImmutableList;
 import net.sourceforge.ganttproject.IGanttProject;
 // [fork change] for the named read errors instead of "Failed to parse document".
 import net.sourceforge.ganttproject.fork.ForkI18nKt;
+import net.sourceforge.ganttproject.fork.VacationProblems;
 import net.sourceforge.ganttproject.gui.GPColorChooser;
+import net.sourceforge.ganttproject.gui.NotificationChannel;
 import net.sourceforge.ganttproject.gui.UIFacade;
 import net.sourceforge.ganttproject.io.GPSaver;
 import net.sourceforge.ganttproject.language.GanttLanguage;
@@ -234,6 +236,30 @@ public class ProxyDocument implements Document {
     return myProject.getHumanResourceManager();
   }
 
+  /**
+   * [fork change] Shows what had to be corrected about the vacations of the file just read.
+   *
+   * THIS IS THE ONLY PLACE IN THE LOAD THAT HAS A UIFacade. The parser collects and stays free of
+   * any user interface; the decision whether there is anyone to tell belongs here. The same split
+   * the fork uses for CapacityParseResult.
+   *
+   * Built like the fork's other messages (see GanttProject.messageSink) rather than through
+   * showNotificationDialog: that one puts a general "Warning" above the text, and a message about
+   * a file wants to say what it is about.
+   */
+  private void reportVacationProblems(VacationProblems problems) {
+    String message = problems.message();
+    if (message == null) {
+      return;
+    }
+    var manager = myUIFacade.getNotificationManager();
+    manager.addNotifications(List.of(manager.createNotification(
+        NotificationChannel.WARNING,
+        ForkI18nKt.forkText("fork.vacation.title"),
+        "<p>" + message.replace("\n", "<br>") + "</p>",
+        null)));
+  }
+
   private void doParse() throws DocumentException {
     GPParser opener = myParserFactory.newParser();
     HumanResourceManager hrManager = getHumanResourceManager();
@@ -251,6 +277,11 @@ public class ProxyDocument implements Document {
         new BaselineSerializer().loadBaselines(xmlProject, myProject.getBaselines());
 
         resourceHandler.process(xmlProject);
+        // [fork change] ONE message for the whole file, and only when there is something to say.
+        // A vacation whose end lies before its start is loaded as a single day from `start` --
+        // that is a correction of a value nobody can check, so it is said out loud rather than
+        // only written to the log.
+        reportVacationProblems(resourceHandler.getVacationProblems());
         taskHandler.process(xmlProject);
 
         List<GPOption<?>> optionsToRead = new ArrayList<>(myUIFacade.getGanttViewProvider().getOptions());
