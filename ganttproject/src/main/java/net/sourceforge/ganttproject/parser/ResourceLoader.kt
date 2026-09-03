@@ -18,12 +18,12 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.parser
 
-import biz.ganttproject.core.calendar.GanttDaysOff
 import biz.ganttproject.core.io.XmlProject
 import biz.ganttproject.core.table.ColumnList
 import biz.ganttproject.core.time.GanttCalendar
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.ResourceDefaultColumn
+import net.sourceforge.ganttproject.fork.daysOffFromFile
 import net.sourceforge.ganttproject.gui.zoom.ZoomManager
 import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.roles.Role
@@ -73,7 +73,13 @@ class ResourceLoader(private val resourceManager: HumanResourceManager, private 
         val startDate = xmlVacation.startDate
         val endDate = xmlVacation.endDate
         if (startDate.isNotBlank() && endDate.isNotBlank()) {
-          it.addDaysOff(GanttDaysOff(GanttCalendar.parseXMLDate(startDate), GanttCalendar.parseXMLDate(endDate)))
+          // [fork change] The end of a vacation is exclusive, so a file with start == end would be
+          // zero days of absence and would silently drop out of the plan. daysOffFromFile turns
+          // that into the single day it names. The cloud reader, XmlProjectImporter, calls the same
+          // function, so the two readers cannot disagree about the same file.
+          it.addDaysOff(daysOffFromFile(
+            GanttCalendar.parseXMLDate(startDate), GanttCalendar.parseXMLDate(endDate),
+            xmlVacation.resourceid))
         }
       } ?: run {
         // LOG

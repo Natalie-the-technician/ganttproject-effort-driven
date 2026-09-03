@@ -20,7 +20,6 @@ package biz.ganttproject.core.io
 
 import biz.ganttproject.core.calendar.CalendarEvent
 import biz.ganttproject.core.calendar.GPCalendar
-import biz.ganttproject.core.calendar.GanttDaysOff
 import biz.ganttproject.core.chart.render.ShapePaint
 import biz.ganttproject.core.model.task.ConstraintType.fromPersistentValue
 import biz.ganttproject.core.time.CalendarFactory
@@ -29,6 +28,7 @@ import net.sourceforge.ganttproject.GanttPreviousState
 import net.sourceforge.ganttproject.GanttPreviousStateTask
 import net.sourceforge.ganttproject.GanttProjectImpl
 import net.sourceforge.ganttproject.IGanttProject
+import net.sourceforge.ganttproject.fork.daysOffFromFile
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RolePersistentID
 import biz.ganttproject.customproperty.CustomColumnsException
@@ -128,7 +128,12 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
 
   private fun importVacations() = xmlProject.vacations.forEach {
     val resource = resourceManager.getById(it.resourceid)
-    val daysOff = GanttDaysOff(GanttCalendar.parseXMLDate(it.startDate), GanttCalendar.parseXMLDate(it.endDate))
+    // [fork change] The end of a vacation is exclusive, so a file with start == end would be zero
+    // days of absence and would silently drop out of the plan. daysOffFromFile turns that into the
+    // single day it names. The desktop reader, ResourceLoader, calls the same function, so the two
+    // readers cannot disagree about the same file.
+    val daysOff = daysOffFromFile(
+      GanttCalendar.parseXMLDate(it.startDate), GanttCalendar.parseXMLDate(it.endDate), it.resourceid)
     resource.addDaysOff(daysOff)
   }
 
