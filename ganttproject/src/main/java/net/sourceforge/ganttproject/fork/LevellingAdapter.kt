@@ -390,28 +390,114 @@ fun capacityProblems(
 }
 
 /**
+ * [fork change] Everything about one Task that the duration needs and that does NOT depend on the
+ * day it starts.
+ *
+ * A type of its own so that [durationAtStart] can read it ONCE per Task and per run. What is in
+ * here is the expensive part: the hours schedule of every person is parsed out of a text column,
+ * and every person's days off are read out of the model. See [durationAtStart] for what that
+ * costs when it is not held on to.
+ */
+private class DurationInputs(
+  /** `null` when the Task carries no effort: then nothing can be derived and the entered duration stands. */
+  val effort: Double?,
+  /** Who contributes how many hours, and when they are away. */
+  val shares: List<Share>,
+  /** An unreadable hours schedule. The calculation refuses; the person sees the error in the dialog. */
+  val scheduleHasErrors: Boolean,
+  /** No time sections anywhere -- the everyday case. */
+  val scheduleIsConstant: Boolean,
+  /** Progress recorded. Measured past, or work already under way. */
+  val begun: Boolean
+)
+
+/**
  * The duration of a Task when it starts on a particular day.
  *
- * Without a time-dependent daily rate this is always the same number, and levelling behaves as
- * before. With sections the duration depends on the starting day -- hence a function and not a
- * number in [LevelTask].
+ * [fork change] SINCE 03.09.2026 THIS COUNTS THE DAYS OFF OF THE PEOPLE INVOLVED, through the very
+ * function the scheduler uses -- [daysNeededWithDaysOff], the core of
+ * [Task.durationDaysWithDaysOff]. Before that, levelling laid a window of five days for a Task
+ * that the scheduler afterwards wrote six days into: the person is away on the Wednesday, the
+ * work still takes five days of hours, and the Task is therefore six days long. Two answers to
+ * one question, and the plan kept whichever of them ran last.
+ *
+ * IT WAS TWO PLACES AND NOT ONE, and this is the second of them. The old body fell back to
+ * [LevelTask.durationDays] whenever the daily rate was constant -- that is, whenever nobody had
+ * an hours schedule entered, which is the everyday plan. That number comes from
+ * [durationFromEffort] in [toLevelTask] and knows no days off at all. Repairing only the
+ * sectioned branch below would have mended the rarer half and left the common one standing.
+ *
+ * WHAT STAYS UNTOUCHED, and it is not a detail: work that has been BEGUN or FINISHED keeps the
+ * number [toLevelTask] gave it, as long as the daily rate is constant. For those two,
+ * [LevelTask.durationDays] is not derived from the effort at all -- a finished Task carries its
+ * measured past, a begun one carries the elapsed days plus the remainder at today's rate.
+ * Replacing that with a duration computed from the full effort would not be a correction but a
+ * different statement, and levelling would start lengthening work that is already done. The
+ * sectioned branch never made that distinction and does not start making it here either: it
+ * computed the full effort before this change and it computes the full effort after it, only now
+ * with the days off in it.
+ *
+ * READ ONCE, NOT PER QUESTION -- the same rule as in [availabilityTest], and here for a measured
+ * reason. The window search asks this function once per candidate starting day: 65 367 times for
+ * a plan of 162 Tasks on one person, 224 550 times for 300 (measured 03.09.2026 on the shapes of
+ * the report of 28.08.2026). Reading the hours schedules and the days off out of the model that
+ * often would turn levelling into a waiting game. They are therefore fetched per Task, once, and
+ * kept in [DurationInputs]. The price is that later changes are not seen; the map is built anew
+ * for each run of levelling, which is exactly its lifetime.
+ *
+ * THE CALENDAR IS REMEMBERED TOO, and that is the other half of the price. The walk asks
+ * `isWorkingDay` for every calendar day of the Task, and every such question converts a
+ * `LocalDate` into a `java.util.Date` and asks the calendar -- about 1.2 microseconds apiece,
+ * measured on 28.08.2026, and the reason a levelling run of the real plan spends its 1.5 seconds
+ * on 1.27 million of them. Answering the same day twice is pure waste here: the calendar does not
+ * change during a run, for the same reason the days off do not. What the map can grow to is
+ * bounded by how far the window search reaches -- at worst its own `MAX_SEARCH_DAYS`, some 50 000
+ * working days, and it lives only as long as the run.
+ *
+ * NO SHORT CUT FOR THE PLAN WITHOUT DAYS OFF, and that omission is deliberate. It would be easy
+ * to hand back [LevelTask.durationDays] unchanged as soon as nobody has anything entered, and it
+ * would be measurably cheaper. It would also make `ohne jede ausfallzeit aendert sich an der
+ * verteilung nichts` -- the check this whole change is guarded by -- true by construction and
+ * therefore worthless: it could no longer see a mistake in the path it is meant to guard. The
+ * walk runs for every plan, and the check compares its answers against dates written out from
+ * the state before the change.
  */
 fun durationAtStart(
   taskManager: TaskManager,
   taskProperties: CustomPropertyManager,
   resourceProperties: CustomPropertyManager
 ): (LevelTask, LocalDate) -> Int {
-  val isWorkingDay = workingDayTest(taskManager.calendar)
+  val calendar = workingDayTest(taskManager.calendar)
+  val calendarAnswers = HashMap<LocalDate, Boolean>()
+  val isWorkingDay: (LocalDate) -> Boolean = { day -> calendarAnswers.getOrPut(day) { calendar(day) } }
+  val inputsById = HashMap<String, DurationInputs?>()
   return fabrik@{ levelTask, start ->
-    val task = taskManager.getTask(levelTask.id.toIntOrNull() ?: return@fabrik levelTask.durationDays)
-      ?: return@fabrik levelTask.durationDays
-    val effort = task.effortHours(taskProperties) ?: return@fabrik levelTask.durationDays
-    val schedule = task.capacitySchedule(resourceProperties)
-    if (schedule.hasErrors || schedule.schedule.isConstant) {
+    // `containsKey`, not `?:` -- the value may legitimately be null (no Task behind the id), and
+    // a `?:` would rebuild that answer on every one of the tens of thousands of questions.
+    val inputs = if (inputsById.containsKey(levelTask.id)) {
+      inputsById[levelTask.id]
+    } else {
+      val task = levelTask.id.toIntOrNull()?.let { taskManager.getTask(it) }
+      val gelesen = task?.let {
+        val schedule = it.capacitySchedule(resourceProperties)
+        DurationInputs(
+          effort = it.effortHours(taskProperties),
+          shares = it.effortShares(resourceProperties),
+          scheduleHasErrors = schedule.hasErrors,
+          scheduleIsConstant = schedule.schedule.isConstant,
+          begun = it.completionPercentage > 0)
+      }
+      inputsById[levelTask.id] = gelesen
+      gelesen
+    } ?: return@fabrik levelTask.durationDays
+    val effort = inputs.effort ?: return@fabrik levelTask.durationDays
+    if (inputs.scheduleHasErrors) {
       return@fabrik levelTask.durationDays
     }
-    daysNeeded(effort, start, schedule.schedule, isWorkingDay = isWorkingDay)
-      ?: levelTask.durationDays
+    if (inputs.scheduleIsConstant && inputs.begun) {
+      return@fabrik levelTask.durationDays
+    }
+    daysNeededWithDaysOff(effort, inputs.shares, start, isWorkingDay) ?: levelTask.durationDays
   }
 }
 
