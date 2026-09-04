@@ -32,7 +32,7 @@ import net.sourceforge.ganttproject.resource.HumanResourceManager;
 import biz.ganttproject.core.time.TimeDuration;
 import net.sourceforge.ganttproject.fork.DaysOffDurationKt;
 import net.sourceforge.ganttproject.fork.LegacyDatesKt;
-import net.sourceforge.ganttproject.fork.LevellingAdapterKt;
+import net.sourceforge.ganttproject.fork.WorkWeekWorkingDays;
 import net.sourceforge.ganttproject.storage.ProjectDatabase.TaskUpdateBuilder;
 import net.sourceforge.ganttproject.task.algorithm.*;
 import net.sourceforge.ganttproject.task.dependency.*;
@@ -1011,6 +1011,28 @@ public class TaskManagerImpl implements TaskManager {
    * RETURNS the task's new end when it wrote a duration, and null when it wrote nothing. The
    * scheduler uses that to report the change through its diagnostic; see
    * SchedulerImpl.deriveDuration.
+   *
+   * [fork change] THE DAY GRID IS BUILT PER TASK since 04.09.2026, out of the working weeks of
+   * the people on it -- see WorkWeekWorkingDays. Before that this place built the global test
+   * workingDayTest(getCalendar()) and handed the same one to every task, so whoever entered a
+   * working week and never opened the levelling menu was planned as though they worked Monday to
+   * Friday. This is the way the SCHEDULER sets durations and therefore the way that runs on every
+   * open and every change; of the three places outside the levelling it is the one that matters.
+   *
+   * NOTHING ENTERED STILL CHANGES NOTHING, and it is the wiring that guarantees it rather than
+   * the arithmetic: for a task whose people have entered no working week, forTask returns its own
+   * workingDayTest(getCalendar()) -- the fast path in WorkWeekWorkingDays, which is the very call
+   * this line used to make. A freshly built instance means it is a fresh function object rather
+   * than a shared one, so the identity that WorkWeekEffect.kt relies on holds within one
+   * instance, not across calls; what carries over here is the answer, not the object.
+   * WorkWeekPlannerGuardTest pins a whole plan of such tasks against the dates measured on main.
+   *
+   * BUILT PER CALL AND NOT KEPT, unlike in the levelling, where one instance serves a whole pass.
+   * There is no pass boundary here to hang it on, and a kept instance would answer with the
+   * working week as it stood when the project was opened -- a person's week edited during the
+   * session would take effect on the next restart and not before. What the fresh instance costs
+   * is one parse of a short text per person on THIS task; the walk it feeds runs over up to
+   * CapacitySchedule.MAX_DAYS days.
    */
   private java.util.Date deriveDurationWithDaysOff(Task task, java.util.Date plannedStart) {
     HumanResourceManager resourceManager = getConfig().getResourceManager();
@@ -1020,7 +1042,8 @@ public class TaskManagerImpl implements TaskManager {
     Integer days = DaysOffDurationKt.durationDaysWithDaysOff(
         task, getCustomPropertyManager(), resourceManager.getCustomPropertyManager(),
         LegacyDatesKt.toModelLocalDate(plannedStart),
-        LevellingAdapterKt.workingDayTest(getCalendar()));
+        new WorkWeekWorkingDays(getCalendar(), resourceManager.getCustomPropertyManager())
+            .forTask(task));
     if (days == null) {
       return null;
     }

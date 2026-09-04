@@ -281,7 +281,17 @@ class LevellingAction(
     // NO SECOND SWITCH FOR IT. Whether absence moves a Task is decided at the assignment, where
     // the person is, and not once more in the menu -- a global flag would silently overrule the
     // markings entered in the plan.
-    val result = levelTasks(tasks, abWann, workingDayTest(taskManager.calendar),
+    //
+    // [fork change] THE DAY GRID IS PER TASK AND NOT PER PROJECT, since 04.09.2026. This line used
+    // to read `workingDayTest(taskManager.calendar)` -- one calendar for the whole plan -- while
+    // the two neighbours of this call, `durationAtStart` here and `writeLevellingBack` in the
+    // write-back, both asked [WorkWeekWorkingDays] per task. Inside ONE run the duration of a task
+    // was therefore computed on the grid of the people on it and the window for it was searched on
+    // the project's. Somebody working Monday to Saturday had their capacity booked on the Monday
+    // they do not work on the task and the Saturday they do left free -- one calendar day of error
+    // per Saturday a task runs over. `WorkWeekLevellingWindowTest` measured that and now demands
+    // the two agree.
+    val result = levelTasks(tasks, abWann, workingDaysPerTask(taskManager, resourceProperties),
       durationAtStart(taskManager, taskProperties, resourceProperties),
       isAvailable = availabilityTest(resourceManager))
 

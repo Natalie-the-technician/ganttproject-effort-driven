@@ -43,7 +43,13 @@ class RecurrenceAction(
   private val projectDatabase: ProjectDatabase,
   private val undoManager: GPUndoManager,
   private val report: (Boolean, String) -> Unit,
-  private val ask: AskBeforeWriting
+  private val ask: AskBeforeWriting,
+  /**
+   * [fork change] Where the working weeks are stored. Optional and last, so that the existing
+   * call in GanttProject.java and every test keep compiling; without it a series is planned on
+   * the project calendar, which is what this action did until 04.09.2026.
+   */
+  private val resourceProperties: CustomPropertyManager? = null
 ) : GPAction("recurrence.run") {
 
   override fun getLocalizedName(): String = forkText("fork.recurrence.run")
@@ -55,7 +61,7 @@ class RecurrenceAction(
     findOrCreateRecurrence(taskProperties)
     projectDatabase.onCustomColumnChange(taskProperties)
 
-    val plan = planRecurrences(taskManager, taskProperties)
+    val plan = planRecurrences(taskManager, taskProperties, resourceProperties)
 
     if (plan.hasErrors) {
       val text = StringBuilder()

@@ -213,7 +213,7 @@ class LevellingDaysOffTest {
 
     val tasks = projekt.levelTasks()
     val abWann = MONTAG
-    val kalender = workingDayTest(projekt.taskManager.calendar)
+    val kalender = workingDaysPerTask(projekt.taskManager, projekt.resourceProperties)
     val dauer = durationAtStart(projekt.taskManager, projekt.taskProperties,
       projekt.resourceProperties)
 

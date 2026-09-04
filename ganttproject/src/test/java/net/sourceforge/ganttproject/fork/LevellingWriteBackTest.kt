@@ -267,7 +267,7 @@ class LevellingWriteBackTest {
     val (x, y) = projekt.zweiPersonenAnEinemVorgang()
 
     val ergebnis = levelTasks(projekt.levelTasks(), MONTAG,
-      workingDayTest(projekt.taskManager.calendar))
+      workingDaysPerTask(projekt.taskManager, projekt.resourceProperties))
 
     assertEquals(ergebnis.starts[x.taskID.toString()], ergebnis.starts[y.taskID.toString()],
       "P ist mit 50 % + 50 % genau voll; beide Vorgaenge passen auf denselben Tag")
@@ -287,7 +287,7 @@ class LevellingWriteBackTest {
     projekt.pinDown(y)
 
     val ergebnis = levelTasks(projekt.levelTasks(), MONTAG,
-      workingDayTest(projekt.taskManager.calendar))
+      workingDaysPerTask(projekt.taskManager, projekt.resourceProperties))
 
     val ueberlast = ergebnis.conflicts.filterIsInstance<LevelConflict.Overload>()
     assertTrue(ueberlast.isEmpty(),
@@ -311,7 +311,7 @@ class LevellingWriteBackTest {
     projekt.pinDown(y)
 
     val ergebnis = levelTasks(projekt.levelTasks(), MONTAG,
-      workingDayTest(projekt.taskManager.calendar))
+      workingDaysPerTask(projekt.taskManager, projekt.resourceProperties))
 
     assertTrue(ergebnis.conflicts.isEmpty(),
       "50 % + 50 % auf eine Person ist genau voll: ${ergebnis.conflicts}")

@@ -37,7 +37,7 @@ import net.sourceforge.ganttproject.fork.CapacitySchedule
 import net.sourceforge.ganttproject.fork.daysNeeded
 import net.sourceforge.ganttproject.fork.utilisationPercent
 import net.sourceforge.ganttproject.fork.toModelLocalDate
-import net.sourceforge.ganttproject.fork.workingDayTest
+import net.sourceforge.ganttproject.fork.WorkWeekWorkingDays
 import kotlin.math.ceil
 
 /**
@@ -343,20 +343,28 @@ abstract class EffortDrivenDurationAlgorithm(
     }
     val resourceProps = resourceProperties.get() ?: return
     val facade = createContainmentFacade()
-    recalculate(facade.rootTask, facade, resourceProps)
+    // [fork change] THE DAY GRID PER TASK, built once for the whole run -- see
+    // [WorkWeekWorkingDays]. Here and not in [recalculateLeaf] for the reason recorded there: it
+    // parses each person's working week text once and remembers it, and one run is exactly its
+    // lifetime. A run reads the model as it stands when it starts, so it cannot go stale within
+    // itself.
+    val workingDays = WorkWeekWorkingDays(taskManager.calendar, resourceProps)
+    recalculate(facade.rootTask, facade, resourceProps, workingDays)
   }
 
   private fun recalculate(
-    task: Task, facade: TaskContainmentHierarchyFacade, resourceProps: CustomPropertyManager) {
+    task: Task, facade: TaskContainmentHierarchyFacade, resourceProps: CustomPropertyManager,
+    workingDays: WorkWeekWorkingDays) {
     val nested = facade.getNestedTasks(task)
     if (nested.isEmpty()) {
-      recalculateLeaf(task, resourceProps)
+      recalculateLeaf(task, resourceProps, workingDays)
     } else {
-      nested.forEach { recalculate(it, facade, resourceProps) }
+      nested.forEach { recalculate(it, facade, resourceProps, workingDays) }
     }
   }
 
-  private fun recalculateLeaf(task: Task, resourceProps: CustomPropertyManager) {
+  private fun recalculateLeaf(
+    task: Task, resourceProps: CustomPropertyManager, workingDays: WorkWeekWorkingDays) {
     val effort = task.effortHours(taskProperties) ?: return
     val availability = task.availableHoursPerDay(resourceProps)
     if (availability <= 0.0) {
@@ -375,7 +383,11 @@ abstract class EffortDrivenDurationAlgorithm(
     val days = if (schedule.hasErrors || schedule.schedule.isConstant || start == null) {
       computeDurationDays(effort, availability)
     } else {
-      daysNeeded(effort, start, schedule.schedule, isWorkingDay = workingDayTest(taskManager.calendar))
+      // [fork change] PER TASK, not one test for everybody: until 04.09.2026 this line built
+      // `workingDayTest(taskManager.calendar)` and planned whoever works Mon, Tue, Fri, Sat as
+      // though they worked Monday to Friday. Only the walk below sees a working week at all --
+      // `computeDurationDays` above divides and never asks a calendar.
+      daysNeeded(effort, start, schedule.schedule, isWorkingDay = workingDays.forTask(task))
         ?: computeDurationDays(effort, availability)
     }
     val newDuration = taskManager.createLength(days.toLong())

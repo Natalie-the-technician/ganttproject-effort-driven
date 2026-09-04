@@ -36,8 +36,19 @@ class ResourceLevellingTest : TestCase() {
   /** Monday. All calculations in the test start from this week. */
   private val montag: LocalDate = LocalDate.of(2026, 8, 17)
 
-  private val werktags: (LocalDate) -> Boolean =
-    { it.dayOfWeek != DayOfWeek.SATURDAY && it.dayOfWeek != DayOfWeek.SUNDAY }
+  /**
+   * ONE GRID FOR THE WHOLE PLAN, and that is a statement about these checks and not a leftover.
+   *
+   * [levelTasks] takes its working-day test per task since 04.09.2026, because in a real plan the
+   * grid follows the people on the task -- see `WorkWeekLevellingWindowTest`. Nothing in this file
+   * is about that: these are checks about the ordering, the window search, the capacity and the
+   * conflicts, and for all of them one Monday-to-Friday week IS the calendar. [oneGridForAllTasks]
+   * says exactly that at the point where it is handed over, so that the single grid is a choice
+   * on the page rather than an omission.
+   */
+  private val werktags: (LevelTask, LocalDate) -> Boolean = oneGridForAllTasks {
+    it.dayOfWeek != DayOfWeek.SATURDAY && it.dayOfWeek != DayOfWeek.SUNDAY
+  }
 
   private fun task(
     id: String, dauer: Int, last: Int = 100, prio: Int = 2, reihe: Int = 0,

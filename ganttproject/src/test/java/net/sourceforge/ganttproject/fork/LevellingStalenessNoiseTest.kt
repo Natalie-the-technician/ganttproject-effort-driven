@@ -118,7 +118,7 @@ class LevellingStalenessNoiseTest {
       }
       val projectStart = taskManager.projectStart?.toModelLocalDate() ?: today
       val levelled = levelTasks(tasks, maxOf(projectStart, today),
-        workingDayTest(taskManager.calendar),
+        workingDaysPerTask(taskManager, resourceProperties),
         durationAtStart(taskManager, taskProperties, resourceProperties),
         isAvailable = availabilityTest(resourceManager))
       return levelled.starts.mapValues { (id, start) -> start to levelled.durations[id] }

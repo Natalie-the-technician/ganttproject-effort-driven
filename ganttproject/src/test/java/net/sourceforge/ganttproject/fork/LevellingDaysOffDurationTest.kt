@@ -141,7 +141,7 @@ class LevellingDaysOffDurationTest {
     }
 
     fun verteilung(abWann: LocalDate = MONTAG): LevelResult =
-      levelTasks(levelTaskListe(), abWann, isWorkingDay,
+      levelTasks(levelTaskListe(), abWann, workingDaysPerTask(taskManager, resourceProperties),
         durationAtStart(taskManager, taskProperties, resourceProperties),
         isAvailable = availabilityTest(resourceManager))
   }

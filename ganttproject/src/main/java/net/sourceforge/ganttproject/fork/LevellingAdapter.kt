@@ -229,6 +229,98 @@ fun workingDayTest(calendar: GPCalendar): (LocalDate) -> Boolean = { day ->
 }
 
 /**
+ * [fork change] Remembered day answers, KEYED BY THE TEST and not by the day alone.
+ *
+ * A map from day to answer holds ONE answer per day. That was right exactly as long as there was
+ * one answer -- which stopped being true when the working-day test became per task: whoever works
+ * Saturdays and whoever does not must get different answers for the same Saturday. A single map
+ * hands the second asker whatever the first one asked, and it does so silently, because no check
+ * that puts only ONE working week into a run can see it.
+ *
+ * WHY IT IS WORTH REMEMBERING AT ALL. Every unremembered question converts a `LocalDate` into a
+ * `java.util.Date` and asks the calendar -- about 1.2 microseconds apiece, measured on 28.08.2026,
+ * and the reason a levelling run of the real plan spends its 1.5 seconds on 1.27 million of them.
+ * The calendar does not change during a run, so answering the same day twice is pure waste.
+ *
+ * THE COMMON PLAN STILL SHARES ONE MAP, and that is not luck, it is [WorkWeekWorkingDays]: a task
+ * whose people have entered no working week gets back the very SAME function object, the project
+ * calendar test. All such tasks land on one entry here and share their day answers exactly as they
+ * did before any of this existed -- which is every plan written until working weeks were added.
+ * Only a task that really has a working week pays for a map of its own.
+ *
+ * WHAT IT CAN GROW TO is bounded by how far the callers walk -- at worst `MAX_SEARCH_DAYS`, some
+ * 50 000 working days per distinct grid -- and it lives only as long as the object holding it,
+ * which is one levelling run. The price of remembering is that later changes are not seen; that is
+ * the same price [availabilityTest] and [WorkWeekWorkingDays] pay, for the same lifetime.
+ */
+internal class RememberedWorkingDays {
+  private val answersByTest = IdentityHashMap<(LocalDate) -> Boolean, HashMap<LocalDate, Boolean>>()
+
+  fun remembering(test: (LocalDate) -> Boolean): (LocalDate) -> Boolean {
+    val answers = answersByTest.getOrPut(test) { HashMap() }
+    return { day -> answers.getOrPut(day) { test(day) } }
+  }
+}
+
+/**
+ * [fork change] The working-day test FOR EACH TASK, for [levelTasks].
+ *
+ * WHY THIS EXISTS. Until 04.09.2026 `LevellingActions` handed `levelTasks` one global
+ * `workingDayTest(taskManager.calendar)` while `durationAtStart` and `writeLevellingBack` both
+ * asked [WorkWeekWorkingDays] per task. Inside ONE run the duration of a task was therefore
+ * computed on the grid of the people on it and the window for it was searched on the project's.
+ * For somebody working Monday to Saturday those are different grids, and the levelling booked
+ * their capacity on days they do not work on the task while leaving free the days they do. The
+ * measurement is in `WorkWeekLevellingWindowTest`.
+ *
+ * BUILT ONCE PER TASK, ANSWERED FROM MEMORY AFTERWARDS -- the whole reason this is a factory
+ * returning a function rather than a function. The window search asks it inside its innermost
+ * loop: `findEarliestWindow` walks the task's whole window for every candidate starting day, up to
+ * `MAX_SEARCH_DAYS` of them. Building a test per question would parse every involved person's
+ * working week out of a text column each time; asking the calendar per question would cost the
+ * 1.2 microseconds [RememberedWorkingDays] exists to avoid. Neither happens here: the working
+ * weeks are read once by [WorkWeekWorkingDays], the test object is looked up once per task id, and
+ * the day answers are remembered per test.
+ *
+ * THE LOOKUP IS BY [LevelTask.id], because that is all `levelTasks` has -- it knows no
+ * GanttProject types on purpose. The id is the task id as a string, the same key `toLevelTask`
+ * builds it from.
+ *
+ * A TASK THAT IS NO LONGER THERE FALLS BACK TO THE PROJECT CALENDAR, via the very object
+ * [WorkWeekWorkingDays] hands to a task with nothing entered -- so such an id shares the common
+ * map rather than opening one of its own. It does not arise in the program (`collectLevelTasks`
+ * builds every id from a live task), and answering "the project calendar" is what levelling did
+ * for every task before working weeks existed.
+ *
+ * ONE INSTANCE PER RUN. It reads the model and remembers what it read, so it must not outlive the
+ * run -- the same lifetime as [availabilityTest] and [durationAtStart] beside it.
+ *
+ * IT DOES NOT SHARE ITS MEMORY WITH [durationAtStart], and that is worth knowing rather than
+ * assuming. The two build a [WorkWeekWorkingDays] each, so each parses every involved person's
+ * working week once and each keeps its own day answers. The ANSWERS are the same either way -- both
+ * read the same model and the same calendar -- so nothing about the plan depends on it; what it
+ * costs is one extra parse per person per run and one extra map per grid. Sharing one object
+ * between the two would save that and is the obvious next step if it ever matters; it was left
+ * undone here because it widens `durationAtStart`'s signature for a saving the measurement of
+ * 04.09.2026 could not see.
+ */
+fun workingDaysPerTask(
+  taskManager: TaskManager,
+  resourceProperties: CustomPropertyManager
+): (LevelTask, LocalDate) -> Boolean {
+  val workingDays = WorkWeekWorkingDays(taskManager.calendar, resourceProperties)
+  val remembered = RememberedWorkingDays()
+  val testById = HashMap<String, (LocalDate) -> Boolean>()
+  return { levelTask, day ->
+    testById.getOrPut(levelTask.id) {
+      val task = levelTask.id.toIntOrNull()?.let { taskManager.getTask(it) }
+      remembered.remembering(
+        task?.let { workingDays.forTask(it) } ?: workingDays.projectCalendarOnly)
+    }(day)
+  }
+}
+
+/**
  * The days off of the people as a function, for [levelTasks].
  *
  * THE PERSON IS NAMED BY THE RESOURCE ID, as a string -- the same key [toLevelTask] builds
@@ -466,18 +558,13 @@ private class DurationInputs(
  *
  * THE CALENDAR IS REMEMBERED TOO, and that is the other half of the price. The walk asks
  * `isWorkingDay` for every calendar day of the Task, and every such question converts a
- * `LocalDate` into a `java.util.Date` and asks the calendar -- about 1.2 microseconds apiece,
- * measured on 28.08.2026, and the reason a levelling run of the real plan spends its 1.5 seconds
- * on 1.27 million of them. Answering the same day twice is pure waste here: the calendar does not
- * change during a run, for the same reason the days off do not. What the map can grow to is
- * bounded by how far the window search reaches -- at worst its own `MAX_SEARCH_DAYS`, some 50 000
- * working days, and it lives only as long as the run.
- *
- * [fork change] REMEMBERED PER TEST, NOT PER DAY, since the merge of `arbeitswoche-wirkung`. The
- * working day is no longer one question with one answer: a Task whose people work Saturdays gets a
- * different answer for the same Saturday than a Task whose people do not. A map from day to answer
- * would hand the second Task whatever the first one asked. The body says how the two are kept
- * apart without giving up the sharing for the plans that have no working week at all.
+ * `LocalDate` into a `java.util.Date` and asks the calendar. Answering the same day twice is pure
+ * waste here: the calendar does not change during a run, for the same reason the days off do not.
+ * [RememberedWorkingDays] is what does the remembering, and it does it PER TEST rather than per
+ * day -- since `arbeitswoche-wirkung` a Task whose people work Saturdays gets a different answer
+ * for the same Saturday than one whose people do not. The measured cost of the question, what the
+ * maps can grow to and how the plans without a working week keep sharing one map are all written
+ * up there; since 04.09.2026 `workingDaysPerTask` uses the same object for the same reason.
  *
  * NO SHORT CUT FOR THE PLAN WITHOUT DAYS OFF, and that omission is deliberate. It would be easy
  * to hand back [LevelTask.durationDays] unchanged as soon as nobody has anything entered, and it
@@ -496,27 +583,13 @@ fun durationAtStart(
   val workingDays = WorkWeekWorkingDays(taskManager.calendar, resourceProperties)
   // [fork change] THE REMEMBERED CALENDAR ANSWERS ARE KEYED BY THE TEST, NOT BY THE DAY ALONE,
   // and that is the one place where the working week and the days off could have destroyed each
-  // other silently.
+  // other silently. The reasoning, together with what a shared map would cost, is in
+  // [RememberedWorkingDays] -- it stands there and not here because `workingDaysPerTask` needs the
+  // same thing for the same reason, and one explanation is better than two that can drift apart.
   //
-  // A map from day to answer holds ONE answer per day. That is right exactly as long as there is
-  // one answer -- which stopped being true when the test became per task: whoever works Saturdays
-  // and whoever does not must get different answers for the same Saturday. A single map would
-  // have handed the second task whatever the first one asked, and every check on either side
-  // would have stayed green, because no check on either side puts two DIFFERENT working weeks
-  // into one run. `zwei vorgaenge mit verschiedenen arbeitswochen bekommen verschiedene antworten`
-  // is that check, and it is red on a shared map.
-  //
-  // THE COMMON PLAN STILL SHARES ONE MAP, and that is not luck, it is [WorkWeekWorkingDays]: a
-  // task whose people have entered no working week gets back the very SAME function object, the
-  // project calendar test. All such tasks therefore land on one entry here and share their day
-  // answers exactly as before this merge -- which is every task of every plan written until now,
-  // and the shape the running times of 03.09.2026 were measured on. Only a task that really has a
-  // working week pays for a map of its own.
-  val answersByTest = IdentityHashMap<(LocalDate) -> Boolean, HashMap<LocalDate, Boolean>>()
-  fun remembering(test: (LocalDate) -> Boolean): (LocalDate) -> Boolean {
-    val answers = answersByTest.getOrPut(test) { HashMap() }
-    return { day -> answers.getOrPut(day) { test(day) } }
-  }
+  // The check that is red on a shared map is `zwei vorgaenge mit verschiedenen arbeitswochen
+  // bekommen verschiedene antworten` in `ZusammenfuehrungKreuzungTest`.
+  val remembered = RememberedWorkingDays()
   val inputsById = HashMap<String, DurationInputs?>()
   return fabrik@{ levelTask, start ->
     // `containsKey`, not `?:` -- the value may legitimately be null (no Task behind the id), and
@@ -530,7 +603,7 @@ fun durationAtStart(
         DurationInputs(
           effort = it.effortHours(taskProperties),
           effortInputs = it.effortInputs(resourceProperties),
-          isWorkingDay = remembering(workingDays.forTask(it)),
+          isWorkingDay = remembered.remembering(workingDays.forTask(it)),
           scheduleHasErrors = schedule.hasErrors,
           scheduleIsConstant = schedule.schedule.isConstant,
           begun = it.completionPercentage > 0)
