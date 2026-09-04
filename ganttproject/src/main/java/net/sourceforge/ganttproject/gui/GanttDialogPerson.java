@@ -25,6 +25,8 @@ import javafx.scene.control.Tab;
 import kotlin.Unit;
 import net.sourceforge.ganttproject.action.CancelAction;
 import net.sourceforge.ganttproject.action.OkAction;
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
+import net.sourceforge.ganttproject.fork.WorkWeekPanelFx;
 import net.sourceforge.ganttproject.gui.resourceproperties.MainPropertiesPanel;
 import net.sourceforge.ganttproject.gui.resourceproperties.ResourceAssignmentsPanelFx;
 import net.sourceforge.ganttproject.gui.taskproperties.CustomColumnsPanel;
@@ -50,6 +52,21 @@ public class GanttDialogPerson {
   private ResourceAssignmentsPanelFx myAssignmentsPanel;
   private final MainPropertiesPanel mainPropertiesPanel;
   private final CustomColumnsPanel customColumnsPanel;
+  /**
+   * [fork change] The working week of this person — seven boxes and two buttons.
+   *
+   * A TAB OF ITS OWN, and next to the days off. The two belong together: the working week is the
+   * grid, an absence is an exception inside it, and somebody looking for one will look where the
+   * other is. It is NOT folded into the days-off tab, because that tab is a full-height list
+   * editor built out of an upstream component ({@link DateIntervalListEditorFx}); putting a seven
+   * box grid and two buttons under it would cramp both and would mean changing upstream code where
+   * adding a tab changes none.
+   *
+   * The fork's other resource columns — utilisation, hours per day — stay in the custom columns
+   * tab, and that is deliberate too: those are single values a text field expresses exactly. A
+   * working week over time is not, which is why it needed a panel at all.
+   */
+  private final WorkWeekPanelFx workWeekPanel;
 
 
   public GanttDialogPerson(HumanResourceManager resourceManager,
@@ -67,6 +84,8 @@ public class GanttDialogPerson {
     mainPropertiesPanel = new MainPropertiesPanel(person);
     customColumnsPanel = new CustomColumnsPanel(customPropertyManager, projectDatabase, CustomColumnsPanel.Type.RESOURCE,
       myUIFacade.getUndoManager(), person, myUIFacade.getResourceColumnList());
+    // [fork change] Its JavaFX controls are built lazily, so this costs nothing off the FX thread.
+    workWeekPanel = new WorkWeekPanelFx(person, customPropertyManager);
     this.onHide = onHide;
   }
 
@@ -111,6 +130,15 @@ public class GanttDialogPerson {
           new PropertiesDialogTabProvider(
             tabPane -> {
               tabPane.getTabs().add(new Tab(language.getText("daysOff"), new DateIntervalListEditorFx(myDaysOffModel)));
+              return Unit.INSTANCE;
+            },
+            () -> Unit.INSTANCE
+          ),
+          // [fork change] The working week, directly after the days off — see workWeekPanel.
+          new PropertiesDialogTabProvider(
+            tabPane -> {
+              tabPane.getTabs().add(
+                new Tab(ForkI18nKt.forkText("fork.column.workWeek"), workWeekPanel.getNode()));
               return Unit.INSTANCE;
             },
             () -> Unit.INSTANCE
@@ -164,6 +192,15 @@ public class GanttDialogPerson {
       // intentionally do nothing, as customPropertyHolder is already a resource being edited
       return null;
     });
+    // [fork change] AFTER the custom columns, and that order is load-bearing. Both can touch the
+    // "work week" column: the custom columns tab writes back whatever its text field held when the
+    // dialog opened, this panel writes what a button press built. The later write wins, so a button
+    // press is not undone by the stale text the other tab is carrying.
+    //
+    // Writes NOTHING when no button was pressed — that guarantee lives in WorkWeekPanelFx.save(),
+    // and it is what keeps the Mon-Fr preselection from becoming an entry for every person whose
+    // properties anybody ever opened.
+    workWeekPanel.save();
 
     person.clearDaysOff();
     for (DateInterval interval : myDaysOffModel.getIntervals()) {
