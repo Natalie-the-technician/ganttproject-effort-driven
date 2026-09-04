@@ -43,11 +43,21 @@ import java.util.Locale
  * was before the three branches existed -- the same starting days, the same durations, to the day.
  *
  * WRITTEN-OUT DATES AND NUMBERS, deliberately, and they were not read off this branch. THIS FILE
- * USES ONLY WHAT `main` 702b1ea49 ALREADY OFFERED -- `collectLevelTasks`, `levelTasks`,
+ * USED ONLY WHAT `main` 702b1ea49 ALREADY OFFERED -- `collectLevelTasks`, `levelTasks`,
  * `durationAtStart`, `workingDayTest`, all four with the signatures they had there -- so that it
- * compiles and runs against that commit UNCHANGED. The numbers below come from exactly that run;
- * how it was made is in the report of 03.09.2026. The portability of this file is the measurement:
- * a guard whose expected values were read off the state it is guarding would guard nothing.
+ * compiled and ran against that commit UNCHANGED. The numbers below come from exactly that run;
+ * how it was made is in the report of 03.09.2026. The portability of this file was the
+ * measurement: a guard whose expected values were read off the state it is guarding would guard
+ * nothing.
+ *
+ * [fork change] ONE LINE OF IT HAS SINCE MOVED, on 04.09.2026, and it is named here so that the
+ * paragraph above is not read as still literally true. `levelTasks` now takes its working-day test
+ * PER TASK, so [Projekt.verteilung] passes `workingDaysPerTask` where it passed
+ * `workingDayTest(taskManager.calendar)`. NOTHING ELSE was touched -- not the plan, not one of the
+ * numbers -- and that is exactly what makes the file go on doing its job: in a plan where nobody
+ * has a working week every task gets the same project-calendar test back, so the same numbers have
+ * to come out, and they do. A file that had needed its numbers adjusted here would have been
+ * reporting a change of behaviour.
  *
  * THE PLAN TRAVELS EVERY FALLBACK of `durationAtStart` and every shape the three branches touch --
  * the shared pool, two people on one task, a half load, an onlooker (axis B) beside a contributor,
@@ -112,7 +122,7 @@ class ZusammenfuehrungWacheTest {
       levelTasks(
         collectLevelTasks(taskManager, taskProperties, resourceProperties, HEUTE, true),
         MONTAG,
-        workingDayTest(taskManager.calendar),
+        workingDaysPerTask(taskManager, resourceProperties),
         durationAtStart(taskManager, taskProperties, resourceProperties),
         isAvailable = availabilityTest(resourceManager))
   }

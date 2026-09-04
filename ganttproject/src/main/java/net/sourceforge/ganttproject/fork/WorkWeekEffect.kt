@@ -198,6 +198,19 @@ class WorkWeekWorkingDays(
   /** The project calendar alone -- what every task used before this file existed. */
   private val projectOnly: (LocalDate) -> Boolean = workingDayTest(calendar)
 
+  /**
+   * [fork change] The same object [forTask] hands back to a task with nothing entered.
+   *
+   * READABLE FROM OUTSIDE, and only for its IDENTITY. A caller that has no `Task` at all -- an id
+   * whose task has gone away between the conversion and the calculation, see
+   * `LevellingAdapter.workingDaysPerTask` -- needs the project calendar as its answer. Building a
+   * second `workingDayTest(calendar)` for that would answer the same and be a DIFFERENT object,
+   * and every memory in this fork that keys day answers by the test would open a map of its own
+   * for it. The guarantee this class is built on is one of identity, and this is how a caller
+   * outside it can keep it.
+   */
+  val projectCalendarOnly: (LocalDate) -> Boolean get() = projectOnly
+
   /** Resource id -> working week. Parsed once. */
   private val perResource = mutableMapOf<Int, WorkWeekSchedule>()
 

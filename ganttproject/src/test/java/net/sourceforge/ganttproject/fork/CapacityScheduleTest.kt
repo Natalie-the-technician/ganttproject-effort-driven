@@ -31,6 +31,14 @@ class CapacityScheduleTest {
     it.dayOfWeek != DayOfWeek.SATURDAY && it.dayOfWeek != DayOfWeek.SUNDAY
   }
 
+  /**
+   * The same week as ONE grid for every task -- [levelTasks] asks its working-day test per task
+   * since 04.09.2026. Nothing in this file is about differing grids: these checks are about the
+   * daily rate, the ordering and the capacity, and one Monday-to-Friday week is the whole calendar
+   * they need. [oneGridForAllTasks] states that at the hand-over instead of leaving it implied.
+   */
+  private val einRaster: (LevelTask, LocalDate) -> Boolean = oneGridForAllTasks(montagBisFreitag)
+
   private fun plan(text: String, base: Double = 4.0) = CapacitySchedule.parse(text, base)
 
   // ---- Parsing --------------------------------------------------------------------------
@@ -184,7 +192,7 @@ class CapacityScheduleTest {
       LevelTask(id = "b", orderInPlan = 1, priority = 2, durationDays = 10,
         loads = mapOf(SHARED_POOL to 100)))
 
-    val ergebnis = levelTasks(tasks, montag, montagBisFreitag, durationAt)
+    val ergebnis = levelTasks(tasks, montag, einRaster, durationAt)
 
     // The first begins on 17.8. -- four hours a day, until 1.9. After that eight.
     // Mon 17.8. to Fri 28.8. is 10 working days at 4 h = 40 h: exactly ten days.
@@ -214,7 +222,7 @@ class CapacityScheduleTest {
         loads = mapOf(SHARED_POOL to 100)),
       LevelTask(id = "b", orderInPlan = 1, priority = 2, durationDays = 10,
         loads = mapOf(SHARED_POOL to 100)))
-    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    val ergebnis = levelTasks(tasks, montag, einRaster)
     assertEquals(10, ergebnis.durations["a"])
     assertEquals(10, ergebnis.durations["b"])
   }
@@ -232,6 +240,14 @@ class MehrerePersonenTest {
   private val montagBisFreitag: (LocalDate) -> Boolean = {
     it.dayOfWeek != DayOfWeek.SATURDAY && it.dayOfWeek != DayOfWeek.SUNDAY
   }
+
+  /**
+   * The same week as ONE grid for every task -- [levelTasks] asks its working-day test per task
+   * since 04.09.2026. Nothing in this file is about differing grids: these checks are about the
+   * daily rate, the ordering and the capacity, and one Monday-to-Friday week is the whole calendar
+   * they need. [oneGridForAllTasks] states that at the hand-over instead of leaving it implied.
+   */
+  private val einRaster: (LevelTask, LocalDate) -> Boolean = oneGridForAllTasks(montagBisFreitag)
   private val montag = LocalDate.of(2026, 8, 17)
 
   @Test
@@ -239,7 +255,7 @@ class MehrerePersonenTest {
     val tasks = listOf(
       LevelTask("a", 0, 2, durationDays = 5, loads = mapOf("1" to 100)),
       LevelTask("b", 1, 2, durationDays = 5, loads = mapOf("2" to 100)))
-    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    val ergebnis = levelTasks(tasks, montag, einRaster)
     assertEquals(montag, ergebnis.starts["a"])
     assertEquals(montag, ergebnis.starts["b"], "die zweite Person hat ihre eigene Kapazitaet")
     assertTrue(ergebnis.conflicts.isEmpty())
@@ -251,7 +267,7 @@ class MehrerePersonenTest {
     val tasks = listOf(
       LevelTask("a", 0, 2, durationDays = 5, loads = mapOf("1" to 100)),
       LevelTask("b", 1, 2, durationDays = 5, loads = mapOf("1" to 100)))
-    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    val ergebnis = levelTasks(tasks, montag, einRaster)
     assertEquals(montag, ergebnis.starts["a"])
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["b"], "erst danach")
   }
@@ -265,7 +281,7 @@ class MehrerePersonenTest {
       LevelTask("gemeinsam", 0, 2, durationDays = 5, loads = mapOf("1" to 100, "2" to 100)),
       LevelTask("nur1", 1, 2, durationDays = 5, loads = mapOf("1" to 100)),
       LevelTask("nur2", 2, 2, durationDays = 5, loads = mapOf("2" to 100)))
-    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    val ergebnis = levelTasks(tasks, montag, einRaster)
     assertEquals(montag, ergebnis.starts["gemeinsam"])
     // Both pools are occupied, so BOTH following Tasks have to wait.
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["nur1"])
@@ -277,7 +293,7 @@ class MehrerePersonenTest {
     val tasks = listOf(
       LevelTask("a", 0, 2, durationDays = 5, loads = mapOf("7" to 100), fixedStart = montag),
       LevelTask("b", 1, 2, durationDays = 5, loads = mapOf("7" to 100), fixedStart = montag))
-    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    val ergebnis = levelTasks(tasks, montag, einRaster)
     val ueberlast = ergebnis.conflicts.filterIsInstance<LevelConflict.Overload>()
     assertTrue(ueberlast.isNotEmpty(), "zwei feste Termine am selben Tag sprengen die Kapazitaet")
     assertEquals("7", ueberlast.first().resourceId)
@@ -291,7 +307,7 @@ class MehrerePersonenTest {
     val tasks = listOf(
       LevelTask("a", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100)),
       LevelTask("b", 1, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100)))
-    val ergebnis = levelTasks(tasks, montag, montagBisFreitag)
+    val ergebnis = levelTasks(tasks, montag, einRaster)
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["b"])
   }
 }
@@ -306,6 +322,14 @@ class WiederholtVerteilenTest {
   private val montagBisFreitag: (LocalDate) -> Boolean = {
     it.dayOfWeek != DayOfWeek.SATURDAY && it.dayOfWeek != DayOfWeek.SUNDAY
   }
+
+  /**
+   * The same week as ONE grid for every task -- [levelTasks] asks its working-day test per task
+   * since 04.09.2026. Nothing in this file is about differing grids: these checks are about the
+   * daily rate, the ordering and the capacity, and one Monday-to-Friday week is the whole calendar
+   * they need. [oneGridForAllTasks] states that at the hand-over instead of leaving it implied.
+   */
+  private val einRaster: (LevelTask, LocalDate) -> Boolean = oneGridForAllTasks(montagBisFreitag)
   private val montag = LocalDate.of(2026, 8, 17)
 
   @Test
@@ -313,7 +337,7 @@ class WiederholtVerteilenTest {
     val fertig = LevelTask("fertig", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100),
       frozen = true, fixedStart = montag)
     val offen = LevelTask("offen", 1, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100))
-    val ergebnis = levelTasks(listOf(fertig, offen), montag, montagBisFreitag)
+    val ergebnis = levelTasks(listOf(fertig, offen), montag, einRaster)
 
     assertEquals(montag, ergebnis.starts["fertig"], "die erledigte Arbeit wird nicht verschoben")
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["offen"],
@@ -328,7 +352,7 @@ class WiederholtVerteilenTest {
       frozen = true, fixedStart = montag)
     val b = LevelTask("b", 1, 2, durationDays = 3, loads = mapOf(SHARED_POOL to 100),
       frozen = true, fixedStart = montag)
-    val ergebnis = levelTasks(listOf(a, b), montag, montagBisFreitag)
+    val ergebnis = levelTasks(listOf(a, b), montag, einRaster)
     assertEquals(montag, ergebnis.starts["a"])
     assertEquals(montag, ergebnis.starts["b"])
     assertTrue(ergebnis.conflicts.any { it is LevelConflict.Overload }, "aber gemeldet wird es")
@@ -339,7 +363,7 @@ class WiederholtVerteilenTest {
     val a = LevelTask("a", 0, 2, durationDays = 10, loads = mapOf(SHARED_POOL to 100))
     val b = LevelTask("b", 1, 2, durationDays = 10, loads = mapOf(SHARED_POOL to 100),
       deadline = LocalDate.of(2026, 8, 31))
-    val ergebnis = levelTasks(listOf(a, b), montag, montagBisFreitag)
+    val ergebnis = levelTasks(listOf(a, b), montag, einRaster)
 
     val verpasst = ergebnis.conflicts.filterIsInstance<LevelConflict.DeadlineMissed>()
     assertEquals(1, verpasst.size)
@@ -354,7 +378,7 @@ class WiederholtVerteilenTest {
     // Counter-check: otherwise the test above would pass even with a report for every Task.
     val a = LevelTask("a", 0, 2, durationDays = 3, loads = mapOf(SHARED_POOL to 100),
       deadline = LocalDate.of(2026, 12, 31))
-    val ergebnis = levelTasks(listOf(a), montag, montagBisFreitag)
+    val ergebnis = levelTasks(listOf(a), montag, einRaster)
     assertTrue(ergebnis.conflicts.none { it is LevelConflict.DeadlineMissed })
   }
 
@@ -364,10 +388,10 @@ class WiederholtVerteilenTest {
     // 60 % and one at 30 % fit at 100 %, and no longer at 80 %.
     val a = LevelTask("a", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 60))
     val b = LevelTask("b", 1, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 30))
-    val voll = levelTasks(listOf(a, b), montag, montagBisFreitag)
+    val voll = levelTasks(listOf(a, b), montag, einRaster)
     assertEquals(montag, voll.starts["b"], "bei 100 % passen 60 und 30 zusammen")
 
-    val gebremst = levelTasks(listOf(a, b), montag, montagBisFreitag, capacityOf = { 80 })
+    val gebremst = levelTasks(listOf(a, b), montag, einRaster, capacityOf = { 80 })
     assertEquals(LocalDate.of(2026, 8, 24), gebremst.starts["b"],
       "bei 80 % nicht mehr -- genau das ist der Puffer")
   }
@@ -388,13 +412,21 @@ class AuslastungsgradTest {
   private val montagBisFreitag: (LocalDate) -> Boolean = {
     it.dayOfWeek != DayOfWeek.SATURDAY && it.dayOfWeek != DayOfWeek.SUNDAY
   }
+
+  /**
+   * The same week as ONE grid for every task -- [levelTasks] asks its working-day test per task
+   * since 04.09.2026. Nothing in this file is about differing grids: these checks are about the
+   * daily rate, the ordering and the capacity, and one Monday-to-Friday week is the whole calendar
+   * they need. [oneGridForAllTasks] states that at the hand-over instead of leaving it implied.
+   */
+  private val einRaster: (LevelTask, LocalDate) -> Boolean = oneGridForAllTasks(montagBisFreitag)
   private val montag = LocalDate.of(2026, 8, 17)
 
   @Test
   fun `ein voller vorgang passt auch bei achtzig prozent`() {
     // Without the rule "the limit is at least the Task's own load" this test hangs.
     val tasks = listOf(LevelTask("a", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100)))
-    val ergebnis = levelTasks(tasks, montag, montagBisFreitag, capacityOf = { 80 })
+    val ergebnis = levelTasks(tasks, montag, einRaster, capacityOf = { 80 })
     assertEquals(montag, ergebnis.starts["a"],
       "ein einzelner Vorgang muss liegen duerfen, sonst sucht die Verteilung endlos")
   }
@@ -406,7 +438,7 @@ class AuslastungsgradTest {
     val tasks = listOf(
       LevelTask("a", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 50)),
       LevelTask("b", 1, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 50)))
-    val ergebnis = levelTasks(tasks, montag, montagBisFreitag, capacityOf = { 80 })
+    val ergebnis = levelTasks(tasks, montag, einRaster, capacityOf = { 80 })
     assertEquals(LocalDate.of(2026, 8, 24), ergebnis.starts["b"])
   }
 
@@ -415,7 +447,7 @@ class AuslastungsgradTest {
     // Second safeguard: even if the limit were wrong again one day, the search has to end. An
     // endless loop is the most expensive failure mode -- nothing about it is visible.
     val tasks = listOf(LevelTask("a", 0, 2, durationDays = 5, loads = mapOf(SHARED_POOL to 100)))
-    val ergebnis = levelTasks(tasks, montag, { false })  // KEIN Tag ist Arbeitstag
+    val ergebnis = levelTasks(tasks, montag, oneGridForAllTasks { false })  // KEIN Tag ist Arbeitstag
     assertTrue(ergebnis.starts.containsKey("a"), "die Verteilung muss zurueckkommen")
   }
 }

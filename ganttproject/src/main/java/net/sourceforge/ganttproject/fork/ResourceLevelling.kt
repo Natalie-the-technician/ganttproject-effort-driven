@@ -238,6 +238,40 @@ data class LevelResult(
  * @param isWorkingDay the calendar, as a function. That keeps the calculation checkable without
  * the program, and holidays come from GanttProject's own calendar rather than from a second
  * weekend logic.
+ *
+ * [fork change] PER TASK, and that is a change of 04.09.2026. It used to be one
+ * `(LocalDate) -> Boolean` for the whole plan. That was right as long as there was one answer --
+ * and it stopped being right when a person could enter a working week of their own: somebody who
+ * works Monday to Saturday has a different set of days from the project calendar, and the
+ * duration was already being computed on THEIR set (`LevellingAdapter.durationAtStart`) while the
+ * window search still laid those days out on the project's. For a task of six of Natalie's days
+ * from a Monday that meant the levelling booked her capacity on the following Monday, which she
+ * does not work on the task, and left the Saturday free, which she does. Two of six days wrong,
+ * and one calendar day of error per Saturday a task runs over. Measured before the change in
+ * `WorkWeekLevellingWindowTest`, which now demands the two agree instead of writing both down.
+ *
+ * THE SHAPE IS THE ONE [durationAt] ALREADY HAD, deliberately: how long a task is and which days
+ * it may lie on are the two questions that have to be answered on the SAME grid -- that is the
+ * whole of what went wrong -- so they take the same pair of arguments and can be read side by
+ * side at every call site.
+ *
+ * THE OTHER SHAPE, a field on [LevelTask] carrying its own test, was considered and dropped. Two
+ * reasons, and the second is the load-bearing one. [LevelTask] is a value: the premise of this
+ * file is that it computes with `LocalDate` and plain values, and the test corpus treats it that
+ * way -- `copy` appears twenty-odd times in `ResourceLevellingTest`. A lambda in it would make
+ * `copy` and `toString` be about a function object. More importantly, the test has to be REMEMBERED
+ * across the whole run, and who owns that memory is the caller's business; a field would be filled
+ * during the conversion, in `collectLevelTasks`, before anything can decide how long it lives.
+ *
+ * ONE ANSWER PER TASK AND DAY, NOT ONE COMPUTATION PER QUESTION. This is asked in the tightest
+ * loops there are: `findEarliestWindow` walks a whole window for every candidate day, up to
+ * `MAX_SEARCH_DAYS` of them. Whoever supplies this function has to build the per-task test ONCE
+ * per task and remember its answers -- `LevellingAdapter.workingDaysPerTask` does both, and the
+ * reasoning is written down there. A caller that reads the model on every question turns
+ * levelling into a waiting game; measured on 04.09.2026, a caller that reads the CALENDAR on every
+ * question costs the same run seven times over.
+ *
+ * FOR A PLAN WITH ONE CALENDAR use [oneGridForAllTasks], which says so at the call site.
  */
 /**
  * @param capacityOf how much of a working day may be planned for this person. 100 means: every
@@ -283,13 +317,28 @@ private const val MAX_SEARCH_DAYS = 50_000
 fun levelTasks(
   tasks: List<LevelTask>,
   projectStart: LocalDate,
-  isWorkingDay: (LocalDate) -> Boolean,
+  isWorkingDay: (LevelTask, LocalDate) -> Boolean,
   durationAt: (LevelTask, LocalDate) -> Int = { task, _ -> task.durationDays },
   capacityOf: (String) -> Int = { 100 },
   isAvailable: (String, LocalDate) -> Boolean = { _, _ -> true }
 ): LevelResult {
   val byId = tasks.associateBy { it.id }
   val conflicts = mutableListOf<LevelConflict>()
+
+  // [fork change] EACH TASK'S OWN GRID, BOUND ONCE, and this is the whole of what the per-task
+  // test costs inside this file: one closure per task and per run, built here instead of at every
+  // one of the tens of thousands of questions below.
+  //
+  // BOUND UP FRONT AND NOT WHERE IT IS USED, because two of the places that need it are loops
+  // over all tasks -- the deadline check and the overload report -- and building a closure inside
+  // them would allocate one per task per overloaded day. The rest of this file therefore keeps
+  // taking a plain `(LocalDate) -> Boolean`: `nextWorkingDay`, `workingDays` and
+  // `findEarliestWindow` are unchanged, they are simply handed the grid of the task they are
+  // working on.
+  //
+  // `getValue` is safe for the same reason `byId` is: every key comes out of `tasks` itself.
+  val gridOf: Map<String, (LocalDate) -> Boolean> =
+    tasks.associate { task -> task.id to { day: LocalDate -> isWorkingDay(task, day) } }
 
   val order = topologicalOrder(tasks)
   if (order == null) {
@@ -307,15 +356,16 @@ fun levelTasks(
   // available for the rest. If it were processed in the normal order, a movable Task could lay
   // itself on the same day beforehand.
   tasks.filter { it.frozen }.forEach { task ->
-    val liegtAuf = nextWorkingDay(task.fixedStart ?: projectStart, isWorkingDay)
-    val days = workingDays(liegtAuf, durationAt(task, liegtAuf), isWorkingDay)
+    val grid = gridOf.getValue(task.id)
+    val liegtAuf = nextWorkingDay(task.fixedStart ?: projectStart, grid)
+    val days = workingDays(liegtAuf, durationAt(task, liegtAuf), grid)
     task.pools.forEach { pool ->
       val belegung = used.getOrPut(pool) { mutableMapOf() }
       days.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadIn(pool) }
     }
     starts[task.id] = days.first()
     durations[task.id] = days.size
-    ends[task.id] = nextWorkingDay(days.last().plusDays(1), isWorkingDay)
+    ends[task.id] = nextWorkingDay(days.last().plusDays(1), grid)
   }
 
   for (id in order) {
@@ -324,23 +374,28 @@ fun levelTasks(
       continue
     }
 
+    // [fork change] THE GRID OF THIS TASK, not of the plan. The predecessors' ends in `ends` were
+    // computed on THEIR grids, which is right: an end is a statement about the task that ends.
+    // What follows from here on is a statement about this one, so it is asked on this one's grid
+    // -- a successor begins on a day IT works, whoever it was waiting for.
+    val grid = gridOf.getValue(id)
     var earliest = maxOf(projectStart, task.earliestStart ?: projectStart)
     for (p in task.predecessors) {
       ends[p]?.let { earliest = maxOf(earliest, it) }
     }
-    earliest = nextWorkingDay(earliest, isWorkingDay)
+    earliest = nextWorkingDay(earliest, grid)
 
     val days: List<LocalDate>
     if (task.fixedStart != null) {
       // Keep the date, even when it lies too early or bursts the capacity. Both are reported --
       // that was the explicit decision: a deadline is a deadline.
-      val start = nextWorkingDay(task.fixedStart, isWorkingDay)
+      val start = nextWorkingDay(task.fixedStart, grid)
       if (start < earliest) {
         conflicts.add(LevelConflict.FixedDateNotReachable(id, start, earliest))
       }
-      days = workingDays(start, durationAt(task, start), isWorkingDay)
+      days = workingDays(start, durationAt(task, start), grid)
     } else {
-      val search = findEarliestWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf,
+      val search = findEarliestWindow(earliest, task, durationAt, used, grid, capacityOf,
         isAvailable)
       days = search.days
       // THE ONE PLACE THE SILENT FALLBACK BECOMES A MESSAGE, and since 27.08.2026 it produces AT
@@ -395,23 +450,28 @@ fun levelTasks(
     }
     starts[id] = days.first()
     durations[id] = days.size
-    ends[id] = nextWorkingDay(days.last().plusDays(1), isWorkingDay)
+    ends[id] = nextWorkingDay(days.last().plusDays(1), grid)
   }
 
   // Deadlines: reported, not enforced. What is checked is the END, because a deadline is an end date.
   tasks.forEach { task ->
     val frist = task.deadline ?: return@forEach
     val ende = ends[task.id] ?: return@forEach
+    // [fork change] ON THIS TASK'S GRID, and it has to be: "this many working days too late" is a
+    // number the person reading it will compare with the task's own duration, and both have to
+    // count the same days. Counting a Saturday worker's overrun in project-calendar days would
+    // report a different number from the one their plan is made of.
+    val grid = gridOf.getValue(task.id)
     // ends[] is the first working day AFTER the Task; the last working day lies before it.
     val letzterTag = generateSequence(ende.minusDays(1)) { it.minusDays(1) }
-      .first { isWorkingDay(it) || it < projectStart }
+      .first { grid(it) || it < projectStart }
     if (letzterTag.isAfter(frist)) {
-      val fehlend = workingDays(nextWorkingDay(frist.plusDays(1), isWorkingDay),
-        1, isWorkingDay).let {
+      val fehlend = workingDays(nextWorkingDay(frist.plusDays(1), grid),
+        1, grid).let {
         var tage = 0
-        var tag = nextWorkingDay(frist.plusDays(1), isWorkingDay)
+        var tag = nextWorkingDay(frist.plusDays(1), grid)
         while (!tag.isAfter(letzterTag) && tage < 100_000) {
-          if (isWorkingDay(tag)) tage++
+          if (grid(tag)) tage++
           tag = tag.plusDays(1)
         }
         tage
@@ -426,7 +486,11 @@ fun levelTasks(
       val onThatDay = tasks.filter { t ->
         if (!t.pools.contains(pool)) return@filter false
         val s = starts[t.id] ?: return@filter false
-        workingDays(s, durations[t.id] ?: t.durationDays, isWorkingDay).contains(day)
+        // [fork change] Every task's days are re-walked on ITS OWN grid, which is the same grid
+        // they were booked on a few lines up. Using one grid for all of them here would name a
+        // Saturday worker on the wrong days of an overload -- the day would be right, the list of
+        // who is on it would not.
+        workingDays(s, durations[t.id] ?: t.durationDays, gridOf.getValue(t.id)).contains(day)
       }.map { it.id }
       conflicts.add(LevelConflict.Overload(day, percent, onThatDay, pool))
     }
@@ -434,6 +498,24 @@ fun levelTasks(
 
   return LevelResult(starts, conflicts, durations)
 }
+
+/**
+ * [fork change] The same day grid for every task -- what [levelTasks] took before 04.09.2026.
+ *
+ * WHAT IT IS FOR: a calculation in which there is genuinely one calendar. Most of the checks in
+ * this file's test corpus are of that kind -- they are about the window search, the ordering or
+ * the capacity, and a single Monday-to-Friday week is the whole of what they need from a calendar.
+ * Writing the adapter here rather than a bare `{ _, day -> … }` at each of them makes the claim
+ * visible: THIS PLAN HAS ONE GRID.
+ *
+ * WHAT IT IS NOT FOR, and this is the point of naming it at all: the program's own levelling run.
+ * `LevellingActions` must pass `LevellingAdapter.workingDaysPerTask`, because in a real plan the
+ * grid is a property of the people on the task and not of the project. Wrapping the project
+ * calendar in here instead would compile, would look tidy and would put the contradiction of
+ * `WorkWeekLevellingWindowTest` straight back. That check is what stops it.
+ */
+fun oneGridForAllTasks(isWorkingDay: (LocalDate) -> Boolean): (LevelTask, LocalDate) -> Boolean =
+  { _, day -> isWorkingDay(day) }
 
 /** The pool shared by all Tasks that have nobody assigned. */
 const val SHARED_POOL = ""
@@ -580,6 +662,11 @@ private data class WindowSearch(
  * TWO REASONS A DAY CAN FAIL, and they are asked side by side: it is too full for somebody, or a
  * person marked as blocking is away on it. The second is axis A. Both are properties OF THE DAY,
  * which is what lets the search skip forward the way it does below.
+ *
+ * @param isWorkingDay [fork change] THE GRID OF [task], already bound by the caller. This function
+ * did not change when the grid became per task: it always searched for one task at a time, so
+ * being handed that one task's calendar is the same shape it always had. What changed is who
+ * decides which calendar that is.
  */
 private fun findEarliestWindow(
   earliest: LocalDate,

@@ -110,7 +110,7 @@ class LevellingBlockingTest {
 
     /** Levelling with exactly the argument list of the call site in `LevellingActions`. */
     fun verteile(): LevelResult = levelTasks(
-      levelTasks(), MONTAG, workingDayTest(taskManager.calendar),
+      levelTasks(), MONTAG, workingDaysPerTask(taskManager, resourceProperties),
       durationAtStart(taskManager, taskProperties, resourceProperties),
       isAvailable = availabilityTest(resourceManager))
 
@@ -307,7 +307,7 @@ class LevellingBlockingTest {
     assertEquals(setOf(emptySet<String>()), tasks.map { it.blocking }.toSet(),
       "Aufbau: keine Zuordnung ist markiert")
 
-    val kalender = workingDayTest(projekt.taskManager.calendar)
+    val kalender = workingDaysPerTask(projekt.taskManager, projekt.resourceProperties)
     val dauer = durationAtStart(projekt.taskManager, projekt.taskProperties,
       projekt.resourceProperties)
     val ohne = levelTasks(tasks, MONTAG, kalender, dauer)

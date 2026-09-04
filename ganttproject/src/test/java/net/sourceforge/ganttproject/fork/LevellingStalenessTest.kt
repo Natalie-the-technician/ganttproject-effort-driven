@@ -576,7 +576,8 @@ class LevellingStalenessTest {
         }
         val tasks = collectLevelTasks(plan.taskManager, plan.taskProperties,
           plan.resourceManager.customPropertyManager, LocalDate.of(2026, 9, 1), true)
-        return levelTasks(tasks, MONTAG, workingDayTest(plan.taskManager.calendar),
+        return levelTasks(tasks, MONTAG,
+          workingDaysPerTask(plan.taskManager, plan.resourceManager.customPropertyManager),
           durationAtStart(plan.taskManager, plan.taskProperties,
             plan.resourceManager.customPropertyManager),
           isAvailable = availabilityTest(plan.resourceManager)).starts
