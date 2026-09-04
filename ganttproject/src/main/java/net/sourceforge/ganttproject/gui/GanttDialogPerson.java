@@ -26,6 +26,7 @@ import kotlin.Unit;
 import net.sourceforge.ganttproject.action.CancelAction;
 import net.sourceforge.ganttproject.action.OkAction;
 import net.sourceforge.ganttproject.fork.ForkI18nKt;
+import net.sourceforge.ganttproject.fork.HomeOfficePanelFx;
 import net.sourceforge.ganttproject.fork.WorkWeekPanelFx;
 import net.sourceforge.ganttproject.gui.resourceproperties.MainPropertiesPanel;
 import net.sourceforge.ganttproject.gui.resourceproperties.ResourceAssignmentsPanelFx;
@@ -67,6 +68,20 @@ public class GanttDialogPerson {
    * working week over time is not, which is why it needed a panel at all.
    */
   private final WorkWeekPanelFx workWeekPanel;
+  /**
+   * [fork change] Where this person works — the home office, as a weekly pattern and as periods.
+   *
+   * A TAB OF ITS OWN, after the working week, and the order of the three is the order of the
+   * questions: the days off say WHETHER the person is there, the working week WHICH days are
+   * theirs, the home office WHERE they are on such a day.
+   *
+   * IT IS EMPHATICALLY NOT PART OF THE DAYS-OFF TAB. Home office is not an absence — the person
+   * works a full day and can simply not be given a task that has to be done on the premises.
+   * Filing it under "days off" would be the one mistake that costs the plan working days that were
+   * actually worked, so the two are kept apart on screen as well as in the model. See
+   * {@link net.sourceforge.ganttproject.fork.HomeOffice}.
+   */
+  private final HomeOfficePanelFx homeOfficePanel;
 
 
   public GanttDialogPerson(HumanResourceManager resourceManager,
@@ -86,6 +101,8 @@ public class GanttDialogPerson {
       myUIFacade.getUndoManager(), person, myUIFacade.getResourceColumnList());
     // [fork change] Its JavaFX controls are built lazily, so this costs nothing off the FX thread.
     workWeekPanel = new WorkWeekPanelFx(person, customPropertyManager);
+    // [fork change] Lazily built controls again, so this costs nothing off the FX thread either.
+    homeOfficePanel = new HomeOfficePanelFx(person, customPropertyManager);
     this.onHide = onHide;
   }
 
@@ -139,6 +156,15 @@ public class GanttDialogPerson {
             tabPane -> {
               tabPane.getTabs().add(
                 new Tab(ForkI18nKt.forkText("fork.column.workWeek"), workWeekPanel.getNode()));
+              return Unit.INSTANCE;
+            },
+            () -> Unit.INSTANCE
+          ),
+          // [fork change] The home office, after the working week — see homeOfficePanel.
+          new PropertiesDialogTabProvider(
+            tabPane -> {
+              tabPane.getTabs().add(
+                new Tab(ForkI18nKt.forkText("fork.homeoffice.ui.tab"), homeOfficePanel.getNode()));
               return Unit.INSTANCE;
             },
             () -> Unit.INSTANCE
@@ -201,6 +227,15 @@ public class GanttDialogPerson {
     // and it is what keeps the Mon-Fr preselection from becoming an entry for every person whose
     // properties anybody ever opened.
     workWeekPanel.save();
+    // [fork change] AFTER the custom columns for the same reason as the working week above: that
+    // tab writes back whatever its text fields held when the dialog opened, and the later write
+    // has to be the one a button press built.
+    //
+    // Writes NOTHING when no button was pressed — separately per half, so entering a period does
+    // not also write an empty weekly pattern. The guarantee lives in HomeOfficePanelFx.save(), and
+    // it is what keeps an untouched person from bringing the two columns into a project that has
+    // none.
+    homeOfficePanel.save();
 
     person.clearDaysOff();
     for (DateInterval interval : myDaysOffModel.getIntervals()) {
