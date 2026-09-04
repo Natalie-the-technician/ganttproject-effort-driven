@@ -24,6 +24,7 @@ import biz.ganttproject.core.chart.render.Style
 import biz.ganttproject.core.chart.render.TaskTexture
 import biz.ganttproject.core.option.*
 import biz.ganttproject.core.time.GanttCalendar
+import biz.ganttproject.customproperty.CustomPropertyHolder
 import biz.ganttproject.createButton
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
@@ -42,6 +43,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.javafx.JavaFx
 import net.sourceforge.ganttproject.action.GPAction
+import net.sourceforge.ganttproject.fork.homeWorkOption
+import net.sourceforge.ganttproject.fork.homeWorkRow
 import net.sourceforge.ganttproject.language.GanttLanguage
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.Task.Priority
@@ -67,6 +70,31 @@ class MainPropertiesPanel(private val task: Task, private val taskView: TaskView
   private val milestoneOption = ObservableBoolean("milestone", task.isMilestone)
   private val taskDatesController = TaskDatesController(task, milestoneOption, coroutineScope)
   private val projectTaskOption = ObservableBoolean("projectTask", task.isProjectTask)
+
+  /**
+   * [fork change] "Can this task be done from home?" -- three states, see `TaskHomeWork.kt`:
+   * nobody has said, can be done from home, needs somebody on site.
+   *
+   * A DROPDOWN AND NOT A CHECKBOX, for two reasons. A checkbox has two states and this has three;
+   * squeezing them in would mean an unticked box standing for both "no" and "nobody asked", which
+   * is exactly the distinction the whole feature exists to keep. And measured in
+   * `PropertySheet.createBooleanOptionEditor`, a checkbox built by this builder never shows its
+   * option's initial value -- it registers a watcher and watchers do not fire on registration --
+   * whereas `createDropdownEditor` ends with `comboBox.value = key2i18n.find { ... }` and does.
+   * A mark that displays as blank however it is stored would be worse than none.
+   *
+   * "not decided yet" STAYS SELECTABLE, although it need not be. It is the only way back from a
+   * misclick without going to the custom columns tab, and choosing it can never restrict anything,
+   * since an undecided task is treated like one that may be done from home. Keeping the way back
+   * open is also what keeps the "nobody ever decided about these" list honest: somebody who
+   * realises they answered the wrong task can put it back.
+   *
+   * It sits on this tab and not next to the assignments, because it is a property of the TASK -- a
+   * site visit stays a site visit whoever is put on it -- while `fork.assignment.blocking` next
+   * door genuinely belongs to one person's assignment.
+   */
+  private val homeWorkOption = homeWorkOption(task, task.manager.customPropertyManager)
+
   private val hasEarliestStart = ObservableBoolean("hasEarliestStart", task.thirdDateConstraint == 1)
   private val earliestStartOption = ObservableDate("earliestBegin",
     if (task.thirdDateConstraint == 1 ) task.third.toLocalDate() else null,
@@ -125,6 +153,11 @@ class MainPropertiesPanel(private val task: Task, private val taskView: TaskView
       } else if (task.canBeMilestone()) {
         checkbox(milestoneOption)
       }
+      // [fork change] The mark for home working, among the other plain facts about the task. The
+      // row itself is built in `TaskHomeWorkRow.kt` -- see the note there for why it does not
+      // stand here: this panel cannot be built in the test JVM, and a test that rebuilt the row
+      // instead of running it would be worth nothing.
+      homeWorkRow(homeWorkOption)
 
       skip()
       dropdown(taskDatesController.schedulingOptions)
@@ -258,6 +291,23 @@ class MainPropertiesPanel(private val task: Task, private val taskView: TaskView
       taskMutator.setShape(value.paint)
     }
   }
+
+  /**
+   * [fork change] Writes the mark into the holder that the properties dialog is about to commit.
+   *
+   * NOT into `task.customValues`, and not from [save]. `TaskPropertiesController.save` calls
+   * `customPropertiesPanel.save {}` AFTER this panel's [save], and that block commits the copy of
+   * the values taken when the dialog was opened -- a write straight to the task would be quietly
+   * overwritten a moment later. The same trap the effort fields fell into; the note above their
+   * `applyEffort` records it. So this method joins the `fields` list that
+   * `applyEffortFieldsThenSyncColumns` runs against the right holder, in the right order.
+   *
+   * What it writes -- and that an unticked box CLEARS instead of writing `false` -- is decided in
+   * the fork function it delegates to, where it can be measured without a screen.
+   */
+  fun applyHomeWorkMark(holder: CustomPropertyHolder) =
+    net.sourceforge.ganttproject.fork.applyHomeWorkMark(
+      holder, task.manager.customPropertyManager, homeWorkOption.value)
 
   fun requestFocus() = onRequestFocus()
 }

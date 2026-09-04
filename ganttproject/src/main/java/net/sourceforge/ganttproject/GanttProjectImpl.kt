@@ -55,6 +55,7 @@ import net.sourceforge.ganttproject.fork.findOrCreateOriginalEffort
 import net.sourceforge.ganttproject.fork.findOrCreateRecurrence
 import net.sourceforge.ganttproject.fork.findOrCreateRecurrenceOf
 import net.sourceforge.ganttproject.fork.findOrCreateUtilisation
+import net.sourceforge.ganttproject.fork.findOrCreateOnSiteOnly
 import net.sourceforge.ganttproject.fork.findOrCreateWaitOnly
 import net.sourceforge.ganttproject.fork.findOrCreateWorkWeek
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
@@ -159,6 +160,10 @@ open class GanttProjectImpl(
     findOrCreateRecurrenceOf(vorgaenge)
     findOrCreateDeadline(vorgaenge)
     findOrCreateWaitOnly(vorgaenge)
+    // [fork change] "On site only" -- the task mark for home working. Listed here for the reason
+    // the comment above gives: a column nobody can see is a column nobody can fill in. The mark
+    // itself stays harmless when it exists and holds nothing, see TaskOnSiteOnly.kt.
+    findOrCreateOnSiteOnly(vorgaenge)
     findOrCreateDateFixed(vorgaenge)
     findOrCreateOriginalEffort(vorgaenge)
   }
