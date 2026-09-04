@@ -391,7 +391,10 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         getProjectDatabase(),
         getUndoManager(),
         (isProblem, message) -> { recurrenceMessages.show(isProblem, message); return Unit.INSTANCE; },
-        askBeforeWriting));
+        askBeforeWriting,
+        // [fork change] Where the working weeks are stored: a recurring date now moves on the day
+        // grid of the people on the series, not on the project calendar alone.
+        getResourceCustomPropertyManager()));
 
     HelpMenu helpMenu = new HelpMenu(getProject(), getUIFacade(), getProjectUIFacade());
     bar.add(mHuman);

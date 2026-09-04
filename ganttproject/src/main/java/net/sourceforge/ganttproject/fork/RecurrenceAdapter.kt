@@ -147,9 +147,22 @@ data class RecurrencePlan(
  */
 fun planRecurrences(
   taskManager: TaskManager,
-  taskProperties: CustomPropertyManager
+  taskProperties: CustomPropertyManager,
+  /**
+   * [fork change] The resource properties, so that the dates can be moved on the day grid of the
+   * people on the series rather than on the project calendar alone -- see [WorkWeekWorkingDays].
+   *
+   * OPTIONAL AND LAST, so that every existing positional call keeps compiling and keeps the
+   * behaviour it had; the same shape [applyLevellingAsSingleEdit] uses for the same reason.
+   * Without it the project calendar decides for every series, which is what this function did
+   * until 04.09.2026.
+   */
+  resourceProperties: CustomPropertyManager? = null
 ): RecurrencePlan {
-  val isWorkingDay = workingDayTest(taskManager.calendar)
+  // The project calendar alone -- the answer for a series whose people have entered nothing, and
+  // the whole answer when no resource properties are to hand.
+  val projectOnly = workingDayTest(taskManager.calendar)
+  val workingDays = resourceProperties?.let { WorkWeekWorkingDays(taskManager.calendar, it) }
   val vorhanden = taskManager.tasks.mapNotNull { it.recurrenceOf(taskProperties) }.toSet()
 
   val geplant = mutableListOf<PlannedOccurrence>()
@@ -165,6 +178,11 @@ fun planRecurrences(
       return@forEach
     }
     val start = task.start?.time?.toModelLocalDate() ?: return@forEach
+    // [fork change] THE GRID OF THIS SERIES, not one grid for all of them. A date that falls on a
+    // non-working day moves forward to the next working day, and which day that is depends on the
+    // people on the series: a Saturday is the next working day for somebody who works Saturdays
+    // and is not one for anybody else.
+    val isWorkingDay = workingDays?.forTask(task) ?: projectOnly
     val termine = occurrences(gelesen.rule, start, isWorkingDay)
     if (isTruncated(gelesen.rule, start, isWorkingDay)) {
       truncated.add(task.name ?: task.taskID.toString())
