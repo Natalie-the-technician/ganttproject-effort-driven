@@ -159,7 +159,7 @@ class WorkWeekPanelFx @JvmOverloads constructor(
 
   /** What the last press did, or why it was refused. Never a dialog: the tab stays where it is. */
   val messageLabel: Label by lazy {
-    Label(if (stored.hasErrors) unreadableMessage() else "").apply { isWrapText = true }
+    Label(if (stored.hasErrors) unreadableMessage() else "").apply { prose() }
   }
 
   /**
@@ -169,7 +169,7 @@ class WorkWeekPanelFx @JvmOverloads constructor(
    * express. A section that starts in the future would otherwise be invisible here, and somebody
    * would enter a week over the top of it and wonder why it does not hold.
    */
-  val summaryLabel: Label by lazy { Label(summaryText()).apply { isWrapText = true } }
+  val summaryLabel: Label by lazy { Label(summaryText()).apply { prose() } }
 
   val applyFromTodayButton: Button by lazy {
     Button(forkText("fork.workweek.ui.applyNow")).apply {
@@ -193,7 +193,7 @@ class WorkWeekPanelFx @JvmOverloads constructor(
     stylesheets.add("/biz/ganttproject/task/TaskPropertiesDialog.css")
     stylesheets.add("/biz/ganttproject/app/buttons.css")
     styleClass.add("tab-contents")
-    children.add(Label(forkText("fork.workweek.ui.intro")).apply { isWrapText = true })
+    children.add(Label(forkText("fork.workweek.ui.intro")).apply { prose() })
     children.add(VBox(4.0).apply { children.addAll(dayBoxes) })
     children.add(HBox(8.0).apply { children.addAll(applyFromTodayButton, applyFromDateButton) })
     children.add(summaryLabel)
@@ -240,6 +240,25 @@ class WorkWeekPanelFx @JvmOverloads constructor(
     refreshSummary()
   }
 
+  /**
+   * A running text of this tab: wraps, and at a WIDTH OF ITS OWN rather than at the width of the
+   * dialog.
+   *
+   * MEASURED ON SCREEN, 04.09.2026, before this was here: the person dialog comes up about 1080 px
+   * wide — the General tab's full-width fields set that — and the container's screen is 1024x768,
+   * so the dialog is already wider than the screen and its Ok button sits outside it. `isWrapText`
+   * alone therefore wrapped at a width nobody could see, and the first line of the explanation ran
+   * off the right edge mid-sentence. A cap makes the text wrap where it is still readable, whatever
+   * the dialog does; it is a maximum, so a narrower dialog is unaffected.
+   *
+   * It does NOT repair the dialog being wider than the screen. That is not this package's and is
+   * written up in the report.
+   */
+  private fun Label.prose() {
+    isWrapText = true
+    maxWidth = PROSE_WIDTH
+  }
+
   private fun unreadableMessage(): String =
     forkText("fork.workweek.ui.error.unreadable", stored.errors.joinToString(" "))
 
@@ -270,6 +289,9 @@ class WorkWeekPanelFx @JvmOverloads constructor(
      * MEANS. See the class comment; this is the one constant of this file that could be misread as
      * a default value, and it is not one.
      */
+    /** How wide a line of explanation in this tab may become. See [prose]. */
+    private const val PROSE_WIDTH = 640.0
+
     val PRESELECTED: Set<DayOfWeek> = setOf(
       DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
   }
