@@ -32,6 +32,8 @@ import biz.ganttproject.core.time.TimeUnit;
 import biz.ganttproject.customproperty.CustomPropertyManager;
 import com.google.common.collect.ImmutableList;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
+import net.sourceforge.ganttproject.fork.AbsenceRun;
+import net.sourceforge.ganttproject.fork.AbsenceStripeKt;
 import net.sourceforge.ganttproject.fork.ChartComparison;
 import net.sourceforge.ganttproject.fork.ChartComparisonKt;
 import net.sourceforge.ganttproject.fork.LevellingAdapterKt;
@@ -161,6 +163,25 @@ public class TaskRendererImpl2 extends ChartRendererBase {
       Task task = myModel.getTaskManager().getTask(rowId);
       return task == null ? null
         : EffortDrivenDurationAlgorithmKt.actualEffortHours(task, myModel.getTaskManager().getCustomPropertyManager());
+    }
+
+    /**
+     * [Fork change] Whose holidays fall into this task, for the stripe on its bar.
+     *
+     * THIS IS THE STEP THAT WAS MISSING. A task bar knew nothing about its assignments -- the
+     * whole renderer did not mention them once -- because ITaskSceneTask is deliberately a
+     * drawing-only view of a task. The real task, and with it its assignments and their people, is
+     * reachable exactly here, in the same place and by the same means as the two effort numbers
+     * above, so this is the shortest cut into foreign territory the fork can make: the scene
+     * builder learns a list of day ranges and still knows nothing about resources.
+     *
+     * A task that no longer exists yields an empty list -- no stripe, rather than a failure while
+     * painting.
+     */
+    @Override
+    public List<AbsenceRun> getAbsenceRuns(int rowId) {
+      Task task = myModel.getTaskManager().getTask(rowId);
+      return task == null ? Collections.emptyList() : AbsenceStripeKt.absenceRuns(task);
     }
 
     @Override

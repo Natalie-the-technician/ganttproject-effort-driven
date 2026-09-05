@@ -225,6 +225,15 @@ public class ChartUIConfiguration {
     return myProjectConfig.getHomeWorkColor();
   }
 
+  /**
+   * [fork change] The colour of the absence stripe on a task bar. Read from the project
+   * configuration on every call, exactly as {@link #getDayOffColor()} is, so that a change in the
+   * settings reaches the next repaint.
+   */
+  public Color getAbsenceColor() {
+    return myProjectConfig.getAbsenceColor();
+  }
+
   public int getYOffSet() {
     return myYOffset;
   }

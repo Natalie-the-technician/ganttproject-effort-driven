@@ -81,6 +81,36 @@ public class UIConfiguration {
    */
   private Color myHomeWorkColor;
 
+  /**
+   * [fork change] Colour of the ABSENCE STRIPE laid over a task bar in the Gantt chart.
+
+   * A THIRD FIELD, beside the day-off colour and the home-working one, and it is not any of them.
+   * The day-off colour paints a BAND OF ITS OWN on the white ground of the resource chart and is
+   * chosen to be readable there; this stripe is painted ONTO A TASK BAR, so it is measured against
+   * the bar rather than against the background, and the two requirements pull in opposite
+   * directions -- the pale yellow that reads well on white all but disappears on #8CB6CE.
+   *
+   * The default is measured, not picked. Greyscale brightness (0.299 R + 0.587 G + 0.114 B) of
+   * everything the stripe can end up next to:
+   *
+   *     task bar, default colour  #8CB6CE  172
+   *     progress bar              #000000    0   (drawn over the stripe, layer 0)
+   *     chart background          #FFFFFF  255
+   *     weekend column            #EEEEEE  238
+   *     home-working band         #5F3CAF   84   (the other fork band, resource chart)
+   *     ABSENCE STRIPE            #E65A1E  125
+   *
+   * 125 is 47 steps from the bar it lies on, 41 from the home-working band, 125 from the progress
+   * bar and 130 from the background -- at least 40 from every one of them, which is the step this
+   * fork has been using since B4 as „still there after a projector and a photocopier". The band
+   * [124, 132] is the ONLY one that clears 40 against both the bar and the home-working violet at
+   * once; that is why the colour is an orange and not a darker red.
+   *
+   * The hatching is drawn in this colour too and OPAQUE, so no alpha arithmetic weakens the number
+   * above. See `StyledPainterImpl`.
+   */
+  private Color myAbsenceColor;
+
   private boolean isRedlineOn;
 
   private boolean isCriticalPathOn;
@@ -126,6 +156,8 @@ public class UIConfiguration {
     myDayOffColor = new Color(0.9f, 1f, 0.17f);
     // [fork change] B4. See the field comment for how this value was arrived at.
     myHomeWorkColor = new Color(95, 60, 175);
+    // [fork change] The absence stripe. See the field comment for the measurement.
+    myAbsenceColor = new Color(230, 90, 30);
     myWeekendAlphaRenderingOption = new AlphaRenderingOption();
     myAppFontSize = new Supplier<Integer>() {
       @Override
@@ -213,6 +245,16 @@ public class UIConfiguration {
   /** [fork change] B4 -- the colour of the home-working band. */
   public void setHomeWorkColor(Color homeWorkColor) {
     this.myHomeWorkColor = homeWorkColor;
+  }
+
+  /** [fork change] The colour of the absence stripe on a task bar. */
+  public Color getAbsenceColor() {
+    return myAbsenceColor;
+  }
+
+  /** [fork change] The colour of the absence stripe on a task bar. */
+  public void setAbsenceColor(Color absenceColor) {
+    this.myAbsenceColor = absenceColor;
   }
 
   public boolean isRedlineOn() {

@@ -168,7 +168,10 @@ class TaskResourcesPanelTest {
 
       // Pins the layout the indices below rely on. A reordered table trips here with a readable
       // message instead of failing somewhere deep inside the assertions.
-      assertEquals(8, columns.size, "the table no longer has the expected number of columns")
+      // [fork change] NINE since 05.09.2026: the absence column of the holiday-stripe package
+      // was added at the end. The number is pinned on purpose -- it is what makes a column
+      // silently appearing or vanishing a red check rather than a surprise.
+      assertEquals(9, columns.size, "the table no longer has the expected number of columns")
       assertEquals(forkText("fork.assignment.blocking"), columns[BLOCKING_COLUMN].text,
         "column $BLOCKING_COLUMN is no longer the blocking axis")
       assertEquals(forkText("fork.assignment.noEffort"), columns[NO_EFFORT_COLUMN].text,

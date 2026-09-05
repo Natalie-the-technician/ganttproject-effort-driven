@@ -9,6 +9,7 @@ import biz.ganttproject.core.chart.canvas.Canvas;
 import biz.ganttproject.core.chart.scene.IdentifiableRow;
 import biz.ganttproject.core.chart.scene.SceneBuilder;
 import biz.ganttproject.core.option.ColorOption;
+import biz.ganttproject.core.option.DefaultColorOption;
 import biz.ganttproject.core.option.GPOption;
 import biz.ganttproject.core.option.GPOptionGroup;
 import biz.ganttproject.core.time.TimeUnitStack;
@@ -51,6 +52,18 @@ public class ChartModelImpl extends ChartModelBase {
 
   private final GPOptionGroup myTaskDefaultsOptions;
 
+  /**
+   * [Fork change] The colour of the absence stripe laid over a task bar.
+   *
+   * ADJUSTABLE ON PURPOSE and not a constant in the painter, for the reason B4 gives for the
+   * home-working colour: the default was chosen by measuring brightness distance (see
+   * {@link net.sourceforge.ganttproject.gui.UIConfiguration}), but the person who reads this chart
+   * every day is the one who knows whether it holds up on their screen and against the colours
+   * they have given their own tasks. The hatching follows whatever colour is chosen, so the second,
+   * colour-free cue survives the change.
+   */
+  private final ColorOption myAbsenceColorOption;
+
   private Set<Task> myHiddenTasks;
 
   private List<GanttPreviousStateTask> myBaseline;
@@ -69,9 +82,22 @@ public class ChartModelImpl extends ChartModelBase {
     getRenderers().add(myTaskRendererImpl);
 
     myTaskDefaultColorOption = taskManager.getTaskDefaultColorOption();
+    // [Fork change] See the field comment. Built exactly like the resource chart's day-off and
+    // home-working colours in ChartModelResource, including the lock/set/commit dance that gives
+    // an option its initial value without counting as a user change.
+    myAbsenceColorOption = new DefaultColorOption("ganttChartDefaults.absenceColor") {
+      @Override
+      public void commit() {
+        super.commit();
+        projectConfig.setAbsenceColor(getValue());
+      }
+    };
+    myAbsenceColorOption.lock();
+    myAbsenceColorOption.setValue(projectConfig.getAbsenceColor());
+    myAbsenceColorOption.commit();
     myTaskDefaultsOptions = new GPOptionGroup("ganttChartDefaults",
         new GPOption[] { taskManager.getTaskNamePrefixOption(), taskManager.getTaskCopyNamePrefixOption(), myTaskDefaultColorOption,
-            getTaskManager().getDependencyHardnessOption() });
+            myAbsenceColorOption, getTaskManager().getDependencyHardnessOption() });
     myTaskDefaultsOptions.setI18Nkey(
         new OptionsPageBuilder.I18N().getCanonicalOptionLabelKey(getTaskManager().getDependencyHardnessOption()),
         "hardness");
@@ -218,6 +244,11 @@ public class ChartModelImpl extends ChartModelBase {
 
   public ColorOption getTaskDefaultColorOption() {
     return myTaskDefaultColorOption;
+  }
+
+  /** [Fork change] The colour of the absence stripe on a task bar. */
+  public ColorOption getAbsenceColorOption() {
+    return myAbsenceColorOption;
   }
 
   public GPOptionGroup getTaskLabelOptions() {
