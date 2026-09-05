@@ -670,6 +670,24 @@ private fun workingDays(
 }
 
 /**
+ * [fork change] The day a task laid on [start] for [count] working days is FINISHED on -- the last
+ * of those days, inclusive.
+ *
+ * IT DELEGATES TO [workingDays] RATHER THAN COUNTING, and that is the whole reason it exists. A
+ * caller outside this file holds a [LevelResult] -- starts and durations -- and wants an end out of
+ * it; the obvious way is to walk the grid and count, which is a second copy of the arithmetic
+ * above. The two would agree until the day they did not, and the day they did not would be the day
+ * somebody was shown a project end the levelling never computed. There is one walk, and this is a
+ * name for its last step.
+ *
+ * ON THE GRID OF THE TASK, which is why [isWorkingDay] is a parameter and not the project calendar:
+ * since 04.09.2026 the duration and the window are both computed per task, and an end computed on
+ * anything else would not match either.
+ */
+fun lastWorkingDay(start: LocalDate, count: Int, isWorkingDay: (LocalDate) -> Boolean): LocalDate =
+  workingDays(start, count, isWorkingDay).last()
+
+/**
  * What the window search found, and how it ended.
  *
  * A TYPE OF ITS OWN INSTEAD OF THE BARE LIST OF DAYS that stood here before, and the reason is

@@ -80,6 +80,49 @@ private fun List<Pair<LocalDate, LocalDate>>.covers(day: LocalDate): Boolean =
   this.any { (from, toExclusive) -> !day.isBefore(from) && day.isBefore(toExclusive) }
 
 /**
+ * [fork change] How the calculation is to SEE somebody's days off -- which need not be what the
+ * model holds.
+ *
+ * WHY THIS EXISTS AT ALL. A preview has to answer „what would THIS holiday do", and that is a
+ * question about a state the plan is not in. There are two ways to ask it: write the holiday into
+ * the model, compute, write it back -- or hand the calculation a different answer to the one
+ * question it asks. This is the second, and the choice is not a matter of taste. The first one is
+ * one thrown exception away from leaving somebody's holidays in the plan changed, and the check
+ * that would notice is exactly the check that four attempts at this preview have got wrong. A
+ * calculation that cannot write cannot leave anything behind.
+ *
+ * IT IS THE ONE READER, AND THAT IS WHAT MAKES IT SUFFICIENT. [HumanResource.daysOffRanges] feeds
+ * three consumers with three meanings -- `Share.daysOff` (the hours go), [EffortInputs.blockingDaysOff]
+ * (the whole day is dead) and `LevellingAdapter.availabilityTest` (the window search) -- and all
+ * three reach it through this interface once the callers pass one on. A preview that overlaid only
+ * the window search would move the task and not lengthen it: right in the small and wrong in the
+ * answer.
+ *
+ * THE DEFAULT IS [daysOffAsEntered] EVERYWHERE, so every call site written before this type keeps
+ * its behaviour and its shape. That is deliberate and it has the usual price: leaving the argument
+ * out compiles. The place where that would be silent is the preview itself, and
+ * `VacationPreviewNoChangeTest` drives it rather than the functions below.
+ */
+fun interface DaysOffView {
+  fun rangesOf(resource: HumanResource): List<Pair<LocalDate, LocalDate>>
+}
+
+/** The days off as they stand in the plan -- what every reader did before [DaysOffView] existed. */
+val daysOffAsEntered = DaysOffView { it.daysOffRanges() }
+
+/**
+ * [ranges] instead of what [resource] carries; everybody else exactly as entered.
+ *
+ * BY OBJECT IDENTITY AND NOT BY ID, and that is not fussiness: a person the dialog has just created
+ * still carries the id -1 (`GanttDialogPerson.okButtonActionPerformed` says so in as many words),
+ * so two fresh people would compare equal. The instance is the same one throughout -- the resource
+ * manager hands out what it stores -- so identity is both correct and cheaper.
+ */
+fun daysOffReplacedFor(
+  resource: HumanResource, ranges: List<Pair<LocalDate, LocalDate>>
+): DaysOffView = DaysOffView { if (it === resource) ranges else it.daysOffRanges() }
+
+/**
  * One assignment, prepared for the day-by-day walk.
  *
  * [fork change] INTERNAL RATHER THAN PRIVATE since 03.09.2026, and that is not a loosening for
@@ -196,7 +239,13 @@ internal class EffortInputs(
  */
 internal fun Task.effortInputs(
   taskProperties: CustomPropertyManager,
-  resourceProperties: CustomPropertyManager
+  resourceProperties: CustomPropertyManager,
+  /**
+   * [fork change] Where the days off are read from. The default is the plan itself; a preview
+   * hands in a different answer for one person. See [DaysOffView] for why this is threaded through
+   * rather than written into the model and taken out again.
+   */
+  daysOff: DaysOffView = daysOffAsEntered
 ): EffortInputs {
   // [fork change] B3, CONDITION (a), AND IT IS READ FIRST. Whether this task needs somebody on the
   // premises is a property OF THE TASK, and it decides whether any home office is looked at at
@@ -231,7 +280,7 @@ internal fun Task.effortInputs(
   val blockingDaysOff: List<Pair<LocalDate, LocalDate>> = this.assignments
     .filter { it.isBlocking }
     .mapNotNull { it.resource as? HumanResource }
-    .flatMap { it.daysOffRanges() }
+    .flatMap { daysOff.rangesOf(it) }
   // [fork change] B3, AXIS A's SECOND HALF: the home office of the same people, off the same
   // UNFILTERED assignment list and for the same reason as the line above it.
   //
@@ -265,7 +314,7 @@ internal fun Task.effortInputs(
       Share(
         resource.capacitySchedule(resourceProperties).schedule,
         assignment.load / 100.0,
-        resource.daysOffRanges(),
+        daysOff.rangesOf(resource),
         // [fork change] E1, and the condition is the whole of it: a person at home delivers no
         // hours TO A TASK THAT NEEDS SOMEBODY ON SITE. Handing the home office in unconditionally
         // would make every home-office day a holiday for every task -- the mistake this package
@@ -362,16 +411,21 @@ internal fun daysNeededWithDaysOff(
  * Returns `null` as well when the effort cannot be worked off within [CapacitySchedule.MAX_DAYS]
  * working days — an empty plan is a better answer than an arbitrary number.
  */
+// [fork change] @JvmOverloads because TaskManagerImpl.java calls this and Java does not see Kotlin
+// default arguments -- without it, adding the optional parameter below would break that call site.
+@JvmOverloads
 fun Task.durationDaysWithDaysOff(
   taskProperties: CustomPropertyManager,
   resourceProperties: CustomPropertyManager,
   start: LocalDate,
   isWorkingDay: (LocalDate) -> Boolean,
+  /** [fork change] See [DaysOffView]. Last and optional, so every existing call site is untouched. */
+  daysOff: DaysOffView = daysOffAsEntered,
 ): Int? {
   val effort = this.effortHours(taskProperties) ?: return null
   if (effort <= 0.0) {
     return 1
   }
   return daysNeededWithDaysOff(
-    effort, this.effortInputs(taskProperties, resourceProperties), start, isWorkingDay)
+    effort, this.effortInputs(taskProperties, resourceProperties, daysOff), start, isWorkingDay)
 }

@@ -343,9 +343,21 @@ fun workingDaysPerTask(
  * The interval end is EXCLUSIVE. That is not decided here -- [daysOffRanges] reads the model, and
  * the reasoning, together with the five places it was measured at, is in `DaysOffDuration.kt`.
  */
-fun availabilityTest(resourceManager: HumanResourceManager): (String, LocalDate) -> Boolean {
+fun availabilityTest(
+  resourceManager: HumanResourceManager,
+  /**
+   * [fork change] Where the days off are read from. The default is the plan itself; a preview hands
+   * in a different answer for one person, so that „what would this holiday do" can be asked without
+   * the model ever holding it. See [DaysOffView].
+   *
+   * IT CHANGES NOTHING ABOUT THE SNAPSHOT BELOW. The map is still built once per run and still
+   * frozen for that run's lifetime -- the view is asked here, at the same moment
+   * `daysOffRanges` used to be, and never again.
+   */
+  view: DaysOffView = daysOffAsEntered
+): (String, LocalDate) -> Boolean {
   val daysOff: Map<String, List<Pair<LocalDate, LocalDate>>> = resourceManager.resources
-    .associate { it.id.toString() to it.daysOffRanges() }
+    .associate { it.id.toString() to view.rangesOf(it) }
     .filterValues { it.isNotEmpty() }
   if (daysOff.isEmpty()) {
     // Nobody has anything entered -- then no lookup has to take place at all.
@@ -628,7 +640,15 @@ private class DurationInputs(
 fun durationAtStart(
   taskManager: TaskManager,
   taskProperties: CustomPropertyManager,
-  resourceProperties: CustomPropertyManager
+  resourceProperties: CustomPropertyManager,
+  /**
+   * [fork change] Where the days off are read from -- see [DaysOffView], and see
+   * `availabilityTest` beside it. THE TWO HAVE TO BE HANDED THE SAME VIEW: this one decides how
+   * LONG a task takes when somebody is away, that one decides WHERE it may lie. A preview that
+   * overlaid only one of them would move a task without lengthening it, which is a plausible wrong
+   * answer rather than a visible fault.
+   */
+  daysOff: DaysOffView = daysOffAsEntered
 ): (LevelTask, LocalDate) -> Int {
   // [fork change] PER TASK, not one test for everybody -- see [WorkWeekWorkingDays].
   val workingDays = WorkWeekWorkingDays(taskManager.calendar, resourceProperties)
@@ -653,7 +673,7 @@ fun durationAtStart(
         val schedule = it.capacitySchedule(resourceProperties)
         DurationInputs(
           effort = it.effortHours(taskProperties),
-          effortInputs = it.effortInputs(taskProperties, resourceProperties),
+          effortInputs = it.effortInputs(taskProperties, resourceProperties, daysOff),
           isWorkingDay = remembered.remembering(workingDays.forTask(it)),
           scheduleHasErrors = schedule.hasErrors,
           scheduleIsConstant = schedule.schedule.isConstant,

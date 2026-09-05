@@ -25,9 +25,13 @@ import javafx.scene.control.Tab;
 import kotlin.Unit;
 import net.sourceforge.ganttproject.action.CancelAction;
 import net.sourceforge.ganttproject.action.OkAction;
+import net.sourceforge.ganttproject.fork.DaysOffDurationKt;
 import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.fork.HomeOfficePanelFx;
+import net.sourceforge.ganttproject.fork.VacationPreview;
+import net.sourceforge.ganttproject.fork.VacationPreviewKt;
 import net.sourceforge.ganttproject.fork.WorkWeekPanelFx;
+import net.sourceforge.ganttproject.gui.NotificationChannel;
 import net.sourceforge.ganttproject.gui.resourceproperties.MainPropertiesPanel;
 import net.sourceforge.ganttproject.gui.resourceproperties.ResourceAssignmentsPanelFx;
 import net.sourceforge.ganttproject.gui.taskproperties.CustomColumnsPanel;
@@ -37,14 +41,25 @@ import net.sourceforge.ganttproject.resource.HumanResourceManager;
 import net.sourceforge.ganttproject.storage.ProjectDatabase;
 import net.sourceforge.ganttproject.task.TaskManager;
 
+import kotlin.Pair;
+
 import javax.swing.*;
 import java.awt.event.ActionEvent;
+import java.time.LocalDate;
+import java.util.List;
 
 public class GanttDialogPerson {
   private static final GanttLanguage language = GanttLanguage.getInstance();
 
   private final TaskManager myTaskManager;
   private final HumanResourceManager myResourceManager;
+  /**
+   * [fork change] KEPT IN A FIELD since the absence preview, where it was only ever handed to the
+   * panels before. The preview needs it for the same reason levelling does: the hours per day, the
+   * utilisation and the working weeks all hang off the resource columns, and a forecast computed
+   * without them is a forecast about somebody else.
+   */
+  private final CustomPropertyManager myResourceProperties;
   private final HumanResource person;
 
 
@@ -93,6 +108,7 @@ public class GanttDialogPerson {
                            Runnable onHide
                            ) {
     myResourceManager = resourceManager;
+    myResourceProperties = customPropertyManager;
     myTaskManager = taskManager;
     myUIFacade = uiFacade;
     this.person = person;
@@ -198,6 +214,11 @@ public class GanttDialogPerson {
   }
 
   private void okButtonActionPerformed() {
+    // [fork change] READ BEFORE ANYTHING IS WRITTEN. The forecast below compares the plan with
+    // this person's absences against the plan without them, and by the time applyChanges() has run
+    // the old state is gone. The list daysOffRanges builds is a fresh one, so it survives the
+    // write below unchanged.
+    List<Pair<LocalDate, LocalDate>> absencesBefore = DaysOffDurationKt.daysOffRanges(person);
     if (person.getId() != -1) {
       // person ID is -1 when it is new one
       // i.e. before the Person dialog is closed
@@ -209,6 +230,96 @@ public class GanttDialogPerson {
 //        myUIFacade.getResourceTree().setSelected(person, true);
         myUIFacade.getViewManager().getView(String.valueOf(UIFacade.RESOURCES_INDEX)).setActive(true);
       });
+    }
+    previewWhatTheAbsenceCosts(absencesBefore);
+  }
+
+  /**
+   * [fork change] WHAT THIS PERSON'S ABSENCE COSTS THE PLAN — said AFTER the Ok, as a report.
+   *
+   * ═══ WHY AFTER AND NOT BEFORE ═══
+   *
+   * The measurement of 05.09.2026 left this open on purpose and asked for a recommendation. It is
+   * this one, and the reasons are three:
+   *
+   * <p>ENTERING AN ABSENCE MOVES NOTHING. Not one date in the plan changes when a holiday is
+   * saved; the dates move when the workload is levelled, and THAT menu item already asks before it
+   * writes, with a preview of its own. A "do you really want this?" here would be asking consent
+   * for something that is not happening. What is wanted at this moment is a forecast, and a
+   * forecast is a report.
+   *
+   * <p>OK WRITES MUCH MORE THAN THE ABSENCE. The name, the custom columns, the working week, the
+   * home office and the assignments all go into ONE undo step together with the days off. A yes/no
+   * that can only answer for the whole step would throw away edits that have nothing to do with
+   * the holiday — and it would do it with the dialog already gone: {@code onHide.run()} has run
+   * before this method is reached, so there would be nothing left to correct in.
+   *
+   * <p>AND IT IS REVERSIBLE ANYWAY. The write above is one undoable edit. Ctrl-Z is the "no", and
+   * it is a better one than a question, because it can be pressed after reading rather than before.
+   *
+   * <p>Natalie can still turn this round: what would have to change is the order of the two calls
+   * in {@link #okButtonActionPerformed} plus a question dialog in place of the report, and the
+   * measuring in {@code VacationPreview.kt} would not be touched at all. The cost is not what
+   * decides it either way — the two levelling runs together were measured at about 110 ms on a plan
+   * of 236 leaves, which is not perceptible in a dialog.
+   *
+   * <p>ON THIS THREAD, DELIBERATELY. It reads the task model, and the task model belongs to the
+   * event thread; handing the calculation to a background thread to save a tenth of a second would
+   * buy a data race with the chart.
+   *
+   * <p>NOTHING AT ALL WHEN THE ABSENCES DID NOT CHANGE. Somebody who opened this dialog to correct
+   * a name gets no box. That is what keeps the report from becoming the thing everybody clicks away
+   * without reading.
+   */
+  private void previewWhatTheAbsenceCosts(List<Pair<LocalDate, LocalDate>> absencesBefore) {
+    List<Pair<LocalDate, LocalDate>> absencesNow = DaysOffDurationKt.daysOffRanges(person);
+    if (absencesBefore.equals(absencesNow)) {
+      return;
+    }
+    VacationPreview preview = VacationPreviewKt.vacationPreview(
+        myTaskManager,
+        myResourceManager,
+        // The same object GanttProject hands the levelling; see GanttProjectBase.getTaskCustomColumnManager.
+        myTaskManager.getCustomPropertyManager(),
+        myResourceProperties,
+        // BEFORE is the state WITHOUT the absences that were just entered, and it is the
+        // hypothetical one. That direction is chosen: everything else this dialog wrote — the
+        // working week, the home office — is then in BOTH runs, so the only difference between
+        // them is the absence itself.
+        DaysOffDurationKt.daysOffReplacedFor(person, absencesBefore),
+        DaysOffDurationKt.getDaysOffAsEntered(),
+        LocalDate.now());
+    if (preview == null) {
+      // No forecast can be made: nothing to level, a cycle in the dependencies, or an unreadable
+      // hours schedule. The levelling menu item reports all three properly and names the remedy; a
+      // resource dialog is the wrong place to teach about dependency cycles.
+      return;
+    }
+    String message = VacationPreviewKt.previewText(preview);
+    if (preview.getChangesNothing()) {
+      // THE QUIET CASE GETS THE QUIET CHANNEL. An absence that costs nothing is the most frequent
+      // one — on one measured shape seventeen of nineteen positions of the holiday — and a modal
+      // box saying "nothing happens" is exactly how a preview becomes the thing people learn to
+      // dismiss. The sentence is still said; it is said where a reassurance belongs.
+      //
+      // The notification is built here rather than through showNotificationDialog for the reason
+      // GanttProject.java records at its own message sink: that call embeds the text in templates
+      // the RSS channel does not have, and would swallow the message.
+      NotificationManager manager = myUIFacade.getNotificationManager();
+      manager.addNotifications(List.of(manager.createNotification(
+          NotificationChannel.RSS,
+          ForkI18nKt.forkText("fork.vacation.preview.head"),
+          "<p>" + message.replace("\n", "<br>") + "</p>",
+          null)));
+    } else {
+      // A WINDOW AND NOT A NOTIFICATION when there IS something to read. Measured on screen for the
+      // estimating-quality report and written up at its call site in GanttProject.java: a
+      // multi-line report in the notification area is practically invisible — on the first run it
+      // was not found at all.
+      myUIFacade.showOptionDialog(
+          JOptionPane.INFORMATION_MESSAGE,
+          message,
+          new Action[] {OkAction.create("ok", () -> Unit.INSTANCE)});
     }
   }
 
