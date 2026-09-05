@@ -56,6 +56,31 @@ public class UIConfiguration {
   /** Color used for days off (and holidays) */
   private Color myDayOffColor;
 
+  /**
+   * [fork change] B4 -- colour of the home-working band in the resource chart.
+   *
+   * A FIELD OF ITS OWN BESIDE {@link #myDayOffColor} AND NOT DERIVED FROM IT. Whoever later wants
+   * the two to be told apart has to be able to move one without the other; a shade computed from
+   * the day-off colour would follow it wherever the user drags that one, and the day the user
+   * picks a violet for their holidays the home office would become invisible.
+   *
+   * The default is measured rather than picked by eye, against the four colours a resource-chart
+   * row can already show. Greyscale brightness (0.299 R + 0.587 G + 0.114 B), as painted:
+   *
+   *     ordinary working day  #FFFFFF  255   (the chart background)
+   *     weekend column        #EEEEEE  238   (chart.properties, calendar.weekend)
+   *     public holiday column #EEDDEE  228   (chart.properties, calendar.holiday)
+   *     holiday band          #F5FFAC  243   (this colour at alpha 100 over white)
+   *     load bar              #8CB6CE  172
+   *     HOME-WORKING BAND     #947DCA  141   (the colour below at alpha 170 over white)
+   *
+   * 141 is 102 brightness steps from the holiday band and 114 from an empty working day, so the
+   * three are told apart on a black-and-white printout and by somebody who does not see the hue at
+   * all. That was the point of measuring: everything the chart shows today sits between 172 and
+   * 255, and a further light tint would have been a fifth pale shade among four.
+   */
+  private Color myHomeWorkColor;
+
   private boolean isRedlineOn;
 
   private boolean isCriticalPathOn;
@@ -99,6 +124,8 @@ public class UIConfiguration {
     myPreviousTaskColor = Color.LIGHT_GRAY;
     myWeekEndColor = Color.GRAY;
     myDayOffColor = new Color(0.9f, 1f, 0.17f);
+    // [fork change] B4. See the field comment for how this value was arrived at.
+    myHomeWorkColor = new Color(95, 60, 175);
     myWeekendAlphaRenderingOption = new AlphaRenderingOption();
     myAppFontSize = new Supplier<Integer>() {
       @Override
@@ -176,6 +203,16 @@ public class UIConfiguration {
 
   public void setDayOffColor(Color dayOffColor) {
     this.myDayOffColor = dayOffColor;
+  }
+
+  /** [fork change] B4 -- the colour of the home-working band. */
+  public Color getHomeWorkColor() {
+    return myHomeWorkColor;
+  }
+
+  /** [fork change] B4 -- the colour of the home-working band. */
+  public void setHomeWorkColor(Color homeWorkColor) {
+    this.myHomeWorkColor = homeWorkColor;
   }
 
   public boolean isRedlineOn() {

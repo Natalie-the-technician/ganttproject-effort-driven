@@ -21,6 +21,7 @@ package net.sourceforge.ganttproject.chart;
 
 import biz.ganttproject.core.chart.grid.Offset;
 import biz.ganttproject.core.chart.scene.CapacityHeatmapSceneBuilder;
+import net.sourceforge.ganttproject.fork.HomeWorkBandKt;
 import net.sourceforge.ganttproject.resource.HumanResource;
 import net.sourceforge.ganttproject.resource.LoadDistribution.Load;
 import org.jetbrains.annotations.NotNull;
@@ -93,8 +94,10 @@ class ResourceLoadRenderer extends ChartRendererBase {
   }
 
   private List<CapacityHeatmapSceneBuilder.Resource> getResources() {
-    HumanResource[] humanResources = ((ChartModelResource) getChartModel()).getVisibleResources();
+    ChartModelResource model = (ChartModelResource) getChartModel();
+    HumanResource[] humanResources = model.getVisibleResources();
     List<CapacityHeatmapSceneBuilder.Resource> resources = new ArrayList<>();
+    CapacityHeatmapSceneBuilder.InputApi sceneInput = getCapacityHeatmapSceneInput();
 
     for (HumanResource humanResource : humanResources) {
       List<CapacityHeatmapSceneBuilder.Load> loads = new ArrayList<>();
@@ -107,6 +110,24 @@ class ResourceLoadRenderer extends ChartRendererBase {
         CapacityHeatmapSceneBuilder.Load load = new CapacityHeatmapSceneBuilder.Load(taskLoad.startDate.getTime(), taskLoad.endDate.getTime(), taskLoad.load, taskId);
         loads.add(load);
       }
+      /*
+       * [fork change] B4 -- the home-working band of this person.
+       *
+       * NOT IN `LoadDistribution`, WHICH IS WHERE THE DAY-OFF BAND COMES FROM, and the reason is
+       * that the two are not the same kind of thing. Days off are a stored LIST and therefore
+       * finite; a weekly home-office pattern names a day every week for ever and has no last one.
+       * It can only be turned into rectangles against a range, and the range is what this class
+       * knows and `LoadDistribution` does not. Keeping it out also means `LoadDistribution` never
+       * learns about home working at all -- see `HomeWorkPlanning.kt` on why that separation is
+       * worth guarding.
+       *
+       * Days the person is away are left out of the band by `homeWorkLoads`: on a day that is both
+       * a holiday and a home-office day the person is absent, and two translucent bands over each
+       * other would mix into a third colour that means neither.
+       */
+      loads.addAll(HomeWorkBandKt.homeWorkLoads(
+          humanResource, model.getResourceProperties(),
+          sceneInput.getChartStartDate(), sceneInput.getChartEndDate()));
       boolean isExpanded = myResourcechart.isExpanded(humanResource);
       CapacityHeatmapSceneBuilder.Resource resource = new CapacityHeatmapSceneBuilder.Resource(loads, isExpanded);
       resources.add(resource);

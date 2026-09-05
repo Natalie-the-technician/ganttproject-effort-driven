@@ -24,6 +24,7 @@ import biz.ganttproject.core.chart.canvas.Canvas.Rectangle;
 import biz.ganttproject.core.chart.canvas.Canvas.Text;
 import biz.ganttproject.core.chart.canvas.Canvas.TextGroup;
 import biz.ganttproject.core.chart.canvas.Painter;
+import biz.ganttproject.core.chart.scene.CapacityHeatmapSceneBuilder;
 import biz.ganttproject.core.chart.render.*;
 import net.sourceforge.ganttproject.util.PropertiesUtil;
 
@@ -68,6 +69,22 @@ public class StyledPainterImpl implements Painter {
 
   /** Default stroke used for the primitives */
   private final static BasicStroke defaultStroke = new BasicStroke();
+
+  /**
+   * [fork change] B4 -- how opaque the home-working band is, out of 255.
+   *
+   * FIRMER THAN THE DAY-OFF BAND'S 100, and it can afford to be. The day-off band is painted OVER
+   * the load bars and has to let them through; the home-working band is painted UNDER them
+   * (`CapacityHeatmapSceneBuilder.build`), so nothing readable is behind it. What is in front of
+   * it -- the load bar and its percentage -- is drawn opaque afterwards and is untouched.
+   */
+  private static final int HOME_WORK_ALPHA = 170;
+
+  /** [fork change] B4 -- distance in pixels between two hatching lines of the home-working band. */
+  private static final int HOME_WORK_HATCH_STEP = 7;
+
+  /** [fork change] B4 -- how much darker the hatching is than the band it sits on, in percent. */
+  private static final int HOME_WORK_HATCH_DARKNESS = 55;
 
   public StyledPainterImpl(final ChartUIConfiguration config) {
     myConfig = config;
@@ -195,6 +212,77 @@ public class StyledPainterImpl implements Painter {
       myGraphics.drawLine(next.getRightX(), next.getTopY() + margin, next.getRightX(), next.getBottomY() - margin);
     };
     myStyle2painter.put("dayoff", myDayOffPainter);
+    /*
+     * [fork change] B4 -- THE HOME-WORKING BAND.
+     *
+     * Natalie: „Der dürfte dann nicht darauf fallen, das wäre wie ein Tag Urlaub zu handhaben, nur
+     * im kalender soll es anderst dargestellt werden, andere Farbe oder so." The person is AT
+     * WORK; only the place differs. So this band must be told apart from the day-off band beside
+     * it, and it must not be mistaken for it.
+     *
+     * TWO CUES AND NOT ONE. The colour is the first (see UIConfiguration.myHomeWorkColor for the
+     * brightness measurement behind the default). The DIAGONAL HATCHING is the second, and it is
+     * there for the people the colour alone does not reach: somebody who does not tell violet from
+     * yellow-green, a black-and-white printout, a projector that washes the hue out. The day-off
+     * band is a plain fill and stays one, so „striped or not" answers the question without any
+     * colour at all.
+     *
+     * WHY NOT A DIFFERENT SHAPE INSTEAD. The band has to cover the whole day column, the same as
+     * the day-off band, or the two would not be comparable at a glance -- and at the year zoom a
+     * day is a couple of pixels wide, where a symbol would be a smudge and a fill still reads.
+     *
+     * WHY THE LINES ARE DRAWN AND NOT TAKEN FROM `ShapeConstants.SLASH`, which is a 4x4 diagonal
+     * texture this program already owns and which would be ONE `fillRect` instead of a loop. Two
+     * reasons, and the first is the one that decides it:
+     *
+     *  * A `ShapePaint` IS OPAQUE. It has a foreground and a background colour and no alpha, so the
+     *    band would ERASE the weekend column, the public-holiday column and the grid beneath it.
+     *    The day-off band lets all three through at alpha 100 and this one has to as well, or the
+     *    two stop being comparable -- which is the whole point.
+     *  * ITS SPACING IS 4 PIXELS and cannot be changed without a new pattern. At the width one day
+     *    has in this chart that reads as a slightly darker tint rather than as stripes, which is a
+     *    weaker second cue than none at all, because it looks like a colour difference.
+     *
+     * WHAT THE LOOP COSTS, since it is a loop in a paint path: (width + height) / 7 calls to
+     * `drawLine`. A one-day band at day zoom is 2 or 3 of them. The worst case in reach is a
+     * year-long PERIOD at day zoom, about 2000 pixels, so under 300 -- once per person per repaint.
+     */
+    RectanglePainter myHomeWorkPainter = next -> {
+      int margin = StyledPainterImpl.this.margin - 3;
+      int left = next.getLeftX();
+      int top = next.getTopY() + margin;
+      int width = next.getWidth();
+      int height = next.getHeight() - 2 * margin;
+      if (width <= 0 || height <= 0) {
+        return;
+      }
+      Color c = myConfig.getHomeWorkColor();
+      myGraphics.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), HOME_WORK_ALPHA));
+      myGraphics.fillRect(left, top, width, height);
+
+      // The hatching, clipped to the band. `clip` INTERSECTS with whatever clip the caller set --
+      // `setClip` would replace it and let the lines run outside the area the chart allows.
+      Shape oldClip = myGraphics.getClip();
+      Stroke oldStroke = myGraphics.getStroke();
+      myGraphics.clip(new java.awt.Rectangle(left, top, width, height));
+      myGraphics.setStroke(defaultStroke);
+      myGraphics.setColor(new Color(
+          c.getRed() * HOME_WORK_HATCH_DARKNESS / 100,
+          c.getGreen() * HOME_WORK_HATCH_DARKNESS / 100,
+          c.getBlue() * HOME_WORK_HATCH_DARKNESS / 100));
+      // 45 degrees. Starting a band's height to the left of the band so that the lines which enter
+      // it from below on the left-hand side are drawn too, instead of a blank triangle in the
+      // corner.
+      for (int x = left - height; x < left + width; x += HOME_WORK_HATCH_STEP) {
+        myGraphics.drawLine(x, top + height, x + height, top);
+      }
+      myGraphics.setClip(oldClip);
+      myGraphics.setStroke(oldStroke);
+
+      myGraphics.setColor(Color.BLACK);
+      myGraphics.drawRect(left, top, width, height);
+    };
+    myStyle2painter.put(CapacityHeatmapSceneBuilder.STYLE_HOME_WORK, myHomeWorkPainter);
     myStyle2painter.put("load.underload", myResourceLoadPainter);
     myStyle2painter.put("load.underload.first", myResourceLoadPainter);
     myStyle2painter.put("load.underload.last", myResourceLoadPainter);

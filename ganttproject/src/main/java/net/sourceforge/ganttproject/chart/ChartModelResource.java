@@ -26,6 +26,7 @@ import biz.ganttproject.core.time.TimeUnitStack;
 import net.sourceforge.ganttproject.gui.UIConfiguration;
 import net.sourceforge.ganttproject.gui.options.model.GP1XOptionConverter;
 import net.sourceforge.ganttproject.resource.HumanResource;
+import biz.ganttproject.customproperty.CustomPropertyManager;
 import net.sourceforge.ganttproject.resource.HumanResourceManager;
 import net.sourceforge.ganttproject.task.Task;
 import net.sourceforge.ganttproject.task.TaskManager;
@@ -47,6 +48,9 @@ public class ChartModelResource extends ChartModelBase {
   private final ColorOption myResourceUnderloadOption;
 
   private final ColorOption myDayOffOption;
+
+  /** [fork change] B4 -- the colour of the home-working band, adjustable like the four beside it. */
+  private final ColorOption myHomeWorkOption;
 
   private final ResourceChart myResourceChart;
 
@@ -131,8 +135,30 @@ public class ChartModelResource extends ChartModelBase {
       myDayOffOption.setValue(new Color(0.9f, 1f, 0.17f));
       myDayOffOption.commit();
     }
+    {
+      /*
+       * [fork change] B4 -- the home-working colour, built exactly like the day-off one above it.
+       *
+       * IT IS ADJUSTABLE ON PURPOSE and not a constant in the painter. The default was chosen for
+       * brightness distance from the four colours the chart already uses (see
+       * `UIConfiguration.myHomeWorkColor`), but the person who has to read this chart every day is
+       * the one who knows whether it works on their screen -- and somebody who does not tell
+       * violet from yellow-green needs to be able to move it. The hatching stays whatever colour
+       * is chosen, so the second cue survives the change.
+       */
+      myHomeWorkOption = new DefaultColorOption("resourceChartColors.homeWork") {
+        @Override
+        public void commit() {
+          super.commit();
+          projectConfig.setHomeWorkColor(getValue());
+        }
+      };
+      myHomeWorkOption.lock();
+      myHomeWorkOption.setValue(new Color(95, 60, 175));
+      myHomeWorkOption.commit();
+    }
     myColorOptions = new GPOptionGroup("resourceChartColors", new GPOption[] { myResourceNormalLoadOption,
-        myResourceOverloadOption, myResourceUnderloadOption, myDayOffOption });
+        myResourceOverloadOption, myResourceUnderloadOption, myDayOffOption, myHomeWorkOption });
   }
 
   // public void paint(Graphics g) {
@@ -143,6 +169,19 @@ public class ChartModelResource extends ChartModelBase {
 
   public HumanResource[] getVisibleResources() {
     return myManager.getResources().toArray(new HumanResource[0]);
+  }
+
+  /**
+   * [fork change] B4 -- the custom properties of the PEOPLE, which is where the home office of a
+   * person is kept (`HomeOfficeStorage.kt`).
+   *
+   * The renderer needs it and has no other way in: `HumanResource` keeps its manager private and
+   * the chart model is the only thing that holds one. Deliberately named after what it contains
+   * rather than `getCustomPropertyManager`, because a chart model also has task properties in
+   * reach and confusing the two would silently read an empty column.
+   */
+  public CustomPropertyManager getResourceProperties() {
+    return myManager.getCustomPropertyManager();
   }
 
   @Override
