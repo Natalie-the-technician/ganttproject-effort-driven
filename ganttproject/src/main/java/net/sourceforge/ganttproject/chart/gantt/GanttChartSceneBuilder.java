@@ -30,6 +30,9 @@ import biz.ganttproject.core.time.TimeDuration;
 import biz.ganttproject.core.time.TimeUnit;
 import biz.ganttproject.customproperty.CustomPropertyManager;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
+import net.sourceforge.ganttproject.fork.AbsenceRun;
+import net.sourceforge.ganttproject.fork.AbsenceStripeKt;
+import net.sourceforge.ganttproject.fork.StripeSpan;
 import net.sourceforge.ganttproject.fork.ChartComparison;
 import net.sourceforge.ganttproject.fork.ComparisonAxis;
 import net.sourceforge.ganttproject.fork.BothComparisons;
@@ -73,6 +76,18 @@ public class GanttChartSceneBuilder {
 
     /** [Fork change] The task's recorded hours, or null. */
     Double getActualEffortHours(int rowId);
+
+    /**
+     * [Fork change] The days on which somebody assigned to this task is away, as disjoint
+     * ascending half-open runs. Empty when nobody is.
+     *
+     * BY ROW ID AND NOT BY TASK, the same way the two effort numbers above are fetched, and for
+     * the same reason: {@link ITaskSceneTask} deliberately knows nothing about the task model, and
+     * assignments are exactly that. `git grep assignments` over the renderer was empty before this
+     * package -- a task bar did not know who was working on it. See
+     * {@link net.sourceforge.ganttproject.fork.AbsenceStripe} for whose absence counts.
+     */
+    List<AbsenceRun> getAbsenceRuns(int rowId);
     TaskActivitySceneBuilder.ChartApi getChartApi(TaskLabelSceneBuilder<ITaskSceneTask> labelsRenderer);
     GPCalendarCalc getCalendar();
     Date getStartDate();
@@ -155,13 +170,28 @@ public class GanttChartSceneBuilder {
         new TaskActivitySceneBuilder.Style(getRectangleHeight()));
   }
 
+  /**
+   * [Fork change] The vertical shift {@link #render} puts on the canvas, in pixels.
+   *
+   * WHY IT HAS A NAME NOW. `Canvas.createRectangle` ADDS this shift to the y it is given, while
+   * `Rectangle.getTopY` returns a y that already has it. Anything positioned relative to a
+   * rectangle that has already been drawn -- which is what an absence stripe is -- has to take it
+   * off again first, or it lands one header height too low and scrolls twice as fast as the bar it
+   * belongs to. Pulled out of `render` rather than written twice so that the two cannot drift.
+   *
+   * The horizontal shift is not needed: `render` sets it to 0 and always has.
+   */
+  private int canvasDeltaY() {
+    return input.getHeaderHeight() - input.getVerticalOffset();
+  }
+
   public Canvas render() {
     getPrimitiveContainer().clear();
     getPrimitiveContainer().getLayer(0).clear();
     getPrimitiveContainer().getLayer(1).clear();
     getPrimitiveContainer().getLayer(2).clear();
-    getPrimitiveContainer().setOffset(0, input.getHeaderHeight() - input.getVerticalOffset());
-    getPrimitiveContainer().getLayer(2).setOffset(0, input.getHeaderHeight() - input.getVerticalOffset());
+    getPrimitiveContainer().setOffset(0, canvasDeltaY());
+    getPrimitiveContainer().getLayer(2).setOffset(0, canvasDeltaY());
 
     VerticalPartitioning vp = input.getVerticalPartitioning();
     vp.build(input.getTasksInDocumentOrder());
@@ -571,6 +601,7 @@ public class GanttChartSceneBuilder {
       OffsetList defaultUnitOffsets, boolean areVisible) {
     List<Polygon> rectangles = myTaskActivityRenderer.renderActivities(rowNum, activities, defaultUnitOffsets);
     if (areVisible && !myTaskApi.hasNestedTasks(t) && !t.isMilestone() && !t.isProjectTask()) {
+      renderAbsenceStripes(t, rectangles, defaultUnitOffsets);
       renderProgressBar(rectangles.stream().filter(REMOVE_SUPERTASK_ENDINGS).toList());
     }
     if (areVisible && myTaskApi.hasNotes(t)) {
@@ -579,6 +610,59 @@ public class GanttChartSceneBuilder {
       getPrimitiveContainer().bind(notes, t);
     }
     return rectangles;
+  }
+
+  /**
+   * [Fork change] THE HOLIDAY STRIPE, one day at a time.
+   *
+   * Natalie: „wenn jemand an Tag 3 von 5 fehlt soll nur Tag 3 den streifen haben." So this cannot
+   * be a style on the bar -- one bar rectangle is many days -- and it is instead a rectangle of its
+   * own per run of absent days, cut to the day columns of the chart.
+   *
+   * WHERE IT IS DRAWN DECIDES WHAT IT CAN HIDE, and this is the whole reason it sits on the BASE
+   * canvas rather than on a layer. `ChartModelBase.paint` paints every renderer's base canvas
+   * first and only then layer 0, layer 1, ... Within one canvas the order is the order of
+   * creation. Created here, right after the bars of the same row, the stripe therefore lands
+   * ON the bar -- which is what it is for, the work is still planned -- and UNDER the progress bar
+   * (layer 0) and under the labels (layer 3), which stay readable without anything having to be
+   * arranged for it.
+   *
+   * IT IS NOT BOUND TO A MODEL OBJECT, on purpose. `Canvas.getPrimitive(x, y)` returns the FIRST
+   * rectangle covering a point, and the bar was created before the stripe, so clicking and
+   * dragging a task still finds the bar. An unbound rectangle also never reaches
+   * `TaskRendererImpl2.getTaskRectangles`.
+   *
+   * ONLY WHERE THERE IS WORK: an activity of intensity 0 is a stretch the plan already draws as
+   * free -- a weekend, a public holiday -- and it is drawn faint. Marking somebody absent on a day
+   * on which nobody was going to work says nothing and would put a stripe where Natalie counts no
+   * day at all („Tag 3 von 5" counts working days). Milestones, summary tasks and the project task
+   * are left out by the caller for the same reason the progress bar is: they carry no work of
+   * their own.
+   */
+  private void renderAbsenceStripes(ITaskSceneTask t, List<Polygon> barRectangles, OffsetList offsets) {
+    List<AbsenceRun> runs = input.getAbsenceRuns(t.getRowId());
+    if (runs.isEmpty()) {
+      return;
+    }
+    int deltaY = canvasDeltaY();
+    for (Polygon bar : barRectangles) {
+      if (!(bar instanceof Rectangle) || !(bar.getModelObject() instanceof ITaskActivity)) {
+        continue;
+      }
+      ITaskActivity<?> activity = (ITaskActivity<?>) bar.getModelObject();
+      if (activity.getIntensity() == 0f) {
+        continue;
+      }
+      Rectangle barRect = (Rectangle) bar;
+      List<StripeSpan> spans = AbsenceStripeKt.absenceStripeSpans(
+          runs, activity.getStart(), activity.getEnd(),
+          barRect.getLeftX(), barRect.getRightX(), offsets);
+      for (StripeSpan span : spans) {
+        Rectangle stripe = getPrimitiveContainer().createRectangle(
+            span.getLeftX(), barRect.getTopY() - deltaY, span.getWidth(), barRect.getHeight());
+        stripe.setStyle(AbsenceStripeKt.STYLE_ABSENCE);
+      }
+    }
   }
 
   private void renderLabels(List<Polygon> rectangles) {

@@ -26,6 +26,7 @@ import biz.ganttproject.core.chart.canvas.Canvas.TextGroup;
 import biz.ganttproject.core.chart.canvas.Painter;
 import biz.ganttproject.core.chart.scene.CapacityHeatmapSceneBuilder;
 import biz.ganttproject.core.chart.render.*;
+import net.sourceforge.ganttproject.fork.AbsenceStripeKt;
 import net.sourceforge.ganttproject.util.PropertiesUtil;
 
 import java.awt.*;
@@ -85,6 +86,20 @@ public class StyledPainterImpl implements Painter {
 
   /** [fork change] B4 -- how much darker the hatching is than the band it sits on, in percent. */
   private static final int HOME_WORK_HATCH_DARKNESS = 55;
+
+  /**
+   * [fork change] How opaque the FILL of an absence stripe is, out of 255.
+   *
+   * DELIBERATELY FAINT, and much fainter than the home-working band's 170. That band is painted
+   * UNDER the load bars and hides nothing; this stripe is painted ON a task bar, and the bar has to
+   * stay visible -- the work is still planned for that day, somebody is merely missing. At 70 the
+   * bar shows through as a tinted version of itself. The fill is the weaker of the two cues on
+   * purpose; the hatching below is opaque and carries the meaning.
+   */
+  private static final int ABSENCE_ALPHA = 70;
+
+  /** [fork change] Distance in pixels between two hatching lines of an absence stripe. */
+  private static final int ABSENCE_HATCH_STEP = 4;
 
   public StyledPainterImpl(final ChartUIConfiguration config) {
     myConfig = config;
@@ -283,6 +298,79 @@ public class StyledPainterImpl implements Painter {
       myGraphics.drawRect(left, top, width, height);
     };
     myStyle2painter.put(CapacityHeatmapSceneBuilder.STYLE_HOME_WORK, myHomeWorkPainter);
+    /*
+     * [fork change] THE ABSENCE STRIPE ON A TASK BAR.
+     *
+     * Natalie: „Er muss ja nur zeigen das an dem Tag jemand nicht da ist. Also nicht der ganze
+     * Vorgang soll den streifen bekommen, sondern nur der teil". The scene builder has already cut
+     * the day out (`GanttChartSceneBuilder.renderAbsenceStripes`); this only has to make it
+     * unmistakable and leave the bar underneath legible.
+     *
+     * IT MUST NOT LOOK LIKE THE HOME-WORKING BAND, which is the whole point B4 was built around: a
+     * home-working day is a WORKING day and an absence is not, and if the two were painted alike
+     * the fork would have spent a package saying they are different and then drawn them the same.
+     * They differ in three ways at once, and none of them is the hue:
+     *
+     *   home working   solid fill at alpha 170   DIAGONAL hatching, 7 px   violet
+     *   absence        faint fill at alpha  70   VERTICAL  hatching, 4 px   orange
+     *
+     * WHY VERTICAL AND NOT DIAGONAL, since a second cue only earns its place if it can be told
+     * from the first one: a vertical cut through vertical hatching meets ONE colour, the same cut
+     * through diagonal hatching meets two. So „which of the two bands is this" is answerable
+     * without seeing any colour at all -- and it is measured that way in `UrlaubsstreifenTest`,
+     * not asserted here.
+     *
+     * WHY HATCHING AT ALL. A colour alone is a weak sign: somebody who does not tell orange from
+     * light blue, a black-and-white printout, a projector that washes the hue out. A horizontal cut
+     * through the stripe meets at least two greys where a cut through the plain bar meets one.
+     *
+     * THE HATCHING IS OPAQUE while the fill is not. That is what keeps the measured brightness
+     * distance of the field comment in `UIConfiguration.myAbsenceColor` honest -- an alpha over an
+     * unknown task colour would give an unknown result, and a user may paint their task bars any
+     * colour they like. The lines are the fixed point; the fill is a tint on top of whatever is
+     * there.
+     *
+     * WHAT STAYS READABLE. The progress bar (canvas layer 0) and the labels (layer 3) are painted
+     * AFTER every base canvas, so both come out on top of this and neither can be covered. That is
+     * arranged in the scene builder, by drawing the stripe on the base canvas; see there.
+     *
+     * WHAT THE LOOP COSTS: width / 4 calls to `drawLine`. One striped day at day zoom is 5 of
+     * them; a fortnight of holiday at day zoom is about 70, once per task and repaint.
+     */
+    RectanglePainter myAbsencePainter = next -> {
+      int left = next.getLeftX();
+      int top = next.getTopY();
+      int width = next.getWidth();
+      int height = next.getHeight();
+      if (width <= 0 || height <= 0) {
+        return;
+      }
+      Color c = myConfig.getAbsenceColor();
+      myGraphics.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), ABSENCE_ALPHA));
+      myGraphics.fillRect(left, top, width, height);
+
+      // Clipped to the stripe. `clip` INTERSECTS with whatever clip the caller set -- `setClip`
+      // would replace it and let the lines run outside the area the chart allows.
+      Shape oldClip = myGraphics.getClip();
+      Stroke oldStroke = myGraphics.getStroke();
+      myGraphics.clip(new java.awt.Rectangle(left, top, width, height));
+      myGraphics.setStroke(defaultStroke);
+      myGraphics.setColor(c);
+      // From the left edge inwards. The first line sits ON the left edge, so a day that is only a
+      // few pixels wide -- month or year zoom -- still gets one and does not fall back to the
+      // faint fill alone.
+      for (int x = left; x < left + width; x += ABSENCE_HATCH_STEP) {
+        myGraphics.drawLine(x, top, x, top + height);
+      }
+      myGraphics.setClip(oldClip);
+      myGraphics.setStroke(oldStroke);
+
+      // The frame, in the stripe's own colour rather than black: black is the progress bar, and a
+      // black box around a day would read as a second progress mark.
+      myGraphics.setColor(c);
+      myGraphics.drawRect(left, top, width - 1, height);
+    };
+    myStyle2painter.put(AbsenceStripeKt.STYLE_ABSENCE, myAbsencePainter);
     myStyle2painter.put("load.underload", myResourceLoadPainter);
     myStyle2painter.put("load.underload.first", myResourceLoadPainter);
     myStyle2painter.put("load.underload.last", myResourceLoadPainter);

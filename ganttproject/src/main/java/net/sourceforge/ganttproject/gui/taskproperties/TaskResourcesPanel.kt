@@ -57,7 +57,10 @@ import net.sourceforge.ganttproject.task.algorithm.actualEffortHours
 import net.sourceforge.ganttproject.task.algorithm.effortHours
 import net.sourceforge.ganttproject.task.algorithm.findEffortDefinition
 import net.sourceforge.ganttproject.task.algorithm.hoursPerDay
+import net.sourceforge.ganttproject.fork.absenceSummaryForTask
 import net.sourceforge.ganttproject.fork.forkText
+import net.sourceforge.ganttproject.fork.toModelDate
+import net.sourceforge.ganttproject.language.GanttLanguage
 import net.sourceforge.ganttproject.task.algorithm.parseEffortInput
 import org.controlsfx.control.tableview2.TableColumn2
 import org.controlsfx.control.tableview2.TableView2
@@ -257,10 +260,41 @@ class TaskResourcesPanel(
         prefWidth = 90.0
       }
 
-      // [fork change] blockingCol, noEffortCol and hoursPerDayCol are new, the remaining columns
-      // are the original ones.
+      /*
+       * [fork change] WHO IS MISSING, AND WHEN -- the other half of Natalie's sentence about the
+       * holiday stripe: „Wer da fehlt kann man dann in der detailansicht schauen wenn man den
+       * Vorgang öffnet."
+       *
+       * The stripe on the bar says THAT somebody is away on a given day; it deliberately says no
+       * more, because a bar is a few pixels high. This column is where the name and the day meet:
+       * the row already names the person, so the cell only has to say when.
+       *
+       * DISPLAY ONLY, exactly like the daily hours beside it. The days off of a person are a
+       * property of the PERSON, not of this assignment -- they apply to every task that person is
+       * on -- and they are edited in the resource dialog. A second editor here would silently
+       * change other tasks from inside this one.
+       *
+       * CLIPPED TO THIS TASK by `absenceSummaryForTask`; see there for why, and for why the date
+       * is shown inclusively although it is stored exclusively.
+       */
+      val absenceCol = TableColumn2<ResourceAssignmentRow, String>(ABSENCE_LABEL).apply {
+        setCellValueFactory { row ->
+          val resource = row.value.assignment?.resource
+          SimpleStringProperty(
+            resource?.let {
+              absenceSummaryForTask(task, it) { day ->
+                GanttLanguage.getInstance().shortDateFormat.format(day.toModelDate())
+              }
+            } ?: "")
+        }
+        isEditable = false
+        prefWidth = 160.0
+      }
+
+      // [fork change] blockingCol, noEffortCol, hoursPerDayCol and absenceCol are new, the
+      // remaining columns are the original ones.
       columns.addAll(idCol, nameCol, unitCol, coordinatorCol, roleCol,
-        blockingCol, noEffortCol, hoursPerDayCol)
+        blockingCol, noEffortCol, hoursPerDayCol, absenceCol)
     }
 
     // Create split layout with table and cost panel
@@ -435,6 +469,9 @@ private val EFFORT_LABEL_ACTUAL_HOURS get() = forkText("fork.effort.actualHours"
 // [fork change] Labels of the two assignment axes.
 private val AXIS_LABEL_BLOCKING get() = forkText("fork.assignment.blocking")
 private val AXIS_LABEL_NO_EFFORT get() = forkText("fork.assignment.noEffort")
+
+/** [fork change] The days of this task on which this person is away. See `AbsenceStripe.kt`. */
+private val ABSENCE_LABEL get() = forkText("fork.assignment.absence")
 
 /**
  * [fork change] The writable property behind a checkbox column of this table.
