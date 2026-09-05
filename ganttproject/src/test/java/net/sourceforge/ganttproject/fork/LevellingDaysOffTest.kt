@@ -128,16 +128,27 @@ class LevellingDaysOffTest {
    * It stays in afterwards, because it pins the one thing the rest of the file cannot see: that
    * the channel is part of the SIGNATURE and does not merely happen to be filled at one call
    * site.
+   *
+   * [fork change] B3 RAISED THE NUMBER FROM SIX TO SEVEN, on 05.09.2026, and the raise is not a
+   * loosening of this check but the second half of the same statement. Home working needed a
+   * channel of its OWN -- `isAtWorkplace`, beside `isAvailable` and never inside it -- because a
+   * person in the home office is AT WORK and must not travel through the absence channel. The
+   * count is what makes „a channel of its own" a fact of the signature rather than a promise; if
+   * somebody folded the two into one to get the number back to six, this check would say so.
+   *
+   * The counted parameter is the LAST one in `parameterTypes`, and there is a check next door in
+   * `HomeWorkLevellingTest` that measures what it does. This one only measures that it exists.
    */
   @Test
   fun `die verteilung nimmt eine auskunft ueber ausfallzeiten entgegen`() {
     val levelTasks = Class.forName("net.sourceforge.ganttproject.fork.ResourceLevellingKt")
       .methods.single { it.name == "levelTasks" }
-    assertEquals(6, levelTasks.parameterCount,
+    assertEquals(7, levelTasks.parameterCount,
       "levelTasks hat ${levelTasks.parameterCount} Parameter: " +
         levelTasks.parameterTypes.joinToString { it.simpleName } +
-        " -- es fehlt der, ueber den die Abwesenheit einer Person hereinkommt. Ohne ihn gibt es " +
-        "nichts, wogegen eine Regel geschnitten werden koennte.")
+        " -- erwartet sind sieben: die sechs von vorher plus der Kanal fuer die Heimarbeit. " +
+        "Fehlt einer von beiden, gibt es nichts, wogegen eine Regel geschnitten werden koennte; " +
+        "sind es sechs, ist einer der beiden in den anderen hineingefaltet worden.")
   }
 
   /**
