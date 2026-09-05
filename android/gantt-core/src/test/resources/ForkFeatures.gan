@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?><project name="Rundwegprobe" company="Noctuvo" webLink="" view-date="2026-09-01" view-index="0" gantt-divider-location="693" resource-divider-location="322" version="3.3.3309" locale="de">
+    <description><![CDATA[Testdatei fuer die Rundwegmessung. Erfunden.]]></description>
+    <view zooming-state="default:6" id="gantt-chart">
+        <field id="tpd3" name="Name" width="257" order="0"/>
+        <field id="tpc4" name="Frist" width="120" order="1"/>
+        <option id="taskLabelRight" value="name"/>
+        <timeline><![CDATA[1]]></timeline>
+        <option id="color.recent"><![CDATA[#ff0066]]></option>
+    </view>
+    <view id="resource-table">
+        <field id="0" name="Name" width="160" order="0"/>
+    </view>
+    <!-- Kommentar, den die App nicht kennt -->
+    <calendars base-id="none">
+        <day-types>
+            <day-type id="0"/>
+            <day-type id="1"/>
+            <default-week id="1" name="default" sun="1" mon="0" tue="0" wed="0" thu="0" fri="0" sat="1"/>
+            <only-show-weekends value="false"/>
+            <overriden-day-types/>
+            <days/>
+        </day-types>
+        <date year="2026" month="10" date="3" type="HOLIDAY"><![CDATA[Tag der Deutschen Einheit]]></date>
+        <date year="" month="12" date="24" type="HOLIDAY"><![CDATA[Heiligabend, jaehrlich]]></date>
+    </calendars>
+    <tasks empty-milestones="true">
+        <taskproperties>
+            <taskproperty id="tpd0" name="type" type="default" valuetype="icon"/>
+            <taskproperty id="tpd1" name="priority" type="default" valuetype="icon"/>
+            <taskproperty id="tpd3" name="name" type="default" valuetype="text"/>
+            <taskproperty id="tpc0" name="deadline" type="custom" valuetype="date"/>
+            <taskproperty id="tpc1" name="wait_only" type="custom" valuetype="boolean" defaultvalue="false"/>
+            <taskproperty id="tpc2" name="date_fixed" type="custom" valuetype="boolean" defaultvalue="false"/>
+            <taskproperty id="tpc3" name="on_site_only" type="custom" valuetype="boolean" defaultvalue="false"/>
+            <taskproperty id="tpc4" name="effort_original_hours" type="custom" valuetype="double"/>
+            <taskproperty id="tpc5" name="effort_hours" type="custom" valuetype="double"/>
+            <taskproperty id="tpc6" name="effort_actual_hours" type="custom" valuetype="double"/>
+            <taskproperty id="tpc7" name="recurrence" type="custom" valuetype="text"/>
+        </taskproperties>
+        <task id="0" uid="aaaa0000aaaa0000aaaa0000aaaa0000" name="Sammelvorgang" color="#8cb6ce" meeting="false" start="2026-09-01" duration="10" complete="20" expand="true">
+            <task id="1" uid="bbbb1111bbbb1111bbbb1111bbbb1111" name="Messreihe aufbauen" color="#8cb6ce" meeting="false" start="2026-09-01" duration="4" complete="50" expand="true" cost-manual-value="0" cost-calculated="false">
+                <notes><![CDATA[Notiz mit ] und & und <spitzen>]]></notes>
+                <depend id="2" type="2" difference="0" hardness="Strong"/>
+                <customproperty taskproperty-id="tpc0" value="2026-09-30"/>
+                <customproperty taskproperty-id="tpc2" value="true"/>
+                <customproperty taskproperty-id="tpc3" value="true"/>
+                <customproperty taskproperty-id="tpc4" value="12.5"/>
+                <customproperty taskproperty-id="tpc5" value="16"/>
+            </task>
+            <task id="2" uid="cccc2222cccc2222cccc2222cccc2222" name="Warten auf Lieferung" color="#8cb6ce" meeting="false" start="2026-09-05" duration="6" complete="0" expand="true">
+                <customproperty taskproperty-id="tpc1" value="true"/>
+                <customproperty taskproperty-id="tpc7" value="WEEKLY:2"/>
+            </task>
+        </task>
+        <task id="3" uid="dddd3333dddd3333dddd3333dddd3333" name="Meilenstein" color="#000000" meeting="true" start="2026-09-15" duration="0" complete="0" expand="true"/>
+    </tasks>
+    <resources>
+        <custom-property-definition id="cpr0" name="hours_per_day" type="double"/>
+        <custom-property-definition id="cpr1" name="utilisation_percent" type="int"/>
+        <custom-property-definition id="cpr2" name="work_week" type="text"/>
+        <resource id="0" name="Natalie" function="Default:1" contacts="" phone="">
+            <rate name="standard" value="0"/>
+            <custom-property definition-id="cpr0" value="6"/>
+            <custom-property definition-id="cpr1" value="80"/>
+            <custom-property definition-id="cpr2" value="MO,DI,MI"/>
+        </resource>
+        <resource id="1" name="Zweite Person" function="1" contacts="" phone=""/>
+    </resources>
+    <allocations>
+        <allocation task-id="1" resource-id="0" function="Default:1" responsible="true" blocking="true" no-effort="false" load="100.0"/>
+        <allocation task-id="1" resource-id="1" function="1" responsible="false" blocking="false" no-effort="true" load="50.0"/>
+        <allocation task-id="2" resource-id="0" function="Default:1" responsible="true" blocking="false" no-effort="false" load="25.0"/>
+    </allocations>
+    <vacations>
+        <vacation start="2026-09-20" end="2026-09-27" resourceid="0"/>
+    </vacations>
+    <previous>
+        <previous-tasks name="Basisplan A" timestamp="1756684800000">
+            <previous-task id="1" start="2026-09-01" duration="3" meeting="false" super="false"/>
+            <previous-task id="2" start="2026-09-04" duration="6" meeting="false" super="false"/>
+        </previous-tasks>
+    </previous>
+    <roles roleset-name="Default"/>
+    <roles>
+        <role id="1" name="Messtechnik"/>
+    </roles>
+</project>
