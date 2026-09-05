@@ -45,10 +45,20 @@ class CapacityHeatmapSceneBuilder(
     canvas.setOffset(0, input.getYCanvasOffset())
     var ypos = 0
     resources.forEach { resource ->
+      // [fork change] B4 -- draw the home-working band FIRST, underneath everything else.
+      // A home-working day is a WORKING day: whatever is planned on it has to stay readable on
+      // top of the band. Were it drawn last it would cover the load bar and the percentage in it,
+      // and a working day would end up looking like an absence -- the one thing this band must
+      // not do. See `HomeWorkBand.kt`.
+      buildLoads(calcLoadDistribution(resource.loads.filter { it.load == HOME_WORK_LOAD }), ypos)
       // Draw day off loads
-      buildLoads(calcLoadDistribution(resource.loads.filter { it.load == -1f }), ypos)
+      buildLoads(calcLoadDistribution(resource.loads.filter { it.load == DAY_OFF_LOAD }), ypos)
       // Draw working time loads
-      buildLoads(calcLoadDistribution(resource.loads.filter { it.load != -1f }), ypos)
+      // [fork change] The home-working marker has to be taken out here as well. It is a negative
+      // load like the day-off marker, and left in this list `calcLoadDistribution` would add it to
+      // the real loads of the same days -- 100 % beside a home-working day would come out as 98 %.
+      buildLoads(calcLoadDistribution(
+        resource.loads.filter { it.load != DAY_OFF_LOAD && it.load != HOME_WORK_LOAD }), ypos)
       if (resource.isExpanded) {
         ypos = buildLoadDetails(resource.loads, ypos)
       }
@@ -94,11 +104,16 @@ class CapacityHeatmapSceneBuilder(
    */
   private fun buildLoads(prevLoad: LoadBorder, curLoad: LoadBorder, ypos: Int, suffix: String) {
     val nextRect = createRectangle(prevLoad.ts.toDate(), curLoad.ts.toDate(), ypos) ?: return
-    nextRect.style = 
-        if (prevLoad.load == -1f) "dayoff" 
-        else prevLoad.load.getStyle() + suffix + if (curLoad.load == 0f) ".last" else ""
+    nextRect.style = when (prevLoad.load) {
+      DAY_OFF_LOAD -> STYLE_DAY_OFF
+      // [fork change] B4. A style of its own, and NOT a variant of "dayoff": the two are painted
+      // by two different painters on purpose, so that nobody can make them look alike by editing
+      // one colour. `StyledPainterImpl` holds the pair.
+      HOME_WORK_LOAD -> STYLE_HOME_WORK
+      else -> prevLoad.load.getStyle() + suffix + if (curLoad.load == 0f) ".last" else ""
+    }
     nextRect.modelObject = prevLoad.load
-    if (prevLoad.load != -1f) {
+    if (prevLoad.load != DAY_OFF_LOAD && prevLoad.load != HOME_WORK_LOAD) {
       createLoadText(nextRect, prevLoad.load)
     }
   }
@@ -144,6 +159,37 @@ class CapacityHeatmapSceneBuilder(
 
   class Resource(val loads: List<Load>, val isExpanded: Boolean = false)
   data class Load(val startTs: Long, val endTs: Long, val load: Float, val taskId: Int? = null)
+
+  companion object {
+    /**
+     * The load value that says „this person is away on this day". Was a bare -1 in three places
+     * before; it is named here so that the second marker below can stand beside it and be told
+     * apart at a glance. [fork change]
+     */
+    const val DAY_OFF_LOAD = -1f
+
+    /**
+     * [fork change] B4 -- the load value that says „this person works FROM HOME on this day".
+     *
+     * A SECOND NEGATIVE MARKER, not a second meaning of the first one, and the whole package hangs
+     * on that. A home-working day is a working day: the person's hours exist and the plan may
+     * spend them. What the band says is only WHERE they are, and Natalie asked for exactly that
+     * and no more -- „das wäre wie ein Tag Urlaub zu handhaben, nur im kalender soll es anderst
+     * dargestellt werden".
+     *
+     * PRECONDITION ON THE PRODUCER: home-working bands of one person MUST NOT OVERLAP. The style
+     * is chosen by comparing the ACCUMULATED load against this value, and two overlapping bands
+     * would accumulate to -4 and fall through to the load styles. `homeWorkBands` in
+     * `HomeWorkBand.kt` merges its days into runs for that reason and is checked on it.
+     */
+    const val HOME_WORK_LOAD = -2f
+
+    /** The painter key for a day off. Unchanged; named for the same reason as [DAY_OFF_LOAD]. */
+    const val STYLE_DAY_OFF = "dayoff"
+
+    /** [fork change] B4 -- the painter key for a home-working day. */
+    const val STYLE_HOME_WORK = "homework"
+  }
 
   interface InputApi {
     fun getYCanvasOffset(): Int

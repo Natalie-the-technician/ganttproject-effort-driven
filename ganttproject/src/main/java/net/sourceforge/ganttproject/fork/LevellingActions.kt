@@ -106,9 +106,21 @@ internal fun noPossibleDateText(
     // That is the whole point of the merge, and an `else` here would rebuild the silence it was
     // built to end. The order is fixed -- absence first -- so that the same plan always renders
     // the same message.
-    if (conflict.blocking.isNotEmpty()) {
-      text.append("\n      - ").append(forkText("fork.levelling.nodate.blocked",
-        conflict.blocking.joinToString(", ") { personName(it) }))
+    // [fork change] B3: the same list of people, but the reason decides the sentence. Both lines
+    // where both reasons applied, and never an `else` between them -- for the reason above: a
+    // Task whose search bounced off a holiday on one day and a home-office day on another has two
+    // things that could be changed, and either one would do.
+    val namen = conflict.blocking.joinToString(", ") { personName(it) }
+    if (conflict.blockingReasons.contains(AbsenceKind.AWAY)) {
+      text.append("\n      - ").append(forkText("fork.levelling.nodate.blocked", namen))
+    }
+    if (conflict.blockingReasons.contains(AbsenceKind.AT_HOME)) {
+      text.append("\n      - ").append(forkText("fork.levelling.nodate.homework", namen))
+    }
+    // A conflict built before B3 -- or by hand -- can carry names and no reason. Then the older
+    // sentence is the honest one: it is what the names meant when they were the only thing there.
+    if (conflict.blocking.isNotEmpty() && conflict.blockingReasons.isEmpty()) {
+      text.append("\n      - ").append(forkText("fork.levelling.nodate.blocked", namen))
     }
     if (conflict.fullFor.isNotEmpty()) {
       text.append("\n      - ").append(forkText("fork.levelling.nodate.full",
@@ -291,9 +303,20 @@ class LevellingAction(
     // they do not work on the task and the Saturday they do left free -- one calendar day of error
     // per Saturday a task runs over. `WorkWeekLevellingWindowTest` measured that and now demands
     // the two agree.
+    //
+    // [fork change] B3, AND THIS LINE IS WHERE THE PACKAGE WOULD DIE WITHOUT A SOUND. The
+    // home-work channel has a default -- „everybody is at their workplace" -- so leaving it out
+    // compiles, every check on `levelTasks` stays green (they inject the function themselves), and
+    // the running program simply does nothing. Exactly that was found once on 04.09.2026, when
+    // this call had kept the global calendar while its neighbours had moved on.
+    // `HomeWorkWiringTest` drives `LevellingAction` itself for that reason.
+    //
+    // A SIBLING OF `availabilityTest` AND NOT AN EXTENSION OF IT: a person in the home office is
+    // AT WORK. See `presenceTest` for what putting the two in one channel would cost.
     val result = levelTasks(tasks, abWann, workingDaysPerTask(taskManager, resourceProperties),
       durationAtStart(taskManager, taskProperties, resourceProperties),
-      isAvailable = availabilityTest(resourceManager))
+      isAvailable = availabilityTest(resourceManager),
+      isAtWorkplace = presenceTest(resourceManager, resourceProperties))
 
     val cycles = result.conflicts.filterIsInstance<LevelConflict.Cycle>()
     if (cycles.isNotEmpty()) {

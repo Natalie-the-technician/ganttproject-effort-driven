@@ -92,9 +92,33 @@ internal class Share(
   val schedule: CapacitySchedule,
   val load: Double,
   val daysOff: List<Pair<LocalDate, LocalDate>>,
+  /**
+   * [fork change] B3: this person's home office, AND ONLY WHEN THIS TASK NEEDS SOMEBODY ON SITE.
+   *
+   * `null` in every other case, and the condition is applied WHERE THIS IS BUILT rather than where
+   * it is read -- see [Task.effortInputs]. A share that carries `null` costs one reference
+   * comparison per working day, which is what every plan that exists today pays.
+   *
+   * WHY IT IS HERE AT ALL, and this is decision E1 of 04.09.2026. Somebody who is NOT
+   * indispensable and who is at home cannot work on a task that has to be done on the premises --
+   * so their hours do not go into THIS task on THAT day. The others carry on: that is the half of
+   * Natalie's sentence that says „kann der Rest ohne sie weiterarbeiten", and it is why this sits
+   * in the share and not in [EffortInputs.blockingHomeOffice], which stops the whole day.
+   *
+   * IT IS NOT A DAY OFF. The person is working; their hours are simply spent elsewhere. Nothing
+   * here may ever reach [HumanResource.daysOffRanges] -- that list feeds three consumers with
+   * three meanings, and a home-working day put into it becomes a holiday in all three.
+   */
+  val homeOffice: HomeOffice? = null,
 ) {
-  fun hoursOn(day: LocalDate): Double =
-    if (daysOff.covers(day)) 0.0 else schedule.hoursOn(day) * load
+  fun hoursOn(day: LocalDate): Double = when {
+    daysOff.covers(day) -> 0.0
+    // [fork change] E1. Deliberately the same answer as a day off -- for THIS task, on THIS day,
+    // and for no other reason: the share is only given a [homeOffice] at all when the task needs
+    // somebody on site.
+    homeOffice != null && homeOffice.worksFromHome(day) -> 0.0
+    else -> schedule.hoursOn(day) * load
+  }
 
   /**
    * The MOST this share can deliver on any one day -- its highest daily rate, days off aside.
@@ -126,7 +150,37 @@ internal class EffortInputs(
   val shares: List<Share>,
   /** AXIS A: whose ABSENCE stops the whole day, flattened into one list of ranges. */
   val blockingDaysOff: List<Pair<LocalDate, LocalDate>>,
-)
+  /**
+   * [fork change] B3, AXIS A's SECOND HALF: whose HOME WORKING stops the whole day.
+   *
+   * A SEPARATE LIST AND NOT MORE RANGES IN [blockingDaysOff], and the reason is not tidiness --
+   * it is that the two cannot be the same list. A day off is a bounded interval; a home-office
+   * arrangement is „every Friday", which has no end and cannot be written down as ranges at all.
+   * A [HomeOffice] answers the question instead of listing the days.
+   *
+   * That the shapes differ is a piece of luck rather than a nuisance: it makes the deadly mistake
+   * -- feeding home working into the day-off channel -- impossible to make by accident.
+   *
+   * EMPTY UNLESS THE TASK NEEDS SOMEBODY ON SITE, and empty in every plan that exists today. The
+   * condition is read in [Task.effortInputs] BEFORE anything is collected, so an unmarked task
+   * pays one boolean per run and not one model read per person.
+   */
+  val blockingHomeOffice: List<HomeOffice> = emptyList(),
+) {
+  /**
+   * [fork change] THE ONE PLACE the two halves of axis A are folded together.
+   *
+   * Named, and deliberately not written out at the call site in the walk: axis A is the rule that
+   * makes a day of the task pass without progress, and whoever adds a third reason for that should
+   * have one line to change. It is also what keeps the walk's hottest line unchanged in shape --
+   * the rule comes in through the DATA, not through a second branch in the loop.
+   *
+   * ORDER: days off first. It is the question every plan asks and the cheaper of the two, and the
+   * second list is empty whenever the task is not marked.
+   */
+  fun blocksWholeDay(day: LocalDate): Boolean =
+    blockingDaysOff.covers(day) || blockingHomeOffice.any { it.worksFromHome(day) }
+}
 
 /**
  * [fork change] The inputs of a task: who contributes how many hours, when are they away, and
@@ -140,7 +194,23 @@ internal class EffortInputs(
  * THE TWO AXES ARE READ IN THIS ORDER, AND THE ORDER IS THE POINT. See the two comments in the
  * body: axis A is taken off the UNFILTERED assignment list, before axis B has dropped anybody.
  */
-internal fun Task.effortInputs(resourceProperties: CustomPropertyManager): EffortInputs {
+internal fun Task.effortInputs(
+  taskProperties: CustomPropertyManager,
+  resourceProperties: CustomPropertyManager
+): EffortInputs {
+  // [fork change] B3, CONDITION (a), AND IT IS READ FIRST. Whether this task needs somebody on the
+  // premises is a property OF THE TASK, and it decides whether any home office is looked at at
+  // all.
+  //
+  // BEFORE THE COLLECTING AND NOT AS A FILTER AFTERWARDS. Both give the same answer; what differs
+  // is the price. `false` is the state of every task in every plan written before this fork, and
+  // in that state nothing is read out of the model at all -- one boolean per task and per run
+  // instead of one home-office parse per person.
+  //
+  // THE FOLD IS ASKED, NOT REBUILT: `mayRunOnHomeWorkingDay` is where „nobody has decided" is
+  // treated like „can be done from home", and it lives in exactly one place. Comparing the enum
+  // by hand here would be a second copy of that decision.
+  val requiresPresence = !this.mayRunOnHomeWorkingDay(taskProperties)
   // [fork change] AXIS A: whose ABSENCE takes the whole task with it, as opposed to whose hours
   // it removes. Flattened into ONE list of ranges, because the only question asked of it is
   // "is any of them away on this day" -- two indispensable people away on the same day therefore
@@ -162,6 +232,25 @@ internal fun Task.effortInputs(resourceProperties: CustomPropertyManager): Effor
     .filter { it.isBlocking }
     .mapNotNull { it.resource as? HumanResource }
     .flatMap { it.daysOffRanges() }
+  // [fork change] B3, AXIS A's SECOND HALF: the home office of the same people, off the same
+  // UNFILTERED assignment list and for the same reason as the line above it.
+  //
+  // THE ORDER MATTERS MORE HERE THAN IT DOES FOR THE HOLIDAY, and that is worth saying plainly.
+  // Consider which tasks ever get marked „needs somebody on site": the acceptance, the hand-over,
+  // the appointment at the machine. Their indispensable person is very often the one who
+  // contributes NOTHING but their presence -- load 0, `no-effort` set -- and the axis B filter
+  // below drops that assignment whole. Collected after the filter, this rule would be dead in its
+  // own main case, and a plan without markings would not notice.
+  //
+  // A PERSON WITH NOTHING ENTERED IS DROPPED HERE rather than answering `false` all day long: the
+  // list is walked once per working day, and an empty [HomeOffice] would answer the same question
+  // at a cost for no reason.
+  val blockingHomeOffice: List<HomeOffice> = if (!requiresPresence) emptyList() else
+    this.assignments
+      .filter { it.isBlocking }
+      .mapNotNull { it.resource as? HumanResource }
+      .map { it.homeOffice(resourceProperties).homeOffice }
+      .filter { !it.isEmpty }
   // [fork change] AXIS B. An assignment marked `no-effort` is dropped whole, not merely set to
   // zero hours -- and dropping it whole is what also takes that person's days off out of the
   // walk. That is the same answer either way, and it is the RIGHT one FOR THE HOURS: somebody who
@@ -176,10 +265,19 @@ internal fun Task.effortInputs(resourceProperties: CustomPropertyManager): Effor
       Share(
         resource.capacitySchedule(resourceProperties).schedule,
         assignment.load / 100.0,
-        resource.daysOffRanges())
+        resource.daysOffRanges(),
+        // [fork change] E1, and the condition is the whole of it: a person at home delivers no
+        // hours TO A TASK THAT NEEDS SOMEBODY ON SITE. Handing the home office in unconditionally
+        // would make every home-office day a holiday for every task -- the mistake this package
+        // exists to avoid, in its quietest form.
+        homeOffice = if (requiresPresence) {
+          resource.homeOffice(resourceProperties).homeOffice.takeIf { !it.isEmpty }
+        } else {
+          null
+        })
     }
   }
-  return EffortInputs(shares, blockingDaysOff)
+  return EffortInputs(shares, blockingDaysOff, blockingHomeOffice)
 }
 
 /**
@@ -235,7 +333,14 @@ internal fun daysNeededWithDaysOff(
       // cannot proceed without makes no progress on that day, not through the other people
       // either. The day is counted all the same -- it occupies a day of the task, as every day
       // off has always done. What it no longer does is eat the others' hours.
-      if (!inputs.blockingDaysOff.covers(day)) {
+      //
+      // [fork change] B3: „missing" now has TWO readings -- away, or at home on a task that needs
+      // somebody here. Both are folded in [EffortInputs.blocksWholeDay], and `days++` above stays
+      // where it is: a home-working day OCCUPIES a day of the task exactly as a holiday does. The
+      // task gets LONGER; it does not skip the day. Pulling `days++` inside this `if` is the
+      // obvious-looking rebuild and it is wrong, measured in `BlockingAbsenceDurationTest` for the
+      // holiday and in `HomeWorkDurationTest` for the home office.
+      if (!inputs.blocksWholeDay(day)) {
         remaining -= inputs.shares.sumOf { it.hoursOn(day) }
       }
       if (remaining <= 1e-9) {
@@ -268,5 +373,5 @@ fun Task.durationDaysWithDaysOff(
     return 1
   }
   return daysNeededWithDaysOff(
-    effort, this.effortInputs(resourceProperties), start, isWorkingDay)
+    effort, this.effortInputs(taskProperties, resourceProperties), start, isWorkingDay)
 }

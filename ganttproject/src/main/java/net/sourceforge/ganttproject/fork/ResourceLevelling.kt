@@ -123,6 +123,25 @@ data class LevelTask(
    */
   val blocking: Set<String> = emptySet(),
   /**
+   * [fork change] B3: does this Task need somebody ON THE PREMISES?
+   *
+   * CONDITION (a) OF THE HOME-WORK RULE, and the reason it has to be a field of the Task rather
+   * than something the availability channel could answer. The rule has two conditions -- this Task
+   * needs somebody here, AND one of [blocking] is at home that day -- and `isAvailable` has no
+   * Task in its signature at all. It could express the second and never the first.
+   *
+   * ASKED OF [blocking] AND OF NO OTHER SET. Natalie's sentence hangs on „zwingend notwendig": the
+   * person who has to be there. Somebody merely assigned to the Task who works from home is not
+   * what stops it; they simply do not deliver their hours to it, which is a statement about the
+   * DURATION and is made in `DaysOffDuration.kt`, not here.
+   *
+   * DEFAULT `false`, for the same reason [blocking] defaults to empty: every Task in every plan
+   * written before this fork is in this state, and in it the new half of the window search is
+   * never evaluated. Together with the default of `isAtWorkplace` in [levelTasks] that is two
+   * independent reasons why nothing changes for a plan that says nothing.
+   */
+  val requiresPresence: Boolean = false,
+  /**
    * Finished or begun work: stays exactly where it lies.
    *
    * WHY THIS IS NECESSARY: without this field levelling was a ONE-OFF TOOL. On the second run it
@@ -215,8 +234,49 @@ sealed interface LevelConflict {
    * the pool of the Tasks nobody is assigned to, and the text names it as such.
    */
   data class NoPossibleDate(
-    val id: String, val blocking: List<String>, val fullFor: List<String>
+    val id: String, val blocking: List<String>, val fullFor: List<String>,
+    /**
+     * [fork change] B3, and this is decision E2 of 04.09.2026: WHY the people in [blocking] were
+     * in the way -- because they were away, because they were working from home, or both.
+     *
+     * A MARK ON THE EXISTING FIELD AND NOT A THIRD LIST BESIDE IT, and the reasoning is the one
+     * written above [fullFor], carried one step further rather than stepped over. [blocking] is a
+     * list because „no day satisfies this SET" is a statement about the whole marked set, which
+     * the Task carries already. [fullFor] is a list because „this day was full" is about ONE
+     * person on ONE day and is not derivable afterwards. „Away or at home" is a statement of the
+     * SAME shape as the first: it is about the same set of people, and the set does not change
+     * with the reason. A third list would therefore repeat the names of the second, and a reader
+     * would have to work out that the two lists are one.
+     *
+     * A SET AND NOT AN ENUM, because both can be true at once: one candidate day rejected for an
+     * absence and another for a home-office day is one Task with two reasons, and dropping either
+     * would point somebody at the wrong thing to change.
+     *
+     * EMPTY EXACTLY WHEN [blocking] IS EMPTY. The two are filled from the same condition, so a
+     * non-empty [blocking] with no reason would be a message that names people and says nothing
+     * about them.
+     */
+    val blockingReasons: Set<AbsenceKind> = emptySet()
   ) : LevelConflict
+}
+
+/**
+ * [fork change] B3: the two ways a person marked as blocking can be in the way of a candidate day.
+ *
+ * THEY ARE NOT THE SAME THING AND THE MESSAGE MUST NOT SAY THEY ARE. „These people were away" put
+ * in front of somebody who was at their desk at home is not a rounding of the truth, it is the
+ * wrong sentence: what has to change is the marking of the TASK, not anybody's holidays. That is
+ * the whole reason this type exists rather than one boolean.
+ */
+enum class AbsenceKind {
+  /** A day off: the person is not working. [LevelTask.blocking] alone decides this. */
+  AWAY,
+
+  /**
+   * The person is working, from home, and this Task needs somebody on the premises. BOTH
+   * conditions -- [LevelTask.requiresPresence] and the person's home office -- or this is not it.
+   */
+  AT_HOME
 }
 
 data class LevelResult(
@@ -320,7 +380,8 @@ fun levelTasks(
   isWorkingDay: (LevelTask, LocalDate) -> Boolean,
   durationAt: (LevelTask, LocalDate) -> Int = { task, _ -> task.durationDays },
   capacityOf: (String) -> Int = { 100 },
-  isAvailable: (String, LocalDate) -> Boolean = { _, _ -> true }
+  isAvailable: (String, LocalDate) -> Boolean = { _, _ -> true },
+  isAtWorkplace: (String, LocalDate) -> Boolean = { _, _ -> true }
 ): LevelResult {
   val byId = tasks.associateBy { it.id }
   val conflicts = mutableListOf<LevelConflict>()
@@ -396,7 +457,7 @@ fun levelTasks(
       days = workingDays(start, durationAt(task, start), grid)
     } else {
       val search = findEarliestWindow(earliest, task, durationAt, used, grid, capacityOf,
-        isAvailable)
+        isAvailable, isAtWorkplace)
       days = search.days
       // THE ONE PLACE THE SILENT FALLBACK BECOMES A MESSAGE, and since 27.08.2026 it produces AT
       // MOST ONE report per Task. `exhausted` says the search gave up and the date below is the
@@ -434,12 +495,18 @@ fun levelTasks(
         //
         // Decided on 02.09.2026: leave the gap, name it here. Whoever removes this `if` because
         // it looks redundant has now been told why it is not.
-        val blocking = if (search.absenceBlocked) task.blocking.sorted() else emptyList()
+        // [fork change] B3: `blockedBy` is filled only inside `task.blocking.any { … }` below, so
+        // a non-empty set implies a non-empty `task.blocking` -- the same statement the boolean
+        // made before it. The reasons travel with the names, because a list of people without the
+        // reason names the wrong remedy; see [LevelConflict.NoPossibleDate.blockingReasons].
+        val blocking =
+          if (search.blockedBy.isNotEmpty()) task.blocking.sorted() else emptyList()
         val fullFor = search.fullFor.sorted()
         // Exhausted with neither reason recorded stays silent, exactly as it did when these were
         // two kinds: there would be nothing to name and nothing to change.
         if (blocking.isNotEmpty() || fullFor.isNotEmpty()) {
-          conflicts.add(LevelConflict.NoPossibleDate(id, blocking, fullFor))
+          conflicts.add(
+            LevelConflict.NoPossibleDate(id, blocking, fullFor, search.blockedBy))
         }
       }
     }
@@ -624,13 +691,22 @@ private data class WindowSearch(
    */
   val exhausted: Boolean,
   /**
-   * At least one candidate day failed because a person marked as blocking was away on it.
+   * Why a candidate day failed on a person marked as blocking: they were away, they were at home
+   * on a Task that needs somebody present, or both happened on different days.
    *
-   * ALWAYS FALSE FOR A PLAN WITHOUT MARKINGS: with [LevelTask.blocking] empty the loop that could
-   * set this runs zero times. That was what kept the capacity fallback silent while it was meant
-   * to stay silent; since P6 it only keeps the two reasons apart.
+   * [fork change] B3 MADE THIS A SET WHERE IT WAS A BOOLEAN, and the boolean's own note is why:
+   * it stood here to keep the two ways of giving up apart, and there are now three. The message
+   * has to name the right remedy, and „change the days off" put in front of a home-office day
+   * sends somebody to the wrong dialog.
+   *
+   * NOT ALLOCATED PER DAY. The loop below keeps two locals and this set is built at the two
+   * return statements, so the cost inside the walk is what it was: two boolean writes.
+   *
+   * ALWAYS EMPTY FOR A PLAN WITHOUT MARKINGS: with [LevelTask.blocking] empty the loop that could
+   * fill it runs zero times, and with [LevelTask.requiresPresence] false its home-office half is
+   * never evaluated at all.
    */
-  val absenceBlocked: Boolean,
+  val blockedBy: Set<AbsenceKind>,
   /**
    * The people whose already-booked working day made a candidate day fail.
    *
@@ -675,13 +751,18 @@ private fun findEarliestWindow(
   used: Map<String, MutableMap<LocalDate, Int>>,
   isWorkingDay: (LocalDate) -> Boolean,
   capacityOf: (String) -> Int,
-  isAvailable: (String, LocalDate) -> Boolean
+  isAvailable: (String, LocalDate) -> Boolean,
+  isAtWorkplace: (String, LocalDate) -> Boolean
 ): WindowSearch {
   var candidate = nextWorkingDay(earliest, isWorkingDay)
   var schutz = 0
   // Whether an absence was ever the reason a day was rejected. Read only when the search gives up
-  // below; it is what tells the two ways of giving up apart. See [WindowSearch.absenceBlocked].
+  // below; it is what tells the ways of giving up apart. See [WindowSearch.blockedBy].
   var absenceBlocked = false
+  // [fork change] B3, the same for a home-office day. TWO LOCALS AND NOT A SET, so that the walk
+  // allocates nothing; the set is built where the two returns are. False for ever in a plan whose
+  // Tasks are unmarked.
+  var homeWorkBlocked = false
   // Whose full day the search bounced off. ONE set per search and not one per candidate day: the
   // additions below happen only on days that are being rejected anyway, and a day that fits adds
   // nothing at all. See [WindowSearch.fullFor].
@@ -721,7 +802,8 @@ private fun findEarliestWindow(
       return WindowSearch(
         workingDays(nextWorkingDay(earliest, isWorkingDay), durationAt(task, earliest),
           isWorkingDay),
-        exhausted = true, absenceBlocked = absenceBlocked, fullFor = fullFor)
+        exhausted = true, blockedBy = blockedBy(absenceBlocked, homeWorkBlocked),
+        fullFor = fullFor)
     }
     // The duration depends on the starting day as soon as the daily rate is time-dependent -- it
     // therefore has to be asked anew FOR EVERY CANDIDATE, not once in advance.
@@ -740,11 +822,29 @@ private fun findEarliestWindow(
       if (absent) {
         absenceBlocked = true
       }
+      // [fork change] B3, THE ONE LINE WHERE THE WINDOW SEARCH LEARNS THE HOME-WORK RULE.
+      //
+      // BOTH CONDITIONS, WITH THE TASK'S ONE FIRST. `task.requiresPresence` is a field read and it
+      // is false for every Task in every plan written before this fork, so `&&` short-circuits and
+      // the person question is never asked. That is one of the five independent reasons an
+      // unmarked plan is laid exactly as it was.
+      //
+      // ASKED OF `task.blocking` -- THE SAME SET, NOT A SECOND ONE. Two sets would be two truths
+      // about who has to be there; one of them would drift.
+      //
+      // AFTER THE ABSENCE AND NOT BESIDE IT. A day that is both is counted as an absence and does
+      // not appear as a home-office day, exactly as a day that is both an absence and full is
+      // counted as an absence. The order is the one the message needs: somebody who is on holiday
+      // is not to be told to unmark the Task.
+      val atHome = !absent && task.requiresPresence && task.blocking.any { !isAtWorkplace(it, day) }
+      if (atHome) {
+        homeWorkBlocked = true
+      }
       // WRITTEN AS `absent || full` STILL, only with the right-hand side given a name. `full` is
       // computed exactly when the old `||` would have evaluated it -- `!absent &&` in front of it
       // is the short circuit, spelled out. Not one day changes its answer by this; what is gained
       // is that the answer can be written down.
-      val full = !absent && task.pools.any { pool ->
+      val full = !absent && !atHome && task.pools.any { pool ->
         // THE DEMAND IS THE ONE ON THIS PERSON, not the sum over everybody on the Task. Asking
         // the sum here was the defect: two people at 50 % each blocked a day on which each of
         // them was only half committed.
@@ -764,13 +864,29 @@ private fun findEarliestWindow(
         }
         voll
       }
-      absent || full
+      absent || atHome || full
     }
     if (blockedAt == null) {
-      return WindowSearch(window, exhausted = false, absenceBlocked = absenceBlocked,
-        fullFor = fullFor)
+      return WindowSearch(window, exhausted = false,
+        blockedBy = blockedBy(absenceBlocked, homeWorkBlocked), fullFor = fullFor)
     }
     // Continue searching only after the blocking day: everything before it fails for the same reason.
     candidate = nextWorkingDay(blockedAt.plusDays(1), isWorkingDay)
   }
+}
+
+/**
+ * [fork change] B3: the two locals of the walk, turned into the set the result carries.
+ *
+ * Written out here rather than inline at the two return statements so that the two cannot come to
+ * disagree -- they are the only two places a [WindowSearch] is built, and a search that reported a
+ * home-office day at one exit and not at the other would be a message that depends on how the
+ * search ended rather than on what it found.
+ */
+private fun blockedBy(absence: Boolean, homeWork: Boolean): Set<AbsenceKind> = when {
+  absence && homeWork -> setOf(AbsenceKind.AWAY, AbsenceKind.AT_HOME)
+  absence -> setOf(AbsenceKind.AWAY)
+  homeWork -> setOf(AbsenceKind.AT_HOME)
+  // The common case by a wide margin, and it allocates nothing.
+  else -> emptySet()
 }

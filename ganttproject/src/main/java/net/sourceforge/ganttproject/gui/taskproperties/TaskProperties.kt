@@ -70,7 +70,18 @@ class TaskPropertiesController(private val task: Task, roleManager: RoleManager,
           holder = it,
           definitions = task.manager.customPropertyManager,
           projectDatabase = projectDatabase,
-          fields = listOf(resourcesPanel::applyEffort, resourcesPanel::applyActualEffort))
+          // [fork change] The home working mark of package B2 joins this list and nothing else
+          // changes here -- which is exactly what the note above promised a further field would
+          // cost.
+          //
+          // IT HAS TO RUN HERE AND NOT IN mainPropertiesPanel.save(mutator) ABOVE. By this point
+          // `CustomColumnsPanel.save` has already walked every definition and written an explicit
+          // `false` into every boolean column of this task, because the value it hands over for an
+          // empty column is `""` and `java.lang.Boolean.valueOf("")` is `false`. A task nobody
+          // decided about would silently become "can be done from home". The field below runs
+          // after that and clears the value again. Measured in `TaskHomeWorkDialogTest`.
+          fields = listOf(resourcesPanel::applyEffort, resourcesPanel::applyActualEffort,
+                          mainPropertiesPanel::applyHomeWorkMark))
         mutator.setCustomProperties(it)
       }
       predecessorsPanel.commit()

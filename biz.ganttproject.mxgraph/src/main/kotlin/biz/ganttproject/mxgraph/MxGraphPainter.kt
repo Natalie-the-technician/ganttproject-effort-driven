@@ -21,6 +21,7 @@ package biz.ganttproject.mxgraph
 import biz.ganttproject.core.chart.canvas.Canvas.*
 import biz.ganttproject.core.chart.canvas.Painter
 import biz.ganttproject.core.chart.render.Style
+import biz.ganttproject.core.chart.scene.CapacityHeatmapSceneBuilder
 import com.mxgraph.util.mxConstants
 import net.sourceforge.ganttproject.chart.ChartUIConfiguration
 import net.sourceforge.ganttproject.font.Fonts
@@ -43,6 +44,8 @@ class MxGraphPainter(uiConfig: ChartUIConfiguration) : Painter {
   private val containerRectanglePainter = SummaryTaskPainter(mxPainter, chartProperties)
   private val resourceLoadPainter = ResourceLoadPainter(mxPainter, uiConfig)
   private val dayoffPainter = DayoffPainter(mxPainter, uiConfig)
+  /** [fork change] B4 -- see HomeWorkPainter.kt for why the export needs an entry of its own. */
+  private val homeWorkPainter = HomeWorkPainter(mxPainter, uiConfig)
   private val textPainter = MxTextPainter(mxPainter, chartProperties) { Fonts.DEFAULT_CHART_FONT }
   private val styleToPainter = mapOf(
       "task.progress" to ColouredRectanglePainter(mxPainter, Color.BLACK),
@@ -60,7 +63,8 @@ class MxGraphPainter(uiConfig: ChartUIConfiguration) : Painter {
       "load.underload.first" to resourceLoadPainter,
       "load.underload.last" to resourceLoadPainter,
       "load.underload.first.last" to resourceLoadPainter,
-      "dayoff" to dayoffPainter
+      "dayoff" to dayoffPainter,
+      CapacityHeatmapSceneBuilder.STYLE_HOME_WORK to homeWorkPainter
   )
 
   override fun prePaint() {}

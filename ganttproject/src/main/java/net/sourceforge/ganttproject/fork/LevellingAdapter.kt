@@ -358,6 +358,57 @@ fun availabilityTest(resourceManager: HumanResourceManager): (String, LocalDate)
   }
 }
 
+/**
+ * [fork change] B3: is this person AT THE WORKPLACE on this day -- a SIBLING of [availabilityTest]
+ * and emphatically not a part of it.
+ *
+ * ═══ WHY THIS IS A SECOND FUNCTION AND NOT FOUR MORE CHARACTERS IN THE ONE ABOVE ═══
+ *
+ * [availabilityTest] is named after what it answers: was this person AT WORK. Home office is not
+ * an answer to that question -- the person IS at work. Adding home-office ranges to the map above
+ * would take four characters, would compile, and would turn every home-working day into a holiday:
+ * the same [daysOffRanges] list feeds `Share.daysOff` (the hours go), `blockingDaysOff` (the day
+ * is dead) and this window search, so one edit would move all three at once. That is the single
+ * most expensive mistake this package can make, and the reason the two functions stand side by
+ * side here rather than one inside the other.
+ *
+ * ═══ WHAT IT DOES NOT KNOW, ON PURPOSE ═══
+ *
+ * It answers about the PERSON and the DAY and knows nothing about the task. Condition (a) -- does
+ * this task need somebody on the premises -- lives in [LevelTask.requiresPresence] and is asked in
+ * the window search. Keeping it out of here is what makes the map below correctly keyed: one
+ * answer per person and day is the truth for every task at once. A map that folded the task
+ * marking in would hand the second asker whatever the first one asked, and no check that puts a
+ * single marking into a run could see it -- the mistake [RememberedWorkingDays] documents one
+ * level down.
+ *
+ * READ ONCE, NOT PER QUESTION, and the same key -- the resource id as a string -- for the same
+ * reason as above. Parsing the two home-office texts per person and working day over up to 50 000
+ * days is what the warning in `HomeOfficeStorage.worksFromHome` is about.
+ *
+ * UNKNOWN KEYS COUNT AS PRESENT: [SHARED_POOL] is not a person and cannot work from home, and a
+ * resource deleted between conversion and calculation is not at home either.
+ *
+ * THE FAST PATH IS DELIBERATE AND IT IS A SECOND FLOOR. Nobody with anything entered means no
+ * lookup at all -- the same shape [availabilityTest] has. It is also, on its own, enough to make
+ * „an unmarked plan is laid exactly as before" true, INDEPENDENTLY of the four other places that
+ * also make it true. Whoever sharpens a guard against this channel has to take this line out at
+ * the same time, or the guard will report green about a rule it never asked.
+ */
+fun presenceTest(
+  resourceManager: HumanResourceManager,
+  resourceProperties: CustomPropertyManager
+): (String, LocalDate) -> Boolean {
+  val homeOffice: Map<String, HomeOffice> = resourceManager.resources
+    .associate { it.id.toString() to it.homeOffice(resourceProperties).homeOffice }
+    .filterValues { !it.isEmpty }
+  if (homeOffice.isEmpty()) {
+    // Nobody has anything entered -- then no lookup has to take place at all.
+    return { _, _ -> true }
+  }
+  return { person, day -> homeOffice[person]?.worksFromHome(day)?.not() ?: true }
+}
+
 // The conversion lives in LegacyDates.kt and EXPLICITLY does NOT use java.time: GanttProject
 // bends the default time zone at startup, and java.time does not see the bending. The reasoning
 // together with the measurement is there.
@@ -602,7 +653,7 @@ fun durationAtStart(
         val schedule = it.capacitySchedule(resourceProperties)
         DurationInputs(
           effort = it.effortHours(taskProperties),
-          effortInputs = it.effortInputs(resourceProperties),
+          effortInputs = it.effortInputs(taskProperties, resourceProperties),
           isWorkingDay = remembered.remembering(workingDays.forTask(it)),
           scheduleHasErrors = schedule.hasErrors,
           scheduleIsConstant = schedule.schedule.isConstant,
@@ -739,6 +790,16 @@ private fun Task.toLevelTask(
     durationDays = duration,
     loads = loads,
     blocking = blocking,
+    // [fork change] B3, CONDITION (a): does this task need somebody on the premises? Read off the
+    // task, exactly as `blocking` above is read off the assignments, and for the same reason --
+    // `isAvailable` has no task in its signature and cannot carry this.
+    //
+    // THE FOLD IS ASKED RATHER THAN REBUILT. „Nobody has decided" behaves like „can be done from
+    // home", and that decision lives in `HomeWorkMark.allowsHomeWorkingDay` alone.
+    //
+    // FALSE FOR EVERY TASK IN EVERY PLAN THAT EXISTS TODAY, which is what makes the new half of
+    // the window search a short circuit rather than a cost.
+    requiresPresence = this.requiresPresence(taskProperties),
     // A dependency on a group means: after ALL the leaves beneath it.
     predecessors = this.dependenciesAsDependant.toArray()
       .mapNotNull { it.dependee?.taskID?.toString() }

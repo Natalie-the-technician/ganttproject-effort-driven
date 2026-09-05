@@ -216,6 +216,15 @@ public class ChartUIConfiguration {
     return myProjectConfig.getDayOffColor();
   }
 
+  /**
+   * [fork change] B4 -- the colour of the home-working band in the resource chart. Read from the
+   * project configuration on every call, exactly as {@link #getDayOffColor()} is, so that a change
+   * in the settings reaches the next repaint.
+   */
+  public Color getHomeWorkColor() {
+    return myProjectConfig.getHomeWorkColor();
+  }
+
   public int getYOffSet() {
     return myYOffset;
   }
