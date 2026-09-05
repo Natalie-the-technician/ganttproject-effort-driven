@@ -26,10 +26,20 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     // TODO Auto-generated constructor stub
   }
 
+  private GPOptionGroup myServerOptions;
+  private GPOptionGroup myLockingOptions;
+
+  /**
+   * The option groups shown on this page, so that {@link OptionPageProviderBase#commit()} reaches
+   * them. The fields are filled in {@link #buildPageComponent()}; before the page has been built
+   * there is nothing to commit, hence the empty array.
+   */
   @Override
   public GPOptionGroup[] getOptionGroups() {
-    // TODO Auto-generated method stub
-    return new GPOptionGroup[0];
+    if (myServerOptions == null || myLockingOptions == null) {
+      return new GPOptionGroup[0];
+    }
+    return new GPOptionGroup[] {myServerOptions, myLockingOptions};
   }
 
   @Override
@@ -123,6 +133,7 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     });
 
     GPOptionGroup optionGroup = new GPOptionGroup("webdav.server", urlOption, usernameOption, passwordOption, savePasswordOption);
+    myServerOptions = optionGroup;
 
     serverList.getTableAndActions().addSelectionListener(new SelectionListener<WebDavServerDescriptor>() {
       @Override
@@ -148,6 +159,7 @@ public class WebDavOptionPageProvider extends OptionPageProviderBase {
     GPOptionGroup lockingGroup = new GPOptionGroup("webdav.lock", webdavStorage.getWebDavLockTimeoutOption(), webdavStorage.getWebDavReleaseLockOption());
     lockingGroup.setI18Nkey(builder.getI18N().getCanonicalOptionLabelKey(webdavStorage.getWebDavLockTimeoutOption()), "webdav.lockTimeout.label");
     lockingGroup.setI18Nkey(builder.getI18N().getCanonicalOptionLabelKey(webdavStorage.getWebDavReleaseLockOption()), "option.webdav.lock.releaseOnProjectClose.label");
+    myLockingOptions = lockingGroup;
     serversPanel.add(builder.buildPlanePage(new GPOptionGroup[] {lockingGroup}), BorderLayout.SOUTH);
 
     builder = new OptionsPageBuilder(null, OptionsPageBuilder.ONE_COLUMN_LAYOUT);
