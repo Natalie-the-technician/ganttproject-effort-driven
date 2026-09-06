@@ -116,6 +116,15 @@ data class LevelTask(
    * calculation needs the two to agree: a name in here is asked about availability, a name in
    * [loads] is booked capacity, and a name in only one of them is answerable either way.
    *
+   * SINCE 06.09.2026 THIS SET ALSO DECIDES WHICH DAYS [loads] IS BOOKED ON, and that is worth
+   * saying plainly next to the sentence above rather than leaving it to be discovered. The two
+   * sets still say two different things -- WHO has to be there against WHOSE day is spent -- and
+   * neither has become a subset of the other. What has changed is that the answer to the first
+   * question now gates the second: on a day this set is not satisfied, nothing in [loads] is
+   * booked at all, not even for people who are there. See [contributingDays] for why, and
+   * `LevellingBlockedDayCapacityTest` for the case that makes it matter -- a person who has to be
+   * present at a load of 0, whose absence frees the day for everybody else.
+   *
    * EMPTY IS THE DEFAULT, and the direction is chosen: an empty set means "nobody blocks", which
    * is what the program did before this stage and what an unmarked assignment means. A Task that
    * nobody blocks is laid exactly as it was laid before -- `ResourceLevellingTest` and
@@ -167,7 +176,16 @@ sealed interface LevelConflict {
   data class FixedDateNotReachable(
     val id: String, val fixedStart: LocalDate, val earliestPossible: LocalDate) : LevelConflict
 
-  /** On this day the sum of the Tasks demands more than 100 %. Arises only from fixed dates. */
+  /**
+   * On this day the sum of the Tasks demands more than 100 %. Arises only from fixed dates.
+   *
+   * [fork change] A TASK THAT CANNOT PROCEED ON THE DAY IS IN NEITHER [percent] NOR [ids], since
+   * 06.09.2026. On a day on which somebody indispensable is missing nobody works on that Task, so
+   * nobody is overloaded by it -- measured on 05.09.2026, where of four reported overloads on one
+   * plan exactly the one on the blocked day was the one that was not true. What that measurement
+   * also showed is that the three remaining ones are untouched: this removes a wrong sentence, it
+   * does not make the report quieter.
+   */
   data class Overload(
     val day: LocalDate, val percent: Int, val ids: List<String>,
     /** Whose capacity is exceeded. Empty: the pool of the unassigned Tasks. */
@@ -348,19 +366,30 @@ data class LevelResult(
  * capacity pools are named after, that is by [LevelTask.loads]'s key, and that is the resource id
  * from the model.
  *
- * ASKED ONLY ABOUT THE PEOPLE IN [LevelTask.blocking], and only in the search for a free window.
- * That is the whole of axis A: a day on which one of them is away is as unusable for this Task as
- * a day that is full. For everybody else the day off keeps doing what it did before -- it takes
- * that person's hours out of the day and leaves the Task where it is (see `DaysOffDuration.kt`).
+ * ASKED ONLY ABOUT THE PEOPLE IN [LevelTask.blocking], and in two places: the search for a free
+ * window, which will not LAY a Task on such a day, and the booking, which will not BOOK one --
+ * see [LevelTask.contributingDays]. That is the whole of axis A: a day on which one of them is
+ * away is as unusable for this Task as a day that is full, and it takes nobody's capacity. For
+ * everybody else the day off keeps doing what it did before -- it takes that person's hours out
+ * of the day and leaves the Task where it is (see `DaysOffDuration.kt`).
  *
  * P0 laid this channel and hung nothing on it; this is the stage that hangs the rule on it. What
  * did not change is the answer for an unmarked plan: with [LevelTask.blocking] empty this
  * function is never asked, and `LevellingDaysOffTest` and `ResourceLevellingTest` still pin the
  * result to be the same either way -- with "absent for everybody on every day" as the input.
  *
- * FIXED DATES AND FROZEN WORK ARE NOT ASKED, deliberately and for the reason already recorded
- * above: a fixed date is kept even when it does not fit, and begun work is the past. Axis A can
- * only act where levelling is allowed to choose, and that is the window search.
+ * FIXED DATES AND FROZEN WORK ARE NOT ASKED ABOUT WHERE THEY LIE, deliberately and for the
+ * reason already recorded above: a fixed date is kept even when it does not fit, and begun work
+ * is the past. Axis A can move a Task only where levelling is allowed to choose, and that is the
+ * window search.
+ *
+ * THEY ARE ASKED ABOUT WHAT THEY OCCUPY, and that is the change of 06.09.2026. The sentence above
+ * used to end „and that is the window search", full stop, which made this channel a question
+ * about placement alone. It is now also a question about capacity: a Task pinned to a date it
+ * cannot work on keeps the date and keeps its length, but stops holding everybody else's day.
+ * That is where the loss was -- for a movable Task the search had already stepped past the day,
+ * so there was nothing to release; the whole of the measured damage sat on the Tasks that may not
+ * move (`2026-09-05-freigabe-gemessen.md`, section 2).
  *
  * A FUNCTION AND NOT A LIST OF DATES, for the same reason as [isWorkingDay] beside it: this file
  * deliberately knows no GanttProject types, so that the calculation stays checkable without a
@@ -408,6 +437,11 @@ fun levelTasks(
 
   // Occupancy per PERSON and working day, in per cent. Only days on which something lies are in
   // it. The key "" is the pool of the unassigned Tasks.
+  //
+  // [fork change] AND ONLY THE DAYS A TASK REALLY CONTRIBUTES ON. A day inside a Task's window on
+  // which somebody indispensable is missing is NOT entered here for that Task -- it is a hole in
+  // the Task, not a claim on anybody. See [LevelTask.contributingDays]; both bookings below go
+  // through it, and so does the overload report at the end, which reads this map.
   val used = mutableMapOf<String, MutableMap<LocalDate, Int>>()
   val starts = mutableMapOf<String, LocalDate>()
   val durations = mutableMapOf<String, Int>()
@@ -420,9 +454,14 @@ fun levelTasks(
     val grid = gridOf.getValue(task.id)
     val liegtAuf = nextWorkingDay(task.fixedStart ?: projectStart, grid)
     val days = workingDays(liegtAuf, durationAt(task, liegtAuf), grid)
+    // [fork change] NO CONTRIBUTION, NO OCCUPANCY -- the release of 06.09.2026, and it is the
+    // same line as the one at the movable booking below. Frozen work is booked here, and it needs
+    // the rule for the same reason: begun work laid across a day on which nobody could work must
+    // not hold that day against everybody else either.
+    val beitragend = task.contributingDays(days, isAvailable, isAtWorkplace)
     task.pools.forEach { pool ->
       val belegung = used.getOrPut(pool) { mutableMapOf() }
-      days.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadIn(pool) }
+      beitragend.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadIn(pool) }
     }
     starts[task.id] = days.first()
     durations[task.id] = days.size
@@ -511,9 +550,21 @@ fun levelTasks(
       }
     }
 
+    // [fork change] NO CONTRIBUTION, NO OCCUPANCY -- see [LevelTask.contributingDays].
+    //
+    // `days` AND NOT `beitragend` IN THE THREE LINES BELOW, and the difference is the whole of
+    // what this change is and is not. The blocked day stays IN the task: it keeps its start, its
+    // length and its end, and the day is a hole inside it. What it no longer does is take
+    // somebody's capacity for work that is not happening.
+    //
+    // FOR A TASK THE SEARCH WAS ALLOWED TO MOVE THIS FILTERS NOTHING, by construction:
+    // `findEarliestWindow` has already refused every window containing such a day, so none of
+    // them is in `days`. It acts on the tasks the search may not move -- a fixed date, frozen
+    // work -- and that is where the loss was measured on 05.09.2026.
+    val beitragend = task.contributingDays(days, isAvailable, isAtWorkplace)
     task.pools.forEach { pool ->
       val belegung = used.getOrPut(pool) { mutableMapOf() }
-      days.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadIn(pool) }
+      beitragend.forEach { belegung[it] = (belegung[it] ?: 0) + task.loadIn(pool) }
     }
     starts[id] = days.first()
     durations[id] = days.size
@@ -557,7 +608,13 @@ fun levelTasks(
         // they were booked on a few lines up. Using one grid for all of them here would name a
         // Saturday worker on the wrong days of an overload -- the day would be right, the list of
         // who is on it would not.
-        workingDays(s, durations[t.id] ?: t.durationDays, gridOf.getValue(t.id)).contains(day)
+        val tage = workingDays(s, durations[t.id] ?: t.durationDays, gridOf.getValue(t.id))
+        // [fork change] AND THROUGH THE SAME FILTER THE BOOKING USED, for the same kind of reason
+        // as the grid beside it: this walk is a THIRD place a task's days are computed, and it
+        // does not read the occupancy it is reporting on. Without the filter a task released from
+        // the day would still be named as one of the reasons it is too full -- the number right,
+        // the names wrong, and the reader pointed at the one task on the day that is innocent.
+        t.contributingDays(tage, isAvailable, isAtWorkplace).contains(day)
       }.map { it.id }
       conflicts.add(LevelConflict.Overload(day, percent, onThatDay, pool))
     }
@@ -602,6 +659,70 @@ internal val LevelTask.pools: List<String>
  * own keys, so the lookup always hits.
  */
 internal fun LevelTask.loadIn(pool: String): Int = loads[pool] ?: SHARED_POOL_LOAD
+
+/**
+ * [fork change] Which of [days] this Task actually consumes capacity on. The release of
+ * 06.09.2026.
+ *
+ * THE RULE, IN NATALIE'S WORDS: „wenn b nicht an dem Vorgang arbeitet weil a nicht da ist, kann b
+ * ja in der zeit was anderes machen". Half of it was built on 03.09.2026 -- since then a day on
+ * which somebody indispensable is missing delivers no hours to the Task, in the duration
+ * calculation and in the window search. The booking did not know it: `used` entered
+ * [loadIn] over EVERY working day of the window, so a day on which nothing happened still held
+ * everybody's capacity against everybody else. This closes that half.
+ *
+ * WHAT IT DOES NOT DO, and it should not be read as more than it is: it keeps no per-person
+ * account of hours. There is still no place in this program that says how much of somebody's day
+ * is left. It makes the day BOOKABLE again -- whether anything fills it is decided by the window
+ * search, exactly as for any other free day. The alternative, a real accounting in hours, was
+ * measured against this one on 05.09.2026 and set aside: it moves a unit through half the file,
+ * changes the wording of the overload message on screen, and breaks the load-0 person this fork
+ * exists for, for no gain on the loss that was actually measured.
+ *
+ * THE SAME QUESTION THE WINDOW SEARCH ASKS, AND THAT IS THE POINT OF IT BEING A FUNCTION. In
+ * [findEarliestWindow] the two locals `absent` and `atHome` decide whether a candidate day is
+ * usable; here the same two conditions decide whether it is booked. Two spellings of one sentence
+ * drift -- this file says so itself about [LevelTask.blocking] and [LevelTask.requiresPresence] --
+ * so the sentence is written once. That the two ends really agree is pinned from the outside by
+ * `fenstersuche und buchung sind sich einig welcher tag ein blockierter ist`, which demands that a
+ * movable task never be laid on a day this function would release.
+ *
+ * BOTH HALVES OF THE RULE, and the second one is not in the draft the measurement proposed: that
+ * one predates the home-work series. A Task that needs somebody on the premises does not run on a
+ * day that person works from home -- the search refuses such a day since 04.09.2026 -- so that day
+ * delivers nothing either and must not be booked. Leaving it out would have left the two ends
+ * saying different things about the same Wednesday.
+ *
+ * THE SAME LIST BACK WHEN NOTHING IS MARKED, the very object and not a copy of it. That is what
+ * makes „an unmarked plan is not touched" a property of the shape rather than of the arithmetic:
+ * with [LevelTask.blocking] empty neither channel is asked at all, on any day, and there is
+ * nothing to allocate. Every plan written before this fork is in that state.
+ *
+ * COST: nothing that rises above the machine's own noise, measured twice — predicted on
+ * 05.09.2026 from the draft, and measured again on 06.09.2026 on this code, paired, on the
+ * measurement stand of 03.09.2026. The worst case for the cost is a plan in which the filter runs
+ * on every booked day and removes NOTHING, since removing a day only saves a map write; 300 tasks
+ * with fixed dates and a marking, 21 measurements after 6 warm-up runs, gave ratios of 1.00 and
+ * 1.01 over two paired passes. Per booked window day this adds one walk over a set that is empty
+ * in the ordinary case; the window search asks `durationAt` 224 550 times in the same plan.
+ */
+internal fun LevelTask.contributingDays(
+  days: List<LocalDate>,
+  isAvailable: (String, LocalDate) -> Boolean,
+  isAtWorkplace: (String, LocalDate) -> Boolean
+): List<LocalDate> {
+  if (blocking.isEmpty()) {
+    return days
+  }
+  return days.filter { day ->
+    // The order is the one in [findEarliestWindow]: the absence first, because it is the cheaper
+    // question, and the home-office half behind `requiresPresence` so that it is never evaluated
+    // for a Task nobody marked.
+    val absent = blocking.any { !isAvailable(it, day) }
+    val atHome = !absent && requiresPresence && blocking.any { !isAtWorkplace(it, day) }
+    !absent && !atHome
+  }
+}
 
 /**
  * Processing order: only Tasks whose predecessors already lie, and among those the most
@@ -836,6 +957,11 @@ private fun findEarliestWindow(
       // The answer is remembered because it is one of the two things that turn the fallback above
       // into a message -- the other one is `fullFor` below. One boolean, no allocation, and false
       // for ever in a plan with no marking.
+      // [fork change] THE SAME QUESTION [LevelTask.contributingDays] ASKS, and the two have to
+      // stay the same question: this one decides that the day is no place for the Task, that one
+      // decides that the day therefore costs nobody anything. They are spelled out separately
+      // here only because the message needs to know WHICH of the two reasons applied, which a
+      // single boolean answer cannot carry.
       val absent = task.blocking.any { !isAvailable(it, day) }
       if (absent) {
         absenceBlocked = true
