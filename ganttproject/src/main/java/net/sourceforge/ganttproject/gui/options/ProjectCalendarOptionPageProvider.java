@@ -22,9 +22,15 @@ import biz.ganttproject.core.option.DefaultDateOption;
 import biz.ganttproject.core.option.GPOptionGroup;
 import biz.ganttproject.core.time.CalendarFactory;
 import biz.ganttproject.core.time.TimeDuration;
+import biz.ganttproject.customproperty.CustomPropertyManager;
 import com.google.common.collect.Lists;
+import net.sourceforge.ganttproject.GPLogger;
+import net.sourceforge.ganttproject.fork.ForkI18nKt;
+import net.sourceforge.ganttproject.fork.HolidayWorkKt;
 import net.sourceforge.ganttproject.gui.UIUtil;
 import net.sourceforge.ganttproject.language.GanttLanguage;
+import net.sourceforge.ganttproject.task.TaskManager;
+import net.sourceforge.ganttproject.task.dependency.TaskDependencyException;
 import net.sourceforge.ganttproject.task.Task;
 import net.sourceforge.ganttproject.task.TaskContainmentHierarchyFacade;
 import net.sourceforge.ganttproject.task.algorithm.AlgorithmException;
@@ -46,6 +52,16 @@ import java.util.List;
  */
 public class ProjectCalendarOptionPageProvider extends OptionPageProviderBase {
   private WeekendsSettingsPanel myWeekendsPanel;
+  /**
+   * [fork change] A4 -- the project setting "allow work on holidays".
+   *
+   * ON THE PROJECT CALENDAR PAGE and not in the program's options, decided on 03.09.2026: the
+   * setting changes computed dates, so in the program's options the same .gan would produce two
+   * different plans on two machines and neither would be wrong in any way anybody could point at.
+   * It travels in the file, and this page is the one that edits what travels in the file about
+   * days.
+   */
+  private JCheckBox myAllowHolidayWork;
   private DefaultDateOption myProjectStartOption;
   private JRadioButton myMoveAllTasks;
   private JRadioButton myMoveStartingTasks;
@@ -76,6 +92,26 @@ public class ProjectCalendarOptionPageProvider extends OptionPageProviderBase {
     myWeekendsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
     myWeekendsPanel.initialize();
     result.add(myWeekendsPanel);
+
+    result.add(Box.createVerticalStrut(15));
+
+    // [fork change] A4. Right below the weekend settings, because the two are the only things on
+    // this page that say which days may be worked -- and directly beside them so that the
+    // difference is visible: the boxes above are about WEEKDAYS, this one is about the calendar
+    // events. The switch never touches a weekend.
+    myAllowHolidayWork = new JCheckBox(
+        ForkI18nKt.forkText("fork.projectCalendar.allowHolidayWork"));
+    myAllowHolidayWork.setAlignmentX(Component.LEFT_ALIGNMENT);
+    myAllowHolidayWork.setSelected(isHolidayWorkAllowed());
+    Box holidayBox = Box.createVerticalBox();
+    holidayBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+    holidayBox.add(myAllowHolidayWork);
+    JLabel holidayHint =
+        new JLabel(ForkI18nKt.forkText("fork.projectCalendar.allowHolidayWork.hint"));
+    holidayHint.setAlignmentX(Component.LEFT_ALIGNMENT);
+    holidayHint.setFont(holidayHint.getFont().deriveFont(Font.PLAIN, holidayHint.getFont().getSize() - 1f));
+    holidayBox.add(holidayHint);
+    result.add(holidayBox);
 
     result.add(Box.createVerticalStrut(15));
 
@@ -204,6 +240,50 @@ public class ProjectCalendarOptionPageProvider extends OptionPageProviderBase {
   @Override
   public void commit() {
     myWeekendsPanel.applyChanges(false);
+    commitHolidayWork();
     myProjectStartOption.commit();
+  }
+
+  /** [fork change] A4. The resource property manager is where the setting lives; see HolidayWork.kt. */
+  private CustomPropertyManager resourceProperties() {
+    return getProject() == null ? null : getProject().getResourceCustomPropertyManager();
+  }
+
+  private boolean isHolidayWorkAllowed() {
+    CustomPropertyManager properties = resourceProperties();
+    return properties != null && HolidayWorkKt.allowsHolidayWork(properties);
+  }
+
+  /**
+   * [fork change] A4. Writes the setting and RE-RUNS THE SCHEDULE, the same two steps
+   * WeekendsSettingsPanel takes when a weekday changes -- and for the same reason: the dates on
+   * screen were computed on the old day grid and would otherwise stay there until the next edit.
+   *
+   * NOTHING IS WRITTEN WHEN NOTHING CHANGED, so opening the page and closing it again does not put
+   * a custom property definition into a file that never had one.
+   */
+  private void commitHolidayWork() {
+    CustomPropertyManager properties = resourceProperties();
+    if (properties == null || myAllowHolidayWork == null) {
+      return;
+    }
+    boolean wanted = myAllowHolidayWork.isSelected();
+    if (wanted == HolidayWorkKt.allowsHolidayWork(properties)) {
+      return;
+    }
+    HolidayWorkKt.setAllowHolidayWork(properties, wanted);
+    GPLogger.log("[fork change] Project setting 'allow work on holidays' is now "
+        + (wanted ? "ON: public holidays are no longer counted as days off, and the working week "
+                    + "of each person decides alone. Weekends are not affected."
+                  : "OFF: a public holiday is a day off again, as it is by default.")
+        + " Recomputing the schedule.");
+    try {
+      TaskManager taskManager = getProject().getTaskManager();
+      taskManager.getAlgorithmCollection().getRecalculateTaskScheduleAlgorithm().run();
+      taskManager.getAlgorithmCollection().getAdjustTaskBoundsAlgorithm()
+          .adjustNestedTasks(taskManager.getRootTask());
+    } catch (TaskDependencyException e) {
+      GPLogger.log(e);
+    }
   }
 }

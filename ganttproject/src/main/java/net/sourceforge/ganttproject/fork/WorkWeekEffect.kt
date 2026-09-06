@@ -71,11 +71,18 @@ import java.time.LocalDate
  * an exception inside a working week, a working week is the grid itself -- but the difference is
  * visible in the result and is written up in the report rather than smoothed over here.
  *
- * HOLIDAYS ARE NOT TOUCHED, and that is a boundary of this stage, not an oversight. The extension
- * half of the rule applies to days that the project calendar leaves free BECAUSE OF THE WEEKDAY.
- * A public holiday stays free even when every involved person's week names that weekday. Whether
- * somebody should be able to work through a holiday is its own switch and its own stage; see
- * [projectDayIsFreeForWeekdayReasons] for how the two are told apart.
+ * HOLIDAYS ARE NOT TOUCHED BY THIS RULE, and that is a boundary of it, not an oversight. The
+ * extension half applies to days that the project calendar leaves free BECAUSE OF THE WEEKDAY. A
+ * public holiday stays free even when every involved person's week names that weekday. Natalie's
+ * distinction, and it is the whole of it: a weekend is a habit, a holiday is an announcement.
+ *
+ * [fork change] A4 BUILT THE OTHER SWITCH, and it did not build it here. „Allow work on holidays"
+ * is a setting OF THE PROJECT ([HolidayRule]), it is off by default, and it is the only way a
+ * holiday moves. The two never meet in the middle: with the switch on, a holiday simply is not
+ * there any more, and the day is then decided by the weekday like any other -- which is to say by
+ * the rule in this file, on its own terms. See [projectDayIsFreeForWeekdayReasons] for how the two
+ * kinds of free day are told apart, and [HolidayRule.isFreeForWeekdayReasons] for what the setting
+ * does to that question.
  */
 
 /**
@@ -98,7 +105,7 @@ import java.time.LocalDate
  * already says yes and the extension half is never consulted for it.
  */
 internal fun projectDayIsFreeForWeekdayReasons(mask: Int): Boolean =
-  mask and GPCalendar.DayMask.WORKING == 0 && mask and GPCalendar.DayMask.HOLIDAY == 0
+  HolidayRule.OFF.isFreeForWeekdayReasons(mask)
 
 /**
  * The rule itself, on the working weeks of the people involved.
@@ -195,8 +202,31 @@ class WorkWeekWorkingDays(
   private val calendar: GPCalendar,
   private val resourceProperties: CustomPropertyManager
 ) {
+  /**
+   * [fork change] A4 -- the project's holiday setting, READ ONCE HERE and nowhere else in the
+   * planning.
+   *
+   * WHY IT IS READ IN THIS CLASS AND NOT THREADED THROUGH. The setting has to reach seven
+   * production call sites -- four in the levelling, the recurrences, the effort-driven duration
+   * and the scheduler's own hook -- and every single one of them already builds this object and
+   * already hands it the resource properties. Reading it here reaches all seven without a
+   * parameter anywhere, and, more to the point, without a call site that could forget to pass it.
+   * A switch that applied to six places out of seven would be worse than no switch: parts of one
+   * plan would be computed on one grid and parts on another, and nothing would say so.
+   *
+   * THE SETTING LIVES IN THE RESOURCE PROPERTIES because that is the only place in the file
+   * format that survives a foreign GanttProject -- measured, see [HolidayRule]. That it is
+   * therefore already to hand here is a convenience the measurement handed us, not the reason for
+   * the choice.
+   *
+   * READ ONCE, LIKE EVERYTHING ELSE THIS CLASS READS, and with the same lifetime: one pass. A
+   * switch flipped during a session takes effect on the next pass, exactly as an edited working
+   * week does.
+   */
+  private val holidayRule: HolidayRule = HolidayRule.of(calendar, resourceProperties)
+
   /** The project calendar alone -- what every task used before this file existed. */
-  private val projectOnly: (LocalDate) -> Boolean = workingDayTest(calendar)
+  private val projectOnly: (LocalDate) -> Boolean = workingDayTest(calendar, holidayRule)
 
   /**
    * [fork change] The same object [forTask] hands back to a task with nothing entered.
@@ -236,10 +266,14 @@ class WorkWeekWorkingDays(
     } else {
       { day ->
         val mask = calendar.getDayMask(day.toModelDate())
+        // [fork change] A4: both answers come out of the same rule object, and they have to. Ask
+        // one of them with the setting applied and the other without it and a public holiday
+        // would be a working day AND free for weekday reasons at the same time -- a state
+        // `taskWorksOn` has no reading for.
         taskWorksOn(
           day,
-          projectWorking = mask and GPCalendar.DayMask.WORKING != 0,
-          projectFreeForWeekdayReasons = projectDayIsFreeForWeekdayReasons(mask),
+          projectWorking = holidayRule.isWorking(mask),
+          projectFreeForWeekdayReasons = holidayRule.isFreeForWeekdayReasons(mask),
           involved = involved)
       }
     }
