@@ -10,6 +10,7 @@ import androidx.compose.ui.res.stringResource
 import biz.ganttproject.mobile.R
 import biz.ganttproject.mobile.core.MatchReason
 import biz.ganttproject.mobile.core.SplitValidation
+import biz.ganttproject.mobile.core.TeammateRole
 import biz.ganttproject.mobile.core.TimeSource
 import biz.ganttproject.mobile.core.TogglError
 import biz.ganttproject.mobile.core.formatHours
@@ -76,6 +77,20 @@ fun MatchReason.text(): String = when (this) {
   MatchReason.EXACT_NAME -> stringResource(R.string.import_reason_name)
   MatchReason.NAME_CONTAINED -> stringResource(R.string.import_reason_contained)
   MatchReason.WORD_OVERLAP -> stringResource(R.string.import_reason_words)
+}
+
+/**
+ * A colleague's role on a task.
+ *
+ * [TeammateRole.Named] is already the project's own wording and is passed
+ * through untranslated — renaming a planner's role would be a lie. Only the
+ * one role GanttProject builds into every project without ever writing its
+ * name into the file needs a word here.
+ */
+@Composable
+fun TeammateRole.text(): String = when (this) {
+  is TeammateRole.Named -> name
+  TeammateRole.ProjectManager -> stringResource(R.string.role_project_manager)
 }
 
 /** Where a record came from, for the one-word note beside it. */

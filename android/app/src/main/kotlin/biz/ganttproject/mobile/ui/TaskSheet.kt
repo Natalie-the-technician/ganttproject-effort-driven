@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,6 +48,8 @@ import biz.ganttproject.mobile.core.TimeSource
 import biz.ganttproject.mobile.core.availableHoursPerDay
 import biz.ganttproject.mobile.core.computeDurationDays
 import biz.ganttproject.mobile.core.parseEffortInput
+import biz.ganttproject.mobile.core.resolveMe
+import biz.ganttproject.mobile.core.teammatesOfTask
 import java.time.ZoneId
 import kotlin.math.abs
 
@@ -91,6 +94,9 @@ fun TaskSheet(
         }
       }
     }
+
+    // ------------------------------------------- Who is working on this
+    TeammatesSection(task, model, viewModel)
 
     // ------------------------------------------------------------ Dates
     Column {
@@ -321,6 +327,86 @@ private fun HoursField(
         }
       }) {
         Text(stringResource(R.string.action_apply))
+      }
+    }
+  }
+}
+
+/**
+ * Who is on this task — the participant's question, answered in the
+ * participant's words.
+ *
+ * ## Why this is not the assignment list further down
+ *
+ * The section at the bottom of this sheet is the planner's: a load slider, a
+ * capacity figure, a responsible flag, buttons that change the plan. Someone
+ * who only takes part in the plan needs none of that and, per the brief for
+ * this app, should not be shown it as their answer — the load percentage in
+ * particular is the planner's own working figure, not a fact about the
+ * colleague standing next to you.
+ *
+ * So this is deliberately three things and no more: the name, the role when
+ * the file states one, and which of the names is the reader's own. It writes
+ * nothing.
+ *
+ * ## Why it sits directly under the task name
+ *
+ * The assignment list is the last section of a sheet that also carries
+ * progress, effort and the whole time log. "Who am I doing this with" is a
+ * question asked at a glance, and an answer four scrolls down is not one.
+ */
+@Composable
+private fun TeammatesSection(
+  task: TaskNode,
+  model: ProjectModel,
+  viewModel: ProjectViewModel
+) {
+  val person = viewModel.person()
+  val mates = remember(task.id, model, person) {
+    teammatesOfTask(model, task.id, resolveMe(model, person))
+  }
+  // Nothing at all when nobody is assigned — not a heading over an empty
+  // list. An unassigned task is a hole in the plan, which is the planner's
+  // to fill and the planner's section below already names in as many words;
+  // repeating it here would only put an empty shelf in front of a reader who
+  // can do nothing about it.
+  if (mates.isEmpty()) return
+
+  Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Text(stringResource(R.string.teammates), style = MaterialTheme.typography.labelMedium)
+    mates.forEach { mate ->
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Text(
+          // A hand-edited file can point an assignment at a resource that is
+          // not there. Showing the bare id keeps the row honest: someone is
+          // on this task and the file has lost their name.
+          text = mate.name ?: stringResource(R.string.teammate_unnamed, mate.resourceId),
+          style = MaterialTheme.typography.bodyMedium,
+          fontStyle = if (mate.name == null) FontStyle.Italic else FontStyle.Normal,
+          color = if (mate.name == null) MaterialTheme.colorScheme.onSurfaceVariant
+          else MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.weight(1f)
+        )
+        mate.role?.let { role ->
+          Text(
+            role.text(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
+        if (mate.isMe) {
+          Text(
+            stringResource(R.string.teammate_you),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary
+          )
+        }
       }
     }
   }
