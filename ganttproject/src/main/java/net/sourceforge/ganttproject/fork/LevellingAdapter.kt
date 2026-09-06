@@ -223,9 +223,26 @@ internal fun workingDaysBetween(
   return tage
 }
 
-/** The project calendar as a function, so the calculation can use it without the model. */
-fun workingDayTest(calendar: GPCalendar): (LocalDate) -> Boolean = { day ->
-  calendar.getDayMask(day.toLegacyDate()) and GPCalendar.DayMask.WORKING != 0
+/**
+ * The project calendar as a function, so the calculation can use it without the model.
+ *
+ * [fork change] A4 -- [rule] is the project's holiday setting, and it DEFAULTS TO OFF, which is
+ * the expression this function contained before A4 (`mask and WORKING != 0`) and nothing else.
+ * Every call site that does not pass a rule therefore keeps the answer it had, on the day; see
+ * [HolidayRule] for why „off" is the old arithmetic written out rather than a value with no
+ * effect.
+ *
+ * WHO PASSES A RULE: [WorkWeekWorkingDays], which is the object all seven production call sites
+ * build and which reads the setting out of the resource properties it is handed anyway. The two
+ * callers that may have no resource properties at all -- `applyLevellingAsSingleEdit` and
+ * `planRecurrences` -- are exactly the callers that then plan on the project calendar alone, so
+ * for them the default is not a shortcut but the only answer there is.
+ */
+@JvmOverloads
+fun workingDayTest(
+  calendar: GPCalendar, rule: HolidayRule = HolidayRule.OFF
+): (LocalDate) -> Boolean = { day ->
+  rule.isWorking(calendar.getDayMask(day.toLegacyDate()))
 }
 
 /**
