@@ -18,6 +18,7 @@ import com.google.common.collect.Lists;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
 import net.sourceforge.ganttproject.chart.gantt.ITaskActivity;
 import net.sourceforge.ganttproject.chart.item.ChartItem;
+import net.sourceforge.ganttproject.chart.item.HiddenGapChartItem;
 import net.sourceforge.ganttproject.chart.item.TaskBoundaryChartItem;
 import net.sourceforge.ganttproject.chart.item.TaskNotesChartItem;
 import net.sourceforge.ganttproject.chart.item.TaskProgressChartItem;
@@ -26,6 +27,8 @@ import net.sourceforge.ganttproject.gui.UIConfiguration;
 import net.sourceforge.ganttproject.gui.options.OptionsPageBuilder;
 import net.sourceforge.ganttproject.task.Task;
 import net.sourceforge.ganttproject.fork.ChartComparison;
+import net.sourceforge.ganttproject.fork.HiddenTaskGap;
+import net.sourceforge.ganttproject.fork.HiddenTaskGapKt;
 import net.sourceforge.ganttproject.task.TaskManager;
 
 import java.util.Arrays;
@@ -115,7 +118,14 @@ public class ChartModelImpl extends ChartModelBase {
 
   @Override
   public ChartItem getChartItemWithCoordinates(int x, int y) {
-    ChartItem result = findTaskProgressItem(x, y);
+    // [Fork change] FIRST, and it has to be first. A collision bar is a rectangle on the base
+    // canvas bound to a HiddenTaskGap rather than to a task activity, and findTaskBoundaryItem
+    // casts whatever model object it finds to ITaskActivity without asking. Asking here, before it
+    // does, is the one place where that cannot be forgotten again.
+    ChartItem result = findHiddenGapItem(x, y);
+    if (result == null) {
+      result = findTaskProgressItem(x, y);
+    }
     if (result == null) {
       result = findTaskBoundaryItem(x, y);
     }
@@ -123,6 +133,23 @@ public class ChartModelImpl extends ChartModelBase {
       result = super.getChartItemWithCoordinates(x, y);
     }
     return result;
+  }
+
+  /**
+   * [Fork change] The collision bar under the pointer, or null.
+   *
+   * BY STYLE and not by the type of the model object, exactly as the notes mark beside it is found:
+   * the style is what the scene builder set, it cannot be set by accident, and a rectangle carrying
+   * it is the only kind on this canvas whose model object is a {@link HiddenTaskGap}.
+   */
+  private ChartItem findHiddenGapItem(int x, int y) {
+    Canvas.Shape primitive = myTaskRendererImpl.getPrimitiveContainer().getPrimitive(x, y);
+    if (primitive != null
+        && HiddenTaskGapKt.STYLE_HIDDEN_GAP.equals(primitive.getStyle())
+        && primitive.getModelObject() instanceof HiddenTaskGap) {
+      return new HiddenGapChartItem((HiddenTaskGap) primitive.getModelObject());
+    }
+    return null;
   }
 
   private ChartItem findTaskProgressItem(int x, int y) {

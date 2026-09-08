@@ -111,6 +111,44 @@ public class UIConfiguration {
    */
   private Color myAbsenceColor;
 
+  /**
+   * [fork change] Colour of the COLLISION BAR -- the mark on a row seam that says a view is hiding
+   * something here. See {@link net.sourceforge.ganttproject.fork.HiddenTaskGap}.
+   *
+   * A FOURTH FIELD, and the darkest of them by a wide margin, because the arithmetic left no other
+   * window open. Greyscale brightness (0.299 R + 0.587 G + 0.114 B) of everything this mark can end
+   * up beside -- it lies on the seam between two rows, over the chart background, and it has to be
+   * told from the two marks this fork already draws:
+   *
+   *     chart background      #FFFFFF  255
+   *     weekend column        #EEEEEE  238   (chart.properties, calendar.weekend)
+   *     public holiday column #EEDDEE  228   (chart.properties, calendar.holiday)
+   *     task bar, default     #8CB6CE  172
+   *     ROW SEPARATOR LINE    #808080  128   (Color.GRAY, GanttChartSceneBuilder.renderVisibleTasks)
+   *     absence stripe        #E65A1E  125
+   *     home-working band     #5F3CAF   84
+   *     progress bar          #000000    0
+   *     COLLISION BAR         #003E3C   43
+   *
+   * THE STEP THIS FORK USES IS 40, „still there after a projector and a photocopier" since B4. With
+   * eight fixed points between 0 and 255 there is exactly ONE window of 40 left: greyscale 40 to
+   * 44. Everything from 85 upwards is within 40 of the home-working band, the absence stripe, the
+   * separator line, the bar or the background; everything below 40 is within 40 of the progress
+   * bar. 43 sits in the middle of the only window there is, so the mark is dark -- that is a
+   * consequence of the palette, not a preference.
+   *
+   * WHY A TEAL AND NOT A DARK RED OR A NAVY. Two of the eight are the fork's own signs, and a
+   * reader has to keep all three apart. #003E3C is the complementary hue of the absence orange,
+   * which is the pair that survives red-green colour blindness best of all, and it is far enough
+   * round the wheel from the home-working violet not to be its darker twin. A dark red would sit
+   * next to the orange on exactly the axis that fails first.
+   *
+   * THE COLOUR IS THE WEAKER OF THE TWO CUES ON PURPOSE. The stronger one is the SHAPE: neither of
+   * the other two marks is a line, and a dashed line with solid end caps reads as „from here to
+   * here, and it is not really there" on a black-and-white printout. See `StyledPainterImpl`.
+   */
+  private Color myHiddenGapColor;
+
   private boolean isRedlineOn;
 
   private boolean isCriticalPathOn;
@@ -158,6 +196,8 @@ public class UIConfiguration {
     myHomeWorkColor = new Color(95, 60, 175);
     // [fork change] The absence stripe. See the field comment for the measurement.
     myAbsenceColor = new Color(230, 90, 30);
+    // [fork change] The collision bar. See the field comment for the measurement.
+    myHiddenGapColor = new Color(0, 62, 60);
     myWeekendAlphaRenderingOption = new AlphaRenderingOption();
     myAppFontSize = new Supplier<Integer>() {
       @Override
@@ -255,6 +295,16 @@ public class UIConfiguration {
   /** [fork change] The colour of the absence stripe on a task bar. */
   public void setAbsenceColor(Color absenceColor) {
     this.myAbsenceColor = absenceColor;
+  }
+
+  /** [fork change] The colour of the collision bar on a row seam. */
+  public Color getHiddenGapColor() {
+    return myHiddenGapColor;
+  }
+
+  /** [fork change] The colour of the collision bar on a row seam. */
+  public void setHiddenGapColor(Color hiddenGapColor) {
+    this.myHiddenGapColor = hiddenGapColor;
   }
 
   public boolean isRedlineOn() {
