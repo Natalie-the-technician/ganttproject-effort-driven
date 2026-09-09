@@ -34,6 +34,8 @@ import com.google.common.collect.ImmutableList;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
 import net.sourceforge.ganttproject.fork.AbsenceRun;
 import net.sourceforge.ganttproject.fork.AbsenceStripeKt;
+import net.sourceforge.ganttproject.fork.HiddenTaskGap;
+import net.sourceforge.ganttproject.fork.HiddenTaskGapKt;
 import net.sourceforge.ganttproject.fork.ChartComparison;
 import net.sourceforge.ganttproject.fork.ChartComparisonKt;
 import net.sourceforge.ganttproject.fork.LevellingAdapterKt;
@@ -182,6 +184,34 @@ public class TaskRendererImpl2 extends ChartRendererBase {
     public List<AbsenceRun> getAbsenceRuns(int rowId) {
       Task task = myModel.getTaskManager().getTask(rowId);
       return task == null ? Collections.emptyList() : AbsenceStripeKt.absenceRuns(task);
+    }
+
+    /**
+     * [Fork change] THE COLLISION BAR'S DATA SOURCE, and the one place in the program that has all
+     * three things it needs at once: the complete plan in document order, the rows the task table
+     * actually shows, and the hierarchy that tells a hidden task from a merely collapsed one.
+     *
+     * IT IS COMPUTED FROM THE VERY SAME TWO LISTS AS THE HIDDEN-TASK PREDICATE ABOVE
+     * ({@link #getVerticalPartitioning}), and it rests on the very same precondition: the row list
+     * is the FULL row list of the table, never a scroll window. If that ever changes, the scrolled
+     * away tasks would be taken for hidden ones here too -- and unlike the partitioning, which
+     * would then merely lose two empty lists, this would put a mark on the chart for every task
+     * outside the viewport. `hiddenTaskGaps` cannot notice the change either; it only states what
+     * is being relied upon, in the same words and in the same breath.
+     *
+     * M2 §8 asked for exactly this and warned what would destroy it: had the cliff of 29.08.2026
+     * been closed in `getTasksInDocumentOrder` instead of in `VerticalPartitioning.build`, the
+     * chart would know nothing about the hidden tasks and this method would have nothing to return.
+     * It was closed in the other place, so the list below is complete.
+     */
+    @Override
+    public List<HiddenTaskGap> getHiddenTaskGaps() {
+      TaskContainmentHierarchyFacade containment = myModel.getTaskManager().getTaskHierarchy();
+      return HiddenTaskGapKt.hiddenTaskGaps(
+        containment.getTasksInDocumentOrder(),
+        myModel.getVisibleTasks(),
+        containment::getContainer
+      );
     }
 
     @Override

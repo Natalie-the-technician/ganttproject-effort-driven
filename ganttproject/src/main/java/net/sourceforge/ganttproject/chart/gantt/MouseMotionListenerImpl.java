@@ -26,6 +26,8 @@ import com.google.common.base.Strings;
 import net.sourceforge.ganttproject.ChartComponentBase;
 import net.sourceforge.ganttproject.chart.item.*;
 import net.sourceforge.ganttproject.chart.mouse.MouseMotionListenerBase;
+import net.sourceforge.ganttproject.fork.HiddenTaskGap;
+import net.sourceforge.ganttproject.fork.HiddenTaskGapKt;
 import net.sourceforge.ganttproject.gui.UIFacade;
 import net.sourceforge.ganttproject.language.GanttLanguage;
 import net.sourceforge.ganttproject.task.Task;
@@ -57,7 +59,16 @@ class MouseMotionListenerImpl extends MouseMotionListenerBase {
       //myChartComponent.setDefaultCursor();
       myCursorProperty.setValue(GPCursor.Default);
 
-      if (itemUnderPoint instanceof CalendarChartItem) {
+      // [Fork change] THE COLLISION BAR. It stands in this branch and not beside the task items
+      // because there IS no task under it -- see HiddenGapChartItem. What the tooltip says is a
+      // count and two days and no name; the names are what the view was asked to leave out.
+      if (itemUnderPoint instanceof HiddenGapChartItem) {
+        HiddenTaskGap gap = ((HiddenGapChartItem) itemUnderPoint).getGap();
+        myChartController.showTooltip(e.getX(), e.getY(), HiddenTaskGapKt.hiddenGapTooltip(
+            gap, date -> GanttLanguage.getInstance().formatDate(
+                CalendarFactory.createGanttCalendar(date))));
+      }
+      else if (itemUnderPoint instanceof CalendarChartItem) {
         CalendarEvent event = findCalendarEvent(((CalendarChartItem) itemUnderPoint).getDate());
         if (event != null) {
           String tooltipText;

@@ -27,6 +27,7 @@ import biz.ganttproject.core.chart.canvas.Painter;
 import biz.ganttproject.core.chart.scene.CapacityHeatmapSceneBuilder;
 import biz.ganttproject.core.chart.render.*;
 import net.sourceforge.ganttproject.fork.AbsenceStripeKt;
+import net.sourceforge.ganttproject.fork.HiddenTaskGapKt;
 import net.sourceforge.ganttproject.util.PropertiesUtil;
 
 import java.awt.*;
@@ -100,6 +101,24 @@ public class StyledPainterImpl implements Painter {
 
   /** [fork change] Distance in pixels between two hatching lines of an absence stripe. */
   private static final int ABSENCE_HATCH_STEP = 4;
+
+  /**
+   * [fork change] How wide the solid end cap of a COLLISION BAR is, in pixels.
+   *
+   * The caps are what make the mark a MEASURE and not a decoration: they say „from this day to that
+   * day". Two pixels, because at the year zoom the whole mark can be five pixels wide and two caps
+   * of three would leave nothing between them.
+   */
+  private static final int HIDDEN_GAP_CAP_WIDTH = 2;
+
+  /** [fork change] How thick the dashed line between the two end caps of a collision bar is. */
+  private static final int HIDDEN_GAP_LINE_THICKNESS = 2;
+
+  /** [fork change] From the start of one dash of a collision bar to the start of the next. */
+  private static final int HIDDEN_GAP_DASH_STEP = 9;
+
+  /** [fork change] How long one dash of a collision bar is. */
+  private static final int HIDDEN_GAP_DASH_LENGTH = 5;
 
   public StyledPainterImpl(final ChartUIConfiguration config) {
     myConfig = config;
@@ -371,6 +390,69 @@ public class StyledPainterImpl implements Painter {
       myGraphics.drawRect(left, top, width - 1, height);
     };
     myStyle2painter.put(AbsenceStripeKt.STYLE_ABSENCE, myAbsencePainter);
+    /*
+     * [fork change] THE COLLISION BAR -- the mark on a row seam that says a view is hiding
+     * something here.
+     *
+     * Natalie: „wenn man eine ansicht hat die nicht alle Vorgänge zeigt und es eine Lücke gibt das
+     * dort der kollisionsbalken liegt und anzeigt das hier eine Lücke ist weil es einen Vorgang
+     * gibt den man gerade nicht sieht." The scene builder has already worked out which seam and
+     * which days (`GanttChartSceneBuilder.renderHiddenTaskGaps`); this has to make it
+     * unmistakable and, above all, unmistakABLE FOR the two marks this fork already draws.
+     *
+     * THREE SIGNS NOW, AND THEY DIFFER IN FORM BEFORE THEY DIFFER IN COLOUR:
+     *
+     *   home working    solid fill at alpha 170   DIAGONAL hatching, 7 px   violet   grey  84
+     *   absence         faint fill at alpha  70   VERTICAL  hatching, 4 px   orange   grey 125
+     *   COLLISION BAR   NO FILL AT ALL            a dashed LINE with caps    teal     grey  43
+     *
+     * WHY A LINE AND NOT A THIRD KIND OF HATCHED BLOCK. The other two lie ON something -- a task
+     * bar, a day column -- and say „this thing here is special". This one lies on the SEAM between
+     * two rows and says „between these two rows something is missing". A block would claim a row it
+     * does not own; a line with a cap at each end claims a stretch of time and nothing else, and it
+     * is the only one of the three that leaves most of its own rectangle untouched. That is
+     * measured in `KollisionsbalkenBildTest`, not asserted here.
+     *
+     * WHY DASHED. „Not really there" is what the mark is about, and a broken line says it without a
+     * word. It is also the cue that survives a black-and-white printout: a horizontal cut through
+     * the mark meets the line and the ground between the dashes, where a cut through either of the
+     * other two meets a filled block.
+     *
+     * IT IS OPAQUE, unlike both other marks. Neither of them could be, because both are painted
+     * over something that has to stay readable. This one is painted on the seam, where there is
+     * nothing but the grey separator line -- and it is drawn BEFORE every task bar (see the scene
+     * builder), so anything that does end up sharing a pixel with it wins.
+     *
+     * WHAT THE LOOP COSTS: width / 9 calls to `fillRect`. A mark spanning a month at day zoom is
+     * about 70 of them, once per gap and repaint, and there are as many gaps as there are runs of
+     * hidden tasks -- in the ordinary case none at all.
+     */
+    RectanglePainter myHiddenGapPainter = next -> {
+      int left = next.getLeftX();
+      int top = next.getTopY();
+      int width = next.getWidth();
+      int height = next.getHeight();
+      if (width <= 0 || height <= 0) {
+        return;
+      }
+      Color c = myConfig.getHiddenGapColor();
+      myGraphics.setColor(c);
+
+      // The two end caps, over the full height of the mark. Clamped so that a mark narrower than
+      // two caps is drawn as one solid stub rather than as two overlapping ones.
+      int capWidth = Math.min(HIDDEN_GAP_CAP_WIDTH, width);
+      myGraphics.fillRect(left, top, capWidth, height);
+      myGraphics.fillRect(left + width - capWidth, top, capWidth, height);
+
+      // The dashed line between them, centred in the height of the mark. The first dash starts ON
+      // the left cap so that a very short mark still reads as a line and not as two dots.
+      int lineTop = top + (height - HIDDEN_GAP_LINE_THICKNESS) / 2;
+      for (int x = left; x < left + width; x += HIDDEN_GAP_DASH_STEP) {
+        int dash = Math.min(HIDDEN_GAP_DASH_LENGTH, left + width - x);
+        myGraphics.fillRect(x, lineTop, dash, HIDDEN_GAP_LINE_THICKNESS);
+      }
+    };
+    myStyle2painter.put(HiddenTaskGapKt.STYLE_HIDDEN_GAP, myHiddenGapPainter);
     myStyle2painter.put("load.underload", myResourceLoadPainter);
     myStyle2painter.put("load.underload.first", myResourceLoadPainter);
     myStyle2painter.put("load.underload.last", myResourceLoadPainter);

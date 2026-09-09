@@ -234,6 +234,15 @@ public class ChartUIConfiguration {
     return myProjectConfig.getAbsenceColor();
   }
 
+  /**
+   * [fork change] The colour of the collision bar on a row seam. Read from the project
+   * configuration on every call, exactly as {@link #getDayOffColor()} is, so that a change in the
+   * settings reaches the next repaint.
+   */
+  public Color getHiddenGapColor() {
+    return myProjectConfig.getHiddenGapColor();
+  }
+
   public int getYOffSet() {
     return myYOffset;
   }

@@ -24,6 +24,7 @@ import biz.ganttproject.core.chart.canvas.Canvas;
 import biz.ganttproject.core.chart.canvas.Canvas.Polygon;
 import biz.ganttproject.core.chart.canvas.Canvas.Rectangle;
 import biz.ganttproject.core.chart.grid.OffsetList;
+import biz.ganttproject.core.chart.grid.OffsetLookup;
 import biz.ganttproject.core.chart.scene.gantt.*;
 import biz.ganttproject.core.model.task.TaskDefaultColumn;
 import biz.ganttproject.core.time.TimeDuration;
@@ -31,6 +32,9 @@ import biz.ganttproject.core.time.TimeUnit;
 import biz.ganttproject.customproperty.CustomPropertyManager;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
 import net.sourceforge.ganttproject.fork.AbsenceRun;
+import net.sourceforge.ganttproject.fork.HiddenGapMark;
+import net.sourceforge.ganttproject.fork.HiddenTaskGap;
+import net.sourceforge.ganttproject.fork.HiddenTaskGapKt;
 import net.sourceforge.ganttproject.fork.AbsenceStripeKt;
 import net.sourceforge.ganttproject.fork.StripeSpan;
 import net.sourceforge.ganttproject.fork.ChartComparison;
@@ -88,6 +92,17 @@ public class GanttChartSceneBuilder {
      * {@link net.sourceforge.ganttproject.fork.AbsenceStripe} for whose absence counts.
      */
     List<AbsenceRun> getAbsenceRuns(int rowId);
+
+    /**
+     * [Fork change] The gaps a named view or a filter has torn into the plan, in document order.
+     * Empty when the chart shows everything, which is the ordinary case.
+     *
+     * COMPUTED BY THE RENDERER AND NOT HERE, for the same reason as the two effort numbers and the
+     * absence runs above: working out which missing task is hidden and which is merely collapsed
+     * needs the task hierarchy, and {@link ITaskSceneTask} deliberately knows nothing about it.
+     * The scene builder learns a list of row indices and dates and still knows nothing about views.
+     */
+    List<HiddenTaskGap> getHiddenTaskGaps();
     TaskActivitySceneBuilder.ChartApi getChartApi(TaskLabelSceneBuilder<ITaskSceneTask> labelsRenderer);
     GPCalendarCalc getCalendar();
     Date getStartDate();
@@ -197,6 +212,11 @@ public class GanttChartSceneBuilder {
     vp.build(input.getTasksInDocumentOrder());
     OffsetList defaultUnitOffsets = input.getTasksUnitOffsets();
 
+    // [Fork change] BEFORE the bars, and that is the whole safety of it: within one canvas the
+    // painting order is the order of creation, so anything a mark happens to share a pixel with --
+    // the top edge of the first task bar, in the narrowest row the chart draws -- is painted over
+    // it. A mark can never cover something that is visible.
+    renderHiddenTaskGaps(defaultUnitOffsets);
     renderVisibleTasks(input.getVisibleTaskSceneTasks(), defaultUnitOffsets);
     renderTasksAboveAndBelowViewport(vp.getAboveViewport(), vp.getBelowViewport(), defaultUnitOffsets);
     renderDependencies();
@@ -237,6 +257,37 @@ public class GanttChartSceneBuilder {
       for (Polygon nextRectangle : rectangles) {
         nextRectangle.setVisible(false);
       }
+    }
+  }
+
+  /**
+   * [Fork change] THE COLLISION BAR. One mark per gap, lying on the seam between the two rows the
+   * hidden tasks were taken from and stretching over the days they occupy.
+   *
+   * See {@link net.sourceforge.ganttproject.fork.HiddenTaskGap} for what counts as a gap and why,
+   * and `hiddenGapMark` for where the mark ends up. Everything decided is decided there; what is
+   * left here is measuring the two dates against the chart's own day columns -- through the very
+   * same {@link OffsetLookup} a task bar is measured with, so a mark cannot drift a pixel away from
+   * the days it names.
+   *
+   * NOT BOUND TO A TASK, bound to the GAP. `ChartModelImpl.getChartItemWithCoordinates` asks for
+   * this object by style before it asks for anything else, and hands it to the tooltip. Binding it
+   * to a task would be wrong twice over: there is no single task, and the tasks are exactly what
+   * the view was asked to leave out.
+   */
+  private void renderHiddenTaskGaps(OffsetList defaultUnitOffsets) {
+    List<HiddenTaskGap> gaps = input.getHiddenTaskGaps();
+    if (gaps.isEmpty()) {
+      return;
+    }
+    OffsetLookup lookup = new OffsetLookup();
+    for (HiddenTaskGap gap : gaps) {
+      int[] bounds = lookup.getBounds(gap.getStart(), gap.getEndExclusive(), defaultUnitOffsets);
+      HiddenGapMark mark = HiddenTaskGapKt.hiddenGapMark(gap, bounds[0], bounds[1], getRowHeight());
+      Rectangle rectangle = getPrimitiveContainer().createRectangle(
+          mark.getLeftX(), mark.getTopY(), mark.getWidth(), mark.getHeight());
+      rectangle.setStyle(HiddenTaskGapKt.STYLE_HIDDEN_GAP);
+      getPrimitiveContainer().bind(rectangle, gap);
     }
   }
 
