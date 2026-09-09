@@ -20,6 +20,7 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.timetracking
 
+import net.sourceforge.ganttproject.GPLogger
 import net.sourceforge.ganttproject.fork.SecretStore
 
 import java.net.URLDecoder
@@ -57,7 +58,7 @@ fun encodeTokenMap(tokens: Map<String, String>): String =
     .filter { it.value.isNotEmpty() }
     .sortedBy { it.key }
     .joinToString(PAIR_SEPARATOR) {
-      "${it.key.urlEncoded()}$FIELD_SEPARATOR${protectedToken(it.value).urlEncoded()}"
+      "${it.key.urlEncoded()}$FIELD_SEPARATOR${protectedToken(it.key, it.value).urlEncoded()}"
     }
 
 /**
@@ -74,13 +75,58 @@ fun encodeTokenMap(tokens: Map<String, String>): String =
  *    write, its CONTENT stays the same. What the promise was meant to protect -- no change without
  *    a reason -- concerns a settings file that gets rewritten on every exit anyway; that the map
  *    carries plain text everywhere is the more important value.
- * 2. If encryption is not possible (not Windows, missing library), the previous behaviour stands
- *    rather than losing the token. For the password "do not store" was the right answer, because
- *    it can be typed again; a lost token, by contrast, only shows up at the next import, and then
- *    the cause is missing.
+ * 2. If the secret cannot be kept (no store on this machine), the previous behaviour stands rather
+ *    than losing the token. For the password "do not store" was the right answer, because it can be
+ *    typed again; a lost token, by contrast, only shows up at the next import, and then the cause
+ *    is missing. It has to be FETCHED AGAIN FROM THE TOGGL WEBSITE, which is a different kind of
+ *    cost from typing a password one knows.
+ *
+ * [fork change] 09.09.2026: THE FALLBACK NO LONGER HAPPENS IN SILENCE. Writing a secret in the
+ * clear is a decision, and until now nobody was told it had been taken -- the token simply stood in
+ * `~/.ganttproject` and looked no different from a setting. The log line says which file and which
+ * setting. It NEVER says the token; not even shortened.
+ *
+ * [fork change] 09.09.2026: the alias. The map key -- `mail=…` or `name=…` -- is what identifies
+ * whose token this is, and it is the same string at every save, which is what the keyring backends
+ * need. It is not a secret: it already stands unencrypted in the same file, right next to the
+ * token, as the first half of the pair.
  */
-private fun protectedToken(token: String): String =
-  if (SecretStore.isProtected(token)) token else SecretStore.protect(token) ?: token
+private fun protectedToken(key: String, token: String): String {
+  if (SecretStore.isProtected(token)) {
+    return token
+  }
+  val protectedValue = SecretStore.protect("toggl:$key", token)
+  if (protectedValue != null) {
+    return protectedValue
+  }
+  warnAboutPlainTextTokenOnce()
+  return token
+}
+
+/**
+ * [fork change] Says once per run that a token is being written in the clear.
+ *
+ * ONCE, not once per write: `~/.ganttproject` is rewritten whenever the settings change, and a
+ * warning that appears fifty times is one nobody reads. Once per run is enough for the fact to be
+ * in the log of the session in which it happened.
+ *
+ * This is only half an answer, and it is meant to be seen as one. The log is not where a person
+ * looks. What belongs here is a note in the dialogue that holds the token field, at the moment the
+ * token is entered -- see the report of 09.09.2026; that is a decision about the user interface and
+ * not one to be taken in passing in a storage function.
+ */
+private var plainTextTokenWarned = false
+
+private fun warnAboutPlainTextTokenOnce() {
+  if (plainTextTokenWarned) {
+    return
+  }
+  plainTextTokenWarned = true
+  GPLogger.log("[fork] No secret store on this machine (backend: ${SecretStore.backendName}). "
+    + "The Toggl API token is written to ~/.ganttproject IN PLAIN TEXT, under the setting "
+    + "'toggl.tokens'. Anything running as this user can read it, and it is in every backup of "
+    + "that file. Revoke the token in Toggl if that file leaves this machine.")
+}
 
 /** Reads the store back. Unreadable pairs are skipped rather than failing the whole settings file. */
 fun decodeTokenMap(text: String?): Map<String, String> {
