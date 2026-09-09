@@ -264,7 +264,14 @@ fun secondsByDay(
  *   middle breaks both directions and must not be done.
  */
 object TimeLogCodec {
-  private const val FIELD = '|'
+  /**
+   * [fork change] Internal rather than private since format version 2: the
+   * hour journal appends a ninth field of its own and has to escape it with
+   * this very table. Sharing it is the same decision the journal made in
+   * version 1 -- one escaping to get right instead of two. Nothing about the
+   * `.gan` changes; this is visibility and nothing else.
+   */
+  internal const val FIELD = '|'
 
   /** Ends a record. See the note about attribute-value normalisation above. */
   const val RECORD = ';'
@@ -272,7 +279,7 @@ object TimeLogCodec {
   /** Field count as of this version. Readers must not rely on it. */
   private const val FIELDS_WRITTEN = 8
 
-  private fun escape(text: String): String = buildString(text.length) {
+  internal fun escape(text: String): String = buildString(text.length) {
     for (ch in text) {
       when (ch) {
         '\\' -> append("\\\\")
@@ -286,7 +293,7 @@ object TimeLogCodec {
     }
   }
 
-  private fun unescape(text: String): String = buildString(text.length) {
+  internal fun unescape(text: String): String = buildString(text.length) {
     var i = 0
     while (i < text.length) {
       val ch = text[i]
@@ -578,7 +585,7 @@ object AmendmentCodec {
   private const val RECORD = ';'
   private const val ID_SEPARATOR = ','
 
-  private fun escape(text: String): String = buildString(text.length) {
+  internal fun escape(text: String): String = buildString(text.length) {
     for (ch in text) {
       when (ch) {
         '\\' -> append("\\\\")
@@ -593,7 +600,7 @@ object AmendmentCodec {
     }
   }
 
-  private fun unescape(text: String): String = buildString(text.length) {
+  internal fun unescape(text: String): String = buildString(text.length) {
     var i = 0
     while (i < text.length) {
       val ch = text[i]
