@@ -110,22 +110,47 @@ private fun protectedToken(key: String, token: String): String {
  * warning that appears fifty times is one nobody reads. Once per run is enough for the fact to be
  * in the log of the session in which it happened.
  *
- * This is only half an answer, and it is meant to be seen as one. The log is not where a person
- * looks. What belongs here is a note in the dialogue that holds the token field, at the moment the
- * token is entered -- see the report of 09.09.2026; that is a decision about the user interface and
- * not one to be taken in passing in a storage function.
+ * [fork change] 09.09.2026, second half: THE OTHER HALF OF THIS IS NOW BUILT. The log is not where
+ * a person looks, so the same fact also stands under the token field in the resource dialogue, at
+ * the moment the token is pasted in -- `MainPropertiesPanel.togglTokenHintBox`. This line stays,
+ * because it records WHEN it happened in the log of the session it happened in, which a line in a
+ * dialogue cannot.
+ *
+ * A note on where it is kept, which was WRONG here until 09.09.2026: the setting is called
+ * `toggl.resourceTokens`, not `toggl.tokens`. The name in the file is the id of the option group
+ * plus the id of the option (`GanttOptions.java:889`), and those are `toggl`
+ * (`TogglTokens.kt`, optionGroup) and `resourceTokens` (`TogglTokens.kt`, tokens). Advice that
+ * names the wrong setting is worse than no advice: whoever follows it finds nothing and concludes
+ * there is nothing to find.
  */
-private var plainTextTokenWarned = false
+/**
+ * [fork change] Where the warning goes, and whether it has already gone there.
+ *
+ * A seam, and it is here for one reason: a test has to be able to read the sentence that really
+ * reaches the logger. Asserting on a function that BUILDS the sentence would prove nothing about
+ * what is passed to `GPLogger` at the call site -- somebody appending the token there would leave
+ * such a test green. This one goes red.
+ *
+ * [alreadySaid] lives here rather than as a private flag of its own so that a test can arm it
+ * again; the tests of one run share a JVM, and a once-per-run flag fires for whichever test comes
+ * first and for none of the others.
+ */
+object PlainTextTokenWarning {
+  /** Replaced in tests. In the running program it is the log and nothing else. */
+  var sink: (String) -> Unit = { GPLogger.log(it) }
+  var alreadySaid: Boolean = false
+}
 
 private fun warnAboutPlainTextTokenOnce() {
-  if (plainTextTokenWarned) {
+  if (PlainTextTokenWarning.alreadySaid) {
     return
   }
-  plainTextTokenWarned = true
-  GPLogger.log("[fork] No secret store on this machine (backend: ${SecretStore.backendName}). "
-    + "The Toggl API token is written to ~/.ganttproject IN PLAIN TEXT, under the setting "
-    + "'toggl.tokens'. Anything running as this user can read it, and it is in every backup of "
-    + "that file. Revoke the token in Toggl if that file leaves this machine.")
+  PlainTextTokenWarning.alreadySaid = true
+  PlainTextTokenWarning.sink(
+    "[fork] No secret store on this machine (backend: ${SecretStore.backendName}). "
+      + "The Toggl API token is written to ~/.ganttproject IN PLAIN TEXT, under the setting "
+      + "'toggl.resourceTokens'. Anything running as this user can read it, and it is in every "
+      + "backup of that file. Revoke the token in Toggl if that file leaves this machine.")
 }
 
 /** Reads the store back. Unreadable pairs are skipped rather than failing the whole settings file. */

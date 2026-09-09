@@ -27,25 +27,20 @@ import biz.ganttproject.core.option.ObservableDouble
 import biz.ganttproject.core.option.ObservableMoney
 import biz.ganttproject.core.option.ObservableString
 import javafx.collections.FXCollections
-import javafx.event.EventHandler
 import javafx.geometry.Insets
 import javafx.scene.Node
-import javafx.scene.control.Hyperlink
-import javafx.scene.control.Label
 import javafx.scene.layout.Background
 import javafx.scene.layout.BackgroundFill
 import javafx.scene.layout.CornerRadii
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.StackPane
-import javafx.scene.layout.VBox
 import javafx.util.StringConverter
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RoleManager
 // [fork change] New imports for the Toggl token.
-import biz.ganttproject.lib.fx.openInBrowser
-import java.awt.Desktop
 import net.sourceforge.ganttproject.fork.forkText
+import net.sourceforge.ganttproject.fork.togglTokenHint
 import net.sourceforge.ganttproject.timetracking.TogglTokenOptions
 import net.sourceforge.ganttproject.timetracking.ASK_IN_A_DIALOG
 import net.sourceforge.ganttproject.timetracking.TokenKeyChange
@@ -129,29 +124,6 @@ class MainPropertiesPanel(private val resource: HumanResource) {
     grid.add(togglTokenHint(), 1, nextRow)
   }
 
-  /**
-   * [fork change] The hint itself: one sentence on where the token comes from, below it the link
-   * to the help article.
-   *
-   * Without a browser, plain text with a visible URL remains — a link that does nothing would be
-   * worse than none, and the address can still be typed off.
-   */
-  private fun togglTokenHint(): Node = VBox(2.0).also { box ->
-    // The container must not set the column either: a VBox passes the largest preferred width
-    // of its children upwards. Reasoning in asHint().
-    box.prefWidth = 0.0
-    box.maxWidth = Double.MAX_VALUE
-    box.children.add(Label(TOGGL_TOKEN_HINT).asHint())
-    box.children.add(
-      if (canBrowse()) {
-        Hyperlink(TOGGL_TOKEN_LINK).also { link ->
-          link.onAction = EventHandler { openInBrowser(TOGGL_TOKEN_HELP_URL) }
-        }
-      } else {
-        Label("$TOGGL_TOKEN_LINK $TOGGL_TOKEN_HELP_URL").asHint()
-      }
-    )
-  }
 
   fun requestFocus() = onRequestFocus()
 
@@ -206,51 +178,6 @@ class MainPropertiesPanel(private val resource: HumanResource) {
 // in a submodule that cannot be written to from this fork; see ForkI18n.kt.
 private val TOGGL_SECTION_LABEL get() = forkText("fork.toggl.section")
 private val TOGGL_TOKEN_LABEL get() = forkText("fork.toggl.token")
-private val TOGGL_TOKEN_HINT get() = forkText("fork.toggl.token.hint")
-private val TOGGL_TOKEN_LINK get() = forkText("fork.toggl.token.link")
-
-/**
- * [fork change] The help article, not the profile page itself.
- *
- * Deliberately not a deep link: Toggl may rebuild the profile page, the help article is more
- * likely to outlast that. The address stands as a constant in the code and NOT in the language
- * files — it is the same in every language, and a translated link would be a link nobody
- * maintains.
- */
-private const val TOGGL_TOKEN_HELP_URL = "https://support.toggl.com/where-is-my-api-key-located"
-
-/**
- * [fork change] The hint is to TAKE the grid column, not to set it.
- *
- * A label with `isWrapText` reports the UNWRAPPED sentence as its preferred width, and in the grid
- * that becomes the column width. A fixed cap of 420 px used to stand here against it. That cap did
- * not only limit the column, it PULLED IT OPEN: measured, the field column was 346 px wide in the
- * original and 419 px in the fork, the dialog 496 px against 569 px accordingly.
- *
- * Without a preferred width the hint asks for no space at all. The column therefore takes its width
- * from the token field above it, and the hint wraps at exactly that width. `maxWidth` stays open,
- * because otherwise the grid does not stretch the node to the cell width and the hint would
- * collapse to its minimum.
- */
-private fun Label.asHint(): Label = also {
-  it.isWrapText = true
-  it.prefWidth = 0.0
-  it.maxWidth = Double.MAX_VALUE
-}
-
-/**
- * [fork change] Is there a browser that can be called?
- *
- * NOT through isBrowseSupported() in biz/ganttproject/lib/fx/Desktop.kt:39 — that calls
- * Desktop.getDesktop() without checking isDesktopSupported() first and then throws an
- * UnsupportedOperationException instead of returning false. A bug in the original; here it is
- * merely worked around, not fixed.
- */
-private fun canBrowse(): Boolean = try {
-  Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)
-} catch (e: Exception) {
-  false
-}
 
 private val roleStringConverter = object : StringConverter<Role>() {
   override fun toString(role: Role): String  = role.name

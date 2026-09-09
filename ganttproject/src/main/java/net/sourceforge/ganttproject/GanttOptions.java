@@ -29,6 +29,8 @@ import com.google.common.collect.Maps;
 import com.google.common.io.ByteStreams;
 import com.google.common.xml.XmlEscapers;
 import net.sourceforge.ganttproject.document.DocumentManager;
+// [fork change] Narrowing the permissions of the settings file; see OwnerOnlyFile.kt.
+import net.sourceforge.ganttproject.fork.OwnerOnlyFile;
 import net.sourceforge.ganttproject.gui.UIConfiguration;
 import net.sourceforge.ganttproject.gui.options.model.GP1XOptionConverter;
 import net.sourceforge.ganttproject.io.CSVOptions;
@@ -199,6 +201,19 @@ public class GanttOptions extends SaverBase {
       ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
       doSave(outBuffer);
       BufferedOutputStream outFile = new BufferedOutputStream(new FileOutputStream(file));
+      // [fork change] Take the file away from the rest of the machine BEFORE anything is written
+      // into it. It holds the WebDAV server list and, where no keyring can be reached, the Toggl
+      // API token in the clear; with a plain FileOutputStream it used to get whatever the umask
+      // left, which is 0644 in the ordinary case -- readable by EVERY user of the machine.
+      //
+      // AFTER opening the stream and BEFORE the copy, on purpose. Opening creates the file empty,
+      // so at this point there is nothing in it yet; narrowing it afterwards would leave a moment
+      // in which the finished file with the token in it stands open to everybody.
+      //
+      // Returns false where the filesystem has no POSIX permissions -- Windows above all. That is
+      // a normal answer and not an error: on Windows the token is encrypted by DPAPI anyway. See
+      // OwnerOnlyFile.
+      OwnerOnlyFile.restrictToOwner(file);
       ByteStreams.copy(new ByteArrayInputStream(outBuffer.toByteArray()), outFile);
       outFile.flush();
       outFile.close();
