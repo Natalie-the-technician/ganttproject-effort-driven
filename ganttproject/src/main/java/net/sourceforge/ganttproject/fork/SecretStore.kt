@@ -20,88 +20,123 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.fork
 
-import net.sourceforge.ganttproject.GPLogger
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 /**
- * Encrypts stored secrets with the Windows login account (DPAPI).
+ * The one place that decides what happens to a secret before it is written to disk.
  *
  * WHAT FOR: `GPCloudStorageOptions` stored the WebDAV password in PLAIN TEXT in `~/.ganttproject`
- * as soon as "save password" was set. Every program running under the same user could read it, and
- * it went into every backup of that file. The checkbox was therefore left unset and the password
- * typed anew on every start.
+ * as soon as "save password" was set, and `TokenStore` did the same with the Toggl API token. Every
+ * program running under the same user could read them, and they went into every backup of that
+ * file.
  *
- * DPAPI ties the ciphertext to the Windows account: a copied file is worthless elsewhere. This is
- * no vault -- whoever can run programs as this user can decrypt as well. It removes exactly the
- * class of mistakes at issue here: passwords that are visible in backups, in data stores, and over
- * the shoulder.
+ * WHAT CHANGED ON 09.09.2026: until then this was DPAPI and nothing else, so the fix only ever
+ * reached Windows. Outside Windows the password was simply not stored (the "save password" box
+ * looked as if it worked and did nothing) and the Toggl token WAS still written in the clear. There
+ * are now three ways -- see [SecretBackend] -- and which one applies is decided by
+ * [secretBackendsFor] and by a probe, not by the name of the operating system alone.
  *
- * MEASURED, not assumed: `jna-platform` only comes in indirectly via `appdirs`, the core `jna`
- * sits beside it in a different version (5.16 against 5.13). Whether DPAPI runs at all in this
- * mixture was open and was checked with `tools/dpapiprobe` against the shipped classpath: round
- * trip in order, 246 bytes of ciphertext, no plain text in the result.
+ * THIS IS NO VAULT. Whoever can run programs as this user can get at the secrets as well, on all
+ * three platforms. What it removes is the class of mistakes actually at issue: secrets readable in
+ * backups, in synchronised data directories, and over the shoulder.
  *
- * WHAT HAPPENS ON OTHER SYSTEMS: nothing. [protect] returns null there, and the caller then does
- * NOT store. Better to keep asking on every start than to write plain text in secret -- a fallback
- * to "insecure but convenient" would be exactly the quiet mistake this fork has already found in
- * several places. For a contribution to the original this would additionally need libsecret
- * (Linux) and Keychain (macOS).
+ * WHAT HAPPENS WHERE THERE IS NO STORE AT ALL -- a server, a container, a stripped-down desktop:
+ * [protect] returns null. Null means "do not store" and NEVER "store in the clear". The callers
+ * differ in what they make of that, and deliberately so:
+ *
+ *  * The WebDAV password is not stored. It can be typed again.
+ *  * The Toggl token IS still written in the clear, because it cannot be typed again -- it has to
+ *    be fetched from the Toggl website. `TokenStore` says so in the log when it does.
+ *
+ * NO THIRD WAY WAS BUILT, and that is a decision and not an omission: encrypting with a key derived
+ * on the machine itself. A key that lies next to the secret is not encryption, it is the look of
+ * it, and the look is worse than plain text because somebody will rely on it.
  */
 object SecretStore {
 
   /**
-   * Marker in front of the ciphertext. Base64 contains neither a tab nor a line break, so the
-   * storage format of the server list (separated by tabs, one line per server) remains
-   * untouched.
+   * Every marker any version of this code has ever written, whatever platform wrote it.
+   *
+   * All of them, not just this platform's: a settings file travels between machines, and something
+   * written on Windows has to be RECOGNISED on Linux even though it cannot be read there. Were
+   * `dpapi:` missing from this list on Linux, [isProtected] would call a ciphertext a plain-text
+   * token and hand it to the keyring as one.
    */
-  private const val MARKER = "dpapi:"
-
-  val isAvailable: Boolean = System.getProperty("os.name", "").startsWith("Windows")
+  private val MARKERS = listOf(DpapiBackend.marker, LibsecretBackend.marker, MacKeychainBackend.marker)
 
   /**
-   * @return the marked ciphertext, or null if encryption is not possible. Null explicitly means
-   * "do not store" and not "store in plain text".
+   * The way in use, or null if there is none here.
+   *
+   * Lazy on purpose. Deciding this means probing, probing means running a program, and on a locked
+   * keyring that means a dialogue. None of that belongs in the start-up of a program that may never
+   * touch a secret at all.
    */
-  /** Whether this stored value is already encrypted. */
-  fun isProtected(stored: String): Boolean = stored.startsWith(MARKER)
+  private val backend: SecretBackend? by lazy {
+    secretBackendsFor(System.getProperty("os.name", "")).firstOrNull { it.isAvailable() }
+  }
 
-  fun protect(plain: String): String? {
-    if (!isAvailable || plain.isEmpty()) {
+  /** Whether a secret can really be kept on this machine right now. */
+  val isAvailable: Boolean get() = backend != null
+
+  /** For the log and for the report. Never a secret. */
+  val backendName: String get() = backend?.name ?: "none"
+
+  /** Whether this stored value is a reference or a ciphertext rather than a bare secret. */
+  fun isProtected(stored: String): Boolean = MARKERS.any { stored.startsWith(it) }
+
+  /**
+   * @param alias what this secret IS -- which server, whose token. Not a secret itself, and it must
+   * be the same string every time the same secret is saved. The keyring backends store the secret
+   * under it, and a changing alias would leave an orphaned keyring entry behind at every save.
+   * DPAPI ignores it.
+   * @return the marked value for the settings file, or null if nothing may be written. Null
+   * explicitly means "do not store" and not "store in plain text".
+   */
+  fun protect(alias: String, plain: String): String? {
+    if (alias.isEmpty() || plain.isEmpty()) {
       return null
     }
-    return try {
-      val cipher = com.sun.jna.platform.win32.Crypt32Util.cryptProtectData(
-        plain.toByteArray(StandardCharsets.UTF_8))
-      MARKER + Base64.getEncoder().encodeToString(cipher)
-    } catch (e: Throwable) {
-      // Error too: a missing library must not abort the saving of the settings.
-      GPLogger.log(e)
-      null
-    }
+    return backend?.protect(handleFor(alias), plain)
   }
 
   /**
    * @return the secret in plain text.
    *
    * A value WITHOUT a marker is returned unchanged: that way entries stay readable which were
-   * written in plain text before this change. At the next save they get encrypted.
+   * written in plain text before this change. At the next save they get protected.
    *
-   * If decryption fails, the value is likewise returned unchanged instead of throwing an
-   * exception. The rare case of an old plain-text password that happens to start with "dpapi:"
-   * thereby falls back to the right behaviour -- and a value encrypted on a different machine
-   * leads to a rejected login, not to a crash.
+   * A value with a marker that is NOT this platform's is likewise returned unchanged -- a Windows
+   * ciphertext read on Linux, a keyring reference read on Windows. So is a value this platform's
+   * store cannot resolve: keyring locked, entry deleted, ciphertext from another machine. The
+   * consequence is then a rejected login, not a crash at startup, and that is the deliberate
+   * choice: the rare old plain-text password that happens to begin with "dpapi:" falls back to the
+   * right behaviour by the same rule.
    */
   fun reveal(stored: String): String {
-    if (!stored.startsWith(MARKER)) {
+    val backend = this.backend ?: return stored
+    if (!stored.startsWith(backend.marker)) {
       return stored
     }
-    return try {
-      val cipher = Base64.getDecoder().decode(stored.removePrefix(MARKER))
-      String(com.sun.jna.platform.win32.Crypt32Util.cryptUnprotectData(cipher), StandardCharsets.UTF_8)
-    } catch (e: Throwable) {
-      GPLogger.log(e)
-      stored
-    }
+    return backend.reveal(stored.removePrefix(backend.marker)) ?: stored
   }
+
+  /**
+   * The alias as it may appear in a command line and in a settings file.
+   *
+   * An alias is built from things a person typed -- a server URL, a user name, an e-mail address --
+   * and those may contain anything at all. Two of the things they may contain would do damage:
+   *
+   *  * A TAB OR A LINE BREAK would take the WebDAV server list apart. It writes one line per server
+   *    with tab-separated fields, so a tab inside a field invents one, and a line break invents a
+   *    whole server.
+   *  * A LEADING "-" would be read as an option by the keyring programs.
+   *
+   * URL-safe Base64 has neither, and the leading "a" settles the second point. Nothing has to
+   * decode it again: what goes into the file and what goes to the keyring as a name are the same
+   * string.
+   */
+  private fun handleFor(alias: String): String =
+    "a" + Base64.getUrlEncoder().withoutPadding()
+      .encodeToString(alias.toByteArray(StandardCharsets.UTF_8))
 }

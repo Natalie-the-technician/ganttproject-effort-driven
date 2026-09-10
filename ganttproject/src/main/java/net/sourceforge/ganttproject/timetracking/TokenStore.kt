@@ -20,6 +20,7 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.timetracking
 
+import net.sourceforge.ganttproject.GPLogger
 import net.sourceforge.ganttproject.fork.SecretStore
 
 import java.net.URLDecoder
@@ -57,7 +58,7 @@ fun encodeTokenMap(tokens: Map<String, String>): String =
     .filter { it.value.isNotEmpty() }
     .sortedBy { it.key }
     .joinToString(PAIR_SEPARATOR) {
-      "${it.key.urlEncoded()}$FIELD_SEPARATOR${protectedToken(it.value).urlEncoded()}"
+      "${it.key.urlEncoded()}$FIELD_SEPARATOR${protectedToken(it.key, it.value).urlEncoded()}"
     }
 
 /**
@@ -74,13 +75,83 @@ fun encodeTokenMap(tokens: Map<String, String>): String =
  *    write, its CONTENT stays the same. What the promise was meant to protect -- no change without
  *    a reason -- concerns a settings file that gets rewritten on every exit anyway; that the map
  *    carries plain text everywhere is the more important value.
- * 2. If encryption is not possible (not Windows, missing library), the previous behaviour stands
- *    rather than losing the token. For the password "do not store" was the right answer, because
- *    it can be typed again; a lost token, by contrast, only shows up at the next import, and then
- *    the cause is missing.
+ * 2. If the secret cannot be kept (no store on this machine), the previous behaviour stands rather
+ *    than losing the token. For the password "do not store" was the right answer, because it can be
+ *    typed again; a lost token, by contrast, only shows up at the next import, and then the cause
+ *    is missing. It has to be FETCHED AGAIN FROM THE TOGGL WEBSITE, which is a different kind of
+ *    cost from typing a password one knows.
+ *
+ * [fork change] 09.09.2026: THE FALLBACK NO LONGER HAPPENS IN SILENCE. Writing a secret in the
+ * clear is a decision, and until now nobody was told it had been taken -- the token simply stood in
+ * `~/.ganttproject` and looked no different from a setting. The log line says which file and which
+ * setting. It NEVER says the token; not even shortened.
+ *
+ * [fork change] 09.09.2026: the alias. The map key -- `mail=…` or `name=…` -- is what identifies
+ * whose token this is, and it is the same string at every save, which is what the keyring backends
+ * need. It is not a secret: it already stands unencrypted in the same file, right next to the
+ * token, as the first half of the pair.
  */
-private fun protectedToken(token: String): String =
-  if (SecretStore.isProtected(token)) token else SecretStore.protect(token) ?: token
+private fun protectedToken(key: String, token: String): String {
+  if (SecretStore.isProtected(token)) {
+    return token
+  }
+  val protectedValue = SecretStore.protect("toggl:$key", token)
+  if (protectedValue != null) {
+    return protectedValue
+  }
+  warnAboutPlainTextTokenOnce()
+  return token
+}
+
+/**
+ * [fork change] Says once per run that a token is being written in the clear.
+ *
+ * ONCE, not once per write: `~/.ganttproject` is rewritten whenever the settings change, and a
+ * warning that appears fifty times is one nobody reads. Once per run is enough for the fact to be
+ * in the log of the session in which it happened.
+ *
+ * [fork change] 09.09.2026, second half: THE OTHER HALF OF THIS IS NOW BUILT. The log is not where
+ * a person looks, so the same fact also stands under the token field in the resource dialogue, at
+ * the moment the token is pasted in -- `MainPropertiesPanel.togglTokenHintBox`. This line stays,
+ * because it records WHEN it happened in the log of the session it happened in, which a line in a
+ * dialogue cannot.
+ *
+ * A note on where it is kept, which was WRONG here until 09.09.2026: the setting is called
+ * `toggl.resourceTokens`, not `toggl.tokens`. The name in the file is the id of the option group
+ * plus the id of the option (`GanttOptions.java:889`), and those are `toggl`
+ * (`TogglTokens.kt`, optionGroup) and `resourceTokens` (`TogglTokens.kt`, tokens). Advice that
+ * names the wrong setting is worse than no advice: whoever follows it finds nothing and concludes
+ * there is nothing to find.
+ */
+/**
+ * [fork change] Where the warning goes, and whether it has already gone there.
+ *
+ * A seam, and it is here for one reason: a test has to be able to read the sentence that really
+ * reaches the logger. Asserting on a function that BUILDS the sentence would prove nothing about
+ * what is passed to `GPLogger` at the call site -- somebody appending the token there would leave
+ * such a test green. This one goes red.
+ *
+ * [alreadySaid] lives here rather than as a private flag of its own so that a test can arm it
+ * again; the tests of one run share a JVM, and a once-per-run flag fires for whichever test comes
+ * first and for none of the others.
+ */
+object PlainTextTokenWarning {
+  /** Replaced in tests. In the running program it is the log and nothing else. */
+  var sink: (String) -> Unit = { GPLogger.log(it) }
+  var alreadySaid: Boolean = false
+}
+
+private fun warnAboutPlainTextTokenOnce() {
+  if (PlainTextTokenWarning.alreadySaid) {
+    return
+  }
+  PlainTextTokenWarning.alreadySaid = true
+  PlainTextTokenWarning.sink(
+    "[fork] No secret store on this machine (backend: ${SecretStore.backendName}). "
+      + "The Toggl API token is written to ~/.ganttproject IN PLAIN TEXT, under the setting "
+      + "'toggl.resourceTokens'. Anything running as this user can read it, and it is in every "
+      + "backup of that file. Revoke the token in Toggl if that file leaves this machine.")
+}
 
 /** Reads the store back. Unreadable pairs are skipped rather than failing the whole settings file. */
 fun decodeTokenMap(text: String?): Map<String, String> {

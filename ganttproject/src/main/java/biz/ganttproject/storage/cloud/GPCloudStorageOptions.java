@@ -117,9 +117,17 @@ public class GPCloudStorageOptions extends GPAbstractOption<WebDavServerDescript
         // The checkbox was therefore left unset and the password typed anew on every start
         // instead -- security that costs effort gets switched off sooner or later.
         //
-        // If protect() returns null (not Windows, or DPAPI unavailable), nothing is stored.
+        // If protect() returns null (no secret store on this machine), nothing is stored.
         // Better to keep asking than to write plain text silently.
-        String protectedPassword = SecretStore.INSTANCE.protect(server.getPassword());
+        //
+        // [fork change] 09.09.2026: the alias. On Windows it is ignored -- DPAPI encrypts and
+        // stores nothing of its own. On Linux and macOS the password goes into the platform
+        // keyring and the alias is the name it is kept under, so it has to be the SAME string at
+        // every save; otherwise every save would leave one more orphaned keyring entry behind.
+        // URL plus user name is what identifies a server here -- the display name is not, it can
+        // be changed without changing the account.
+        String alias = "webdav:" + server.getRootUrl() + "|" + server.getUsername();
+        String protectedPassword = SecretStore.INSTANCE.protect(alias, server.getPassword());
         if (protectedPassword != null) {
           result.append("\t").append(protectedPassword);
         }
