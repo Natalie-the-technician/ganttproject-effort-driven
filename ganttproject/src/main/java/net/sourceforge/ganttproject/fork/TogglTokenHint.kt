@@ -123,7 +123,20 @@ fun togglTokenHintBox(secretStoreAvailable: Boolean, optionsFilePath: String): V
  * because that stylesheet belongs to the original and this fork does not write into it.
  */
 private fun plainTextWarning(optionsFilePath: String): Label =
-  Label(forkText("fork.toggl.token.plaintext", optionsFilePath)).asHint().also { label ->
+  plainTextWarningLabel(forkText("fork.toggl.token.plaintext", optionsFilePath))
+
+/**
+ * [fork change] 10.09.2026: the same amber line, for the second secret.
+ *
+ * Split out of [plainTextWarning] rather than copied into `GitHubConnectPanel`, and the reason is
+ * not tidiness. The colours, the bar down the left and the sign are what make a reader recognise
+ * this line as the same KIND of statement wherever it appears; two copies would drift, and the day
+ * one of them stopped looking like a warning nobody would notice. The wording is the caller's,
+ * because the two secrets are kept in different settings and a shared sentence could only be vague
+ * about which.
+ */
+internal fun plainTextWarningLabel(text: String): Label =
+  Label(text).asHint().also { label ->
     label.graphic = Label(WARNING_SIGN)
     label.contentDisplay = ContentDisplay.LEFT
     label.graphicTextGap = 6.0

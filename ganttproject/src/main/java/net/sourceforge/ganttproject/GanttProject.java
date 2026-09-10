@@ -29,6 +29,8 @@ import net.sourceforge.ganttproject.timetracking.ConnectionCheckMessageSink;
 // Kotlin puts file-level declarations into a class <FileName>Kt.
 import net.sourceforge.ganttproject.timetracking.ImportPeriodDialogKt;
 import net.sourceforge.ganttproject.timetracking.TaskChoiceDialogKt;
+import net.sourceforge.ganttproject.timetracking.GitHubConnectAction;
+import net.sourceforge.ganttproject.timetracking.GitHubTokenOptions;
 import net.sourceforge.ganttproject.timetracking.TogglConnectionAction;
 import net.sourceforge.ganttproject.timetracking.TogglImportAction;
 // [Fork-Aenderung] Kapazitaetsverteilung.
@@ -287,6 +289,12 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         messageSink.apply(() -> ForkI18nKt.forkText("fork.recurrence.title"));
     mHuman.add(new TogglConnectionAction(getHumanResourceManager(), togglMessages));
 
+    // [fork change] FF5 part 2b. Connecting the hour journal to GitHub. Beside the Toggl entries
+    // because it is the same subject -- where the hours come from and where they are kept -- and
+    // it is a once-a-year act, so it wants a menu entry rather than a place on a screen somebody
+    // looks at daily.
+    mHuman.add(new GitHubConnectAction());
+
     // [fork change] Import of the Toggl times. A question is asked before writing: the preview
     // names the totals AND what gets skipped. showOptionDialog does not block, so the action gets
     // a callback instead of a return value.
@@ -448,6 +456,13 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     // [fork change] Toggl token per person. Belongs in the application settings
     // (~/.ganttproject) and explicitly NOT in the project file - that one is shared.
     options.addOptions(TogglTokenOptions.INSTANCE.getOptionGroup());
+    // [fork change] FF5 part 2b. The GitHub sign-in (both tokens, both expiry times, as one
+    // encoded line) belongs in the application settings for the same reason as the Toggl token:
+    // the project file is shared, and this one may WRITE the journal repository. Where a platform
+    // key store answers, ~/.ganttproject holds only a reference to it; where none does, the line
+    // goes in unencrypted and OptionGitHubTokenStorage says so once in the log and again under the
+    // connect button.
+    options.addOptions(GitHubTokenOptions.INSTANCE.getOptionGroup());
     options.addOptions(myTaskManagerConfig.getTaskOptions());
     startupLogger.debug("2. loading options");
     initOptions();
