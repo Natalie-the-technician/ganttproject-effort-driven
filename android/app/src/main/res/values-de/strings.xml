@@ -113,6 +113,10 @@
     <string name="assignment_responsible">Verantwortlich</string>
     <string name="assignment_hours_per_day">%1$s h pro Tag</string>
     <string name="assignment_all_assigned">Alle Ressourcen sind diesem Vorgang bereits zugewiesen.</string>
+    <string name="teammates">Wer arbeitet mit</string>
+    <string name="teammate_you">Sie</string>
+    <string name="teammate_unnamed">In der Datei nicht benannt (id %1$s)</string>
+    <string name="role_project_manager">Projektleitung</string>
 
     <!-- Ressourcen -->
     <string name="resources_none">Dieses Projekt hat keine Ressourcen.</string>

@@ -118,6 +118,10 @@
     <string name="assignment_responsible">Responsible</string>
     <string name="assignment_hours_per_day">%1$s h per day</string>
     <string name="assignment_all_assigned">Every resource is already assigned to this task.</string>
+    <string name="teammates">Working on this</string>
+    <string name="teammate_you">you</string>
+    <string name="teammate_unnamed">Not named in the file (id %1$s)</string>
+    <string name="role_project_manager">project management</string>
 
     <!-- Resources -->
     <string name="resources_none">This project has no resources.</string>
