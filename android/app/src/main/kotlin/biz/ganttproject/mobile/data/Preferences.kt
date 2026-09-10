@@ -122,6 +122,21 @@ class SecureStore(context: Context) {
      * setting.
      */
     const val KEY_DAV_PASSWORD = "dav_password"
+
+    /**
+     * The GitHub access token AND its refresh token, encoded as one line by
+     * `GitHubTokenSet.encoded()`.
+     *
+     * BOTH, not just the access token. The access one is good for eight hours;
+     * without the refresh one beside it the person would type a code into a
+     * browser every morning, and by the third morning the whole thing is
+     * switched off.
+     *
+     * The client id is NOT here. It is not a secret, it stands in the source
+     * (`GITHUB_CLIENT_ID`), and putting it in this file would suggest an
+     * installed copy holds something worth taking.
+     */
+    const val KEY_GITHUB_TOKENS = "github_tokens"
   }
 }
 

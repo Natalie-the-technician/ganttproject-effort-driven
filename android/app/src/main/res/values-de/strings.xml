@@ -282,4 +282,20 @@
 
     <string name="locked_title">Gerade am PC in Bearbeitung</string>
     <string name="notice_opened_while_locked">Dieses Projekt ist gerade am PC geöffnet. Lesen und Bearbeiten geht hier trotzdem — nur Speichern wird abgelehnt, bis es dort geschlossen ist, spätestens nach zwei Stunden.</string>
+
+    <!-- [fork change] FF5 Teil 2b: das Stundenjournal mit GitHub verbinden. -->
+    <string name="github_title">Stundenjournal auf GitHub</string>
+    <string name="github_connect">Mit GitHub verbinden</string>
+    <string name="github_disconnect">Verbindung lösen</string>
+    <string name="github_cancel">Abbrechen</string>
+    <string name="github_connected">Verbunden.</string>
+    <string name="github_step_1">Öffne die Adresse unten und tippe diesen Code ein:</string>
+    <string name="github_other_device">Der Browser darf auf einem beliebigen Gerät sein — einem Laptop, einem anderen Telefon. Nur der Code muss dorthin.</string>
+    <string name="github_copy_code">Code kopieren</string>
+    <string name="github_open_page">Seite öffnen</string>
+    <string name="github_waiting">Warte darauf, dass du bei GitHub bestätigst…</string>
+    <string name="github_ok">Verbunden. Das Stundenjournal kann jetzt auf GitHub gesichert werden.</string>
+    <string name="github_denied">Du hast die Verbindung bei GitHub abgelehnt. Es wurde nichts geändert.</string>
+    <string name="github_expired">Der Code ist abgelaufen — er gilt nur eine Viertelstunde. Hol einen neuen.</string>
+    <string name="github_failed">Die Verbindung zu GitHub ist gescheitert: %1$s</string>
 </resources>

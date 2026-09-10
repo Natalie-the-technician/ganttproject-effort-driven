@@ -290,4 +290,22 @@
 
     <string name="locked_title">Open on the PC right now</string>
     <string name="notice_opened_while_locked">This project is open on the PC right now. You can read and edit it here — saving will be refused until it is closed there, at the latest after two hours.</string>
+
+    <!-- [fork change] FF5 part 2b: connecting the hour journal to GitHub. -->
+    <string name="github_title">Hour journal on GitHub</string>
+    <string name="github_connect">Connect to GitHub</string>
+    <string name="github_disconnect">Disconnect</string>
+    <string name="github_cancel">Cancel</string>
+    <string name="github_connected">Connected.</string>
+    <string name="github_step_1">Open the address below and type this code:</string>
+    <!-- The point GitHub's own documentation makes: the browser does not have to be
+         this device. That is why the code is shown large enough to read across a desk. -->
+    <string name="github_other_device">The browser can be on any device — a laptop, another phone. Only the code has to get there.</string>
+    <string name="github_copy_code">Copy code</string>
+    <string name="github_open_page">Open the page</string>
+    <string name="github_waiting">Waiting for you to confirm at GitHub…</string>
+    <string name="github_ok">Connected. The hour journal can now be saved to GitHub.</string>
+    <string name="github_denied">You refused the connection at GitHub. Nothing was changed.</string>
+    <string name="github_expired">The code has run out — it is only good for a quarter of an hour. Ask for a new one.</string>
+    <string name="github_failed">The connection to GitHub failed: %1$s</string>
 </resources>

@@ -9,7 +9,12 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import biz.ganttproject.mobile.R
+import biz.ganttproject.mobile.core.AccessTokenOutcome
+import biz.ganttproject.mobile.core.DeviceCodeOutcome
+import biz.ganttproject.mobile.core.DeviceFlowOutcome
 import biz.ganttproject.mobile.core.EditScope
+import biz.ganttproject.mobile.core.GitHubConnection
 import biz.ganttproject.mobile.core.GanttDocument
 import biz.ganttproject.mobile.core.monthsWithRecords
 import biz.ganttproject.mobile.core.monthPeriod
@@ -38,6 +43,8 @@ import biz.ganttproject.mobile.core.SyncGuarantee
 import biz.ganttproject.mobile.core.needsUnmanagedStorageWarning
 import biz.ganttproject.mobile.core.planImport
 import biz.ganttproject.mobile.data.AppPreferences
+import biz.ganttproject.mobile.data.SecureStoreGitHubTokens
+import biz.ganttproject.mobile.data.installGitHubLog
 import biz.ganttproject.mobile.data.FileError
 import biz.ganttproject.mobile.data.FileResult
 import biz.ganttproject.mobile.data.OpenProject
@@ -238,6 +245,103 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
   /** Server settings as shown in the dialog, plus the last check's outcome. */
   private val _dav = MutableStateFlow(loadDavSettings())
   val dav: StateFlow<DavSettingsState> = _dav.asStateFlow()
+
+  // ----------------------------------------------------------- GitHub sign-in
+
+  /**
+   * [fork change] The connection that keeps the hour journal in a repository.
+   *
+   * Built once and kept: it owns the token store, and it is the only thing
+   * that writes a renewed token down. A second one built per call would work
+   * just as well, which is the point — the state that matters is on disk, not
+   * in this field.
+   */
+  private val github = GitHubConnection(http, SecureStoreGitHubTokens(secure))
+
+  private val _github = MutableStateFlow(GitHubConnectState(connected = github.isConnected()))
+  val githubState: StateFlow<GitHubConnectState> = _github.asStateFlow()
+
+  /**
+   * Read by the polling loop before every request, written by the interface.
+   *
+   * `@Volatile` because the two are different threads and this is the one
+   * value they share. Without it the loop could keep the old value in a
+   * register and go on asking after the person pressed Cancel — which is
+   * precisely the behaviour the flow is built to avoid.
+   */
+  @Volatile
+  private var keepWaitingForGitHub = false
+
+  init {
+    installGitHubLog()
+  }
+
+  /**
+   * [fork change] Asks GitHub for a code and then waits for the person.
+   *
+   * On [Dispatchers.IO] from end to end, and it has to be: the waiting is a
+   * real `Thread.sleep` between polls and it can last a quarter of an hour.
+   */
+  fun connectToGitHub() {
+    keepWaitingForGitHub = true
+    _github.update { it.copy(busy = true, message = null, userCode = null) }
+    viewModelScope.launch {
+      when (val start = withContext(Dispatchers.IO) { github.startConnecting() }) {
+        is DeviceCodeOutcome.Failed -> _github.update {
+          it.copy(busy = false, message = message(R.string.github_failed, start.reason))
+        }
+        is DeviceCodeOutcome.NotEnabled -> _github.update {
+          it.copy(busy = false, message = start.reason)
+        }
+        is DeviceCodeOutcome.Ready -> {
+          _github.update {
+            it.copy(
+              busy = true,
+              userCode = start.prompt.userCode,
+              verificationUri = start.prompt.verificationUri
+            )
+          }
+          val outcome = withContext(Dispatchers.IO) {
+            github.finishConnecting(start.prompt) { keepWaitingForGitHub }
+          }
+          _github.update {
+            it.copy(
+              busy = false,
+              userCode = null,
+              connected = github.isConnected(),
+              message = when (outcome) {
+                is DeviceFlowOutcome.Connected -> message(R.string.github_ok)
+                is DeviceFlowOutcome.Denied -> message(R.string.github_denied)
+                is DeviceFlowOutcome.Expired -> message(R.string.github_expired)
+                is DeviceFlowOutcome.Stopped -> null
+                is DeviceFlowOutcome.Failed -> message(R.string.github_failed, outcome.reason)
+              }
+            )
+          }
+        }
+      }
+    }
+  }
+
+  /** Stops the waiting. The code stays valid at GitHub until it expires. */
+  fun cancelGitHubConnect() {
+    keepWaitingForGitHub = false
+  }
+
+  fun disconnectGitHub() {
+    github.forget()
+    _github.update { it.copy(connected = false, userCode = null, message = null, busy = false) }
+  }
+
+  /**
+   * [fork change] A token to put on a request, renewing it first if it is
+   * stale. Nothing calls this yet — see the report of 10.09.2026.
+   */
+  suspend fun githubAccessToken(): AccessTokenOutcome =
+    withContext(Dispatchers.IO) { github.accessToken() }
+
+  private fun message(id: Int, vararg args: Any): String =
+    getApplication<Application>().getString(id, *args)
 
   // ------------------------------------------------------------ File level
 

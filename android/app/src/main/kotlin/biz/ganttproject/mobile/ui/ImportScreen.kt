@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,6 +81,19 @@ fun ImportScreen(
     if (!project.canEdit) item { EditingOffBanner() }
     item { TokenCard(state, viewModel) }
     item { RangeCard(state, viewModel) }
+    // [fork change] FF5 part 2b. On this tab because it is the hours tab: what
+    // is imported here is what the journal on GitHub records. It is deliberately
+    // below the import, not above it — connecting is a once-a-year act and the
+    // import is a daily one.
+    item {
+      val github by viewModel.githubState.collectAsState()
+      GitHubConnectCard(
+        state = github,
+        onConnect = viewModel::connectToGitHub,
+        onCancel = viewModel::cancelGitHubConnect,
+        onDisconnect = viewModel::disconnectGitHub
+      )
+    }
 
     state.error?.let { error ->
       item {
