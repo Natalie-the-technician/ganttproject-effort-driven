@@ -1,0 +1,19 @@
+# [fork change] Line endings.
+#
+# The `shared-*.timelog` fixtures are pinned by SHA-256 -- in the desktop
+# suite (ganttproject-tester/.../TimeJournalTest.kt) and, identically, in
+# the Android one (android/gantt-core/.../TimeJournalTest.kt). The digests
+# are the whole mechanism that keeps the two implementations of the hour
+# journal from drifting apart, so the bytes on disk have to be the bytes in
+# the object store on every platform.
+#
+# Without this line a clone made with Git's Windows default
+# (core.autocrlf=true) gets CRLF in the working tree and six checks in
+# TimeJournalTest turn red on code that is perfectly correct.
+#
+# Deliberately narrow: no `* text=auto`. That would not fix this at all --
+# it marks the fixtures as text, which is exactly what invites the
+# conversion -- and it would renormalise six unrelated files that are
+# committed with CRLF today (the two gradlew.bat launchers,
+# ganttproject.bat, ganttproject.nsi.tpl and two bundled LICENSE texts).
+*.timelog -text
