@@ -55,6 +55,19 @@ class ChangeTaskProgressRuler {
     int visiblePixels = -1;
     float accumulatedDuration = 0f;
     List<Rectangle> taskRectangles = myTaskChartFacade.getTaskRectangles(myTask);
+    // [Fork change] S7. NO BAR ON SCREEN MEANS NO PIXEL SCALE, and this line used to read
+    // element 0 of the list without asking. A collapsed recurrence series with the "series on one
+    // row" switch on draws the bars of its DATES on the group's row and nothing for the group
+    // itself, so `getTaskRectangles` for the group has nothing to hand back; measured on
+    // 14.09.2026 it handed back `[null]` and the next line died with
+    //   Cannot invoke "Canvas$Rectangle.getLeftX()" because ... List.get(int) is null.
+    // `getTaskRectangles` now skips what it cannot find, which turns that into an EMPTY list --
+    // and an empty list must leave the ruler unable to answer rather than answering wrongly. See
+    // getProgress: without a scale the progress stays exactly where it was, so a drag that should
+    // never have started changes nothing instead of setting the task to 0 % or to 100 %.
+    if (taskRectangles.isEmpty()) {
+      return;
+    }
     myMinPx = taskRectangles.get(0).getLeftX();
     myPixel2progress.put(myMinPx, 0);
     for (Rectangle r : taskRectangles) {
@@ -73,6 +86,12 @@ class ChangeTaskProgressRuler {
    * @return progress value corresponding to the given {@code pixels} value.
    */
   Progress getProgress(int pixels) {
+    // [Fork change] S7. Empty exactly when the task has no rectangle on the chart -- see the
+    // constructor. Every answer below is derived from pixels this task was drawn at; with none of
+    // them the only answer that cannot be wrong is the value the task already carries.
+    if (myPixel2progress.isEmpty()) {
+      return new Progress(myTask.getCompletionPercentage(), myTask.getDuration());
+    }
     if (pixels < myMinPx) {
       return new Progress(0, myTask.getDuration());
     }

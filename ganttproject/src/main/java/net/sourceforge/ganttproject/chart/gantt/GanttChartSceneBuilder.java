@@ -48,7 +48,9 @@ import net.sourceforge.ganttproject.task.*;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
@@ -341,16 +343,35 @@ public class GanttChartSceneBuilder {
       //
       // EMPTY IS THE ORDINARY CASE and costs one method call per row. See InputApi#getSeriesBars.
       List<ITaskActivity<ITaskSceneTask>> seriesBars = input.getSeriesBars(t.getRowId());
-      List<ITaskActivity<ITaskSceneTask>> activities = seriesBars.isEmpty() ? t.getActivities() : seriesBars;
+      boolean isMergedRow = !seriesBars.isEmpty();
+      List<ITaskActivity<ITaskSceneTask>> activities = isMergedRow ? seriesBars : t.getActivities();
       activities = mySplitter.split(activities, Integer.MAX_VALUE);
-      List<Polygon> rectangles = renderActivities(rowNum, t, activities, defaultUnitOffsets, true);
+      List<Polygon> rectangles = renderActivities(rowNum, t, activities, defaultUnitOffsets, true, isMergedRow);
       for (Polygon p : rectangles) {
         if (p.getModelObject() != null) {
           boundPolygons.add(p);
         }
       }
       renderLabels(boundPolygons);
-      renderComparisonBand(t, rowNum, defaultUnitOffsets);
+      // [Fork change] S6a. NO COMPARISON BAND ON A MERGED ROW.
+      //
+      // All four band methods key off the ROW's task -- findBaselineDuration and renderBaseline
+      // compare against `taskBaseline.getId() == t.getRowId()`, the effort band asks
+      // `input.getOriginalEffortHours(t.getRowId())`. On this row that task is the GROUP, and a
+      // group's baseline entry describes the span from the first date to the last: measured on
+      // 14.09.2026, the durations view drew a neutral band 300 px wide under three bars of 20 px
+      // each. That is not merely uninformative, it is a second, different statement drawn on the
+      // same row as the first with nothing to tell the two apart.
+      //
+      // SUPPRESSED RATHER THAN DRAWN PER DATE. The measurement report of 11.09.2026 weighed the
+      // alternative -- all four methods rebuilt around a (task, activities) pair instead of a row,
+      // 120 to 160 lines -- and rejected it: "teurer und schlechter. Nicht empfohlen." The band
+      // answers "how does the plan compare with the baseline"; a collapsed group is the one shape
+      // in which the user has said they do not want the dates individually. Expanding the group
+      // gives every date its row and its own band, which is the answer to that question.
+      if (!isMergedRow) {
+        renderComparisonBand(t, rowNum, defaultUnitOffsets);
+      }
       rowNum++;
       Canvas.Line nextLine = getPrimitiveContainer().createLine(0, rowNum * getRowHeight(),
           input.getWidth(), rowNum * getRowHeight());
@@ -695,8 +716,24 @@ public class GanttChartSceneBuilder {
 
   private List<Polygon> renderActivities(final int rowNum, ITaskSceneTask t, List<ITaskActivity<ITaskSceneTask>> activities,
       OffsetList defaultUnitOffsets, boolean areVisible) {
+    return renderActivities(rowNum, t, activities, defaultUnitOffsets, areVisible, false);
+  }
+
+  /**
+   * @param isMergedRow [Fork change] true when the bars on this row belong to tasks OTHER than
+   *        {@code t} -- today only the dates of a collapsed recurrence series. See
+   *        {@link InputApi#getSeriesBars}.
+   */
+  private List<Polygon> renderActivities(final int rowNum, ITaskSceneTask t, List<ITaskActivity<ITaskSceneTask>> activities,
+      OffsetList defaultUnitOffsets, boolean areVisible, boolean isMergedRow) {
     List<Polygon> rectangles = myTaskActivityRenderer.renderActivities(rowNum, activities, defaultUnitOffsets);
-    if (areVisible && !myTaskApi.hasNestedTasks(t) && !t.isMilestone() && !t.isProjectTask()) {
+    if (areVisible && isMergedRow) {
+      // [Fork change] S4 + S5. The row's own task is a summary task and would fail the test below;
+      // its bars, however, belong to ordinary tasks that each deserve their own stripe and their
+      // own progress. Handled separately rather than folded into the condition, because THE ROW'S
+      // TASK IS THE WRONG QUESTION HERE from the first line onwards.
+      renderPerOwnerDetails(rectangles, defaultUnitOffsets);
+    } else if (areVisible && !myTaskApi.hasNestedTasks(t) && !t.isMilestone() && !t.isProjectTask()) {
       renderAbsenceStripes(t, rectangles, defaultUnitOffsets);
       renderProgressBar(rectangles.stream().filter(REMOVE_SUPERTASK_ENDINGS).toList());
     }
@@ -706,6 +743,71 @@ public class GanttChartSceneBuilder {
       getPrimitiveContainer().bind(notes, t);
     }
     return rectangles;
+  }
+
+  /**
+   * [Fork change] S4 AND S5: ON A MERGED ROW, EVERY BAR GETS ITS OWN PROGRESS AND ITS OWN STRIPE.
+   *
+   * ═══ WHAT WAS THERE BEFORE: NOTHING ═══
+   *
+   * Measured on 14.09.2026, and it corrects the estimate in the measurement report of 11.09.2026,
+   * which expected a progress bar "falsch verteilt" and a stripe "weg". Neither: the caller draws
+   * both only for a task that is not a summary task, and the row of a collapsed recurrence group
+   * IS one. On that row neither has ever been drawn, with the switch or without it. So this is an
+   * addition and not a repair -- there is no earlier picture that has to be preserved.
+   *
+   * ═══ WHY BY OWNER ═══
+   *
+   * {@link #renderProgressBar} takes the owner of the FIRST rectangle as "the" task and then spends
+   * that one task's completion across every rectangle it is handed, in order. Handing it a whole
+   * merged row would read the group's percentage and paint it from the left: at 50 % the first six
+   * of twelve dates full and the last six empty -- which looks right exactly as long as a series is
+   * worked through in order, and lies the moment somebody does March before February. Each date
+   * carries its own percentage, and grouping the rectangles by owner lets that method do precisely
+   * what it already does, once per date.
+   *
+   * The same grouping settles the stripe: {@link #renderAbsenceStripes} looks the days off up by
+   * ONE task id, and the group has no assignments of its own. Per owner it asks about the date the
+   * bar actually belongs to. That is the "je Balken" of step S5, done once per date rather than
+   * once per rectangle -- the same lookups a per-rectangle version would do, minus the repeats for
+   * a date that was cut into several rectangles.
+   *
+   * ═══ BY ROW ID, NOT BY THE OWNER OBJECT ═══
+   *
+   * {@code ITaskSceneTaskImpl} is an ordinary class with no {@code equals}, so a map keyed on it
+   * would group by identity. That happens to work today -- {@code seriesBars} builds one view per
+   * child and hands out all of its activities -- but it would silently fall apart into one group
+   * per bar the day anything builds a second view of the same task. The row id is the identity that
+   * is actually meant.
+   *
+   * THE ORDER OF THE ROW IS KEPT ({@code LinkedHashMap}) so that the rectangles reach
+   * {@code renderProgressBar} in the order they were drawn in; it walks them left to right and
+   * stops when the completion is used up.
+   *
+   * EACH OWNER IS ASKED THE SAME THREE QUESTIONS THE CALLER ASKS ABOUT AN ORDINARY ROW. A child
+   * that is itself a summary task, a milestone or the project task carries no work of its own and
+   * gets neither -- the same rule, applied where it now belongs.
+   */
+  private void renderPerOwnerDetails(List<Polygon> rectangles, OffsetList defaultUnitOffsets) {
+    Map<Integer, List<Polygon>> byOwner = new LinkedHashMap<>();
+    for (Polygon p : rectangles) {
+      if (!(p.getModelObject() instanceof ITaskActivity)) {
+        continue;
+      }
+      ITaskSceneTask owner = ((ITaskActivity<ITaskSceneTask>) p.getModelObject()).getOwner();
+      if (owner == null) {
+        continue;
+      }
+      byOwner.computeIfAbsent(owner.getRowId(), id -> new ArrayList<>()).add(p);
+    }
+    for (List<Polygon> ownBars : byOwner.values()) {
+      ITaskSceneTask owner = ((ITaskActivity<ITaskSceneTask>) ownBars.get(0).getModelObject()).getOwner();
+      if (myTaskApi.hasNestedTasks(owner) || owner.isMilestone() || owner.isProjectTask()) {
+        continue;
+      }
+      renderAbsenceStripes(owner, ownBars, defaultUnitOffsets);
+      renderProgressBar(ownBars.stream().filter(REMOVE_SUPERTASK_ENDINGS).toList());
+    }
   }
 
   /**

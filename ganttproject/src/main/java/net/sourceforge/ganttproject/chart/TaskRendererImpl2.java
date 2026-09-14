@@ -33,6 +33,7 @@ import biz.ganttproject.core.time.TimeDuration;
 import biz.ganttproject.core.time.TimeUnit;
 import biz.ganttproject.customproperty.CustomPropertyManager;
 import com.google.common.collect.ImmutableList;
+import net.sourceforge.ganttproject.GPLogger;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
 import net.sourceforge.ganttproject.fork.AbsenceRun;
 import net.sourceforge.ganttproject.fork.AbsenceStripeKt;
@@ -48,6 +49,7 @@ import net.sourceforge.ganttproject.task.*;
 
 import java.util.*;
 import java.util.List;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import static net.sourceforge.ganttproject.chart.gantt.TaskActivitySceneApiAdapterKt.mapTaskSceneTask2Task;
@@ -57,6 +59,9 @@ import static net.sourceforge.ganttproject.chart.gantt.TaskActivitySceneApiAdapt
  * in the gantt chart
  */
 public class TaskRendererImpl2 extends ChartRendererBase {
+  /** [Fork change] S7: a rectangle that cannot be found is reported here rather than swallowed. */
+  private static final Logger LOGGER = GPLogger.getLogger(TaskRendererImpl2.class);
+
   private final GanttChartSceneBuilder chartRenderer;
 
   private final ChartModelImpl myModel;
@@ -71,12 +76,16 @@ public class TaskRendererImpl2 extends ChartRendererBase {
    * for why that row lies today and why the repair is drawing only.
    *
    * OFF BY DEFAULT, AND NOT OUT OF CAUTION. The picture behind this switch is deliberately
-   * unfinished: progress is still spread across the row rather than shown per date, the absence
-   * stripe is not drawn on such a row at all, the comparison band still belongs to the group, and
-   * the first click on a bar expands the group again. Each of those is a package of its own, and
+   * unfinished, and what is still missing is written down rather than left to be discovered: the
+   * first click on a bar expands the group again (S8), and the row's left and right labels still
+   * name the group rather than the first and last date (S9). Each is a package of its own, and
    * while the default is off they can be built one at a time without anybody's chart changing in
    * the meantime. The switch is what makes the work divisible; it is not a hedge against the part
    * that is finished.
+   *
+   * WHAT WAS ON THIS LIST UNTIL 14.09.2026 and is now built: the progress bar per date (S4), the
+   * absence stripe per bar (S5) and the comparison band, which is suppressed on such a row (S6a).
+   * See {@code GanttChartSceneBuilder#renderPerOwnerDetails}.
    */
   private final BooleanOption mySeriesOneRowOption =
       new DefaultBooleanOption("ganttChartDetails.seriesOneRow", false);
@@ -353,6 +362,41 @@ public class TaskRendererImpl2 extends ChartRendererBase {
     return rowHeight;
   }
 
+  /**
+   * The rectangles a task was actually drawn as, for whoever needs to measure against them --
+   * today that is the progress drag ({@code GanttChartController:125} -> {@code
+   * ChangeTaskProgressRuler}).
+   *
+   * [Fork change] S7. THIS METHOD REBUILDS THE ACTIVITIES AND THEN LOOKS UP WHAT WAS DRAWN, and
+   * those two can disagree. Before this change the disagreement was only caught by three
+   * {@code assert}s, which bite under {@code -ea} and are off in the running program; what the
+   * program got instead was a list with {@code null} in it, or a {@code ClassCastException}.
+   * Both were measured on 14.09.2026 (report `2026-09-14-reihe-richtigstellen.md`):
+   *
+   *   * COLLAPSED RECURRENCE SERIES, switch on: the row draws the bars of the DATES, so nothing
+   *     is drawn for the group's own activities. The list came back as {@code [null]} and
+   *     {@code ChangeTaskProgressRuler:58} died on
+   *     {@code Cannot invoke "Canvas$Rectangle.getLeftX()" because ... List.get(int) is null}.
+   *   * A LEGACY MILESTONE is drawn as a {@code Canvas.Rhombus}, and the cast to {@code Rectangle}
+   *     threw {@code ClassCastException} -- with the switch and the series out of the picture
+   *     entirely. That one was already there before this fork touched anything.
+   *
+   * SKIPPED AND LOGGED, NOT THROWN, AND NOT SWALLOWED EITHER. Three reasons, in order:
+   *
+   *   1. The caller is a MOUSE GESTURE, not a computation. Throwing turns a drag into a stack
+   *      trace over a half-painted chart and loses the plan's unsaved state; the honest answer to
+   *      "which rectangles is this task drawn as" when it is drawn as none is the empty list.
+   *   2. A list with {@code null} in it is not a weaker answer, it is a BROKEN CONTRACT: it
+   *      crashes the caller anyway, one frame further out, at a line that cannot say why.
+   *   3. Silence is the one option ruled out. A missing rectangle means the drawing and this
+   *      lookup have drifted apart, which is a fault in this program and not in the plan, so it
+   *      goes to the log with the task named -- {@code FINE}, because with the series switch on it
+   *      is EXPECTED for a collapsed group and a warning per drag would train the reader to ignore
+   *      the channel.
+   *
+   * The caller is guarded too: {@code ChangeTaskProgressRuler} now survives an empty list rather
+   * than reading element 0 of it.
+   */
   public static List<Rectangle> getTaskRectangles(Task t, ChartModelImpl chartModel) {
     List<Rectangle> result = new ArrayList<>();
     ITaskSceneTask task = new ITaskSceneTaskImpl(t, chartModel);
@@ -364,13 +408,16 @@ public class TaskRendererImpl2 extends ChartRendererBase {
     );
     List<ITaskActivity<ITaskSceneTask>> splitOnBounds = splitter.split(originalActivities, Integer.MAX_VALUE);
     for (ITaskActivity<ITaskSceneTask> activity : splitOnBounds) {
-      assert activity != null : "Got null activity in task="+t;
-      Canvas.Shape graphicPrimitive = chartModel.getGraphicPrimitive(activity);
-      assert graphicPrimitive != null : "Got null for activity="+activity;
-      assert graphicPrimitive instanceof Rectangle;
+      Canvas.Shape graphicPrimitive = activity == null ? null : chartModel.getGraphicPrimitive(activity);
+      if (!(graphicPrimitive instanceof Rectangle)) {
+        LOGGER.fine(String.format(
+            "No rectangle drawn for activity=%s of task=%s (id=%d); got %s. Skipping it.",
+            activity, t.getName(), t.getTaskID(),
+            graphicPrimitive == null ? "null" : graphicPrimitive.getClass().getSimpleName()));
+        continue;
+      }
       result.add((Rectangle) graphicPrimitive);
     }
     return result;
-
   }
 }

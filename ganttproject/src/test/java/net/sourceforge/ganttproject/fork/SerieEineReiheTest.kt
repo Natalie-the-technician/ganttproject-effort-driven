@@ -76,9 +76,13 @@ import java.util.Locale
  *
  * ═══ WHAT IS DELIBERATELY NOT CHECKED HERE ═══
  *
- * Progress per date, absence stripes per bar, the comparison band, the labels, and the first click
- * expanding the group again. None of those is built yet (S4–S9 of the measurement report of
- * 11.09.2026), which is why the setting this file switches on is OFF by default.
+ * The labels, and the first click expanding the group again (S8 and S9 of the measurement report
+ * of 11.09.2026). Neither is built yet, which is why the setting this file switches on is still OFF
+ * by default.
+ *
+ * Progress per date, the absence stripe per bar and the comparison band were in this list until
+ * 14.09.2026; they are built now and checked in [SerieEinzelheitenTest], which is where a check
+ * about what hangs OFF a bar belongs. This file stays about the bars themselves.
  */
 class SerieEineReiheTest {
 
