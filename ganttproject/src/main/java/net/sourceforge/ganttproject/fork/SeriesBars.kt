@@ -91,8 +91,32 @@ import net.sourceforge.ganttproject.task.Task
  *    `recurrence_of` column — see [isRecurrenceGroup], which exists precisely because the group
  *    and its dates carry their markers in the SAME column and telling them apart by "marker
  *    present" once cost four red checks.
- *  * It must be COLLAPSED. Expanded, every date is a row of its own; drawing them here as well
- *    would draw each of them twice, once on its own row and once on the group's.
+ *  * It must be COLLAPSED, AND THAT IS ASKED OF THE ROW LIST, NOT OF `Task.expand`. Expanded,
+ *    every date is a row of its own; drawing them here as well would draw each of them twice.
+ *
+ *    CORRECTED ON 14.09.2026, AFTER SWITCHING THE FEATURE ON IN THE RUNNING PROGRAM AND SEEING
+ *    NOTHING HAPPEN. The first version asked `group.expand`, and in the running program that field
+ *    is frozen at whatever the file was loaded with: the JavaFX task table never calls `setExpand`,
+ *    it keeps the truth in its own `TreeCollapseView`. Measured in the container on 14.09.2026 with
+ *    a plan whose file says `expand="false"` and whose table shows the group shut:
+ *
+ *        seriesBars id=2 recurrenceOf=4711@Serie isGroup=true expand=TRUE kinder=12
+ *
+ *    -- so this method returned an empty list every single time and the whole package did nothing,
+ *    whatever the setting said. Every check passed because every check sets `expand` by hand.
+ *
+ *    THE FORK HAD ALREADY WRITTEN THIS DOWN. `HiddenTaskGap` says it in as many words:
+ *    "`Task.expand` CANNOT BE ASKED ... the model field is frozen at whatever was loaded from the
+ *    file while the truth lives in the UI map `TreeCollapseView`, which the chart renderer has no
+ *    way to reach." That file asks THE ROW LIST instead, and so does this one now: a group is
+ *    collapsed when none of its children is a row. The row list is what the table hands the chart
+ *    before every repaint, so it cannot go stale.
+ *
+ *    WHAT IT GUESSES, AND WHICH WAY. A filter that removes every child of an EXPANDED group looks
+ *    from here exactly like a collapsed group, and this row will then draw the children's bars.
+ *    `HiddenTaskGap` meets the same ambiguity and guesses the same way. Here the cost of the guess
+ *    is a row that shows more than the filter asked for, not less -- and what it shows are the
+ *    dates of the very group the filter left standing.
  *  * It must have children. A group without any has nothing to show and keeps its own bar.
  *
  * EVERY CHILD, NOT ONLY THE MARKED DATES. A hand-made task dragged into a recurrence group is
@@ -112,12 +136,22 @@ import net.sourceforge.ganttproject.task.Task
  * the right one at the LAST. Sorting the children keeps each child's own activities in their
  * original order, which `isFirst`/`isLast` depend on.
  */
-fun seriesBars(group: Task, model: ChartModel, manager: CustomPropertyManager): List<TaskSceneTaskActivity> {
-  if (!group.isRecurrenceGroup(manager) || group.expand) {
+fun seriesBars(
+  group: Task,
+  model: ChartModel,
+  manager: CustomPropertyManager,
+  isRow: (Task) -> Boolean
+): List<TaskSceneTaskActivity> {
+  if (!group.isRecurrenceGroup(manager)) {
     return emptyList()
   }
   val children = model.taskManager.taskHierarchy.getNestedTasks(group)
   if (children.isEmpty()) {
+    return emptyList()
+  }
+  // THE CHEAP QUESTIONS FIRST, and not for tidiness: [isRow] walks the row list, so asking it before
+  // the marker would put a scan of the whole table on every ordinary row of every repaint.
+  if (children.any(isRow)) {
     return emptyList()
   }
   return children

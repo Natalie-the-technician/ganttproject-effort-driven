@@ -348,8 +348,13 @@ public class TaskRendererImpl2 extends ChartRendererBase {
       return Collections.emptyList();
     }
     Task task = myModel.getTaskManager().getTask(rowId);
+    // THE ROW LIST IS WHAT SAYS "COLLAPSED", not Task.expand -- see SeriesBars for the measurement
+    // that cost this package a day. getVisibleTasks() is the list the table hands over before every
+    // repaint, so it is never stale; seriesBars asks it only about the children of a group that has
+    // already turned out to be a series.
     return task == null ? Collections.emptyList()
-      : SeriesBarsKt.seriesBars(task, myModel, myModel.getTaskManager().getCustomPropertyManager());
+      : SeriesBarsKt.seriesBars(task, myModel, myModel.getTaskManager().getCustomPropertyManager(),
+          t -> myModel.getVisibleTasks().contains(t));
   }
 
   public GPOptionGroup getLabelOptions() {

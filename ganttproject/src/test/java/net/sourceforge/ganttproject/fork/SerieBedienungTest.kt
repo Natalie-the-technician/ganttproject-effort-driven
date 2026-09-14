@@ -112,6 +112,16 @@ class SerieBedienungTest {
       chartModel.startDate = montag.minusDays(7).toModelDate()
     }
 
+    /**
+     * The rows of the table, and the reason this list exists at all.
+     *
+     * „Collapsed" is not a field on the task; it is the row list not containing the children
+     * ([seriesBars], corrected 14.09.2026). So this helper keeps the list the table would hand the
+     * chart: every task built WITHOUT a parent is a row, a child is not. A check that wants a group
+     * opened puts its children in by hand.
+     */
+    val zeilen = mutableListOf<Task>()
+
     fun vorgang(name: String, start: LocalDate, tage: Int = 1, elternteil: Task? = null): Task =
       taskManager.newTaskBuilder()
         .withName(name)
@@ -119,6 +129,12 @@ class SerieBedienungTest {
         .withDuration(taskManager.createLength(tage.toLong()))
         .let { if (elternteil == null) it else it.withParent(elternteil) }
         .build()
+        .also {
+          if (elternteil == null) {
+            zeilen.add(it)
+            chartModel.setVisibleTasks(zeilen)
+          }
+        }
 
     /** A recurrence group with one child per date, collapsed. Same markers as `RecurrenceAdapter`. */
     fun serie(name: String, daten: List<LocalDate> = termine): Pair<Task, List<Task>> {
@@ -131,6 +147,8 @@ class SerieBedienungTest {
       }
       gruppe.customValues.setValue(findOrCreateRecurrenceOf(props), recurrenceGroupMark(quelleId))
       taskManager.algorithmCollection.adjustTaskBoundsAlgorithm.run(gruppe)
+      // `expand` is set because a plan loaded from a file carries it -- and for no other reason:
+      // nothing here depends on it any more, and one check below proves that by setting it wrong.
       gruppe.expand = false
       return gruppe to kinder
     }
@@ -203,7 +221,9 @@ class SerieBedienungTest {
     assertFalse(d.chartModel.isMergedSeriesRow(einzeln),
       "ein Vorgang ohne Kinder erst recht nicht")
 
-    serie.expand = true
+    // AUFGEKLAPPT HEISST: DIE TERMINE SIND ZEILEN. Not `expand = true` -- that field is not what the
+    // program goes by; see the check further down that this one used to stand in for.
+    d.chartModel.setVisibleTasks(d.zeilen + kinder)
     assertFalse(d.chartModel.isMergedSeriesRow(serie),
       "aufgeklappt hat jeder Termin seine eigene Zeile, da gibt es nichts zusammenzulegen")
   }
@@ -226,6 +246,42 @@ class SerieBedienungTest {
     d.schalterAn()
     assertTrue(d.chartModel.isMergedSeriesRow(serie),
       "und eingeschaltet nicht -- sonst pruefte die Zeile darueber gar nichts")
+  }
+
+  /**
+   * ═══ DIE PRUEFUNG, DIE DAS GANZE PAKET GERETTET HAETTE ═══
+   *
+   * THE GROUP IS SHUT AND `expand` IS LEFT ALONE — which is exactly the state the running program
+   * is in. Measured in the container on 14.09.2026: a plan whose file says `expand="false"`, whose
+   * table shows the group shut and whose setting is ticked still reported
+   *
+   *     seriesBars id=2 recurrenceOf=4711@Serie isGroup=true expand=TRUE kinder=12
+   *
+   * because the JavaFX table never writes the field back. Every check written for S1–S7 sets
+   * `expand` by hand and therefore never saw it: the package was green from end to end and did
+   * nothing at all when switched on.
+   *
+   * SO THIS CHECK NEVER TOUCHES `expand`. It says only what the program says — the group is a row,
+   * its dates are not — and that is now the whole of the question.
+   */
+  @Test
+  fun `zugeklappt heisst kein termin ist eine zeile, und nicht was expand behauptet`() {
+    val d = Diagramm()
+    val (serie, kinder) = d.serie("Umsatzsteuervoranmeldung")
+    serie.expand = true      // wie im laufenden Programm: das Feld sagt "offen", die Tabelle nicht
+    d.schalterAn()
+
+    assertTrue(d.chartModel.isMergedSeriesRow(serie),
+      "nur die Gruppe ist eine Zeile, also ist sie zugeklappt -- was expand sagt, zaehlt nicht")
+
+    d.chartModel.setVisibleTasks(d.zeilen + kinder)
+    assertFalse(d.chartModel.isMergedSeriesRow(serie),
+      "sind die Termine eigene Zeilen, ist sie aufgeklappt -- sonst waere jede Gruppe immer zusammengelegt")
+
+    serie.expand = false     // und andersherum genauso wenig
+    d.chartModel.setVisibleTasks(d.zeilen + kinder)
+    assertFalse(d.chartModel.isMergedSeriesRow(serie),
+      "expand=false darf eine aufgeklappte Serie nicht zusammenlegen")
   }
 
   // =============================================================================================
