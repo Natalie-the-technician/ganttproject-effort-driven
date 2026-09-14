@@ -233,12 +233,7 @@ public class TaskRendererImpl2 extends ChartRendererBase {
      */
     @Override
     public List<ITaskActivity<ITaskSceneTask>> getSeriesBars(int rowId) {
-      if (!mySeriesOneRowOption.getValue()) {
-        return Collections.emptyList();
-      }
-      Task task = myModel.getTaskManager().getTask(rowId);
-      return task == null ? Collections.emptyList()
-        : SeriesBarsKt.seriesBars(task, myModel, myModel.getTaskManager().getCustomPropertyManager());
+      return seriesBarsFor(rowId);
     }
 
     /**
@@ -335,6 +330,26 @@ public class TaskRendererImpl2 extends ChartRendererBase {
   @Override
   public void render() {
     chartRenderer.render();
+  }
+
+  /**
+   * [Fork change] The bars the row of {@code rowId} draws in place of its own, or an empty list.
+   *
+   * THE ONE ANSWER, ASKED FROM TWO SIDES. The scene builder asks it through the seam above, once
+   * per row, to decide what to draw. {@link ChartModelImpl#isMergedSeriesRow} asks it to decide
+   * whether the task table may open that group (S8). Those two MUST agree: a table that keeps a row
+   * shut which the chart did not merge hides a task for no reason, and a table that opens one the
+   * chart did merge undoes the row. Writing the three conditions out twice would have been right on
+   * the day it was written and a silent disagreement on the day one of them moved -- which is why
+   * this method exists rather than a copy in the model.
+   */
+  List<ITaskActivity<ITaskSceneTask>> seriesBarsFor(int rowId) {
+    if (!mySeriesOneRowOption.getValue()) {
+      return Collections.emptyList();
+    }
+    Task task = myModel.getTaskManager().getTask(rowId);
+    return task == null ? Collections.emptyList()
+      : SeriesBarsKt.seriesBars(task, myModel, myModel.getTaskManager().getCustomPropertyManager());
   }
 
   public GPOptionGroup getLabelOptions() {

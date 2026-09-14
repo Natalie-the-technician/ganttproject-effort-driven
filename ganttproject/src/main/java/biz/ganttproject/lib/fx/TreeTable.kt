@@ -98,8 +98,25 @@ class GPTreeTableView<T>(rootItem: TreeItem<T>) : TreeTableView<T>(rootItem) {
     skin?.let { (it as GPTreeTableViewSkin<T>).scrollBy(value) }
   }
 
+  /**
+   * [Fork change] S8. AN ITEM WITH NO ROW IS NOT SCROLLED TO.
+   *
+   * `getRow` walks the OPEN part of the tree and answers -1 for an item that a collapsed ancestor
+   * hides. The row number then went on to `scrollTo(row + 1)`, that is to row 0: asking to be taken
+   * to something invisible took the table to the very top of the plan instead, which looks exactly
+   * like an unasked-for jump.
+   *
+   * It was never reachable before, because the only caller opens every ancestor first
+   * (`TaskTable.initSelectionListeners`). Since S8 that caller keeps one kind of group shut, so the
+   * case is now ordinary rather than impossible, and doing nothing is the honest answer: the item
+   * has no row, so there is no row to bring into view.
+   */
   fun scrollTo(item: TreeItem<T>) {
-    skin?.let { (it as GPTreeTableViewSkin<T>).scrollTo(getRow(item)) }
+    val row = getRow(item)
+    if (row < 0) {
+      return
+    }
+    skin?.let { (it as GPTreeTableViewSkin<T>).scrollTo(row) }
   }
 
   override fun requestFocus() {

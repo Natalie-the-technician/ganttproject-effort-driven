@@ -165,6 +165,40 @@ public class ChartModelImpl extends ChartModelBase {
     return result;
   }
 
+  /**
+   * [Fork change] The renderer that actually draws the task bars of this chart.
+   *
+   * IT IS NOT THE ONLY ONE THAT CAN EXIST. A check may build a second {@link TaskRendererImpl2} over
+   * the same model and render through it -- {@code SerieEineReiheTest} does -- and that second one
+   * carries its own copy of every setting. Anything that reads a setting through the MODEL, as
+   * {@link #isMergedSeriesRow} does, reads it off this one, so a check that sets the switch on a
+   * renderer of its own and then asks the model would be asking a different object. Hence the
+   * accessor: the two can be made the same object, which is what the running program has anyway.
+   */
+  public TaskRendererImpl2 getTaskRenderer() {
+    return myTaskRendererImpl;
+  }
+
+  /**
+   * [Fork change] S8. True when the row of {@code t} draws the bars of its children instead of its
+   * own spanning bar -- the one shape in which opening the group in the table would undo the very
+   * picture the user is looking at. See {@link net.sourceforge.ganttproject.fork.MergedSeriesRows}.
+   *
+   * THE SETTING IS ASKED FIRST, so that "off" costs one field read and the answer is then false for
+   * every task, whatever the plan looks like. That is what keeps S8 behind the same switch as the
+   * rest of this package.
+   *
+   * IT GOES THROUGH THE VERY METHOD THE DRAWING GOES THROUGH,
+   * {@link TaskRendererImpl2#seriesBarsFor}, which also asks the setting first -- so "off" costs one
+   * field read and the answer is then false for every task, whatever the plan looks like, and the
+   * table can never disagree with the picture. The first version of this method read the setting
+   * and called {@code seriesBars} itself; the checks of 14.09.2026 caught it, because switching the
+   * feature off at its source left this method still saying yes.
+   */
+  public boolean isMergedSeriesRow(Task t) {
+    return !myTaskRendererImpl.seriesBarsFor(t.getTaskID()).isEmpty();
+  }
+
   public Canvas.Shape getGraphicPrimitive(Object modelObject) {
     for (SceneBuilder renderer : getRenderers()) {
       Canvas.Shape result = renderer.getCanvas().getPrimitive(modelObject);

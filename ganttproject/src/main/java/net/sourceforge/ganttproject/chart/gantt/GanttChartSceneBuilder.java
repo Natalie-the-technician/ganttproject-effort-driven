@@ -774,11 +774,16 @@ public class GanttChartSceneBuilder {
    *
    * ═══ BY ROW ID, NOT BY THE OWNER OBJECT ═══
    *
-   * {@code ITaskSceneTaskImpl} is an ordinary class with no {@code equals}, so a map keyed on it
-   * would group by identity. That happens to work today -- {@code seriesBars} builds one view per
-   * child and hands out all of its activities -- but it would silently fall apart into one group
-   * per bar the day anything builds a second view of the same task. The row id is the identity that
-   * is actually meant.
+   * CORRECTED ON 14.09.2026. The reason first written here -- "{@code ITaskSceneTaskImpl} is an
+   * ordinary class with no {@code equals}" -- is WRONG, and it was wrong when it was written:
+   * that class overrides both {@code equals} and {@code hashCode}
+   * ({@code TaskActivitySceneApiAdapter.kt:74-88}, and already before this fork), comparing by
+   * {@code taskID}. A map keyed on the owner object would therefore group correctly too.
+   *
+   * The choice stands on a smaller claim: the row id is the identity that is MEANT here, it is what
+   * every other seam of this fork keys on ({@code getAbsenceRuns}, {@code getOriginalEffortHours},
+   * {@code getSeriesBars} all take an int), and it does not depend on a second class keeping an
+   * {@code equals} that nothing else in this file would notice losing.
    *
    * THE ORDER OF THE ROW IS KEPT ({@code LinkedHashMap}) so that the rectangles reach
    * {@code renderProgressBar} in the order they were drawn in; it walks them left to right and

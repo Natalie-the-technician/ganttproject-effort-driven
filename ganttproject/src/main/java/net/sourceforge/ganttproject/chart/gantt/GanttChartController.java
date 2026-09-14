@@ -36,6 +36,7 @@ import net.sourceforge.ganttproject.chart.item.TaskBoundaryChartItem;
 import net.sourceforge.ganttproject.chart.item.TaskProgressChartItem;
 import net.sourceforge.ganttproject.chart.item.TaskRegularAreaChartItem;
 import net.sourceforge.ganttproject.chart.mouse.*;
+import net.sourceforge.ganttproject.fork.MergedSeriesRows;
 import net.sourceforge.ganttproject.gui.UIFacade;
 import net.sourceforge.ganttproject.task.Task;
 import net.sourceforge.ganttproject.task.TaskManager;
@@ -49,7 +50,8 @@ import java.awt.event.MouseMotionListener;
 import java.util.List;
 import java.util.function.Supplier;
 
-public class GanttChartController extends AbstractChartImplementation implements ChartImplementation {
+public class GanttChartController extends AbstractChartImplementation
+    implements ChartImplementation, MergedSeriesRows {
   private final TaskManager myTaskManager;
   private final ChartModelImpl myChartModel;
   private final ChartViewState myChartViewState;
@@ -171,6 +173,20 @@ public class GanttChartController extends AbstractChartImplementation implements
         getActiveInteraction().paint(g);
       }
     }
+  }
+
+  /**
+   * [Fork change] S8. The chart answers for its own rows.
+   *
+   * WHY THE ANSWER LIVES HERE. This object is the {@code source} the task table is handed when a
+   * press on a bar changes the selection ({@code MouseListenerImpl} passes {@code this}), and it is
+   * also the object that owns the chart model that drew the row. The table therefore needs no wire
+   * to the setting, no wire to the renderer and no knowledge of recurrence: it asks whoever caused
+   * the selection whether opening a group would undo the picture, and only the chart ever says yes.
+   */
+  @Override
+  public boolean drawsSeriesOnOneRow(Task task) {
+    return myChartModel.isMergedSeriesRow(task);
   }
 
   @Override

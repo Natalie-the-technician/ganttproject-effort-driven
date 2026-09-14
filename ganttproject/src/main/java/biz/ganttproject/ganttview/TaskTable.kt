@@ -30,7 +30,6 @@ import biz.ganttproject.core.time.TimeDuration
 import biz.ganttproject.customproperty.CustomPropertyHolder
 import biz.ganttproject.lib.fx.*
 import biz.ganttproject.task.TaskActions
-import biz.ganttproject.task.ancestors
 import com.sun.javafx.scene.control.behavior.CellBehaviorBase
 import de.jensd.fx.glyphs.GlyphIcon
 import de.jensd.fx.glyphs.fontawesome.FontAwesomeIcon
@@ -55,6 +54,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.javafx.JavaFx
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import net.sourceforge.ganttproject.fork.ancestorsToOpen
 import net.sourceforge.ganttproject.GPLogger
 import net.sourceforge.ganttproject.IGanttProject
 import net.sourceforge.ganttproject.ProjectOpenActivityFactory
@@ -462,7 +462,14 @@ class TaskTable(
       override fun selectionChanged(currentSelection: List<Task>, source: Any?) {
         if (source != this@TaskTable) {
           Platform.runLater {
-            ancestors(currentSelection, taskManager.taskHierarchy).reversed()
+            // [Fork change] S8. THE ONE GROUP THE TABLE DOES NOT OPEN.
+            //
+            // Unchanged for every source but one: `ancestorsToOpen` hands back exactly the list
+            // this line used to build, unless the source is the Gantt chart AND the ancestor is a
+            // group whose row is at this moment drawing the bars of its children. Opening that one
+            // would turn the row the user pressed on back into the twelve it was drawn to replace.
+            // The reasoning, and the measurement of who else arrives here, is in MergedSeriesRows.
+            ancestorsToOpen(currentSelection, taskManager.taskHierarchy, source)
               .forEach { task2treeItem[it]?.isExpanded = true }
 
             treeTable.selectionModel.clearSelection()
