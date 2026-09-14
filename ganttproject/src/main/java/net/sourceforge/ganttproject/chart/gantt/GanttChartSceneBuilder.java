@@ -94,6 +94,36 @@ public class GanttChartSceneBuilder {
     List<AbsenceRun> getAbsenceRuns(int rowId);
 
     /**
+     * [Fork change] The bars of a COLLAPSED recurrence group's dates, to be drawn on the group's
+     * own row in place of its one spanning bar. Empty for every other row, and empty for every row
+     * at all while the setting is off -- which it is by default.
+     *
+     * WHY A ROW MAY CARRY FOREIGN BARS AT ALL: it already does. {@code renderActivities} takes the
+     * row number as a PARAMETER and draws every activity of the list onto that same row, which is
+     * how a task across a weekend comes to have three rectangles today. What is fixed is not
+     * "one row, one bar" but "one row, one TASK", and it is fixed at exactly one place, the loop
+     * in {@link GanttChartSceneBuilder#renderVisibleTasks}. This method is what that loop asks
+     * before it decides whose activities the row shows.
+     *
+     * BY ROW ID AND NOT BY TASK, the fourth seam of this cut and for the third time the same
+     * reason: {@link ITaskSceneTask} deliberately knows nothing about the task hierarchy or about
+     * custom columns, and recognising a recurrence group needs both -- the marker sits in the
+     * {@code recurrence_of} column and the dates are the group's children. The renderer has the
+     * real task and the column manager at once; the scene builder learns a list of activities and
+     * still knows nothing about recurrence.
+     *
+     * THE OWNER OF EACH BAR IS THE DATE, NOT THE GROUP. That is the whole point of returning
+     * activities rather than, say, a list of date ranges: colour, shape, "critical" and milestone
+     * are all read off {@code activity.getOwner()} in {@code processRegularActivity}, hit-testing
+     * on the chart is geometric and reads the owner out of the rectangle under the pointer
+     * ({@code ChartModelImpl.findTaskBoundaryItem}), and progress and absence stripes -- neither of
+     * which this step draws yet -- will need the same handle.
+     *
+     * See {@link net.sourceforge.ganttproject.fork.SeriesBars}.
+     */
+    List<ITaskActivity<ITaskSceneTask>> getSeriesBars(int rowId);
+
+    /**
      * [Fork change] The gaps a named view or a filter has torn into the plan, in document order.
      * Empty when the chart shows everything, which is the ordinary case.
      *
@@ -296,7 +326,22 @@ public class GanttChartSceneBuilder {
     int rowNum = 0;
     for (ITaskSceneTask t : visibleTasks) {
       boundPolygons.clear();
-      List<ITaskActivity<ITaskSceneTask>> activities = t.getActivities();
+      // [Fork change] A COLLAPSED RECURRENCE GROUP SHOWS ITS DATES INSTEAD OF ITS OWN BAR.
+      //
+      // This is the one line that loosens "one row = one task", and it loosens it only here: the
+      // row is still the group, the row number is still the running number of the list, the table
+      // on the left still has exactly one row for it. What changes is whose activities are drawn
+      // on that row.
+      //
+      // WHY IT IS WORTH IT: a summary task takes its start from the earliest child and its end
+      // from the latest (AdjustTaskBoundsAlgorithm), and its activities are then filled across
+      // that WHOLE span. A monthly series over a year therefore reads, collapsed, as one
+      // uninterrupted bar from January to December -- twelve days of work drawn as twelve months.
+      // Collapsing already gives one row; what it cannot do is stop that one row from lying.
+      //
+      // EMPTY IS THE ORDINARY CASE and costs one method call per row. See InputApi#getSeriesBars.
+      List<ITaskActivity<ITaskSceneTask>> seriesBars = input.getSeriesBars(t.getRowId());
+      List<ITaskActivity<ITaskSceneTask>> activities = seriesBars.isEmpty() ? t.getActivities() : seriesBars;
       activities = mySplitter.split(activities, Integer.MAX_VALUE);
       List<Polygon> rectangles = renderActivities(rowNum, t, activities, defaultUnitOffsets, true);
       for (Polygon p : rectangles) {

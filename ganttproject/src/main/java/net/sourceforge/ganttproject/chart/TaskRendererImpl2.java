@@ -25,6 +25,8 @@ import biz.ganttproject.core.chart.grid.OffsetList;
 import biz.ganttproject.core.chart.scene.gantt.TaskActivitySceneBuilder;
 import biz.ganttproject.core.chart.scene.gantt.TaskLabelSceneBuilder;
 import biz.ganttproject.core.chart.scene.gantt.TaskLabelSceneInput;
+import biz.ganttproject.core.option.BooleanOption;
+import biz.ganttproject.core.option.DefaultBooleanOption;
 import biz.ganttproject.core.option.GPOption;
 import biz.ganttproject.core.option.GPOptionGroup;
 import biz.ganttproject.core.time.TimeDuration;
@@ -39,6 +41,7 @@ import net.sourceforge.ganttproject.fork.HiddenTaskGapKt;
 import net.sourceforge.ganttproject.fork.ChartComparison;
 import net.sourceforge.ganttproject.fork.ChartComparisonKt;
 import net.sourceforge.ganttproject.fork.LevellingAdapterKt;
+import net.sourceforge.ganttproject.fork.SeriesBarsKt;
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenDurationAlgorithmKt;
 import net.sourceforge.ganttproject.chart.gantt.*;
 import net.sourceforge.ganttproject.task.*;
@@ -59,6 +62,24 @@ public class TaskRendererImpl2 extends ChartRendererBase {
   private final ChartModelImpl myModel;
 
   private final GPOptionGroup myLabelOptions;
+
+  /**
+   * [Fork change] S10 -- THE SWITCH FOR "ONE ROW, MANY BARS", AND IT IS OFF.
+   *
+   * When it is on, the row of a COLLAPSED recurrence group draws the bars of its dates instead of
+   * its own bar spanning the whole year. See {@link net.sourceforge.ganttproject.fork.SeriesBars}
+   * for why that row lies today and why the repair is drawing only.
+   *
+   * OFF BY DEFAULT, AND NOT OUT OF CAUTION. The picture behind this switch is deliberately
+   * unfinished: progress is still spread across the row rather than shown per date, the absence
+   * stripe is not drawn on such a row at all, the comparison band still belongs to the group, and
+   * the first click on a bar expands the group again. Each of those is a package of its own, and
+   * while the default is off they can be built one at a time without anybody's chart changing in
+   * the meantime. The switch is what makes the work divisible; it is not a hedge against the part
+   * that is finished.
+   */
+  private final BooleanOption mySeriesOneRowOption =
+      new DefaultBooleanOption("ganttChartDetails.seriesOneRow", false);
 
   class GanttChartSceneApi implements GanttChartSceneBuilder.InputApi {
     @Override
@@ -187,6 +208,31 @@ public class TaskRendererImpl2 extends ChartRendererBase {
     }
 
     /**
+     * [Fork change] The bars a collapsed recurrence group shows instead of its own.
+     *
+     * THE FOURTH SEAM OF THIS CUT, built like the three above it and for the same reason: only
+     * here are the real task, the task hierarchy and the column manager available at once, and
+     * recognising a recurrence group needs all three -- the marker sits in the {@code
+     * recurrence_of} custom column and the dates are the group's children. The scene builder
+     * learns a list of activities and still knows nothing about recurrence.
+     *
+     * A task that no longer exists yields an empty list -- its own bar, rather than a failure
+     * while painting, the same answer {@link #getAbsenceRuns} gives.
+     *
+     * THE SWITCH IS ASKED FIRST AND NOT INSIDE THE FORK LOGIC, so that "off" costs one field read
+     * per row and does not reach the task manager at all.
+     */
+    @Override
+    public List<ITaskActivity<ITaskSceneTask>> getSeriesBars(int rowId) {
+      if (!mySeriesOneRowOption.getValue()) {
+        return Collections.emptyList();
+      }
+      Task task = myModel.getTaskManager().getTask(rowId);
+      return task == null ? Collections.emptyList()
+        : SeriesBarsKt.seriesBars(task, myModel, myModel.getTaskManager().getCustomPropertyManager());
+    }
+
+    /**
      * [Fork change] THE COLLISION BAR'S DATA SOURCE, and the one place in the program that has all
      * three things it needs at once: the complete plan in document order, the rows the task table
      * actually shows, and the hierarchy that tells a hidden task from a merely collapsed one.
@@ -259,10 +305,15 @@ public class TaskRendererImpl2 extends ChartRendererBase {
     myModel = model;
     chartRenderer = new GanttChartSceneBuilder(new GanttChartSceneApi(), getPrimitiveContainer());
     TaskLabelSceneInput taskLabelSceneApi = chartRenderer.getTaskLabelSceneApi();
+    // [Fork change] mySeriesOneRowOption joins the "task details" group, the one group of this
+    // renderer that getChartOptionGroups() actually hands to the settings page
+    // (ChartModelImpl:268). Committing it goes through ChartOptionGroup.commit, which tells the
+    // chart to repaint -- so ticking the box takes effect without anything else being wired up.
     myLabelOptions = new ChartOptionGroup("ganttChartDetails",
         new GPOption[] {
           taskLabelSceneApi.getTopLabelOption(), taskLabelSceneApi.getBottomLabelOption(),
-          taskLabelSceneApi.getLeftLabelOption(), taskLabelSceneApi.getRightLabelOption()
+          taskLabelSceneApi.getLeftLabelOption(), taskLabelSceneApi.getRightLabelOption(),
+          mySeriesOneRowOption
         },
         model.getOptionEventDispatcher()
     );
@@ -279,6 +330,14 @@ public class TaskRendererImpl2 extends ChartRendererBase {
 
   public GPOptionGroup getLabelOptions() {
     return myLabelOptions;
+  }
+
+  /**
+   * [Fork change] The switch from S10, for the checks and for whoever needs to read it without
+   * digging through an option group. See the field comment for why the default is off.
+   */
+  public BooleanOption getSeriesOneRowOption() {
+    return mySeriesOneRowOption;
   }
 
   public int calculateRowHeight() {
