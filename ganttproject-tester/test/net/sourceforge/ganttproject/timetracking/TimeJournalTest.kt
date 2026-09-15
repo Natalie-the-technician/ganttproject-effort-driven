@@ -34,6 +34,7 @@ import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskManager
 import net.sourceforge.ganttproject.task.TaskManagerConfig
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -49,11 +50,11 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
- * [fork change] The hour journal, desktop side, format version 2 -- and the
+ * [fork change] The hour journal, desktop side, format version 3 -- and the
  * guard that keeps this implementation and the Android one from drifting
  * apart.
  *
- * The four `shared-*.timelog` files under `ganttproject-tester/resources`
+ * The seven `shared-*.timelog` files under `ganttproject-tester/resources`
  * are byte for byte the ones in `android/gantt-core/src/test/resources`.
  * Neither implementation produced them: they were written by hand from the
  * format specification, so a fixture can disagree with an implementation --
@@ -62,7 +63,14 @@ import java.time.ZoneOffset
  * copy turns its own side red.
  *
  * `shared-v1.timelog` is the version 1 file byte for byte as version 1 wrote
- * it, so that "version 1 still reads" is provable against real bytes.
+ * it, so that "version 1 still reads" is provable against real bytes. The
+ * three `shared-v3-*.timelog` files are the version 3 ones and do the same
+ * job for the version that added `recordedBy`: `shared-v3-empty` and
+ * `shared-v3-one` are `shared-empty` and `shared-one` one version on, so the
+ * upgrade can be checked against bytes rather than against this side's own
+ * idea of it, and `shared-v3-many` is `shared-many` plus the two records only
+ * version 3 can hold -- one span of work, two people, each entered by
+ * somebody else.
  */
 class TimeJournalTest {
 
@@ -88,7 +96,10 @@ class TimeJournalTest {
     "shared-empty.timelog" to "6a00802f93d814f60874776e74bbccf4bc506463f93864325ed1769b3468f10b",
     "shared-one.timelog" to "cd702086dd564dc42b574cfe88e71584fdfc3f3faeaad91d78319bf42e545be2",
     "shared-many.timelog" to "ea07d77eda9970a23253f36738910888e9b4cc1da3bb488674c1fbd624c6e1c8",
-    "shared-v1.timelog" to "cf837134829e3c2a5c8c58b4bde4a4267bfcc4239a507405936a8a2b743d5ee0"
+    "shared-v1.timelog" to "cf837134829e3c2a5c8c58b4bde4a4267bfcc4239a507405936a8a2b743d5ee0",
+    "shared-v3-empty.timelog" to "1fd1318efc779089532b938bf68d469ef7c31075c502a962eb5dea207bdde0b0",
+    "shared-v3-one.timelog" to "af06ccb46cea4dbc540462ecfbd57e329024740d90265b51b00dc6621e89359a",
+    "shared-v3-many.timelog" to "ab4c632a9d26a56d545e646aac6c886ee858fb6918e4ad3694d1cafa4c5266e4"
   )
 
   @Test
@@ -100,14 +111,31 @@ class TimeJournalTest {
   }
 
   @Test
-  @DisplayName("the version 2 header names the marks field")
-  fun `the header is version 2`() {
+  @DisplayName("the version 3 header names the recorder and the marks, in that order")
+  fun `the header is version 3`() {
     assertEquals(
-      "#gp-timelog 2 record|task|start|seconds|source|person|note|created|tags",
+      "#gp-timelog 3 record|task|start|seconds|source|person|note|created|recordedby|tags",
       TimeJournal.HEADER
     )
-    assertEquals(2, TimeJournal.VERSION)
-    assertTrue(fixture("shared-many.timelog").startsWith(TimeJournal.HEADER + "\n"))
+    assertEquals(3, TimeJournal.VERSION)
+    // The older headers are bytes in files that already exist. They are
+    // pinned here rather than merely used, because a typo in one of them
+    // turns "still read" into "refused" for every journal ever written.
+    assertEquals(
+      "#gp-timelog 2 record|task|start|seconds|source|person|note|created|tags",
+      TimeJournal.HEADER_V2
+    )
+    assertEquals(
+      "#gp-timelog 1 record|task|start|seconds|source|person|note|created",
+      TimeJournal.HEADER_V1
+    )
+    assertTrue(fixture("shared-v3-many.timelog").startsWith(TimeJournal.HEADER + "\n"))
+    assertTrue(fixture("shared-many.timelog").startsWith(TimeJournal.HEADER_V2 + "\n"))
+    // `tags` is the last field named in both, and `recordedby` went in front
+    // of it rather than after it. That is what moved the marks along a field
+    // and why the version had to rise; see the note in TimeJournal.kt.
+    assertTrue(TimeJournal.HEADER.endsWith("|recordedby|tags"))
+    assertTrue(TimeJournal.HEADER_V2.endsWith("|created|tags"))
   }
 
   @Test
@@ -154,9 +182,9 @@ class TimeJournalTest {
   }
 
   @Test
-  @DisplayName("writing what the shared journal says produces the shared journal, byte for byte")
+  @DisplayName("writing the version 3 journal back out produces the same bytes")
   fun `the shared journal round trips through bytes`() {
-    val original = fixtureBytes("shared-many.timelog")
+    val original = fixtureBytes("shared-v3-many.timelog")
     val entries = TimeJournal.read(original.toString(Charsets.UTF_8)).entries
     val written = TimeJournal.write(entries)
     assertEquals(emptyList<JournalEntry>(), written.refused, "nothing in the fixture may be refused")
@@ -169,17 +197,41 @@ class TimeJournalTest {
   }
 
   @Test
-  @DisplayName("the empty and the single-record journals round trip as well")
+  @DisplayName("the empty and the single-record version 3 journals round trip as well")
   fun `the small shared journals round trip`() {
-    listOf("shared-empty.timelog", "shared-one.timelog").forEach { name ->
+    listOf("shared-v3-empty.timelog", "shared-v3-one.timelog").forEach { name ->
       val original = fixture(name)
       val entries = TimeJournal.read(original).entries
       assertEquals(original, TimeJournal.write(entries).text, "$name does not come back unchanged")
     }
-    assertEquals(0, TimeJournal.read(fixture("shared-empty.timelog")).entries.size)
-    val one = TimeJournal.read(fixture("shared-one.timelog")).entries.single()
+    assertEquals(0, TimeJournal.read(fixture("shared-v3-empty.timelog")).entries.size)
+    val one = TimeJournal.read(fixture("shared-v3-one.timelog")).entries.single()
     assertEquals("r-001", one.record.id)
     assertEquals(listOf("V203"), one.tags, "the single-record fixture carries a mark")
+    assertNull(one.record.recordedBy, "and Anna entered her own hours")
+  }
+
+  @Test
+  @DisplayName("writing a version 2 journal back out produces the shared version 3 bytes")
+  fun `the version 2 fixtures upgrade to the version 3 ones`() {
+    // Not "the upgrade looks plausible": the version 3 files were written by
+    // hand from the specification, so this compares what this code produces
+    // against bytes neither implementation made.
+    listOf("shared-empty.timelog" to "shared-v3-empty.timelog",
+      "shared-one.timelog" to "shared-v3-one.timelog").forEach { (old, new) ->
+      val entries = TimeJournal.read(fixture(old)).entries
+      assertEquals(fixture(new), TimeJournal.write(entries).text, "$old does not upgrade to $new")
+    }
+    // `shared-v3-many` is `shared-many` one version on plus the two records
+    // that only version 3 can carry. Take those two out and what is left is
+    // exactly what upgrading the version 2 file has to produce.
+    val entries = TimeJournal.read(fixture("shared-many.timelog")).entries
+    val expected = fixture("shared-v3-many.timelog")
+      .lines()
+      .filterNot { it.startsWith("r-010|") || it.startsWith("r-011|") }
+      .joinToString("\n")
+    assertTrue(expected.length < fixture("shared-v3-many.timelog").length, "two lines were dropped")
+    assertEquals(expected, TimeJournal.write(entries).text, "shared-many does not upgrade cleanly")
   }
 
   // --------------------------------------------------------------- The marks
@@ -311,6 +363,189 @@ class TimeJournalTest {
     assertEquals(1, read.unmarked, "and it counts as a gap")
   }
 
+  // ------------------------------------------------------------- Version 3
+
+  @Test
+  @DisplayName("the version 3 journal reads: the recorder and the marks each in their own field")
+  fun `the version 3 shared journal reads`() {
+    val read = TimeJournal.read(fixture("shared-v3-many.timelog"))
+    assertNull(read.problem, "the fixture should be a valid journal")
+    assertEquals(3, read.version, "the fixture is a version 3 journal")
+    assertEquals(0, read.skippedLines, "no line of the fixture may be dropped")
+    assertEquals(11, read.entries.size, "eleven record lines")
+    assertEquals(10, read.entries.map { it.record.id }.toSet().size, "ten distinct ids, one twice")
+
+    val byId = read.entries.groupBy { it.record.id }
+    // Everything version 2 already carried is still read the same way. If the
+    // recorder had shifted a field, these would be the first to go wrong.
+    assertEquals("Berg|mann", byId.getValue("r-002").single().record.person, "a separator in a name")
+    assertEquals("Pfad C:\\temp;Notiz\tEnde", byId.getValue("r-004").single().record.note)
+    assertEquals(listOf("A;B", "C|D"), byId.getValue("r-004").single().tags, "separators in a mark")
+    assertEquals(listOf("V203", "Ümlaut"), byId.getValue("r-007").single().tags, "a non-ASCII mark")
+
+    // One span of work, two people, and neither of them typed it in.
+    val dora = byId.getValue("r-010").single()
+    val emil = byId.getValue("r-011").single()
+    assertEquals("Dora", dora.record.person)
+    assertEquals("Emil", emil.record.person)
+    assertEquals(
+      dora.record.start.toInstant(),
+      emil.record.start.toInstant(),
+      "the same stretch of the afternoon, for two people"
+    )
+    assertEquals("Anna", dora.record.recordedBy, "Anna entered Dora's hours")
+    assertTrue(dora.record.isThirdParty)
+    // A recorder's name carrying both separators at once. Nothing may treat
+    // either of them as structure here: they are inside one field and inside
+    // one name.
+    assertEquals("Berg|mann;X", emil.record.recordedBy, "both separators in a recorder's name")
+    assertTrue(emil.record.isThirdParty)
+    assertEquals(listOf("V203"), emil.tags, "and the marks are still the marks")
+
+    // Everything else is self-recorded, and says so by saying nothing.
+    val others = read.entries.filterNot { it.record.id == "r-010" || it.record.id == "r-011" }
+    assertEquals(9, others.size)
+    assertTrue(others.all { it.record.recordedBy == null }, "an empty field nine is not a name")
+    assertTrue(others.none { it.record.isThirdParty })
+
+    assertEquals(3, read.unmarked, "r-003, r-008 and r-009 carry no mark")
+  }
+
+  @Test
+  @DisplayName("the line order is the byte order, with the recorder in the line")
+  fun `the version 3 lines are in byte order`() {
+    val body = fixture("shared-v3-many.timelog").lines().drop(1).filter { it.isNotBlank() }
+    // The two notes are U+FB00 and U+1F600. As UTF-8 bytes the first is
+    // ef ac 80 and the second f0 9f 98 80, so the ligature comes first. As
+    // Kotlin Strings compare -- UTF-16 code units -- the emoji's leading
+    // surrogate D83D sorts BELOW FB00 and they would come out the other way
+    // round. The fixture pins the byte order, so this cannot pass unnoticed.
+    val five = body.filter { it.startsWith("r-005|") }
+    assertEquals(2, five.size, "the same id twice, one with a ligature and one with an emoji")
+    assertTrue(five[0].contains("\uFB00"), "the ligature line comes first in byte order")
+    assertTrue(five[1].contains("\uD83D\uDE00"), "and the emoji line second")
+    assertTrue(five[0] > five[1], "which is the opposite of what String order would give")
+
+    // Two lines, one instant, telling apart on their bytes: r-010 before
+    // r-011. The recorder is part of the line the tie-break looks at.
+    assertTrue(
+      body.indexOfFirst { it.startsWith("r-010|") } <
+        body.indexOfFirst { it.startsWith("r-011|") },
+      "the tie-break runs over the whole line"
+    )
+  }
+
+  @Test
+  @DisplayName("field nine is the recorder in version 3 and the marks in version 2 -- only the version says which")
+  fun `the field layout comes from the version and never from the field count`() {
+    // Nine fields, nothing wrong with any of them, and nothing in the line
+    // that says which version it belongs to. That is the point: a version 2
+    // line carrying a mark and a version 3 line carrying none are the same
+    // shape. Counting fields cannot tell them apart, so nothing may try.
+    val nine = "r-001|t-roof|2026-09-09T08:00+02:00|9000|MANUAL|Anna|Dach decken|" +
+      "2026-09-09T08:00+02:00|V203"
+    assertEquals(9, nine.split("|").size, "nine fields, which either version can produce")
+
+    val asTwo = checkNotNull(TimeJournal.decodeLine(nine, version = 2))
+    assertEquals(listOf("V203"), asTwo.tags, "in version 2 field nine is the mark")
+    assertNull(asTwo.record.recordedBy, "and version 2 has no recorder at all")
+    assertFalse(asTwo.record.isThirdParty)
+
+    val asThree = checkNotNull(TimeJournal.decodeLine(nine, version = 3))
+    assertEquals("V203", asThree.record.recordedBy, "in version 3 field nine is the recorder")
+    assertEquals(emptyList<String>(), asThree.tags, "and this line has no marks field")
+
+    // The same trap the other way round: ten fields, read as version 2, and
+    // the recorder becomes the booking. Neither reading complains, both
+    // produce a record, and exactly one of them states something nobody
+    // wrote. Nothing but the header can decide which.
+    val ten = "r-001|t-roof|2026-09-09T08:00+02:00|9000|MANUAL|Anna|Dach decken|" +
+      "2026-09-09T08:00+02:00|Anna|V203"
+    val misread = checkNotNull(TimeJournal.decodeLine(ten, version = 2))
+    assertEquals(listOf("Anna"), misread.tags, "a version 2 reader books these hours against Anna")
+    assertNull(misread.record.recordedBy)
+    val right = checkNotNull(TimeJournal.decodeLine(ten, version = 3))
+    assertEquals("Anna", right.record.recordedBy)
+    assertEquals(listOf("V203"), right.tags)
+
+    // And the reader that matters takes the version from the file, not from a
+    // parameter: the version 2 fixture read whole keeps its marks.
+    val whole = TimeJournal.read(fixture("shared-many.timelog"))
+    assertEquals(2, whole.version)
+    assertTrue(whole.entries.all { it.record.recordedBy == null }, "no version 2 line has a recorder")
+    assertEquals(
+      listOf("V203", "V204"),
+      whole.entries.single { it.record.id == "r-002" }.tags,
+      "and its marks are still marks"
+    )
+  }
+
+  @Test
+  @DisplayName("a recorder survives a round trip, separators and all")
+  fun `a recorder survives a round trip`() {
+    val entry = JournalEntry(sample("m-1").copy(recordedBy = "Berg|mann;X\tZ"), listOf("V203"))
+    val written = TimeJournal.write(listOf(entry))
+    val back = TimeJournal.read(written.text).entries.single()
+    assertEquals(3, TimeJournal.read(written.text).version)
+    assertEquals("Berg|mann;X\tZ", back.record.recordedBy, "the recorder comes back unmangled")
+    assertEquals(listOf("V203"), back.tags, "and the marks did not absorb it")
+    assertEquals("Anna", back.record.person, "whose hours they are is a different question")
+    assertEquals(entry.record, back.record)
+    // Written twice, the same bytes -- a recorder must not make a save look
+    // like a change.
+    assertEquals(written.text, TimeJournal.write(listOf(back)).text)
+  }
+
+  @Test
+  @DisplayName("an empty recorder reads back as none, not as a name of nothing")
+  fun `an empty recorder is none`() {
+    val written = TimeJournal.write(listOf(JournalEntry(sample("m-1"), listOf("V203"))))
+    assertTrue(
+      written.text.contains("|2026-09-09T08:00+02:00||V203\n"),
+      "the field is written even when empty, or the marks would move"
+    )
+    val back = TimeJournal.read(written.text).entries.single()
+    assertNull(back.record.recordedBy)
+    assertFalse(back.record.isThirdParty)
+    // A recorder of nothing but blanks is not a recorder either -- the same
+    // rule the person field has kept since version 1.
+    val blank = TimeJournal.write(listOf(JournalEntry(sample("m-2").copy(recordedBy = "   "))))
+    assertNull(TimeJournal.read(blank.text).entries.single().record.recordedBy)
+  }
+
+  @Test
+  @DisplayName("upgrading a version 2 journal says self-recorded, and says nothing about it")
+  fun `the version 2 upgrade is silent about the recorder`() {
+    val read = TimeJournal.read(fixture("shared-many.timelog"))
+    assertEquals(2, read.version)
+    val written = TimeJournal.write(read.entries)
+    val again = TimeJournal.read(written.text)
+    assertEquals(3, again.version)
+    assertTrue(again.entries.all { it.record.recordedBy == null }, "every record was self-recorded")
+    // The marks upgrade is loud because "could not say" became "says
+    // nothing". This one is not, because empty here is not a gap: before the
+    // field existed there was no way to enter anybody else's hours, so these
+    // records really were self-recorded. Nothing became less certain.
+    assertEquals(3, written.unmarked.size, "the same three gaps as before, and no more")
+    assertEquals(read.unmarked, written.unmarked.size, "the upgrade invents no gap")
+    assertEquals(
+      read.entries.map { it.record.copy(recordedBy = null) },
+      again.entries.map { it.record },
+      "and it moves no record"
+    )
+  }
+
+  @Test
+  @DisplayName("re-attributing an entry is a change, even though no hours moved")
+  fun `a changed recorder is a change`() {
+    val before = listOf(JournalEntry(sample("c-1"), listOf("V203")))
+    val after = listOf(JournalEntry(sample("c-1").copy(recordedBy = "Anna"), listOf("V203")))
+    val summary = TimeJournal.changeSummary(before, after, zone)
+    assertEquals(1, summary.lines.size, "who is answerable for an entry changing is a change")
+    assertEquals(ChangeKind.CHANGED, summary.lines.single().kind)
+    assertEquals(0L, summary.lines.single().seconds, "and no hours moved")
+  }
+
   // ------------------------------------------------------------- Version 1
 
   @Test
@@ -344,19 +579,27 @@ class TimeJournalTest {
     assertEquals(9, read.entries.size)
     assertTrue(read.entries.all { it.tags.isEmpty() }, "version 1 has no marks, whatever the line says")
     assertEquals(9, read.unmarked)
+    // And not as a recorder either. Field nine is the marks in version 2 and
+    // the recorder in version 3; in version 1 it is neither, because version 1
+    // says fields past the eighth are not looked at.
+    assertTrue(
+      read.entries.all { it.record.recordedBy == null },
+      "version 1 has no recorder, whatever the line says"
+    )
   }
 
   @Test
-  @DisplayName("writing a version 1 journal back produces version 2 and says how many marks are missing")
+  @DisplayName("writing a version 1 journal back produces version 3 and says how many marks are missing")
   fun `version one is upgraded loudly`() {
     val read = TimeJournal.read(fixture("shared-v1.timelog"))
     val written = TimeJournal.write(read.entries)
-    assertTrue(written.text.startsWith(TimeJournal.HEADER + "\n"), "the upgrade writes version 2")
+    assertTrue(written.text.startsWith(TimeJournal.HEADER + "\n"), "the upgrade writes version 3")
     assertEquals(9, written.unmarked.size, "and it is loud about what the old file could not say")
-    // Same records, one version up: the only difference is the header and the
-    // empty ninth field.
+    // Same records, two versions up: the difference is the header and two
+    // empty fields, the marks and the recorder.
     val again = TimeJournal.read(written.text)
-    assertEquals(2, again.version)
+    assertEquals(3, again.version)
+    assertTrue(again.entries.all { it.record.recordedBy == null }, "nobody recorded these for anybody")
     assertEquals(
       read.entries.map { it.record },
       again.entries.map { it.record },
@@ -367,11 +610,11 @@ class TimeJournalTest {
   @Test
   @DisplayName("a version this code does not know is refused by name")
   fun `a newer version is refused by name`() {
-    val text = fixture("shared-many.timelog").replaceFirst("#gp-timelog 2 ", "#gp-timelog 3 ")
+    val text = fixture("shared-v3-many.timelog").replaceFirst("#gp-timelog 3 ", "#gp-timelog 4 ")
     val read = TimeJournal.read(text)
     assertEquals(JournalProblem.UNKNOWN_VERSION, read.problem)
     assertEquals(emptyList<JournalEntry>(), read.entries)
-    assertEquals(3, read.version, "the reader can still say which version it was handed")
+    assertEquals(4, read.version, "the reader can still say which version it was handed")
   }
 
   @Test

@@ -30,7 +30,7 @@ import java.time.format.DateTimeParseException
 import kotlin.math.abs
 
 /*
- * [fork change] The hour journal, desktop side, format version 2.
+ * [fork change] The hour journal, desktop side, format version 3.
  *
  * The same file format the Android app writes, implemented again rather than
  * shared, and the duplication is deliberate.
@@ -87,6 +87,66 @@ import kotlin.math.abs
  * a record around can drop a mark on the way.
  *
  * ------------------------------------------------------------------------
+ * WHAT VERSION 3 ADDED, AND WHY IT COULD NOT BE A QUIET APPEND -- 15.09.2026
+ * ------------------------------------------------------------------------
+ *
+ * [JournalRecord] gained a ninth field, `recordedBy`: the person who typed
+ * the record in, on the occasions when that was somebody other than the
+ * person whose hours it is. Empty means they entered their own, which is what
+ * every record written before this field existed did.
+ *
+ * Appending a field to a record is normally free -- the format paragraph
+ * below says as much, and version 2 lived off that promise. Here it is not
+ * free, and the reason is the one thing this file has to get right.
+ *
+ * A journal line is the record's fields followed by the marks:
+ *
+ *     encodeLine(entry) == encodeRecordFields(entry.record) + '|' + tags
+ *
+ * The marks therefore sit **one field past the record's last one, always**.
+ * A record that grew from eight fields to nine moves the marks from field
+ * nine to field ten, and nobody inserted anything anywhere: the front of the
+ * line simply got longer. Turn a version 2 reader loose on such a line and it
+ * reads `recordedBy` **as the marks**; turn a version 3 reader loose on a
+ * version 2 line and it reads the marks **as `recordedBy`**. Neither
+ * complains. Both produce a file that parses and a statement nobody made --
+ * "these hours are booked against Anna", or "Anna entered these hours for
+ * somebody else". That is precisely the silent loss this module exists to
+ * prevent, and no amount of care at the call site can catch it, because
+ * nothing is malformed.
+ *
+ * So the version number in the header is the only thing that may decide the
+ * field layout, and it had to rise. [decodeLine] takes the split from the
+ * version it was handed and from nowhere else:
+ *
+ *   - **version 3**: fields 1..9 are the record, field 10 is the marks.
+ *   - **version 2**: fields 1..8 are the record, field 9 is the marks, and
+ *     there is no `recordedBy` -- which reads as "recorded by the person
+ *     themselves". That is not a guess: before the field existed there was no
+ *     way to enter anybody else's hours at all, so every version 2 record
+ *     really was self-recorded.
+ *   - **version 1**: fields 1..8 are the record and nothing further is read.
+ *
+ * **Counting the fields of a line would be the same bug wearing a hat.** A
+ * version 2 line that carries a mark has nine fields, and so does a version 3
+ * line that carries none; "nine fields means version 2" is wrong exactly in
+ * the cases where it matters. Nothing here may ever decide a layout by how
+ * many fields it can see. [recordFieldCount] is the only place that knows,
+ * and it is a function of the version alone.
+ *
+ * The alternative -- keep the marks at field nine and append `recordedBy`
+ * after them -- was rejected. A journal line would then no longer be the
+ * record's fields plus the marks, and the same values would sit in two
+ * different field orders depending on which file they were in. One order that
+ * moves with a version number is far easier to hit from another language than
+ * two orders that differ quietly.
+ *
+ * Writing a version 2 journal back out produces version 3 with every
+ * `recordedBy` empty. That is **true**, not merely harmless: those records
+ * really were self-recorded. Unlike the version 1 upgrade nothing becomes
+ * less certain on the way, so there is nothing to report about it.
+ *
+ * ------------------------------------------------------------------------
  * WHAT THE DESKTOP CAN AND CANNOT DO WITH THIS TODAY -- measured 09.09.2026
  * ------------------------------------------------------------------------
  *
@@ -103,30 +163,54 @@ import kotlin.math.abs
  * tags, passed straight through. Nothing here invents one.
  *
  * ------------------------------------------------------------------------
- * THE FORMAT, version 2
+ * THE FORMAT, version 3
  * ------------------------------------------------------------------------
  *
  * UTF-8 text. Lines end with a single LF, and the file always ends with one,
  * including the empty journal, so appending cannot damage the previous line.
  *
- * **Line 1 is exactly [HEADER].** A first line of [HEADER_V1] is a version 1
- * journal and is **still read**; see below. Anything else is refused rather
- * than guessed at, and a first line that starts with [HEADER_PREFIX] but
- * matches no known header is a journal of an unknown version, reported as
- * that, with the version number it claims.
+ * **Line 1 is exactly [HEADER].** A first line of [HEADER_V2] or [HEADER_V1]
+ * is an older journal and is **still read**; see below. Anything else is
+ * refused rather than guessed at, and a first line that starts with
+ * [HEADER_PREFIX] but matches no known header is a journal of a version this
+ * code does not know, reported as that, with the version number it claims.
  *
- * **Every later line is one record**, nine `|`-separated fields:
- * `record`, `task`, `start`, `seconds`, `source`, `person`, `note`,
- * `created`, `tags`. Fields past the ninth are ignored and missing ones
- * defaulted, so new fields may be appended at the end -- and nowhere else.
- * **Version 2 is what that promise was for**, and keeping it is why version 1
- * is still read.
+ * The header names the fields, so the file explains itself to whoever opens
+ * it, and it carries the version for the reason the section above gives: the
+ * layout of every later line follows from that number and from nothing else.
+ *
+ * **Every later line is one record**, ten `|`-separated fields. The first
+ * nine are the record itself:
+ *
+ *   1. `record`     - the record id. Never empty.
+ *   2. `task`       - the task uid. Never empty, and never the task *id*.
+ *   3. `start`      - when the work began, with its offset.
+ *   4. `seconds`    - the duration in seconds, a decimal integer, never
+ *                     rounded.
+ *   5. `source`     - one of the [JournalSource] names.
+ *   6. `person`     - whose hours these are. May be empty.
+ *   7. `note`       - the description. May be empty.
+ *   8. `created`    - when the record was made.
+ *   9. `recordedby` - who entered it, when that was not `person`. Usually
+ *                     empty; see the version 3 note above.
+ *
+ * and the tenth is `tags`, the marks. In a **version 2** file the ninth of
+ * that list is not there: the marks are field nine and there are nine fields
+ * in all. In a **version 1** file there are eight and no marks.
+ *
+ * Fields past the marks are ignored and missing ones defaulted, so a further
+ * field may be appended **after the marks** -- and nowhere else. **Version 2
+ * is what that promise was for**, and keeping it is why versions 1 and 2 are
+ * still read. A field appended to the *record* is the one case the promise
+ * does not cover, because it shifts the marks along; that is what the version
+ * number is for.
  *
  * **Escaping:** `\` to `\\`, tab to `\t`, LF to `\n`, CR to `\r`, `|` to
  * `\p`, `;` to `\s`. An unknown escape keeps both characters rather than
  * guessing. Because LF is escaped, no value can break a line in two.
  *
- * **Field nine is escaped mark by mark, then joined with a raw `;`.** The
+ * **The marks field is escaped mark by mark, then joined with a raw `;`.**
+ * The
  * separator is safe precisely because `;` is in the escape table already: a
  * mark that contains one is written `\s` and can never be mistaken for the
  * separator. It is also visible, which a tab would not be, and it is not a
@@ -140,22 +224,24 @@ import kotlin.math.abs
  * string the journal does not interpret, so ` V203 ` and `V203` are two
  * different marks, while a mark of nothing but whitespace has no content.
  *
- * **What "empty" and "absent" mean, and how they are told apart.** A ninth
+ * **What "empty" and "absent" mean, and how they are told apart.** A marks
  * field that is present and empty says "this record carries no marks". A line
- * with no ninth field at all -- every line of a version 1 file, or a truncated
- * line of a version 2 one -- says nothing about marks, because there was
- * nowhere to say it. Both read as an empty list and both count towards
+ * with no marks field at all -- every line of a version 1 file, or a truncated
+ * line of a later one -- says nothing about marks, because there was nowhere
+ * to say it. Both read as an empty list and both count towards
  * [JournalRead.unmarked], which is the number that has to go to zero either
  * way. The difference is carried **once, for the whole file**, by
- * [JournalRead.version]: version 1 could not say, version 2 chose not to. It
- * belongs to the file and not to the record, because it is a property of the
- * format the file was written in.
+ * [JournalRead.version]: version 1 could not say, versions 2 and 3 chose not
+ * to. It belongs to the file and not to the record, because it is a property
+ * of the format the file was written in.
  *
- * Writing a version 1 journal back out therefore produces a version 2 file
- * whose ninth fields are all empty, turning "could not say" into "says
- * nothing". That is unavoidable -- a version 2 file has to write *something*
+ * Writing a version 1 journal back out therefore produces a version 3 file
+ * whose marks fields are all empty, turning "could not say" into "says
+ * nothing". That is unavoidable -- a later file has to write *something*
  * there -- and it is why the upgrade is loud: every record shows up in
- * [JournalWrite.unmarked].
+ * [JournalWrite.unmarked]. The `recordedby` field the same upgrade adds is a
+ * different case and is silent, because empty there is not a gap but a fact;
+ * see the version 3 note above.
  *
  * **The order of the lines is fixed**, and that is the point of the design:
  * the same records must give the same bytes whatever order they arrive in,
@@ -188,6 +274,16 @@ enum class JournalSource { MANUAL, TIMER, QUICK, IMPORTED }
  * time log of its own: this is what a line of the file means, not a model the
  * rest of the program keeps. Keyed by the task **uid**, never the task id --
  * the id is a per-project counter and collides the moment two projects meet.
+ *
+ * @param person whose hours these are.
+ * @param recordedBy who typed the record in, when that was **somebody other
+ *   than [person]** -- a foreman booking a crew's afternoon, an office
+ *   entering a paper slip. Null means the person entered their own time,
+ *   which is what every record before format version 3 did and what the
+ *   reader therefore fills in for one. It is kept apart from [person] because
+ *   the two answer different questions: whose work it was, and who is
+ *   answerable for the entry. Collapsing them would lose one of the two, and
+ *   the journal exists so that nothing is lost quietly.
  */
 data class JournalRecord(
   val id: String,
@@ -197,10 +293,14 @@ data class JournalRecord(
   val source: JournalSource = JournalSource.MANUAL,
   val person: String? = null,
   val note: String = "",
-  val createdAt: OffsetDateTime = start
+  val createdAt: OffsetDateTime = start,
+  val recordedBy: String? = null
 ) {
   /** The calendar day this counts towards. The zone has no default: see below. */
   fun dateIn(zone: ZoneId): LocalDate = start.atZoneSameInstant(zone).toLocalDate()
+
+  /** True when somebody entered these hours on behalf of [person]. */
+  val isThirdParty: Boolean get() = recordedBy != null
 }
 
 /**
@@ -295,10 +395,14 @@ data class ChangeSummary(
 object TimeJournal {
 
   /** The format version this code writes. */
-  const val VERSION = 2
+  const val VERSION = 3
 
-  /** The exact first line of a version 2 journal. */
-  const val HEADER = "#gp-timelog 2 record|task|start|seconds|source|person|note|created|tags"
+  /** The exact first line of a version 3 journal. */
+  const val HEADER =
+    "#gp-timelog 3 record|task|start|seconds|source|person|note|created|recordedby|tags"
+
+  /** The exact first line of a version 2 journal. Still read, never written. */
+  const val HEADER_V2 = "#gp-timelog 2 record|task|start|seconds|source|person|note|created|tags"
 
   /** The exact first line of a version 1 journal. Still read, never written. */
   const val HEADER_V1 = "#gp-timelog 1 record|task|start|seconds|source|person|note|created"
@@ -306,13 +410,28 @@ object TimeJournal {
   /** What every journal header starts with, whatever its version. */
   const val HEADER_PREFIX = "#gp-timelog "
 
-  private val KNOWN_HEADERS = mapOf(HEADER_V1 to 1, HEADER to 2)
+  private val KNOWN_HEADERS = mapOf(HEADER_V1 to 1, HEADER_V2 to 2, HEADER to 3)
+
+  /**
+   * How many fields at the front of a line belong to the record, by version.
+   *
+   * The marks are the field straight after them, so this number is also where
+   * the marks are -- and it is the whole reason the version has to be known
+   * rather than guessed. It changed between version 2 and version 3 because
+   * the record grew a ninth field, not because the journal rearranged
+   * anything. See the version 3 note at the top of this file.
+   *
+   * **A function of the version and of nothing else.** In particular not of
+   * the number of fields the line happens to have: a version 2 line with a
+   * mark and a version 3 line without one both have nine.
+   */
+  private fun recordFieldCount(version: Int): Int = if (version >= 3) 9 else 8
 
   private const val FIELD = '|'
   private const val RECORD_IN_GAN = ';'
 
   /**
-   * What separates two marks inside field nine.
+   * What separates two marks inside the marks field.
    *
    * Deliberately the character that is already escaped as the record
    * separator of a plan-file chunk: because it is in the escape table, a mark
@@ -391,7 +510,14 @@ object TimeJournal {
   private fun encodeTags(tags: List<String>): String =
     canonicalTags(tags).joinToString(TAG_SEPARATOR.toString()) { escape(it) }
 
-  /** The eight fields a record has carried since version 1. */
+  /**
+   * The record's own fields: the eight it has carried since version 1, and
+   * `recordedBy` since version 3.
+   *
+   * The ninth is written even when it is empty, because the marks come
+   * straight after it and a field that is sometimes there and sometimes not
+   * would put them in two different places in one file.
+   */
   private fun encodeRecordFields(record: JournalRecord): String = listOf(
     record.id,
     record.taskUid,
@@ -400,10 +526,11 @@ object TimeJournal {
     record.source.name,
     record.person.orEmpty(),
     record.note,
-    record.createdAt.toString()
+    record.createdAt.toString(),
+    record.recordedBy.orEmpty()
   ).joinToString(FIELD.toString()) { escape(it) }
 
-  /** One line of the file: the record's eight fields, then the marks. */
+  /** One line of the file: the record's nine fields, then the marks. */
   fun encodeLine(entry: JournalEntry): String =
     encodeRecordFields(entry.record) + FIELD + encodeTags(entry.tags)
 
@@ -438,10 +565,16 @@ object TimeJournal {
    * One line, or null when it cannot be read. Null, not an exception: one
    * damaged line must not take a whole journal down.
    *
-   * [version] decides whether a ninth field is looked at. In a version 1 file
-   * it is not: version 1 promised that fields past the eighth are ignored, and
-   * a version 2 reader keeps that promise, or "version 1 could not say" would
-   * become untrue the moment somebody hand-edited an old file.
+   * **[version] alone decides where the fields are.** Field nine is
+   * `recordedBy` in a version 3 file and the marks in a version 2 one, and
+   * the two are told apart by the number in the header and by nothing else --
+   * never by counting what the line contains, which cannot tell them apart at
+   * all. See the version 3 note at the top of this file.
+   *
+   * In a version 1 file neither is read: version 1 promised that fields past
+   * the eighth are ignored, and a later reader keeps that promise, or
+   * "version 1 could not say" would become untrue the moment somebody
+   * hand-edited an old file.
    */
   fun decodeLine(line: String, version: Int = VERSION): JournalEntry? {
     if (line.isBlank()) return null
@@ -470,10 +603,17 @@ object TimeJournal {
       source = source,
       person = fields.getOrNull(5)?.takeIf { it.isNotBlank() },
       note = fields.getOrNull(6).orEmpty(),
-      createdAt = fields.getOrNull(7)?.let { parseTime(it) } ?: start
+      createdAt = fields.getOrNull(7)?.let { parseTime(it) } ?: start,
+      // Version 3 only. In an older file field nine holds the marks, and
+      // reading it here would turn "booked against V203" into "V203 entered
+      // these hours" -- a statement nobody made, in a line nothing is wrong
+      // with.
+      recordedBy = if (version >= 3) fields.getOrNull(8)?.takeIf { it.isNotBlank() } else null
     )
     if (version < 2) return JournalEntry(record)
-    return JournalEntry(record, decodeTags(raw.getOrNull(8).orEmpty()))
+    // One past the record's last field. Which field that is comes from the
+    // version, never from how many fields this line happens to have.
+    return JournalEntry(record, decodeTags(raw.getOrNull(recordFieldCount(version)).orEmpty()))
   }
 
   private fun decodeTags(raw: String): List<String> =
@@ -550,7 +690,9 @@ object TimeJournal {
    * "Content" is the whole encoded line, so **a record whose mark changed is
    * a change** even though no hours moved: re-booking an hour from one
    * undertaking to another is exactly the kind of thing a record somebody has
-   * to vouch for must not do quietly. It shows up as a change of nought hours.
+   * to vouch for must not do quietly. It shows up as a change of nought
+   * hours. The same goes for `recordedBy`: who is answerable for an entry
+   * changing is a change, and for the same reason.
    *
    * Grouped by kind, task, person and day, ordered by size so the cap keeps
    * what matters, then cut to [maxLines]. Ties break on day, label and person
