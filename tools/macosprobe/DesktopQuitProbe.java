@@ -54,8 +54,16 @@ import java.util.concurrent.TimeUnit;
  *   handler-fixed       the same, with the Platform.exit() F27 proposes. The positive control: if
  *                       this one does not die either, the experiment says nothing about F27 and the
  *                       run has to be thrown away rather than reported.
+ *   handler-ignore      THE NEGATIVE CONTROL, added 20.09.2026 after run 35522222211. The handler
+ *                       is installed and reached, and then it answers NOTHING -- no performQuit(),
+ *                       no Platform.exit(). Without this arm the other two cannot be read: they
+ *                       both ended after the quit handler ran, which looks like an answer about
+ *                       performQuit() but is equally consistent with macOS terminating the
+ *                       application no matter what the handler does. If THIS arm survives,
+ *                       performQuit() is what ends the process; if it dies too, the experiment
+ *                       says nothing about F27 and must not be reported as if it did.
  *
- * In the two handler modes the program prints READY and then waits to be quit from outside.
+ * In the three handler modes the program prints READY and then waits to be quit from outside.
  */
 public class DesktopQuitProbe {
 
@@ -119,7 +127,7 @@ public class DesktopQuitProbe {
         System.out.flush();
         javafx.application.Platform.exit();
       }
-    });
+    }, !"handler-ignore".equals(mode));
     System.out.println("PROBE setQuitHandler=" + installed);
     if (!installed.startsWith("ok")) {
       System.out.flush();
@@ -156,9 +164,19 @@ public class DesktopQuitProbe {
    * a broken probe rather than as a measured property of the machine.
    */
   private static String tryToInstall(Runnable onQuit) {
+    return tryToInstall(onQuit, true);
+  }
+
+  private static String tryToInstall(Runnable onQuit, boolean answerWithPerformQuit) {
     try {
       Desktop.getDesktop().setQuitHandler((quitEvent, response) -> {
         onQuit.run();
+        if (!answerWithPerformQuit) {
+          // The negative control answers nothing at all. See handler-ignore above.
+          System.out.println("PROBE answering nothing -- no performQuit(), no Platform.exit()");
+          System.out.flush();
+          return;
+        }
         // THE LINE UNDER TEST. DesktopIntegration.maybeQuit does exactly this and nothing more.
         response.performQuit();
       });

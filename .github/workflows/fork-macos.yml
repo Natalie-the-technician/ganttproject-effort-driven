@@ -547,6 +547,9 @@ jobs:
             kill -9 "$pid" 2>/dev/null || true
             wait "$pid" 2>/dev/null || true
           }
+          # THE ORDER MATTERS: the negative control runs FIRST. If it dies too, the other two arms
+          # say nothing about F27 and whoever reads the log sees that before reading them.
+          run_bundle_arm handler-ignore || true
           run_bundle_arm handler || true
           run_bundle_arm handler-fixed || true
 
