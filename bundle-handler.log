@@ -1,0 +1,12 @@
+PROBE mode=handler
+PROBE pid=14165
+PROBE os.name=Mac OS X os.version=26.6.2 java.version=21.0.12 java.vendor=BellSoft
+PROBE java.awt.headless=null
+PROBE GraphicsEnvironment.isHeadless=false
+PROBE Desktop.isDesktopSupported=true
+PROBE APP_QUIT_HANDLER supported=true
+PROBE javafx started
+PROBE javafx=up
+PROBE setQuitHandler=ok
+READY
+PROBE quit handler CALLED
