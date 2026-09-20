@@ -1,0 +1,289 @@
+Submodule 'biz.ganttproject.app.localization' (https://github.com/bardsoftware/biz.ganttproject.app.localization.git) registered for path 'biz.ganttproject.app.localization'
+Cloning into '/Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/biz.ganttproject.app.localization'...
+From https://github.com/bardsoftware/biz.ganttproject.app.localization
+ * branch            a21b1223c5c645d2b206893a2c1159324e21e36a -> FETCH_HEAD
+Submodule path 'biz.ganttproject.app.localization': checked out 'a21b1223c5c645d2b206893a2c1159324e21e36a'
+ProductName:		macOS
+ProductVersion:		26.6.2
+BuildVersion:		25G83
+arm64
+cpus: 3  memory: 7516192768
+openjdk version "21.0.12" 2026-07-21 LTS
+OpenJDK Runtime Environment (build 21.0.12+10-LTS)
+OpenJDK 64-Bit Server VM (build 21.0.12+10-LTS, mixed mode, sharing)
+JAVA_HOME=/Users/runner/hostedtoolcache/Java_Liberica_jdk+fx/21.0.12-10/arm64
+jmods total: 76
+javafx.base.jmod
+javafx.controls.jmod
+javafx.fxml.jmod
+javafx.graphics.jmod
+javafx.media.jmod
+javafx.swing.jmod
+javafx.web.jmod
+-rwxr-xr-x  1 root  wheel  660768 Aug 13 02:51 /usr/bin/security
+--- is there a window session at all: this decides what F27 can be asked ---
+console user: runner
+Aqua
+tools/macosprobe/limit.sh: line 32:  2718 Killed: 9               "$@"
+LIMIT: >5s, killed: sleep 60
+hanging command: rc=124 (expected 124) after 5s (expected ~5)
+failing command: rc=7 (expected 7, i.e. the code is passed through)
+limit ok in both directions
+::add-mask::13C3ACF9-1D2A-472C-A78C-1943493DB147-04503627-6AC3-4A14-A66B-7DA733D6E303
+--- keychains as the runner finds them, before anything is changed ---
+--- security: list-keychains before
+    "/Users/runner/Library/Keychains/login.keychain-db"
+--- security: list-keychains before -> rc=0
+--- security: default-keychain before
+    "/Users/runner/Library/Keychains/login.keychain-db"
+--- security: default-keychain before -> rc=0
+--- security: create-keychain
+--- security: create-keychain -> rc=0
+--- security: set-keychain-settings
+--- security: set-keychain-settings -> rc=0
+--- security: unlock-keychain
+--- security: unlock-keychain -> rc=0
+--- security: default-keychain -s
+--- security: default-keychain -s -> rc=0
+tools/macosprobe/limit.sh: line 36:  2918 Terminated: 15          ( sleep "$limit"; kill -9 "$child" 2> /dev/null )
+existing keychains: [    /Users/runner/work/_temp/ganttproject-probe.keychain-db ]
+--- security: list-keychains -s
+--- security: list-keychains -s -> rc=0
+--- after ---
+--- security: list-keychains after
+    "/Users/runner/work/_temp/ganttproject-probe.keychain-db"
+    "/Users/runner/work/_temp/ganttproject-probe.keychain-db"
+--- security: list-keychains after -> rc=0
+--- security: default-keychain after
+    "/Users/runner/work/_temp/ganttproject-probe.keychain-db"
+--- security: default-keychain after -> rc=0
+=== ROUND TRIP 1: written the way MacKeychainBackend writes it, no -A ===
+--- security: add (no -A)
+--- security: add (no -A) -> rc=0
+--- security: find (no -A)
+--- security: find (no -A) -> rc=0
+ROUND TRIP no -A: ok
+=== ROUND TRIP 2: the control, written with -A ===
+--- security: add (-A)
+--- security: add (-A) -> rc=0
+--- security: find (-A)
+--- security: find (-A) -> rc=0
+ROUND TRIP -A: ok
+w: file:///Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/biz.ganttproject.impex.msproject2/src/main/java/biz/ganttproject/impex/msproject2/ProjectFileImporterImpl.kt:596:89 'val targetTask: Task!' is deprecated. Deprecated in Java.
+
+> Task :biz.ganttproject.impex.msproject2:compileJava
+Note: /Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/biz.ganttproject.impex.msproject2/src/main/java/biz/ganttproject/impex/msproject2/ProjectFileExporter.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: /Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/biz.ganttproject.impex.msproject2/src/main/java/biz/ganttproject/impex/msproject2/CustomPropertyMapping.java uses unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :biz.ganttproject.impex.msproject2:classes
+> Task :biz.ganttproject.impex.msproject2:jar
+> Task :ganttproject-tester:compileTestKotlin
+
+> Task :ganttproject-tester:compileTestJava
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :ganttproject-tester:testClasses
+
+[Incubating] Problems report is available at: file:///Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 2m 42s
+22 actionable tasks: 22 executed
+> Task :ganttproject:jar UP-TO-DATE
+> Task :biz.ganttproject.impex.msproject2:compileKotlin UP-TO-DATE
+> Task :biz.ganttproject.impex.msproject2:compileJava UP-TO-DATE
+> Task :biz.ganttproject.impex.msproject2:processResources UP-TO-DATE
+> Task :biz.ganttproject.impex.msproject2:classes UP-TO-DATE
+> Task :biz.ganttproject.impex.msproject2:jar UP-TO-DATE
+> Task :ganttproject-tester:compileTestKotlin UP-TO-DATE
+> Task :ganttproject-tester:compileTestJava UP-TO-DATE
+> Task :ganttproject-tester:processTestResources UP-TO-DATE
+> Task :ganttproject-tester:testClasses UP-TO-DATE
+
+> Task :ganttproject-tester:test
+Running: Test testSayWhetherAnythingWasActuallyMeasured(net.sourceforge.ganttproject.fork.SecretStoreProbeTest)
+Running: Test testPlainTextFromBeforeStaysReadable(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testOnWindowsItIsStillDpapiAndNothingElse(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testTheRoundTripWhereThereIsAStore(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testAHandleThatWasNeverStoredGivesNoForeignSecret(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testTheMarkersAreDistinctAndNoneBeginsWithAnother(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testAValueFromAnotherPlatformIsRecognisedAndPassedThrough(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testWithoutAnAliasNothingIsStored(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testNothingLooksProtectedWhenNothingCanBe(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testUndecryptableValueDoesNotThrow(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testEmptySecretIsNeverStored(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testOnlyWindowsGetsDpapi(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testTheTokenIsNotReadableInTheFile(net.sourceforge.ganttproject.timetracking.TokenEncryptionTest)
+Running: Test testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite(net.sourceforge.ganttproject.timetracking.TokenEncryptionTest)
+Running: Test testTwoPeopleWithTheSameTokenDoNotLookAlike(net.sourceforge.ganttproject.timetracking.TokenEncryptionTest)
+Running: Test testWithoutAStoreTheTokenIsRecognisablePlainText(net.sourceforge.ganttproject.timetracking.TokenEncryptionTest)
+Running: Test testTheSameTokenIsNoCollision(net.sourceforge.ganttproject.timetracking.TokenEncryptionTest)
+
+[Incubating] Problems report is available at: file:///Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 14s
+23 actionable tasks: 2 executed, 21 up-to-date
+RESULT baseline: files=3 tests=17 failures=0 errors=0 skipped=0
+RESULT baseline: red=0 []
+RESULT baseline: green=17 ['SecretStoreProbeTest.testSayWhetherAnythingWasActuallyMeasured', 'SecretStoreTest.testAHandleThatWasNeverStoredGivesNoForeignSecret', 'SecretStoreTest.testAValueFromAnotherPlatformIsRecognisedAndPassedThrough', 'SecretStoreTest.testEmptySecretIsNeverStored', 'SecretStoreTest.testNothingLooksProtectedWhenNothingCanBe', 'SecretStoreTest.testOnWindowsItIsStillDpapiAndNothingElse', 'SecretStoreTest.testOnlyWindowsGetsDpapi', 'SecretStoreTest.testPlainTextFromBeforeStaysReadable', 'SecretStoreTest.testTheMarkersAreDistinctAndNoneBeginsWithAnother', 'SecretStoreTest.testTheRoundTripWhereThereIsAStore', 'SecretStoreTest.testUndecryptableValueDoesNotThrow', 'SecretStoreTest.testWithoutAnAliasNothingIsStored', 'TokenEncryptionTest.testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite', 'TokenEncryptionTest.testTheSameTokenIsNoCollision', 'TokenEncryptionTest.testTheTokenIsNotReadableInTheFile', 'TokenEncryptionTest.testTwoPeopleWithTheSameTokenDoNotLookAlike', 'TokenEncryptionTest.testWithoutAStoreTheTokenIsRecognisablePlainText']
+RESULT baseline: skipped=0 []
+PROBE baseline: SECRETSTORE-PROBE os.name=Mac OS X isAvailable=true backend=macOS Keychain chosenForThisOs=macOS Keychain
+EXPECTATION baseline: met -- nothing red
+SECRETSTORE-PROBE os.name=Mac OS X isAvailable=true backend=macOS Keychain chosenForThisOs=macOS Keychain
+ .../src/main/java/net/sourceforge/ganttproject/fork/SecretBackend.kt    | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[Incubating] Problems report is available at: file:///Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':ganttproject-tester:test'.
+> There were failing tests. See the report at: file:///Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/ganttproject-tester/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 12s
+23 actionable tasks: 4 executed, 19 up-to-date
+RESULT sabotage-write: files=3 tests=17 failures=1 errors=0 skipped=0
+RESULT sabotage-write: red=1 ['SecretStoreTest.testTheRoundTripWhereThereIsAStore']
+RESULT sabotage-write: green=16 ['SecretStoreProbeTest.testSayWhetherAnythingWasActuallyMeasured', 'SecretStoreTest.testAHandleThatWasNeverStoredGivesNoForeignSecret', 'SecretStoreTest.testAValueFromAnotherPlatformIsRecognisedAndPassedThrough', 'SecretStoreTest.testEmptySecretIsNeverStored', 'SecretStoreTest.testNothingLooksProtectedWhenNothingCanBe', 'SecretStoreTest.testOnWindowsItIsStillDpapiAndNothingElse', 'SecretStoreTest.testOnlyWindowsGetsDpapi', 'SecretStoreTest.testPlainTextFromBeforeStaysReadable', 'SecretStoreTest.testTheMarkersAreDistinctAndNoneBeginsWithAnother', 'SecretStoreTest.testUndecryptableValueDoesNotThrow', 'SecretStoreTest.testWithoutAnAliasNothingIsStored', 'TokenEncryptionTest.testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite', 'TokenEncryptionTest.testTheSameTokenIsNoCollision', 'TokenEncryptionTest.testTheTokenIsNotReadableInTheFile', 'TokenEncryptionTest.testTwoPeopleWithTheSameTokenDoNotLookAlike', 'TokenEncryptionTest.testWithoutAStoreTheTokenIsRecognisablePlainText']
+RESULT sabotage-write: skipped=0 []
+RED sabotage-write: SecretStoreTest.testTheRoundTripWhereThereIsAStore: junit.framework.ComparisonFailure: and it has to come back exactly as it went in expected:<[Passwort mit Umlauten-äöü und Zeichen-!"§$%&/() 	 und
+PROBE sabotage-write: SECRETSTORE-PROBE os.name=Mac OS X isAvailable=true backend=macOS Keychain chosenForThisOs=macOS Keychain
+EXPECTATION sabotage-write: met -- the break was caught, 1 red
+Running: Test testUndecryptableValueDoesNotThrow(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testEmptySecretIsNeverStored(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testOnlyWindowsGetsDpapi(net.sourceforge.ganttproject.fork.SecretStoreTest)
+Running: Test testSayWhetherAnythingWasActuallyMeasured(net.sourceforge.ganttproject.fork.SecretStoreProbeTest)
+Running: Test testTheTokenIsNotReadableInTheFile(net.sourceforge.ganttproject.timetracking.TokenEncryptionTest)
+Running: Test testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite(net.sourceforge.ganttproject.timetracking.TokenEncryptionTest)
+Running: Test testTwoPeopleWithTheSameTokenDoNotLookAlike(net.sourceforge.ganttproject.timetracking.TokenEncryptionTest)
+Running: Test testWithoutAStoreTheTokenIsRecognisablePlainText(net.sourceforge.ganttproject.timetracking.TokenEncryptionTest)
+Running: Test testTheSameTokenIsNoCollision(net.sourceforge.ganttproject.timetracking.TokenEncryptionTest)
+
+[Incubating] Problems report is available at: file:///Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 12s
+23 actionable tasks: 4 executed, 19 up-to-date
+RESULT restored: files=3 tests=17 failures=0 errors=0 skipped=0
+RESULT restored: red=0 []
+RESULT restored: green=17 ['SecretStoreProbeTest.testSayWhetherAnythingWasActuallyMeasured', 'SecretStoreTest.testAHandleThatWasNeverStoredGivesNoForeignSecret', 'SecretStoreTest.testAValueFromAnotherPlatformIsRecognisedAndPassedThrough', 'SecretStoreTest.testEmptySecretIsNeverStored', 'SecretStoreTest.testNothingLooksProtectedWhenNothingCanBe', 'SecretStoreTest.testOnWindowsItIsStillDpapiAndNothingElse', 'SecretStoreTest.testOnlyWindowsGetsDpapi', 'SecretStoreTest.testPlainTextFromBeforeStaysReadable', 'SecretStoreTest.testTheMarkersAreDistinctAndNoneBeginsWithAnother', 'SecretStoreTest.testTheRoundTripWhereThereIsAStore', 'SecretStoreTest.testUndecryptableValueDoesNotThrow', 'SecretStoreTest.testWithoutAnAliasNothingIsStored', 'TokenEncryptionTest.testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite', 'TokenEncryptionTest.testTheSameTokenIsNoCollision', 'TokenEncryptionTest.testTheTokenIsNotReadableInTheFile', 'TokenEncryptionTest.testTwoPeopleWithTheSameTokenDoNotLookAlike', 'TokenEncryptionTest.testWithoutAStoreTheTokenIsRecognisablePlainText']
+RESULT restored: skipped=0 []
+PROBE restored: SECRETSTORE-PROBE os.name=Mac OS X isAvailable=true backend=macOS Keychain chosenForThisOs=macOS Keychain
+EXPECTATION restored: met -- nothing red
+
+[Incubating] Problems report is available at: file:///Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':ganttproject-tester:test'.
+> There were failing tests. See the report at: file:///Users/runner/work/ganttproject-effort-driven/ganttproject-effort-driven/ganttproject-tester/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 9s
+23 actionable tasks: 4 executed, 19 up-to-date
+RESULT no-store: files=3 tests=17 failures=1 errors=0 skipped=0
+RESULT no-store: red=1 ['SecretStoreProbeTest.testSayWhetherAnythingWasActuallyMeasured']
+RESULT no-store: green=16 ['SecretStoreTest.testAHandleThatWasNeverStoredGivesNoForeignSecret', 'SecretStoreTest.testAValueFromAnotherPlatformIsRecognisedAndPassedThrough', 'SecretStoreTest.testEmptySecretIsNeverStored', 'SecretStoreTest.testNothingLooksProtectedWhenNothingCanBe', 'SecretStoreTest.testOnWindowsItIsStillDpapiAndNothingElse', 'SecretStoreTest.testOnlyWindowsGetsDpapi', 'SecretStoreTest.testPlainTextFromBeforeStaysReadable', 'SecretStoreTest.testTheMarkersAreDistinctAndNoneBeginsWithAnother', 'SecretStoreTest.testTheRoundTripWhereThereIsAStore', 'SecretStoreTest.testUndecryptableValueDoesNotThrow', 'SecretStoreTest.testWithoutAnAliasNothingIsStored', 'TokenEncryptionTest.testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite', 'TokenEncryptionTest.testTheSameTokenIsNoCollision', 'TokenEncryptionTest.testTheTokenIsNotReadableInTheFile', 'TokenEncryptionTest.testTwoPeopleWithTheSameTokenDoNotLookAlike', 'TokenEncryptionTest.testWithoutAStoreTheTokenIsRecognisablePlainText']
+RESULT no-store: skipped=0 []
+RED no-store: SecretStoreProbeTest.testSayWhetherAnythingWasActuallyMeasured: junit.framework.AssertionFailedError: on Mac OS X the operating system ships a secret store, so isAvailable must be true. It is not, which means every other test in this area returned early and measured NOTHING -- while still counting as passed. SECRETSTORE-PROBE os.name=Mac OS X isAvailable=false backend=none chosenForThisOs=macOS Keychain
+PROBE no-store: SECRETSTORE-PROBE os.name=Mac OS X isAvailable=false backend=none chosenForThisOs=macOS Keychain
+EXPECTATION no-store: met -- the break was caught, 1 red
+--- default settings ---
+PROBE mode=report
+PROBE pid=12149
+PROBE os.name=Mac OS X os.version=26.6.2 java.version=21.0.12 java.vendor=BellSoft
+PROBE java.awt.headless=null
+PROBE GraphicsEnvironment.isHeadless=false
+PROBE Desktop.isDesktopSupported=true
+PROBE APP_QUIT_HANDLER supported=true
+PROBE setQuitHandler=ok
+--- and with the window server explicitly allowed, in case AWT decided otherwise ---
+PROBE mode=report
+PROBE pid=12479
+PROBE os.name=Mac OS X os.version=26.6.2 java.version=21.0.12 java.vendor=BellSoft
+PROBE java.awt.headless=false
+PROBE GraphicsEnvironment.isHeadless=false
+PROBE Desktop.isDesktopSupported=true
+PROBE APP_QUIT_HANDLER supported=true
+PROBE setQuitHandler=ok
+--- can System Events be spoken to at all ---
+35
+osascript: usable
+================ arm: handler ================
+ARM handler: ready, pid 13083
+ARM handler: osascript exit 0
+ARM handler: THE PROCESS IS STILL ALIVE
+ARM handler: handler reached = 0
+--- log ---
+PROBE mode=handler
+PROBE pid=13083
+PROBE os.name=Mac OS X os.version=26.6.2 java.version=21.0.12 java.vendor=BellSoft
+PROBE java.awt.headless=false
+PROBE GraphicsEnvironment.isHeadless=false
+PROBE Desktop.isDesktopSupported=true
+PROBE APP_QUIT_HANDLER supported=true
+PROBE javafx started
+PROBE javafx=up
+PROBE setQuitHandler=ok
+READY
+ARM handler: alive=yes
+================ arm: handler-fixed ================
+ARM handler-fixed: ready, pid 13811
+ARM handler-fixed: osascript exit 0
+ARM handler-fixed: THE PROCESS IS STILL ALIVE
+ARM handler-fixed: handler reached = 0
+--- log ---
+PROBE mode=handler-fixed
+PROBE pid=13811
+PROBE os.name=Mac OS X os.version=26.6.2 java.version=21.0.12 java.vendor=BellSoft
+PROBE java.awt.headless=false
+PROBE GraphicsEnvironment.isHeadless=false
+PROBE Desktop.isDesktopSupported=true
+PROBE APP_QUIT_HANDLER supported=true
+PROBE javafx started
+PROBE javafx=up
+PROBE setQuitHandler=ok
+READY
+ARM handler-fixed: alive=yes
+caution: filename not matched:  java.desktop/sun/lwawt/macosx/_AppEventHandler.java
+not in src.zip
