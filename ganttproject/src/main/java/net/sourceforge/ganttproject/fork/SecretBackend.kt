@@ -21,6 +21,10 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject.fork
 
 import net.sourceforge.ganttproject.GPLogger
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import java.util.concurrent.TimeUnit
@@ -389,32 +393,156 @@ internal fun isSafeHandle(handle: String) = SAFE_HANDLE.matches(handle)
 internal class SecretCommandResult(val exitCode: Int, val stdout: ByteArray, val stderr: String)
 
 /**
+ * How long this thread waits for a program's pipes to reach their end AFTER the program itself has
+ * ended.
+ *
+ * A pipe reaches its end when the last writer closes it, and that is normally the program ending.
+ * Normally, but not always: a program may hand its pipes to a child that outlives it -- `secret-tool`
+ * can start a keyring daemon -- and then the end never comes. This thread must not wait for that,
+ * so the wait is bounded and a pipe that does not finish counts as a failed call. Better no answer
+ * than half a secret.
+ */
+private const val DRAIN_GRACE_SECONDS = 5L
+
+/** How long a killed program is given to actually be gone. SIGKILL cannot be caught or ignored. */
+private const val KILL_GRACE_SECONDS = 5L
+
+/**
  * Runs a keyring program.
  *
- * NOTHING FROM [stdout] IS EVER LOGGED. That is where the secret comes back, and a log line is a
- * file. [stderr] is returned but only the probes -- whose value is public -- log it.
+ * THIS THREAD MAY ONLY EVER WAIT ON [Process.waitFor], AND THAT IS THE WHOLE POINT OF THE SHAPE
+ * BELOW. Until 20.09.2026 it read both pipes to their end first and consulted the time limit
+ * afterwards, which cannot work: a pipe reaches its end when the program ends, so by the time the
+ * limit was looked at there was nothing left to interrupt. Measured on 20.09.2026 against the
+ * compiled code: a program sleeping 45 seconds came back after 45 seconds, and with a result rather
+ * than null -- the call reported success. The limit had no effect at all.
  *
- * @param stdin what to write to the program, or null. Only [LibsecretBackend] uses this, and
- * `secret-tool store` writes nothing at all while it reads, so writing before reading cannot
- * deadlock here.
- * @return null if the program is not there, fails to start, or does not finish in time.
+ * THE SAME LINE CARRIED A SECOND, LATENT FAULT: stdout was read to its end before stderr was
+ * touched. A program that fills the stderr pipe -- 64 KB on Linux -- blocks in `write` while this
+ * side waits on stdout, and neither can move again. It is not a second bug in a second place, it is
+ * the same missing property: both pipes have to be emptied WHILE the program runs. Hence a thread
+ * per pipe, and stdin fed from a third, so that no pipe can hold this thread up.
+ *
+ * ALL THREE THREADS ARE DAEMON THREADS. A thread waiting on a pipe that never closes would
+ * otherwise keep the JVM alive at shutdown -- the same fault again, only in green. They end by
+ * themselves when the program ends or is killed, because the pipe then breaks under them.
+ *
+ * NOTHING FROM [stdout] IS EVER LOGGED. That is where the secret comes back, and a log line is a
+ * file. [stderr] is returned but only the probes -- whose value is public -- log it. NOTHING FROM
+ * [command] IS LOGGED EITHER: on macOS the secret itself stands in the arguments.
+ *
+ * @param stdin what to write to the program, or null. The pipe is closed in both cases, because a
+ * program reading its stdin waits for the end of it.
+ * @return null if the program is not there, fails to start, does not finish in time, or does not
+ * give up its output in full.
  */
 internal fun runSecretCommand(command: List<String>, stdin: ByteArray?): SecretCommandResult? {
   var process: Process? = null
-  return try {
-    process = ProcessBuilder(command).start()
-    process.outputStream.use { if (stdin != null) it.write(stdin) }
-    val stdout = process.inputStream.readBytes()
-    val stderr = String(process.errorStream.readBytes(), StandardCharsets.UTF_8)
-    if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-      process.destroyForcibly()
+  try {
+    val started = ProcessBuilder(command).start()
+    process = started
+    // Both pipes are given a thread BEFORE anything is waited for, and stdin a third one.
+    val stdoutDrain = StreamDrain(started.inputStream, "gp-secret-stdout")
+    val stderrDrain = StreamDrain(started.errorStream, "gp-secret-stderr")
+    feedInBackground(started.outputStream, stdin, "gp-secret-stdin")
+    if (!started.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+      // The kill is in the `finally`, so that it happens on every way out of here.
       return null
     }
-    SecretCommandResult(process.exitValue(), stdout, stderr)
+    val stdout = stdoutDrain.awaitEnd(DRAIN_GRACE_SECONDS) ?: return null
+    val stderr = stderrDrain.awaitEnd(DRAIN_GRACE_SECONDS) ?: return null
+    return SecretCommandResult(started.exitValue(), stdout, String(stderr, StandardCharsets.UTF_8))
   } catch (e: Exception) {
     // An absent program lands here as an IOException. That is the normal case on a machine without
     // a keyring, not a fault, so it is not logged as one.
-    process?.destroyForcibly()
-    null
+    return null
+  } finally {
+    // On the way out through the time limit or through an exception the program is still running,
+    // and a keyring program left behind would sit on the keyring for the rest of the session -- at
+    // worst holding a dialogue in front of the user. On the ordinary way out it has ended already
+    // and there is nothing to do.
+    process?.let { if (it.isAlive) killAndReap(it) }
   }
+}
+
+/**
+ * Kills a program and waits until it is really gone.
+ *
+ * [Process.destroyForcibly] only sends the signal; without the wait the caller would go on while
+ * the process is still being taken down, and "it was given up on" would not yet mean "it is gone".
+ * SIGKILL cannot be caught, so the wait is short and a program that survives it is a surprise worth
+ * a log line -- one that says nothing about the command, because the secret may be in it.
+ */
+private fun killAndReap(process: Process) {
+  process.destroyForcibly()
+  try {
+    if (!process.waitFor(KILL_GRACE_SECONDS, TimeUnit.SECONDS)) {
+      logQuietly("[fork] A keyring program did not end after it was killed.")
+    }
+  } catch (e: InterruptedException) {
+    Thread.currentThread().interrupt()
+  }
+}
+
+/**
+ * Empties one pipe in a thread of its own, so that the thread that started the program never waits
+ * on it.
+ */
+private class StreamDrain(stream: InputStream, threadName: String) {
+  private val collected = ByteArrayOutputStream()
+
+  @Volatile
+  private var broken = false
+
+  private val thread = Thread({
+    try {
+      stream.use { it.copyTo(collected) }
+    } catch (e: IOException) {
+      // The usual way here is the program having been killed: the pipe breaks under the read.
+      broken = true
+    }
+  }, threadName)
+
+  init {
+    thread.isDaemon = true
+    thread.start()
+  }
+
+  /**
+   * @return everything the pipe carried, or null if it did not reach its end within [seconds] or
+   * could not be read. Null is never a short answer -- a truncated secret is a wrong password, and
+   * a wrong password looks like a server problem.
+   */
+  fun awaitEnd(seconds: Long): ByteArray? {
+    try {
+      thread.join(seconds * 1000L)
+    } catch (e: InterruptedException) {
+      Thread.currentThread().interrupt()
+      return null
+    }
+    // The order matters: only a thread that has ENDED gives this thread a safe view of `collected`.
+    if (thread.isAlive || broken) {
+      return null
+    }
+    return collected.toByteArray()
+  }
+}
+
+/**
+ * Writes [data] to a program and closes its stdin, in a thread of its own.
+ *
+ * THE CLOSE HAPPENS EVEN WITH NO DATA: a program that reads its stdin waits for the end of it, and
+ * the end of a pipe is its close. Nothing waits for this thread. A program that never reads what is
+ * offered would block it, and that is exactly why it is not this thread's business.
+ */
+private fun feedInBackground(stream: OutputStream, data: ByteArray?, threadName: String) {
+  val thread = Thread({
+    try {
+      stream.use { if (data != null) it.write(data) }
+    } catch (e: IOException) {
+      // A program that does not read its stdin, or one that was killed. Neither is a fault here.
+    }
+  }, threadName)
+  thread.isDaemon = true
+  thread.start()
 }
