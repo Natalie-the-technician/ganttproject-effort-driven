@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-20T16:18:50.475Z" hostname="sat12-dp148-cc75db82-b420-4b5d-bd8d-606b1a70ba0a-16FD474FF46A.local" time="0.368">
+  <properties/>
+  <testcase name="testTheTokenIsNotReadableInTheFile" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.054"/>
+  <testcase name="testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.033"/>
+  <testcase name="testTwoPeopleWithTheSameTokenDoNotLookAlike" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.099"/>
+  <testcase name="testWithoutAStoreTheTokenIsRecognisablePlainText" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.001"/>
+  <testcase name="testTheSameTokenIsNoCollision" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.181"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
