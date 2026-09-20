@@ -1,7 +1,7 @@
 # Measures the two things in this fork that have been stuck on "no Mac available".
 #
-# WHAT THIS IS NOT: a Mac package. `distApp` is at the very end, marked as an extra, and nothing is
-# signed -- this repository has no signing secrets and is not getting any for a measurement.
+# WHAT THIS IS NOT: a Mac package. Nothing is signed -- this repository has no signing secrets and
+# is not getting any for a measurement.
 #
 # WHAT IT MEASURES
 #
@@ -19,21 +19,55 @@
 #       alive is the open question. A build runner has no Dock, so this cannot be done through the
 #       Dock menu; what can be done is measured, and what cannot is named.
 #
+# ---------------------------------------------------------------------------------------------
+# WHAT THE FIRST ATTEMPT COST, on 20.09.2026, and what changed here because of it
+#
+# The first run of this workflow sat in the step "Create and unlock a keychain of our own" for TWO
+# HOURS and was then cancelled by hand. Three things follow, and all three are in this file:
+#
+#  1. EVERY STEP HAS A `timeout-minutes`, and so does the job. Without one, a hung step runs to the
+#     six-hour platform limit. This is the cheapest lesson of the day and it is not negotiable.
+#
+#  2. EVERY `security` CALL GOES THROUGH `tools/macosprobe/limit.sh`. A step timeout kills the step
+#     but does not say WHICH command was waiting; the limit says which, with an exit code of 124 and
+#     a line in the log. The suspicion it is aimed at: `security` does not fail when securityd wants
+#     a decision from a person and there is nobody to ask -- it waits. Every call is suspected, not
+#     only the obvious ones, because the first attempt did not record which one it was.
+#
+#  3. RESULTS TRAVEL HOME EARLY, not only at the end. A job killed by `timeout-minutes` does not run
+#     its remaining steps, not even the ones marked `if: always()` -- everything the first attempt
+#     had measured before it was cancelled was lost. F10 is carried out as soon as it exists, before
+#     F27 is started.
+#
+# And a fourth, about reading results: the cancelled run still reported `success` on some steps
+# afterwards. Those numbers are worthless -- the keychain was never created. Results out of a
+# cancelled run are not a measurement.
+#
 # Derived from `fork-win64.yml` on branch `paket-windows` (d9fc4e56a), whose scaffolding -- checkout,
-# submodules, Liberica 21 jdk+fx, gradle cache -- was proved green on run 35511918413. Two things
-# from it are deliberately NOT carried over:
-#   * That workflow checks out the tree of `main` detached, so the package name carries main's
-#     commit. There is no package here, and the measurement has to run against the sources this
-#     branch modifies during the counter-checks. So: the branch as it is.
-#   * It needs `contents: write` to attach a release. Nothing here writes.
+# submodules, Liberica 21 jdk+fx, gradle cache -- was proved green on run 35511918413, and whose
+# first five steps were proved green on macos-latest by the cancelled run described above.
 name: Fork macOS probe
 
 on:
   push:
     branches: ['probe-macos']
 
+# `contents: write` -- and this is a deliberate departure from the note that came with this task,
+# which said `contents: read` because nothing is uploaded. Measured reason: without a GitHub token
+# on the build machine at home, THE NUMBERS CANNOT BE READ BACK. The REST endpoints for job logs and
+# for artifacts both require authentication even on a public repository; what is readable without a
+# token is the per-step conclusion and nothing else, i.e. "green" or "red". This workflow exists to
+# produce counts and test names, so "green" is precisely the answer that would be worthless.
+#
+# The runner therefore pushes its own output back, onto branches of its own named after the run. It
+# touches nothing else: not main, not this branch, no tags, no force.
 permissions:
-  contents: read
+  contents: write
+
+# A second push supersedes the first rather than paying for two macOS runners at once.
+concurrency:
+  group: probe-macos
+  cancel-in-progress: true
 
 env:
   # The runner has 7 GB. The default heap is a fraction of that and the Kotlin compilation of this
@@ -41,23 +75,34 @@ env:
   GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
   TESTS: "ganttproject-tester/build/test-results/test"
   BACKEND: "ganttproject/src/main/java/net/sourceforge/ganttproject/fork/SecretBackend.kt"
+  LIMIT: "tools/macosprobe/limit.sh"
 
 jobs:
   probe:
     name: Keychain and quit handler on macos-latest
     runs-on: macos-latest
+    # The note that came with this task said 30. Raised to 60 with the reason stated, because 30 is
+    # a ceiling that could cut the measurement off rather than a hang: a cold Kotlin compilation of
+    # this tree plus four test runs plus the F27 experiment has never been timed on macOS, and a job
+    # killed at the ceiling loses everything that has not been carried home. The hang the 30 was
+    # aimed at is caught by the per-step limits below, which are much tighter than 30 anyway.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        timeout-minutes: 5
 
       # Without the localization submodule the :ganttproject build aborts. Same commands as the
       # Windows workflow, where they are green.
       - name: Check out submodules
+        timeout-minutes: 5
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
           git submodule sync --recursive
           git submodule update --init --force --recursive --depth=1
 
       - uses: actions/setup-java@v4
+        timeout-minutes: 10
         with:
           distribution: 'liberica'
           java-version: '21'
@@ -67,8 +112,10 @@ jobs:
       # Printed before anything is built: a JDK without the JavaFX modules would surface much later
       # as an unrelated compile error, and the F27 probe needs javafx.graphics by name.
       - name: What machine is this
+        timeout-minutes: 5
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
           sw_vers
           uname -m
           echo "cpus: $(sysctl -n hw.ncpu)  memory: $(sysctl -n hw.memsize)"
@@ -77,40 +124,140 @@ jobs:
           ls "$JAVA_HOME/jmods" | grep -c . | sed 's/^/jmods total: /'
           ls "$JAVA_HOME/jmods" | grep javafx || echo "NO JAVAFX JMODS"
           ls -l /usr/bin/security
-          echo "--- keychains as the runner finds them, before anything is changed ---"
-          security list-keychains -d user || true
-          security default-keychain -d user || true
+          echo "--- is there a window session at all: this decides what F27 can be asked ---"
+          echo "console user: $(stat -f '%Su' /dev/console 2>/dev/null || echo unknown)"
+          launchctl managername 2>/dev/null || echo "launchctl managername: unavailable"
+
+      # PROVE THE LIMIT WORKS BEFORE RELYING ON IT. Every `security` call below is wrapped in it; a
+      # wrapper that silently does nothing would put the run straight back into the two-hour hang it
+      # exists to prevent. Both directions, on the machine that will use it.
+      - name: Does the time limit actually bite
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
+          chmod +x "$LIMIT" tools/macosprobe/carry.sh
+          start=$(date +%s)
+          "$LIMIT" 5 sleep 60 && rc=0 || rc=$?
+          took=$(( $(date +%s) - start ))
+          echo "hanging command: rc=$rc (expected 124) after ${took}s (expected ~5)"
+          test "$rc" = "124" || { echo "THE LIMIT DOES NOT BITE -- everything below is unsafe"; exit 1; }
+          test "$took" -lt 20 || { echo "the limit bit far too late"; exit 1; }
+          "$LIMIT" 10 sh -c 'exit 7' && rc=0 || rc=$?
+          echo "failing command: rc=$rc (expected 7, i.e. the code is passed through)"
+          test "$rc" = "7" || { echo "the limit does not pass exit codes through"; exit 1; }
+          echo "limit ok in both directions"
 
       # A KEYCHAIN OF OUR OWN, so that nothing depends on how the runner image happens to have set
       # up the login keychain -- and so that nothing is left in a keychain anybody else uses.
       #
       # The password is generated here and never printed. `add-mask` makes the runner replace it in
       # the log even if some later command echoes it by accident; it is a throwaway for one job on
-      # one ephemeral machine either way.
+      # one ephemeral machine either way. It is passed with `-p` to every call that takes one --
+      # without it those commands ask a terminal that a runner does not have.
+      #
+      # NOT `tr -dc ... < /dev/urandom | head -c 32`, which is the obvious way and is wrong here:
+      # `head` closes the pipe, `tr` dies of SIGPIPE, and with `set -o pipefail` the whole assignment
+      # fails. `uuidgen` is part of macOS and has no pipe.
       #
       # `set-keychain-settings` with neither -t nor -l: the default is to relock after 300 seconds
       # of inactivity, and the Gradle build takes longer than that. A keychain that locks halfway
       # through would make `isAvailable` false in the middle of a run and turn the whole measurement
       # into noise that looks like a result.
       - name: Create and unlock a keychain of our own
+        id: keychain
+        timeout-minutes: 8
         run: |
           set -euo pipefail
-          PW="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)"
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
+          PW="$(uuidgen)-$(uuidgen)"
           echo "::add-mask::$PW"
           KC="$RUNNER_TEMP/ganttproject-probe.keychain-db"
-          security create-keychain -p "$PW" "$KC"
-          security set-keychain-settings "$KC"
-          security unlock-keychain -p "$PW" "$KC"
-          security default-keychain -d user -s "$KC"
-          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+
+          # Each call named before it runs and its code reported after it: this is the step that hung
+          # for two hours without leaving a trace of WHICH call it was waiting in. It will not happen
+          # twice silently.
+          sec() {
+            what="$1"; shift
+            echo "--- security: $what"
+            "$LIMIT" 45 security "$@" && rc=0 || rc=$?
+            echo "--- security: $what -> rc=$rc$([ "$rc" = "124" ] && echo '  *** THIS IS THE ONE THAT WAITS ***' || true)"
+            return "$rc"
+          }
+
+          echo "--- keychains as the runner finds them, before anything is changed ---"
+          sec "list-keychains before" list-keychains -d user || true
+          sec "default-keychain before" default-keychain -d user || true
+
+          sec "create-keychain" create-keychain -p "$PW" "$KC"
+          sec "set-keychain-settings" set-keychain-settings "$KC"
+          sec "unlock-keychain" unlock-keychain -p "$PW" "$KC"
+          sec "default-keychain -s" default-keychain -d user -s "$KC"
+          # The existing list is read under the limit too, and into a variable first: a bare
+          # `security` inside a command substitution would be the one call in this step without a
+          # time limit on it, which is exactly the hole this step is being rebuilt to close.
+          existing="$("$LIMIT" 45 security list-keychains -d user | tr -d '"' | tr '\n' ' ')"
+          echo "existing keychains: [$existing]"
+          sec "list-keychains -s" list-keychains -d user -s "$KC" $existing
           echo "KC=$KC" >> "$GITHUB_ENV"
           echo "--- after ---"
-          security list-keychains -d user
-          security default-keychain -d user
-          echo "--- does a round trip through /usr/bin/security work at all, outside the JVM ---"
-          security add-generic-password -U -a probe-shell -s GanttProjectShellProbe -w "not-a-secret-2026"
-          test "$(security find-generic-password -a probe-shell -s GanttProjectShellProbe -w)" = "not-a-secret-2026" \
-            && echo "SHELL ROUND TRIP: ok" || { echo "SHELL ROUND TRIP: FAILED"; exit 1; }
+          sec "list-keychains after" list-keychains -d user || true
+          sec "default-keychain after" default-keychain -d user || true
+
+          # THE ROUND TRIP, OUTSIDE THE JVM, AND IT IS RUN TWICE ON PURPOSE.
+          #
+          # The prime suspect for the two-hour hang is not writing but READING: `security
+          # add-generic-password` without `-A` gives the item an access control list, and a later
+          # `find-generic-password` that is not on that list makes securityd ask a person. On a
+          # machine with nobody to ask, that call waits -- it does not fail.
+          #
+          # `MacKeychainBackend.store` writes WITHOUT `-A`. So the interesting arm is the first one,
+          # which is exactly what the backend does; the second, with `-A`, is the control that says
+          # whether `-A` is what makes the difference. Whichever way it comes out, the answer belongs
+          # in F10: if the plain write cannot be read back unattended, then the backend as written
+          # cannot work on an unattended machine, and that is a finding and not an accident of CI.
+          echo "=== ROUND TRIP 1: written the way MacKeychainBackend writes it, no -A ==="
+          sec "add (no -A)" add-generic-password -U -a probe-plain -s GanttProjectShellProbe -w "not-a-secret-2026" || true
+          # Read exactly ONCE, not once for the log and once for the value: if this is the call that
+          # waits, running it twice costs the limit twice for no extra information. The value here
+          # is public, so capturing it is not a secret leaving anywhere.
+          echo "--- security: find (no -A)"
+          got="$("$LIMIT" 45 security find-generic-password -a probe-plain -s GanttProjectShellProbe -w)" && rc=0 || rc=$?
+          echo "--- security: find (no -A) -> rc=$rc$([ "$rc" = "124" ] && echo '  *** THIS IS THE ONE THAT WAITS ***' || true)"
+          if [ "$got" = "not-a-secret-2026" ]; then
+            echo "ROUND TRIP no -A: ok"
+            echo "roundtrip_plain=ok" >> "$GITHUB_OUTPUT"
+          else
+            echo "ROUND TRIP no -A: FAILED (rc=$rc) -- this is the shape the backend uses"
+            echo "roundtrip_plain=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "=== ROUND TRIP 2: the control, written with -A ==="
+          sec "add (-A)" add-generic-password -U -A -a probe-anyapp -s GanttProjectShellProbe -w "not-a-secret-2026" || true
+          echo "--- security: find (-A)"
+          got2="$("$LIMIT" 45 security find-generic-password -a probe-anyapp -s GanttProjectShellProbe -w)" && rc=0 || rc=$?
+          echo "--- security: find (-A) -> rc=$rc"
+          if [ "$got2" = "not-a-secret-2026" ]; then
+            echo "ROUND TRIP -A: ok"
+            echo "roundtrip_anyapp=ok" >> "$GITHUB_OUTPUT"
+          else
+            echo "ROUND TRIP -A: FAILED"
+            echo "roundtrip_anyapp=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Deliberately not `exit 1` on a failed round trip. A keychain that cannot be read back is
+          # a RESULT for F10, and the runs below are what turn it into numbers -- aborting here would
+          # throw away the measurement in order to report the problem.
+
+      # Compiled in its own step so that the four test runs below can be given tight limits without
+      # the first one having to carry a cold Kotlin compilation of the whole tree as well.
+      - name: Build the tests once, on their own
+        if: always()
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
+          ./gradlew :ganttproject-tester:testClasses --console=plain 2>&1 | tail -30
 
       # RUN 1 -- the actual measurement, sources untouched.
       #
@@ -118,12 +265,15 @@ jobs:
       # previous XML in place, so without both of these run 3 would report run 1's numbers.
       - name: Run 1 -- baseline, keychain present
         id: baseline
+        if: always()
+        timeout-minutes: 15
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
           touch "$RUNNER_TEMP/mark"
           ./gradlew :ganttproject-tester:test --rerun \
             --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -40 || true
-          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" baseline
+          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" baseline green
           cat ganttproject-tester/build/secretstore-probe.txt 2>/dev/null || \
             cat build/secretstore-probe.txt 2>/dev/null || echo "probe file not found"
 
@@ -138,85 +288,106 @@ jobs:
       # `isAvailable` stays true. The guarded tests therefore do NOT return early -- they run, and
       # they fail. Had the probe been broken instead, every test would have returned early and the
       # run would have been GREEN, which is precisely the trap being demonstrated.
+      #
+      # `sed` and not a python heredoc: fewer moving parts inside a YAML block scalar, and both
+      # substitutions were checked against this very file on 20.09.2026 -- exactly one hit each, on
+      # the intended line.
       - name: Run 2 -- counter-check, the write to the keychain removed
         if: always()
+        timeout-minutes: 15
         run: |
           set -euo pipefail
-          before="return if (store(handle, plain)) marker + handle else null"
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
+          before='return if (store(handle, plain)) marker + handle else null'
+          after='return marker + handle  // COUNTER-CHECK: nothing is written to the keychain'
           test "$(grep -c "$before" "$BACKEND")" = "1" || { echo "expected exactly one occurrence"; exit 1; }
-          python3 - "$BACKEND" <<'PY'
-          import sys
-          p = sys.argv[1]
-          s = open(p).read()
-          before = "return if (store(handle, plain)) marker + handle else null"
-          after = "return marker + handle  // COUNTER-CHECK: nothing is written to the keychain"
-          open(p, "w").write(s.replace(before, after, 1))
-          PY
+          sed "s|$before|$after|" "$BACKEND" > "$BACKEND.tmp" && mv "$BACKEND.tmp" "$BACKEND"
+          test "$(grep -c "$after" "$BACKEND")" = "1" || { echo "the substitution did not take"; exit 1; }
           git diff --stat -- "$BACKEND"
           touch "$RUNNER_TEMP/mark"
           ./gradlew :ganttproject-tester:test --rerun \
             --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -20 || true
-          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" sabotage-write
+          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" sabotage-write red
 
       # RUN 3 -- taken back, green again. Without this the red run above could also be a machine
       # that stopped working between run 1 and run 2.
       - name: Run 3 -- taken back, green again
         if: always()
+        timeout-minutes: 15
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
           git checkout -- "$BACKEND"
           git diff --quiet -- "$BACKEND" || { echo "the file is still modified"; exit 1; }
           touch "$RUNNER_TEMP/mark"
           ./gradlew :ganttproject-tester:test --rerun \
             --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -20 || true
-          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" restored
+          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" restored green
 
       # RUN 4 -- WHAT A MACHINE WITHOUT A KEYCHAIN LOOKS LIKE, measured rather than argued.
       #
       # `security` is pointed at a path that does not exist, which is what the code sees on a
       # machine with no store. The expectation to check against the numbers: everything green
-      # EXCEPT `SecretStoreProbeTest`, and `skipped` still 0 -- i.e. fifteen tests reporting success
+      # EXCEPT `SecretStoreProbeTest`, and `skipped` still 0 -- i.e. a set of tests reporting success
       # while measuring nothing. That number is the size of the hole.
       - name: Run 4 -- what a machine without a keychain looks like
         if: always()
+        timeout-minutes: 15
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
           before='private const val SECURITY = "/usr/bin/security"'
+          after='private const val SECURITY = "/usr/bin/security-deliberately-absent"'
           test "$(grep -c "$before" "$BACKEND")" = "1" || { echo "expected exactly one occurrence"; exit 1; }
-          python3 - "$BACKEND" <<'PY'
-          import sys
-          p = sys.argv[1]
-          s = open(p).read()
-          before = 'private const val SECURITY = "/usr/bin/security"'
-          after = 'private const val SECURITY = "/usr/bin/security-deliberately-absent"'
-          open(p, "w").write(s.replace(before, after, 1))
-          PY
+          sed "s|$before|$after|" "$BACKEND" > "$BACKEND.tmp" && mv "$BACKEND.tmp" "$BACKEND"
+          test "$(grep -c "$after" "$BACKEND")" = "1" || { echo "the substitution did not take"; exit 1; }
           touch "$RUNNER_TEMP/mark"
           ./gradlew :ganttproject-tester:test --rerun \
             --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -20 || true
-          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" no-store
+          # Taken back BEFORE the counting, not after: the count can end the step by itself now that
+          # it carries the expectation, and a step that ends early would leave the sabotage in the
+          # tree. The XML has already been written at this point, so nothing is lost by the order.
           git checkout -- "$BACKEND"
           git diff --quiet -- "$BACKEND" || { echo "the file is still modified"; exit 1; }
+          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" no-store red
+
+      # F10 IS HOME BEFORE F27 IS STARTED. See carry.sh for why this is not left to the end.
+      - name: Carry the F10 measurements home
+        if: always()
+        timeout-minutes: 6
+        run: tools/macosprobe/carry.sh f10
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       # ---------------------------------------------------------------- F27
       - name: F27 -- what this machine can do at all
         if: always()
+        timeout-minutes: 8
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
           mkdir -p "$RUNNER_TEMP/probe"
           javac --add-modules javafx.graphics -d "$RUNNER_TEMP/probe" tools/macosprobe/DesktopQuitProbe.java
           echo "--- default settings ---"
-          java --add-modules javafx.graphics -cp "$RUNNER_TEMP/probe" DesktopQuitProbe report || true
+          "$LIMIT" 120 java --add-modules javafx.graphics -cp "$RUNNER_TEMP/probe" DesktopQuitProbe report || true
           echo "--- and with the window server explicitly allowed, in case AWT decided otherwise ---"
-          java -Djava.awt.headless=false --add-modules javafx.graphics -cp "$RUNNER_TEMP/probe" DesktopQuitProbe report || true
+          "$LIMIT" 120 java -Djava.awt.headless=false --add-modules javafx.graphics \
+            -cp "$RUNNER_TEMP/probe" DesktopQuitProbe report || true
+          # Separates "the quit request never arrived" from "System Events may not be spoken to".
+          # Without this, a silent experiment below has two explanations and picks neither.
+          echo "--- can System Events be spoken to at all ---"
+          "$LIMIT" 30 osascript -e 'tell application "System Events" to count processes' \
+            && echo "osascript: usable" || echo "osascript: NOT usable -- the experiment below cannot ask"
 
       # THE EXPERIMENT. Both arms are run: the F27 shape, and the same thing with the Platform.exit()
       # F27 proposes. Without the second arm a surviving process proves nothing -- it could be the
       # quit request that never arrived rather than the missing exit.
       - name: F27 -- ask the OS to quit it, twice
         if: always()
+        timeout-minutes: 12
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
           run_arm() {
             mode="$1"
             echo "================ arm: $mode ================"
@@ -239,7 +410,7 @@ jobs:
             # A quit APPLE EVENT, not a signal. A signal would prove nothing: the question is what
             # AWT's performQuit() does after the OS asked politely.
             set +e
-            osascript -e "tell application \"System Events\" to quit (first process whose unix id is $pid)" 2>&1
+            "$LIMIT" 30 osascript -e "tell application \"System Events\" to quit (first process whose unix id is $pid)" 2>&1
             echo "ARM $mode: osascript exit $?"
             set -e
             sleep 25
@@ -265,8 +436,10 @@ jobs:
       # JDK that would run the program.
       - name: F27 -- what performQuit is, in the JDK's own source
         if: always()
+        timeout-minutes: 6
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
           if [ ! -f "$JAVA_HOME/lib/src.zip" ]; then echo "no src.zip in this JDK"; exit 0; fi
           cd "$RUNNER_TEMP"
           unzip -o -q "$JAVA_HOME/lib/src.zip" 'java.desktop/sun/lwawt/macosx/_AppEventHandler.java' || \
@@ -280,6 +453,22 @@ jobs:
 
       - name: Everything the runner has to say if something above went wrong
         if: failure()
+        timeout-minutes: 5
         run: |
           ls -R ganttproject-tester/build/test-results 2>/dev/null | head -40 || true
           git status --short || true
+
+      - name: Carry everything home
+        if: always()
+        timeout-minutes: 6
+        run: tools/macosprobe/carry.sh all
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        timeout-minutes: 6
+        with:
+          name: macos-probe-results
+          path: ${{ runner.temp }}/ergebnis
+          if-no-files-found: warn

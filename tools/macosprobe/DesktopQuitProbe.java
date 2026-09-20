@@ -134,8 +134,14 @@ public class DesktopQuitProbe {
     if (quitRequested.await(120, TimeUnit.SECONDS)) {
       // Reached only if performQuit() did NOT end the process. Kept alive afterwards on purpose,
       // so that the outside observer sees a living process rather than a race.
-      Thread.sleep(30_000);
-      System.out.println("PROBE still alive 30s after the quit handler ran");
+      //
+      // FIVE MINUTES, not thirty seconds as this said until 20.09.2026: the workflow looks at the
+      // process 25 seconds after asking it to quit, and a probe that exits by itself at second 30
+      // would turn "it survived and I killed it" into "it died shortly after" if anything ran a few
+      // seconds slow. The workflow kills it; the step has its own time limit; nothing here is left
+      // to decide when the experiment ends.
+      Thread.sleep(300_000);
+      System.out.println("PROBE still alive 300s after the quit handler ran");
       System.out.flush();
       System.exit(5);
     }

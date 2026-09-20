@@ -11,7 +11,7 @@ it would produce a full set of green numbers for a run that never happened -- wh
 failure this whole exercise is about, one level up. Every file has to be newer than the marker file
 written immediately before the build, or this exits non-zero and says so.
 
-Usage: count-tests.py <results-dir> <marker-file> [label]
+Usage: count-tests.py <results-dir> <marker-file> [label] [green|red]
 """
 import glob
 import os
@@ -71,3 +71,33 @@ for m in messages:
     print(f"RED {label}: {m}")
 for line in probe_lines:
     print(f"PROBE {label}: {line}")
+
+# ---------------------------------------------------------------------------------------------
+# THE EXPECTATION BELONGS IN THE RUN, NOT IN THE REPORT.
+#
+# Added on 20.09.2026, after the counting above had been checked against real result XML and found
+# to report red tests while still exiting 0. That is the same trap this whole workflow is about, one
+# level up: the step stays green, the job stays green, and whoever reads the run afterwards reads
+# numbers and decides for themselves whether they were the expected ones. A counter-check that has
+# to be graded by a person after the fact is not a counter-check.
+#
+#   green -- this run must have no failures. Run 1 and run 3.
+#   red   -- this run MUST have failures, because a deliberate break was applied before it. If it
+#            comes back green, the break did not reach anything and the whole comparison is void.
+#            Run 2 and run 4.
+#
+# Anything else, including no fourth argument at all, only counts and says nothing about it.
+expected = sys.argv[4] if len(sys.argv) > 4 else ""
+broken = failures + errors
+if expected == "green" and broken:
+    print(f"EXPECTATION {label}: FAILED -- expected no failures, got {broken}")
+    sys.exit(4)
+if expected == "red":
+    if not broken:
+        print(f"EXPECTATION {label}: FAILED -- a deliberate break was applied and NOTHING went red."
+              f" The break did not reach the code under test; the comparison with the green run is"
+              f" worthless.")
+        sys.exit(5)
+    print(f"EXPECTATION {label}: met -- the break was caught, {broken} red")
+if expected == "green":
+    print(f"EXPECTATION {label}: met -- nothing red")
