@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" tests="5" skipped="0" failures="4" errors="0" timestamp="2026-09-20T16:27:52.127Z" hostname="sjc22-bt147-e6277ac7-cf5d-4569-8c7f-23ed59879f74-BE5B5762541A.local" time="0.413">
+  <properties/>
+  <testcase name="testTheTokenIsNotReadableInTheFile" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.025">
+    <failure message="junit.framework.ComparisonFailure: gelesen wird er trotzdem wieder im Klartext expected:&lt;[1234567890abcdef1234567890abcdef]&gt; but was:&lt;[keychain:adG9nZ2w6bWFpbD1uYXRhbGllQGV4YW1wbGUuaW52YWxpZA]&gt;" type="junit.framework.ComparisonFailure">junit.framework.ComparisonFailure: gelesen wird er trotzdem wieder im Klartext expected:&lt;[1234567890abcdef1234567890abcdef]&gt; but was:&lt;[keychain:adG9nZ2w6bWFpbD1uYXRhbGllQGV4YW1wbGUuaW52YWxpZA]&gt;
+	at junit.framework.Assert.assertEquals(Assert.java:100)
+	at junit.framework.TestCase.assertEquals(TestCase.java:253)
+	at net.sourceforge.ganttproject.timetracking.TokenEncryptionTest.testTheTokenIsNotReadableInTheFile(TokenEncryptionTest.kt:75)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at junit.framework.TestCase.runTest(TestCase.java:177)
+	at junit.framework.TestCase.runBare(TestCase.java:142)
+	at junit.framework.TestResult$1.protect(TestResult.java:122)
+	at junit.framework.TestResult.runProtected(TestResult.java:142)
+	at junit.framework.TestResult.run(TestResult.java:125)
+	at junit.framework.TestCase.run(TestCase.java:130)
+	at junit.framework.TestSuite.runTest(TestSuite.java:241)
+	at junit.framework.TestSuite.run(TestSuite.java:236)
+</failure>
+  </testcase>
+  <testcase name="testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.023">
+    <failure message="junit.framework.ComparisonFailure: expected:&lt;[1234567890abcdef1234567890abcdef]&gt; but was:&lt;[keychain:adG9nZ2w6bWFpbD1uYXRhbGllQGV4YW1wbGUuaW52YWxpZA]&gt;" type="junit.framework.ComparisonFailure">junit.framework.ComparisonFailure: expected:&lt;[1234567890abcdef1234567890abcdef]&gt; but was:&lt;[keychain:adG9nZ2w6bWFpbD1uYXRhbGllQGV4YW1wbGUuaW52YWxpZA]&gt;
+	at junit.framework.Assert.assertEquals(Assert.java:100)
+	at junit.framework.Assert.assertEquals(Assert.java:107)
+	at junit.framework.TestCase.assertEquals(TestCase.java:260)
+	at net.sourceforge.ganttproject.timetracking.TokenEncryptionTest.testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite(TokenEncryptionTest.kt:86)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at junit.framework.TestCase.runTest(TestCase.java:177)
+	at junit.framework.TestCase.runBare(TestCase.java:142)
+	at junit.framework.TestResult$1.protect(TestResult.java:122)
+	at junit.framework.TestResult.runProtected(TestResult.java:142)
+	at junit.framework.TestResult.run(TestResult.java:125)
+	at junit.framework.TestCase.run(TestCase.java:130)
+	at junit.framework.TestSuite.runTest(TestSuite.java:241)
+	at junit.framework.TestSuite.run(TestSuite.java:236)
+</failure>
+  </testcase>
+  <testcase name="testTwoPeopleWithTheSameTokenDoNotLookAlike" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.048">
+    <failure message="junit.framework.ComparisonFailure: beide sind trotzdem lesbar expected:&lt;[1234567890abcdef1234567890abcdef]&gt; but was:&lt;[keychain:adG9nZ2w6bWFpbD1uYXRhbGllQGV4YW1wbGUuaW52YWxpZA]&gt;" type="junit.framework.ComparisonFailure">junit.framework.ComparisonFailure: beide sind trotzdem lesbar expected:&lt;[1234567890abcdef1234567890abcdef]&gt; but was:&lt;[keychain:adG9nZ2w6bWFpbD1uYXRhbGllQGV4YW1wbGUuaW52YWxpZA]&gt;
+	at junit.framework.Assert.assertEquals(Assert.java:100)
+	at junit.framework.TestCase.assertEquals(TestCase.java:253)
+	at net.sourceforge.ganttproject.timetracking.TokenEncryptionTest.testTwoPeopleWithTheSameTokenDoNotLookAlike(TokenEncryptionTest.kt:117)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at junit.framework.TestCase.runTest(TestCase.java:177)
+	at junit.framework.TestCase.runBare(TestCase.java:142)
+	at junit.framework.TestResult$1.protect(TestResult.java:122)
+	at junit.framework.TestResult.runProtected(TestResult.java:142)
+	at junit.framework.TestResult.run(TestResult.java:125)
+	at junit.framework.TestCase.run(TestCase.java:130)
+	at junit.framework.TestSuite.runTest(TestSuite.java:241)
+	at junit.framework.TestSuite.run(TestSuite.java:236)
+</failure>
+  </testcase>
+  <testcase name="testWithoutAStoreTheTokenIsRecognisablePlainText" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.0"/>
+  <testcase name="testTheSameTokenIsNoCollision" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.317">
+    <failure message="junit.framework.AssertionFailedError: derselbe Token unter beiden Schluesseln ist keine Kollision, war aber Collision(key=mail=natalie@example.invalid, ifOverwritten=mail%3Dnatalie%40example.invalid:keychain%3AadG9nZ2w6bmFtZT1OYXRhbGll, ifDiscarded=mail%3Dnatalie%40example.invalid:keychain%3AadG9nZ2w6bWFpbD1uYXRhbGllQGV4YW1wbGUuaW52YWxpZA)" type="junit.framework.AssertionFailedError">junit.framework.AssertionFailedError: derselbe Token unter beiden Schluesseln ist keine Kollision, war aber Collision(key=mail=natalie@example.invalid, ifOverwritten=mail%3Dnatalie%40example.invalid:keychain%3AadG9nZ2w6bmFtZT1OYXRhbGll, ifDiscarded=mail%3Dnatalie%40example.invalid:keychain%3AadG9nZ2w6bWFpbD1uYXRhbGllQGV4YW1wbGUuaW52YWxpZA)
+	at junit.framework.Assert.fail(Assert.java:57)
+	at junit.framework.Assert.assertTrue(Assert.java:22)
+	at junit.framework.Assert.assertFalse(Assert.java:39)
+	at junit.framework.TestCase.assertFalse(TestCase.java:208)
+	at net.sourceforge.ganttproject.timetracking.TokenEncryptionTest.testTheSameTokenIsNoCollision(TokenEncryptionTest.kt:150)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at junit.framework.TestCase.runTest(TestCase.java:177)
+	at junit.framework.TestCase.runBare(TestCase.java:142)
+	at junit.framework.TestResult$1.protect(TestResult.java:122)
+	at junit.framework.TestResult.runProtected(TestResult.java:142)
+	at junit.framework.TestResult.run(TestResult.java:125)
+	at junit.framework.TestCase.run(TestCase.java:130)
+	at junit.framework.TestSuite.runTest(TestSuite.java:241)
+	at junit.framework.TestSuite.run(TestSuite.java:236)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

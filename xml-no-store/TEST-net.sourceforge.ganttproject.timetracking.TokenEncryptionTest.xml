@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-20T16:28:09.202Z" hostname="sjc22-bt147-e6277ac7-cf5d-4569-8c7f-23ed59879f74-BE5B5762541A.local" time="0.006">
+  <properties/>
+  <testcase name="testTheTokenIsNotReadableInTheFile" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.0"/>
+  <testcase name="testAnOldPlaintextEntryStillWorksAndIsEncryptedOnTheNextWrite" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.001"/>
+  <testcase name="testTwoPeopleWithTheSameTokenDoNotLookAlike" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.0"/>
+  <testcase name="testWithoutAStoreTheTokenIsRecognisablePlainText" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.005"/>
+  <testcase name="testTheSameTokenIsNoCollision" classname="net.sourceforge.ganttproject.timetracking.TokenEncryptionTest" time="0.0"/>
+  <system-out><![CDATA[16:28:09 [Test worker] INFO  App - [fork] No secret store on this machine (backend: none). The Toggl API token is written to ~/.ganttproject IN PLAIN TEXT, under the setting 'toggl.resourceTokens'. Anything running as this user can read it, and it is in every backup of that file. Revoke the token in Toggl if that file leaves this machine.
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
