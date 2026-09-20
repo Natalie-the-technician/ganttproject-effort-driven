@@ -1,0 +1,285 @@
+# Measures the two things in this fork that have been stuck on "no Mac available".
+#
+# WHAT THIS IS NOT: a Mac package. `distApp` is at the very end, marked as an extra, and nothing is
+# signed -- this repository has no signing secrets and is not getting any for a measurement.
+#
+# WHAT IT MEASURES
+#
+#   F10 `SecretStore` / `MacKeychainBackend`. The Linux path was run against a real gnome-keyring
+#       and the Windows path against real DPAPI; the macOS path has never run and says so in its own
+#       KDoc. The problem with simply running it is that a green result means nothing here: every
+#       test in this area is guarded with `if (!SecretStore.isAvailable) return`, so a machine
+#       WITHOUT a keychain produces the same green numbers as one with it -- and `skipped` stays 0,
+#       because there is no `assumeTrue` anywhere to raise it. Hence the four runs below: a green
+#       one is only worth something next to a red one produced by breaking the very path it claims
+#       to have exercised.
+#
+#   F27 `DesktopIntegration.maybeQuit` answers the OS quit request with `performQuit()` and does not
+#       call `Platform.exit()`, unlike the other two quit paths. Whether that keeps the process
+#       alive is the open question. A build runner has no Dock, so this cannot be done through the
+#       Dock menu; what can be done is measured, and what cannot is named.
+#
+# Derived from `fork-win64.yml` on branch `paket-windows` (d9fc4e56a), whose scaffolding -- checkout,
+# submodules, Liberica 21 jdk+fx, gradle cache -- was proved green on run 35511918413. Two things
+# from it are deliberately NOT carried over:
+#   * That workflow checks out the tree of `main` detached, so the package name carries main's
+#     commit. There is no package here, and the measurement has to run against the sources this
+#     branch modifies during the counter-checks. So: the branch as it is.
+#   * It needs `contents: write` to attach a release. Nothing here writes.
+name: Fork macOS probe
+
+on:
+  push:
+    branches: ['probe-macos']
+
+permissions:
+  contents: read
+
+env:
+  # The runner has 7 GB. The default heap is a fraction of that and the Kotlin compilation of this
+  # tree is the largest thing that happens here.
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+  TESTS: "ganttproject-tester/build/test-results/test"
+  BACKEND: "ganttproject/src/main/java/net/sourceforge/ganttproject/fork/SecretBackend.kt"
+
+jobs:
+  probe:
+    name: Keychain and quit handler on macos-latest
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Without the localization submodule the :ganttproject build aborts. Same commands as the
+      # Windows workflow, where they are green.
+      - name: Check out submodules
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          git submodule update --init --force --recursive --depth=1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'liberica'
+          java-version: '21'
+          java-package: jdk+fx
+          cache: 'gradle'
+
+      # Printed before anything is built: a JDK without the JavaFX modules would surface much later
+      # as an unrelated compile error, and the F27 probe needs javafx.graphics by name.
+      - name: What machine is this
+        run: |
+          set -euo pipefail
+          sw_vers
+          uname -m
+          echo "cpus: $(sysctl -n hw.ncpu)  memory: $(sysctl -n hw.memsize)"
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+          ls "$JAVA_HOME/jmods" | grep -c . | sed 's/^/jmods total: /'
+          ls "$JAVA_HOME/jmods" | grep javafx || echo "NO JAVAFX JMODS"
+          ls -l /usr/bin/security
+          echo "--- keychains as the runner finds them, before anything is changed ---"
+          security list-keychains -d user || true
+          security default-keychain -d user || true
+
+      # A KEYCHAIN OF OUR OWN, so that nothing depends on how the runner image happens to have set
+      # up the login keychain -- and so that nothing is left in a keychain anybody else uses.
+      #
+      # The password is generated here and never printed. `add-mask` makes the runner replace it in
+      # the log even if some later command echoes it by accident; it is a throwaway for one job on
+      # one ephemeral machine either way.
+      #
+      # `set-keychain-settings` with neither -t nor -l: the default is to relock after 300 seconds
+      # of inactivity, and the Gradle build takes longer than that. A keychain that locks halfway
+      # through would make `isAvailable` false in the middle of a run and turn the whole measurement
+      # into noise that looks like a result.
+      - name: Create and unlock a keychain of our own
+        run: |
+          set -euo pipefail
+          PW="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)"
+          echo "::add-mask::$PW"
+          KC="$RUNNER_TEMP/ganttproject-probe.keychain-db"
+          security create-keychain -p "$PW" "$KC"
+          security set-keychain-settings "$KC"
+          security unlock-keychain -p "$PW" "$KC"
+          security default-keychain -d user -s "$KC"
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          echo "KC=$KC" >> "$GITHUB_ENV"
+          echo "--- after ---"
+          security list-keychains -d user
+          security default-keychain -d user
+          echo "--- does a round trip through /usr/bin/security work at all, outside the JVM ---"
+          security add-generic-password -U -a probe-shell -s GanttProjectShellProbe -w "not-a-secret-2026"
+          test "$(security find-generic-password -a probe-shell -s GanttProjectShellProbe -w)" = "not-a-secret-2026" \
+            && echo "SHELL ROUND TRIP: ok" || { echo "SHELL ROUND TRIP: FAILED"; exit 1; }
+
+      # RUN 1 -- the actual measurement, sources untouched.
+      #
+      # `--rerun` and the marker file together: Gradle skips an up-to-date test task and leaves the
+      # previous XML in place, so without both of these run 3 would report run 1's numbers.
+      - name: Run 1 -- baseline, keychain present
+        id: baseline
+        run: |
+          set -euo pipefail
+          touch "$RUNNER_TEMP/mark"
+          ./gradlew :ganttproject-tester:test --rerun \
+            --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -40 || true
+          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" baseline
+          cat ganttproject-tester/build/secretstore-probe.txt 2>/dev/null || \
+            cat build/secretstore-probe.txt 2>/dev/null || echo "probe file not found"
+
+      # RUN 2 -- THE COUNTER-CHECK, and the only reason run 1 is worth anything.
+      #
+      # WHAT IS BROKEN AND WHY EXACTLY THIS: `protect` stops calling `store`, so nothing is ever
+      # handed to `security add-generic-password`, while the value written into the settings file
+      # still looks perfectly correct. Everything else is untouched.
+      #
+      # The point is what this does NOT break: `MacKeychainBackend.availability` probes by calling
+      # `store` and `reveal` itself, so it still runs a real round trip through /usr/bin/security and
+      # `isAvailable` stays true. The guarded tests therefore do NOT return early -- they run, and
+      # they fail. Had the probe been broken instead, every test would have returned early and the
+      # run would have been GREEN, which is precisely the trap being demonstrated.
+      - name: Run 2 -- counter-check, the write to the keychain removed
+        if: always()
+        run: |
+          set -euo pipefail
+          before="return if (store(handle, plain)) marker + handle else null"
+          test "$(grep -c "$before" "$BACKEND")" = "1" || { echo "expected exactly one occurrence"; exit 1; }
+          python3 - "$BACKEND" <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
+          before = "return if (store(handle, plain)) marker + handle else null"
+          after = "return marker + handle  // COUNTER-CHECK: nothing is written to the keychain"
+          open(p, "w").write(s.replace(before, after, 1))
+          PY
+          git diff --stat -- "$BACKEND"
+          touch "$RUNNER_TEMP/mark"
+          ./gradlew :ganttproject-tester:test --rerun \
+            --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -20 || true
+          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" sabotage-write
+
+      # RUN 3 -- taken back, green again. Without this the red run above could also be a machine
+      # that stopped working between run 1 and run 2.
+      - name: Run 3 -- taken back, green again
+        if: always()
+        run: |
+          set -euo pipefail
+          git checkout -- "$BACKEND"
+          git diff --quiet -- "$BACKEND" || { echo "the file is still modified"; exit 1; }
+          touch "$RUNNER_TEMP/mark"
+          ./gradlew :ganttproject-tester:test --rerun \
+            --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -20 || true
+          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" restored
+
+      # RUN 4 -- WHAT A MACHINE WITHOUT A KEYCHAIN LOOKS LIKE, measured rather than argued.
+      #
+      # `security` is pointed at a path that does not exist, which is what the code sees on a
+      # machine with no store. The expectation to check against the numbers: everything green
+      # EXCEPT `SecretStoreProbeTest`, and `skipped` still 0 -- i.e. fifteen tests reporting success
+      # while measuring nothing. That number is the size of the hole.
+      - name: Run 4 -- what a machine without a keychain looks like
+        if: always()
+        run: |
+          set -euo pipefail
+          before='private const val SECURITY = "/usr/bin/security"'
+          test "$(grep -c "$before" "$BACKEND")" = "1" || { echo "expected exactly one occurrence"; exit 1; }
+          python3 - "$BACKEND" <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
+          before = 'private const val SECURITY = "/usr/bin/security"'
+          after = 'private const val SECURITY = "/usr/bin/security-deliberately-absent"'
+          open(p, "w").write(s.replace(before, after, 1))
+          PY
+          touch "$RUNNER_TEMP/mark"
+          ./gradlew :ganttproject-tester:test --rerun \
+            --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -20 || true
+          python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" no-store
+          git checkout -- "$BACKEND"
+          git diff --quiet -- "$BACKEND" || { echo "the file is still modified"; exit 1; }
+
+      # ---------------------------------------------------------------- F27
+      - name: F27 -- what this machine can do at all
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/probe"
+          javac --add-modules javafx.graphics -d "$RUNNER_TEMP/probe" tools/macosprobe/DesktopQuitProbe.java
+          echo "--- default settings ---"
+          java --add-modules javafx.graphics -cp "$RUNNER_TEMP/probe" DesktopQuitProbe report || true
+          echo "--- and with the window server explicitly allowed, in case AWT decided otherwise ---"
+          java -Djava.awt.headless=false --add-modules javafx.graphics -cp "$RUNNER_TEMP/probe" DesktopQuitProbe report || true
+
+      # THE EXPERIMENT. Both arms are run: the F27 shape, and the same thing with the Platform.exit()
+      # F27 proposes. Without the second arm a surviving process proves nothing -- it could be the
+      # quit request that never arrived rather than the missing exit.
+      - name: F27 -- ask the OS to quit it, twice
+        if: always()
+        run: |
+          set -euo pipefail
+          run_arm() {
+            mode="$1"
+            echo "================ arm: $mode ================"
+            out="$RUNNER_TEMP/$mode.log"
+            java -Djava.awt.headless=false --add-modules javafx.graphics \
+              -cp "$RUNNER_TEMP/probe" DesktopQuitProbe "$mode" > "$out" 2>&1 &
+            pid=$!
+            for i in $(seq 1 30); do
+              grep -q READY "$out" && break
+              kill -0 "$pid" 2>/dev/null || break
+              sleep 1
+            done
+            if ! grep -q READY "$out"; then
+              echo "ARM $mode: never reached READY -- nothing could be triggered"
+              cat "$out"
+              kill -9 "$pid" 2>/dev/null || true
+              return 0
+            fi
+            echo "ARM $mode: ready, pid $pid"
+            # A quit APPLE EVENT, not a signal. A signal would prove nothing: the question is what
+            # AWT's performQuit() does after the OS asked politely.
+            set +e
+            osascript -e "tell application \"System Events\" to quit (first process whose unix id is $pid)" 2>&1
+            echo "ARM $mode: osascript exit $?"
+            set -e
+            sleep 25
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "ARM $mode: THE PROCESS IS STILL ALIVE"
+              alive=yes
+            else
+              echo "ARM $mode: the process is gone"
+              alive=no
+            fi
+            echo "ARM $mode: handler reached = $(grep -c 'quit handler CALLED' "$out" || true)"
+            echo "--- log ---"
+            cat "$out"
+            kill -9 "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            echo "ARM $mode: alive=$alive"
+          }
+          run_arm handler
+          run_arm handler-fixed
+
+      # THE EVIDENCE THAT NEEDS NO WINDOW SERVER: what performQuit() is actually implemented as.
+      # Whatever the experiment above does or does not manage to trigger, this can be read off the
+      # JDK that would run the program.
+      - name: F27 -- what performQuit is, in the JDK's own source
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -f "$JAVA_HOME/lib/src.zip" ]; then echo "no src.zip in this JDK"; exit 0; fi
+          cd "$RUNNER_TEMP"
+          unzip -o -q "$JAVA_HOME/lib/src.zip" 'java.desktop/sun/lwawt/macosx/_AppEventHandler.java' || \
+            echo "not in src.zip"
+          f=java.desktop/sun/lwawt/macosx/_AppEventHandler.java
+          if [ -f "$f" ]; then
+            echo "--- _NativeEvent / QuitResponse ---"
+            grep -n -A 25 'class _AppEventHandler' "$f" | head -5
+            grep -n -B 5 -A 30 'performQuit' "$f"
+          fi
+
+      - name: Everything the runner has to say if something above went wrong
+        if: failure()
+        run: |
+          ls -R ganttproject-tester/build/test-results 2>/dev/null | head -40 || true
+          git status --short || true
