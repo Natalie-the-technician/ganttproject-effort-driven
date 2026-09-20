@@ -28,6 +28,7 @@ mkdir -p "$out"
 cp ganttproject-tester/build/secretstore-probe.txt "$out/" 2>/dev/null || true
 cp build/secretstore-probe.txt "$out/" 2>/dev/null || true
 cp "$RUNNER_TEMP"/handler*.log "$out/" 2>/dev/null || true
+cp "$RUNNER_TEMP"/bundle-*.log "$out/" 2>/dev/null || true
 # The result XML itself, not only the counts, so that whoever reads the report can recount.
 tar czf "$out/test-results.tgz" -C ganttproject-tester/build test-results 2>/dev/null || true
 ls -l "$out"

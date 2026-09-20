@@ -26,7 +26,17 @@ child=$!
 # A second child as the alarm clock. The obvious loop -- poll `kill -0` once a second -- does not
 # work: a finished child is a zombie until it is waited for, and `kill -0` on a zombie SUCCEEDS, so
 # the loop would run its full length every single time.
-( sleep "$limit"; kill -9 "$child" 2>/dev/null ) &
+#
+# `>/dev/null 2>&1` ON THE ALARM, and it is not cosmetic. MEASURED on 20.09.2026, in run
+# 35521476830: the keychain step took 135 seconds although every `security` call in it returned
+# rc=0 in no time -- three of those calls sat inside a command substitution, at 45 seconds each.
+#
+# The reason: `kill "$alarm"` below ends the SUBSHELL, but not the `sleep` running inside it. That
+# orphaned `sleep` keeps the file descriptors it inherited, and when this script runs inside
+# `x="$(limit.sh 45 something-quick)"` one of those is the very pipe the command substitution is
+# waiting for EOF on. So `$( )` waits out the full limit even though the command finished at once.
+# Giving the alarm its own /dev/null means it holds nothing anybody is waiting for.
+( sleep "$limit"; kill -9 "$child" 2>/dev/null ) >/dev/null 2>&1 &
 alarm=$!
 
 wait "$child"

@@ -43,6 +43,23 @@
 # afterwards. Those numbers are worthless -- the keychain was never created. Results out of a
 # cancelled run are not a measurement.
 #
+# WHAT THE FIRST COMPLETE RUN (35521476830, 20.09.2026) CHANGED HERE
+#
+# It went green end to end in about eight minutes and answered F10. Three things it measured are
+# built into this file now:
+#
+#  * NO `security` CALL WAITS ON THIS RUNNER. Every one returned rc=0, including a
+#    `find-generic-password` against an item written WITHOUT `-A`. The access-control suspicion
+#    above is therefore not what hung the first attempt, and it is recorded here as refuted rather
+#    than quietly dropped.
+#  * The 135 seconds that step took were MY OWN limit.sh, not `security`: its alarm `sleep`
+#    outlived the subshell that was killed and held the command substitution pipe open for the full
+#    limit, three times over. Fixed in limit.sh, checked in both directions.
+#  * The counter-check in run 2 turned only ONE test red, against five for the same kind of break
+#    on Windows. Run 2 now empties the keychain first -- see the comment there; the short version
+#    is that `reveal` returns the stored reference instead of failing, so run 1 answers run 2 s
+#    questions.
+#
 # Derived from `fork-win64.yml` on branch `paket-windows` (d9fc4e56a), whose scaffolding -- checkout,
 # submodules, Liberica 21 jdk+fx, gradle cache -- was proved green on run 35511918413, and whose
 # first five steps were proved green on macos-latest by the cancelled run described above.
@@ -136,7 +153,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
-          chmod +x "$LIMIT" tools/macosprobe/carry.sh
+          chmod +x "$LIMIT" tools/macosprobe/carry.sh tools/macosprobe/sichere-xml.sh
           start=$(date +%s)
           "$LIMIT" 5 sleep 60 && rc=0 || rc=$?
           took=$(( $(date +%s) - start ))
@@ -273,6 +290,7 @@ jobs:
           touch "$RUNNER_TEMP/mark"
           ./gradlew :ganttproject-tester:test --rerun \
             --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -40 || true
+          tools/macosprobe/sichere-xml.sh baseline
           python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" baseline green
           cat ganttproject-tester/build/secretstore-probe.txt 2>/dev/null || \
             cat build/secretstore-probe.txt 2>/dev/null || echo "probe file not found"
@@ -304,9 +322,34 @@ jobs:
           sed "s|$before|$after|" "$BACKEND" > "$BACKEND.tmp" && mv "$BACKEND.tmp" "$BACKEND"
           test "$(grep -c "$after" "$BACKEND")" = "1" || { echo "the substitution did not take"; exit 1; }
           git diff --stat -- "$BACKEND"
+
+          # EMPTY THE KEYCHAIN OF WHAT RUN 1 PUT THERE, and this is not housekeeping -- it decides
+          # what this counter-check is worth.
+          #
+          # MEASURED in run 35521476830: this break turned exactly ONE test red, where the same kind
+          # of break against DPAPI on Windows turned five red on 11.09.2026. The reason is visible in
+          # SecretStore.reveal: an unresolvable reference is not an error, it returns the STORED
+          # STRING unchanged. Combine that with a handle that is deliberately stable across saves --
+          # `handleFor(alias)`, the same string every time for the same server -- and the entries run
+          # 1 wrote are still lying there under exactly the handles run 2 asks for. A test that
+          # writes nothing and then reads run 1's value back sees the right secret and stays green.
+          #
+          # The run 1 entries are therefore removed first, so that the break is measured against an
+          # empty store rather than against yesterday's answers. `security` is asked repeatedly
+          # because it deletes one matching item per call; the counter is a stop, not an
+          # expectation.
+          echo "--- removing what run 1 left under service GanttProject ---"
+          weg=0
+          while "$LIMIT" 20 security delete-generic-password -s GanttProject "$KC" >/dev/null 2>&1; do
+            weg=$((weg + 1))
+            test "$weg" -lt 50 || { echo "stopping at 50 -- that is not a number this test can produce"; break; }
+          done
+          echo "removed $weg entries written by run 1"
+
           touch "$RUNNER_TEMP/mark"
           ./gradlew :ganttproject-tester:test --rerun \
             --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -20 || true
+          tools/macosprobe/sichere-xml.sh sabotage-write
           python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" sabotage-write red
 
       # RUN 3 -- taken back, green again. Without this the red run above could also be a machine
@@ -322,6 +365,7 @@ jobs:
           touch "$RUNNER_TEMP/mark"
           ./gradlew :ganttproject-tester:test --rerun \
             --tests "*SecretStore*" --tests "*TokenEncryption*" --console=plain 2>&1 | tail -20 || true
+          tools/macosprobe/sichere-xml.sh restored
           python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" restored green
 
       # RUN 4 -- WHAT A MACHINE WITHOUT A KEYCHAIN LOOKS LIKE, measured rather than argued.
@@ -349,6 +393,7 @@ jobs:
           # tree. The XML has already been written at this point, so nothing is lost by the order.
           git checkout -- "$BACKEND"
           git diff --quiet -- "$BACKEND" || { echo "the file is still modified"; exit 1; }
+          tools/macosprobe/sichere-xml.sh no-store
           python3 tools/macosprobe/count-tests.py "$TESTS" "$RUNNER_TEMP/mark" no-store red
 
       # F10 IS HOME BEFORE F27 IS STARTED. See carry.sh for why this is not left to the end.
@@ -430,6 +475,80 @@ jobs:
           }
           run_arm handler
           run_arm handler-fixed
+
+      # SECOND ATTEMPT AT F27, AND THE REASON FOR IT.
+      #
+      # MEASURED in run 35521476830: the runner is not the obstacle. It has a window session
+      # (`GraphicsEnvironment.isHeadless=false`), `Desktop.isDesktopSupported=true`,
+      # `APP_QUIT_HANDLER supported=true`, the handler installs, and `osascript` can speak to System
+      # Events. What did not happen is the only thing that matters: `handler reached = 0` in BOTH
+      # arms. `osascript` returned 0 and the quit request never arrived.
+      #
+      # The likely reason is not the machine but the shape of the program: a bare `java` process is
+      # not a bundled application, so there is nothing for an Apple Event addressed to an
+      # application to be delivered to. `osascript`'s exit code 0 only says System Events accepted
+      # the sentence.
+      #
+      # So: build the probe into a real .app with jpackage -- which is on this JDK and which this
+      # fork already uses for the Windows package -- and address THAT by name. Everything here is
+      # `|| true` and under a time limit: this is an extra attempt at something already measured as
+      # not-working, and it must not be able to cost the run its other results.
+      - name: F27 -- second attempt, as a real .app bundle
+        if: always()
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ergebnis"; exec > >(tee -a "$RUNNER_TEMP/ergebnis/protokoll.txt") 2>&1
+          mkdir -p "$RUNNER_TEMP/probejar"
+          jar --create --file "$RUNNER_TEMP/probejar/probe.jar" --main-class DesktopQuitProbe \
+            -C "$RUNNER_TEMP/probe" . || { echo "jar failed -- stopping this attempt"; exit 0; }
+          "$LIMIT" 300 jpackage --type app-image --name QuitProbe \
+            --input "$RUNNER_TEMP/probejar" --main-jar probe.jar --main-class DesktopQuitProbe \
+            --java-options "--add-modules=javafx.graphics" \
+            --dest "$RUNNER_TEMP/bundle" || { echo "jpackage failed -- stopping this attempt"; exit 0; }
+          app="$RUNNER_TEMP/bundle/QuitProbe.app"
+          ls "$app/Contents" || true
+          cat "$app/Contents/Info.plist" 2>/dev/null | head -30 || true
+
+          run_bundle_arm() {
+            mode="$1"
+            echo "================ bundle arm: $mode ================"
+            out="$RUNNER_TEMP/bundle-$mode.log"
+            "$app/Contents/MacOS/QuitProbe" "$mode" > "$out" 2>&1 &
+            pid=$!
+            for i in $(seq 1 40); do
+              grep -q READY "$out" && break
+              kill -0 "$pid" 2>/dev/null || break
+              sleep 1
+            done
+            if ! grep -q READY "$out"; then
+              echo "BUNDLE ARM $mode: never reached READY"
+              cat "$out" || true
+              kill -9 "$pid" 2>/dev/null || true
+              return 0
+            fi
+            # The launcher may fork: ask for the pid the program printed about ITSELF, which is the
+            # JVM that installed the handler, not the shell job.
+            echte=$(grep -m1 'PROBE pid=' "$out" | sed 's/.*PROBE pid=//')
+            echo "BUNDLE ARM $mode: ready, shell pid $pid, own pid $echte"
+            set +e
+            "$LIMIT" 30 osascript -e 'tell application "QuitProbe" to quit' 2>&1
+            echo "BUNDLE ARM $mode: osascript by name exit $?"
+            set -e
+            sleep 25
+            if kill -0 "$echte" 2>/dev/null; then
+              echo "BUNDLE ARM $mode: THE PROCESS IS STILL ALIVE"
+            else
+              echo "BUNDLE ARM $mode: the process is gone"
+            fi
+            echo "BUNDLE ARM $mode: handler reached = $(grep -c 'quit handler CALLED' "$out" || true)"
+            cat "$out" || true
+            kill -9 "$echte" 2>/dev/null || true
+            kill -9 "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          }
+          run_bundle_arm handler || true
+          run_bundle_arm handler-fixed || true
 
       # THE EVIDENCE THAT NEEDS NO WINDOW SERVER: what performQuit() is actually implemented as.
       # Whatever the experiment above does or does not manage to trigger, this can be read off the
