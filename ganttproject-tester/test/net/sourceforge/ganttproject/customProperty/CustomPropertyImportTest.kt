@@ -56,32 +56,21 @@ class CustomPropertyImportTest {
     }
   }
 
-  /**
-   * [fork change] The clashing pair now uses a GENERATED id (`tpc3`), which is what a project file
-   * written by GanttProject actually contains for a column the user created.
-   *
-   * Why it had to change: since `CustomColumnsManager.findByStableId` the import matches a
-   * NON-generated id before the display name, so the former pair -- id `col3` on both sides, names
-   * `col3` and `Column3` -- is now recognised as one and the same column and reused instead of
-   * duplicated (measured: 3 definitions instead of 4). A generated id keeps the name as the
-   * identity, so this test still asserts exactly what it always asserted: an id that is free is
-   * taken over unchanged, and a clashing one yields a freshly generated id rather than a collision.
-   */
   @Test
   fun `import preserves property id`() {
     val target = CustomColumnsManager()
     target.createDefinition("col1", CustomPropertyClass.TEXT.iD, "col1", null)
-    target.createDefinition("tpc3", CustomPropertyClass.TEXT.iD, "col3", null)
+    target.createDefinition("col3", CustomPropertyClass.TEXT.iD, "col3", null)
 
     val source = CustomColumnsManager()
     source.createDefinition("col2", CustomPropertyClass.TEXT.iD, "col2", null)
-    source.createDefinition("tpc3", CustomPropertyClass.TEXT.iD, "Column3", null)
+    source.createDefinition("col3", CustomPropertyClass.TEXT.iD, "Column3", null)
 
     target.importData(source)
     val definitions = target.definitions
     assertEquals(4, definitions.size)
 
-    assertEquals(setOf("col1", "col2", "tpc3", "tpc0"), definitions.map { it.id }.toSet())
+    assertEquals(setOf("col1", "col2", "col3", "tpc0"), definitions.map { it.id }.toSet())
   }
 
   @Test
