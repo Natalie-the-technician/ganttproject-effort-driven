@@ -158,7 +158,7 @@ public class ImportResourcesDefaultTest extends TaskTestCase {
     addResource(target, "Jane Target", 0, "jane@target.example", "100");
 
     HumanResourceManager imported = newResourceManager();
-    addResource(imported, "Jane Target", 0, "jane@elsewhere.example", "120");
+    addResource(imported, "Jane Target", 7, "jane@elsewhere.example", "120");
 
     target.importData(imported, new OverwritingMerger(new MergeResourcesOption()), Collections.emptyMap());
 
