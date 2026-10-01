@@ -109,6 +109,47 @@ public class ImportResourcesDefaultTest extends TaskTestCase {
   }
 
   /**
+   * Neither the name nor the mail address of a resource is mandatory: a resource created with
+   * Ctrl+H and confirmed right away has an empty name and no mail address. Two such resources are
+   * not the same person, and must not be matched on their empty value.
+   */
+  public void testBlankNamesAreNotTreatedAsTheSamePerson() {
+    HumanResourceManager target = newResourceManager();
+    addResource(target, "", 0, "", "100");
+
+    HumanResourceManager imported = newResourceManager();
+    addResource(imported, "", 0, "", "50");
+
+    target.importData(imported, new OverwritingMerger(new MergeResourcesOption()), Collections.emptyMap());
+
+    assertEquals("Two nameless resources were treated as the same person",
+        2, target.getResources().size());
+    assertEquals("The pay rate of the target project's resource was overwritten",
+        100.0, target.getById(0).getStandardPayRate().doubleValue(), 0.0001);
+  }
+
+  /**
+   * Same for the mail address, which is the other field a user can leave empty.
+   */
+  public void testBlankMailAddressesAreNotTreatedAsTheSamePerson() {
+    MergeResourcesOption byMail = new MergeResourcesOption();
+    byMail.setSelectedValue(MergeResourcesEnum.BY_EMAIL);
+
+    HumanResourceManager target = newResourceManager();
+    addResource(target, "Jane Target", 0, null, "100");
+
+    HumanResourceManager imported = newResourceManager();
+    addResource(imported, "John Acquired", 0, null, "50");
+
+    target.importData(imported, new OverwritingMerger(byMail), Collections.emptyMap());
+
+    assertEquals("Two resources without a mail address were treated as the same person",
+        2, target.getResources().size());
+    assertEquals("The name of the target project's resource was overwritten",
+        "Jane Target", target.getById(0).getName());
+  }
+
+  /**
    * The point of the option is not lost: when both files really do describe the same person, the
    * records are still merged, and the differing IDs do not get in the way.
    */
