@@ -111,7 +111,7 @@ class EffortColumnImportTest {
   }
 
   /**
-   * The counter-case, and the reason the fix may not simply match on the id: a column the USER
+   * First counter-case, and the reason the fix may not simply match on the id: a column the USER
    * creates gets a GENERATED id (`tpc0`, `tpc1`, …) that carries no meaning. Two unrelated projects
    * both start at `tpc0`, so matching those by id would merge two columns that have nothing to do
    * with each other. For generated ids the name stays the identity.
@@ -130,6 +130,29 @@ class EffortColumnImportTest {
     assertEquals(2, target.definitions.size,
       "zwei verschiedene Benutzerspalten duerfen nicht verschmelzen, nur weil die Kennung erzeugt gleich ist")
     assertTrue(target.definitions.map { it.name }.containsAll(listOf("Raum", "Lieferant")))
+  }
+
+  /**
+   * Second counter-case, and the reason the rule is a DECLARED LIST and not "any id that was not
+   * generated": an id written into a file is not a promise either. Two projects may both carry
+   * `col1` and mean something different by it, and GanttProject requires those to stay apart --
+   * `CustomPropertyImportTest.import preserves property id` and
+   * `ImportTasksTestCase.testImportCustomColumns` say so, the latter by checking that no column
+   * loses its values. Mirrored here so a later attempt to widen the rule fails inside the fork's own
+   * tests too, and not only in the inherited ones.
+   */
+  @Test
+  fun `undeklarierte kennungen bleiben getrennt`() {
+    val source = CustomColumnsManager()
+    source.createDefinition("col1", CustomPropertyClass.TEXT.iD, "bar", null)
+    val target = CustomColumnsManager()
+    target.createDefinition("col1", CustomPropertyClass.TEXT.iD, "foo", null)
+
+    target.importData(source)
+
+    assertEquals(2, target.definitions.size,
+      "eine Kennung aus einer Datei ist keine Zusage -- nur erklaerte Kennungen gelten als Identitaet")
+    assertTrue(target.definitions.map { it.name }.containsAll(listOf("foo", "bar")))
   }
 
   /**
