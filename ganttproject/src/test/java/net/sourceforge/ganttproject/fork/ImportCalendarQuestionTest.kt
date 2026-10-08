@@ -171,6 +171,29 @@ class ImportCalendarQuestionTest {
   }
 
   @Test
+  fun `der assistent laesst den import nicht zu, solange die frage offen ist`() {
+    // THE LOCK THE USER SEES. Wizard.kt:276 sets `finishButton.isDisable = !canFinish()`, so this
+    // predicate IS the enabled state of the Import button -- measured here instead of at a
+    // screenshot, because a picture shows the button but not why it is grey.
+    val model = ImporterWizardModel()
+    val file = File.createTempFile("ImportCalendarQuestionTest", ".gan").also { it.deleteOnExit() }
+    val importer = ImporterFromGanttFile().also {
+      it.setContext(GanttProjectImpl(), EasyMock.createNiceMock<UIFacade>(UIFacade::class.java), nicePreferences())
+      it.setModel(model)
+    }
+    model.importer = importer
+    model.file = file
+
+    assertFalse(model.canFinish(), "mit offener Kalenderfrage ist der Import-Knopf gesperrt")
+
+    // Answered -- and now it has to open. Without the ChangeValueListener in the importer the
+    // predicate would flip here but the button would not, which is why the listener exists; this
+    // case covers the predicate, the running program covers the button.
+    importer.calendarOptionForTesting.setSelectedValue(ImportCalendarOption.Values.NO)
+    assertTrue(model.canFinish(), "mit Antwort ist er frei -- sonst waere die Frage unbeantwortbar")
+  }
+
+  @Test
   fun `importProject wirft, bevor es das erste mal schreibt`() {
     val project = GanttProjectImpl()
     val bufferProject = EasyMock.createStrictMock<BufferProject>(BufferProject::class.java)
@@ -203,7 +226,7 @@ class ImportCalendarQuestionTest {
    * merge option, which this test does not measure. The calendar answer is deliberately NOT
    * persisted by the importer -- a stored answer would be a pre-selection again.
    */
-  private fun contextualizedImporter(uiFacade: UIFacade): ImporterFromGanttFile {
+  private fun nicePreferences(): Preferences {
     val node = EasyMock.createNiceMock<Preferences>(Preferences::class.java)
     EasyMock.expect(node.get(EasyMock.anyString(), EasyMock.anyString()))
       .andReturn(MergeResourcesEnum.DEFAULT.name.lowercase()).anyTimes()
@@ -211,6 +234,11 @@ class ImportCalendarQuestionTest {
     val prefs = EasyMock.createNiceMock<Preferences>(Preferences::class.java)
     EasyMock.expect(prefs.node(EasyMock.anyString())).andReturn(node).anyTimes()
     EasyMock.replay(prefs)
+    return prefs
+  }
+
+  private fun contextualizedImporter(uiFacade: UIFacade): ImporterFromGanttFile {
+    val prefs = nicePreferences()
 
     // A REAL wizard model with a REAL file. See the comment in the "geht nicht weiter" case: an
     // importer without a model fails one statement too early, and the case would then be red for
