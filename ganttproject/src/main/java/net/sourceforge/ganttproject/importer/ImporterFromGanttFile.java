@@ -38,16 +38,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static net.sourceforge.ganttproject.importer.BufferProjectImportKt.importBufferProject;
+import static net.sourceforge.ganttproject.importer.AskingImportCalendarOptionKt.unansweredCalendarQuestionText;
 
 public class ImporterFromGanttFile extends ImporterBase {
   private final HumanResourceMerger.MergeResourcesOption myMergeResourcesOption = new HumanResourceMerger.MergeResourcesOption();
-  private final ImportCalendarOption myImportCalendarOption = new ImportCalendarOption();
+  private final ImportCalendarOption myImportCalendarOption = new AskingImportCalendarOption();
 
   private final GPOption[] myOptions = new GPOption[]{myMergeResourcesOption, myImportCalendarOption};
 
   public ImporterFromGanttFile() {
     super("ganttprojectFiles");
-    myImportCalendarOption.setSelectedValue(ImportCalendarOption.Values.NO);
+    // NO PRE-SELECTED CALENDAR ANSWER. This line used to read
+    //   myImportCalendarOption.setSelectedValue(ImportCalendarOption.Values.NO);
+    // which pre-selected "leave existing": a project with working hours of its own computed
+    // differently after an import than before, and nobody was asked and nothing was said.
+    // Natalie's decision of 08.10.2026 is to ask every time with NEITHER answer pre-selected, so
+    // the starting value is UNDECIDED -- AskingImportCalendarOption carries it, and that is also
+    // where the label of that state comes from. Setting it again here would be the one line that
+    // quietly undoes the decision, which is why it is written out above instead of deleted.
   }
 
   @Override
@@ -73,10 +81,45 @@ public class ImporterFromGanttFile extends ImporterBase {
         node.put(myMergeResourcesOption.getID(), String.valueOf(event.getNewValue()));
       }
     });
+    // ANSWERING THE CALENDAR QUESTION HAS TO WAKE THE WIZARD UP. The finish button is set from
+    // canFinish() in the wizard's refresh, and that refresh only runs when needsRefresh is raised.
+    // Without this listener the button would stay disabled after the user picked an answer -- the
+    // question would be unanswerable instead of merely unanswered.
+    //
+    // NOT PERSISTED, unlike the merge option above, and that is the point: a stored answer would
+    // be a pre-selection again on the next import, which is exactly what Natalie decided against.
+    myImportCalendarOption.addChangeValueListener(new ChangeValueListener() {
+      @Override
+      public void changeValue(ChangeValueEvent event) {
+        ImporterWizardModel model = getModel();
+        if (model != null) {
+          model.getNeedsRefresh().set(true, ImporterFromGanttFile.this);
+        }
+      }
+    });
+  }
+
+  /**
+   * The calendar question, while it has no answer.
+   *
+   * <p>ADDED IN THIS FORK. The wizard keeps its finish button disabled while this is non-null.
+   */
+  @Override
+  public String getUnansweredQuestion() {
+    return myImportCalendarOption.isUndecided() ? unansweredCalendarQuestionText() : null;
   }
 
   @Override
   public void run() {
+    // THE SECOND LOCK, AND THE ONE THAT MAKES "NOTHING HAPPENS" TRUE. It sits BEFORE the
+    // undoableEdit and before the file is read, so an unanswered calendar question leaves the
+    // target project exactly as it was: no calendar taken over, no calendar discarded, no tasks,
+    // no resources, not even an empty entry in the undo stack. The wizard's disabled button is
+    // the first lock; this one holds for any caller that does not go through the wizard.
+    if (myImportCalendarOption.isUndecided()) {
+      getUiFacade().showErrorDialog(unansweredCalendarQuestionText());
+      return;
+    }
     final File selectedFile = getFile();
     final IGanttProject targetProject = getProject();
     getUiFacade().getUndoManager().undoableEdit("Import", new Runnable() {

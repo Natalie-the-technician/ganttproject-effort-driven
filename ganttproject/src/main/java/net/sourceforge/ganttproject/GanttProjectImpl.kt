@@ -234,6 +234,16 @@ open class GanttProjectImpl(
     importCalendarOption: ImportCalendarOption?,
     closeCurrentProject: Boolean
   ): TaskMapping {
+      // THE UNANSWERED CALENDAR QUESTION STOPS HERE, BEFORE THE FIRST WRITE. Added in this fork.
+      // It has to be the very first statement of the method: the calendar is only the second step
+      // below, so checking it there would already have imported the roles -- half an import, for a
+      // question nobody answered. Throwing is right and a return is not: reaching this point means
+      // the wizard's disabled button AND the importer's own refusal were both bypassed, and a
+      // caller who did that has to hear about it rather than get a quietly calendar-less import.
+      require(importCalendarOption?.isUndecided() != true) {
+        "The calendar question of this import has no answer (ImportCalendarOption.Values.UNDECIDED)." +
+          " Nothing was imported. Ask the user before calling importProject."
+      }
       roleManager.importData(bufferProject.roleManager)
       if (importCalendarOption != null) {
         activeCalendar.importCalendar(bufferProject.activeCalendar, importCalendarOption)

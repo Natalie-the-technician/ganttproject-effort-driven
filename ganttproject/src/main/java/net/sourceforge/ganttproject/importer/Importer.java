@@ -41,6 +41,25 @@ public interface Importer {
   void setContext(IGanttProject project, UIFacade uiFacade, Preferences pluginPreferences);
 
   boolean isReady();
+
+  /**
+   * A question this importer needs answered before it may run, or null when there is none.
+   *
+   * ADDED IN THIS FORK, and deliberately NOT folded into {@link #isReady()}: that method reads a
+   * field of {@code ImporterBase} which {@code setFile} no longer writes (the file lives in the
+   * wizard model now), so it answers false for every importer here and nothing may be built on
+   * it. The returned text is shown to the user, so it says what to decide and not that something
+   * is missing.
+   *
+   * <p>THE WIZARD ASKS THIS ON EVERY REFRESH and keeps the finish button disabled while it
+   * answers non-null, which is what makes an unanswered question stop the import instead of
+   * letting it run with a silent default. An importer that returns non-null here must also refuse
+   * in its own {@link #run()}: the button is the first lock, not the only one.
+   */
+  default String getUnansweredQuestion() {
+    return null;
+  }
+
   void run();
 
   void setFile(File file);

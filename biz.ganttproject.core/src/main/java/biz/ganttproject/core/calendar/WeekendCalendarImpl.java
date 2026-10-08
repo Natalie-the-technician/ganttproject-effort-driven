@@ -367,6 +367,18 @@ public class WeekendCalendarImpl extends GPCalendarBase implements GPCalendarCal
 
   @Override
   public void importCalendar(GPCalendar calendar, ImportCalendarOption importOption) {
+    // UNDECIDED FIRST, AND WITH ITS OWN RETURN. Added in this fork together with that value.
+    // What follows is a chain of ifs WITHOUT an else: a value none of them names does not stop
+    // here, it falls through into the tail below the MERGE block and imports the week day types
+    // and onlyShowWeekends anyway. For an unanswered question that is exactly the wrong thing --
+    // half a calendar, silently. Nothing is taken over and nothing is discarded instead.
+    //
+    // THIS IS THE SECOND LOCK, NOT THE FIRST. An import must never get this far with an
+    // unanswered question; ImporterFromGanttFile refuses to run and IGanttProject.importProject
+    // throws before it writes anything. This one is here for the caller that bypasses both.
+    if (ImportCalendarOption.Values.UNDECIDED.equals(importOption.getSelectedValue())) {
+      return;
+    }
     if (ImportCalendarOption.Values.NO.equals(importOption.getSelectedValue())) {
       return;
     }
