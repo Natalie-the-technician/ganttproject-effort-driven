@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="Basis" company="" webLink="" view-date="2026-10-01" view-index="0" gantt-divider-location="300" resource-divider-location="300" version="3.3.3312" locale="de_DE">
+    <description/>
+    <view zooming-state="default:0" id="gantt-chart">
+        <field id="tpd3" name="Name" width="200" order="0"/>
+        <field id="tpd4" name="Begin date" width="75" order="1"/>
+        <field id="tpd5" name="End date" width="75" order="2"/>
+        <timeline><![CDATA[]]></timeline>
+    </view>
+    <view id="resourceTable">
+        <field id="0" name="Name" width="210" order="0"/>
+    </view>
+    <!-- Three normal tasks, A -> B -> C, so dependency/allocation tests have real targets -->
+    <tasks empty-milestones="true">
+        <taskproperties>
+            <taskproperty id="tpd0" name="type" type="defau

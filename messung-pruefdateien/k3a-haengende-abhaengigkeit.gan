@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="Basis" company="" webLink="" view-date="2026-10-01" view-index="0" gantt-divider-location="300" resource-divider-location="300" version="3.3.3312" locale="de_DE">
+    <description/>
+    <view zooming-state="default:0" id="gantt-chart">
+        <field id="tpd3" name="Name" width="200" order="0"/>
+        <field id="tpd4" name="Begin date" width="75" order="1"/>
+        <field id="tpd5" name="End date" width="75" order="2"/>
+        <timeline><![CDATA[]]></timeline>
+    </view>
+    <view id="resourceTable">
+        <field id="0" name="Name" width="210" order="0"/>
+    </view>
+    <!-- Three normal tasks, A -> B -> C, so dependency/allocation tests have real targets -->
+    <tasks empty-milestones="true">
+        <taskproperties>
+            <taskproperty id="tpd0" name="type" type="default" valuetype="icon"/>
+            <taskproperty id="tpd1" name="priority" type="default" valuetype="icon"/>
+        </taskproperties>
+        <task id="0" uid="aaaaaaaaaa" name="Aufgabe A" color="#8cb6ce" meeting="false" start="2026-10-01" duration="5" complete="0" expand="true"/>
+        <task id="1" uid="bbbbbbbbbb" name="Aufgabe B" color="#8cb6ce" meeting="false" start="2026-10-06" duration="5" complete="0" expand="true">
+            <depend id="999" type="2" difference="0" hardness="Strong"/>
+        </task>
+        <task id="2" uid="cccccccccc" name="Aufgabe C" color="#8cb6ce" meeting="false" start="2026-10-11" duration="5" complete="0" expand="true">
+            <depend id="1" type="2" difference="0" hardness="Strong"/>
+        </task>
+    </tasks>
+    <resources>
+        <resource id="0" uid="r1111111111" name="Person Eins" function="Default:0" contacts="" phone=""/>
+    </resources>
+    <allocations>
+        <allocation task-id="0" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
+    </allocations>
+    <vacations/>
+    <taskdisplaycolumns>
+        <displaycolumn property-id="tpd3" order="0" width="200"/>
+    </taskdisplaycolumns>
+    <previous-state-tasks/>
+    <roles roleset-name="Default"/>
+</project>
