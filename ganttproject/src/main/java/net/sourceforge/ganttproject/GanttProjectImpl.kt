@@ -41,7 +41,7 @@ import net.sourceforge.ganttproject.gui.UIConfiguration
 import net.sourceforge.ganttproject.gui.UIFacade
 import net.sourceforge.ganttproject.gui.options.model.GP1XOptionConverter
 import net.sourceforge.ganttproject.importer.BufferProject
-import net.sourceforge.ganttproject.importer.TaskMapping
+import net.sourceforge.ganttproject.importer.ProjectImportResult
 import net.sourceforge.ganttproject.language.GanttLanguage
 import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.resource.HumanResourceMerger
@@ -233,7 +233,7 @@ open class GanttProjectImpl(
     mergeOption: HumanResourceMerger.MergeResourcesOption,
     importCalendarOption: ImportCalendarOption?,
     closeCurrentProject: Boolean
-  ): TaskMapping {
+  ): ProjectImportResult {
       roleManager.importData(bufferProject.roleManager)
       if (importCalendarOption != null) {
         activeCalendar.importCalendar(bufferProject.activeCalendar, importCalendarOption)
@@ -252,7 +252,7 @@ open class GanttProjectImpl(
           bufferProject.taskManager, humanResourceManager,
           result, original2ImportedResource
         )
-        return result
+        return ProjectImportResult(result, that2thisCustomDefs)
       } finally {
         origTaskManager.setEventsEnabled(true)
       }

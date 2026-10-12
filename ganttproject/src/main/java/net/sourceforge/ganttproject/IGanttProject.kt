@@ -28,7 +28,7 @@ import net.sourceforge.ganttproject.document.Document
 import net.sourceforge.ganttproject.document.DocumentManager
 import net.sourceforge.ganttproject.gui.UIConfiguration
 import net.sourceforge.ganttproject.importer.BufferProject
-import net.sourceforge.ganttproject.importer.TaskMapping
+import net.sourceforge.ganttproject.importer.ProjectImportResult
 import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.resource.HumanResourceMerger
 import net.sourceforge.ganttproject.roles.RoleManager
@@ -78,7 +78,7 @@ interface IGanttProject {
     mergeOption: HumanResourceMerger.MergeResourcesOption,
     importCalendarOption: ImportCalendarOption?,
     closeCurrentProject: Boolean
-  ): TaskMapping
+  ): ProjectImportResult
 
   @Throws(Document.DocumentException::class, IOException::class)
   fun restore(fromDocument: Document)
