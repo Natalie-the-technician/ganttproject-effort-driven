@@ -29,7 +29,7 @@ import net.sourceforge.ganttproject.document.DocumentManager
 import net.sourceforge.ganttproject.fork.BaselineNameCollision
 import net.sourceforge.ganttproject.gui.UIConfiguration
 import net.sourceforge.ganttproject.importer.BufferProject
-import net.sourceforge.ganttproject.importer.TaskMapping
+import net.sourceforge.ganttproject.importer.ProjectImportResult
 import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.resource.HumanResourceMerger
 import net.sourceforge.ganttproject.roles.RoleManager
@@ -79,15 +79,15 @@ interface IGanttProject {
     mergeOption: HumanResourceMerger.MergeResourcesOption,
     importCalendarOption: ImportCalendarOption?,
     closeCurrentProject: Boolean,
-    // ADDED IN THIS FORK. Null means "do not import baselines at all", the default for a caller
-    // that has not decided -- see net.sourceforge.ganttproject.fork.BaselineImport.kt. A JAVA
-    // CALLER CANNOT OMIT THIS even though it has a default: Kotlin's default-parameter mechanism
-    // is invisible from Java on an interface method (there is no body to generate an overload
-    // from, unlike a plain function where @JvmOverloads can). Every direct Java call site of this
-    // interface method -- there is exactly one, GanttProjectBase.importProject -- passes it
-    // explicitly instead.
+    // ADDED IN THIS FORK (import-basisplan-namensdialog). Null means "do not import baselines at
+    // all", the default for a caller that has not decided -- see
+    // net.sourceforge.ganttproject.fork.BaselineImport.kt. A JAVA CALLER CANNOT OMIT THIS even
+    // though it has a default: Kotlin's default-parameter mechanism is invisible from Java on an
+    // interface method (there is no body to generate an overload from, unlike a plain function
+    // where @JvmOverloads can). Every direct Java call site of this interface method -- there is
+    // exactly one, GanttProjectBase.importProject -- passes it explicitly instead.
     baselineNameCollision: BaselineNameCollision? = null
-  ): TaskMapping
+  ): ProjectImportResult
 
   @Throws(Document.DocumentException::class, IOException::class)
   fun restore(fromDocument: Document)

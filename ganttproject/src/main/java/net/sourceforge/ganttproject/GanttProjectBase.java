@@ -59,6 +59,7 @@ import net.sourceforge.ganttproject.gui.view.GPViewManager;
 import net.sourceforge.ganttproject.gui.view.ViewManagerImpl;
 import net.sourceforge.ganttproject.gui.zoom.ZoomManager;
 import net.sourceforge.ganttproject.importer.BufferProject;
+import net.sourceforge.ganttproject.importer.ProjectImportResult;
 import net.sourceforge.ganttproject.language.GanttLanguage;
 import net.sourceforge.ganttproject.parser.ParserFactory;
 import net.sourceforge.ganttproject.plugins.PluginManager;
@@ -161,7 +162,7 @@ abstract class GanttProjectBase implements IGanttProject, UIFacade {
     myTitle.set(builder.toString());
   }
   @Override
-  public @NotNull Map<Task, Task> importProject(
+  public @NotNull ProjectImportResult importProject(
     @NotNull BufferProject bufferProject,
     @NotNull HumanResourceMerger.MergeResourcesOption mergeResourcesOption,
     @Nullable ImportCalendarOption importCalendarOption, boolean closeCurrentProject,

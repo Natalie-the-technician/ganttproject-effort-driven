@@ -41,7 +41,7 @@ import net.sourceforge.ganttproject.gui.UIConfiguration
 import net.sourceforge.ganttproject.gui.UIFacade
 import net.sourceforge.ganttproject.gui.options.model.GP1XOptionConverter
 import net.sourceforge.ganttproject.importer.BufferProject
-import net.sourceforge.ganttproject.importer.TaskMapping
+import net.sourceforge.ganttproject.importer.ProjectImportResult
 import net.sourceforge.ganttproject.language.GanttLanguage
 import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.resource.HumanResourceMerger
@@ -236,7 +236,7 @@ open class GanttProjectImpl(
     importCalendarOption: ImportCalendarOption?,
     closeCurrentProject: Boolean,
     baselineNameCollision: BaselineNameCollision?
-  ): TaskMapping {
+  ): ProjectImportResult {
       // THE UNANSWERED CALENDAR QUESTION STOPS HERE, BEFORE THE FIRST WRITE. Added in this fork.
       // It has to be the very first statement of the method: the calendar is only the second step
       // below, so checking it there would already have imported the roles -- half an import, for a
@@ -273,7 +273,7 @@ open class GanttProjectImpl(
         if (baselineNameCollision != null) {
           importBaselines(bufferProject.baselines, baselines, result, baselineNameCollision, bufferProject.projectName)
         }
-        return result
+        return ProjectImportResult(result, that2thisCustomDefs)
       } finally {
         origTaskManager.setEventsEnabled(true)
       }

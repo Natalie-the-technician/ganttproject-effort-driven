@@ -78,7 +78,15 @@ class CustomColumnsManager : CustomPropertyManager {
       for (thatColumn in source.definitions) {
         // [fork change] Declared-stable id first, display name second -- see findByStableId.
         var thisColumn = findByStableId(thatColumn) ?: findByName(thatColumn.name)
-        if (thisColumn == null || thisColumn.propertyClass != thatColumn.propertyClass) {
+        // [fork change] A name match whose incoming class is TEXT is still a match. TEXT is what
+        // every spreadsheet reader (CSVImport's CsvRecordImpl.getType) assigns to a column it has no
+        // real type information about -- it is a placeholder, not a claim that the column is really
+        // text. Treating it as a hard mismatch against an existing, properly typed column of the same
+        // name created a second column instead of merging into the first one. A genuine class clash
+        // between two non-TEXT classes (e.g. DATE vs. DOUBLE) still falls through to the duplicate
+        // below, as before.
+        if (thisColumn == null ||
+            (thisColumn.propertyClass != thatColumn.propertyClass && thatColumn.propertyClass != CustomPropertyClass.TEXT)) {
           thisColumn = CustomColumn(this, thatColumn.name, thatColumn.propertyClass, thatColumn.defaultValue)
           thisColumn.id = findById(thatColumn.id)?.let { createId() } ?: thatColumn.id
           thisColumn.attributes.putAll(thatColumn.attributes)
