@@ -49,6 +49,8 @@ import net.sourceforge.ganttproject.resource.OverwritingMerger
 import net.sourceforge.ganttproject.roles.RoleManager
 import net.sourceforge.ganttproject.storage.LazyProjectDatabaseProxy
 // [fork change] New import for the trigger of the duration calculation.
+import net.sourceforge.ganttproject.fork.BaselineNameCollision
+import net.sourceforge.ganttproject.fork.importBaselines
 import net.sourceforge.ganttproject.fork.findOrCreateDateFixed
 import net.sourceforge.ganttproject.fork.findOrCreateDeadline
 import net.sourceforge.ganttproject.fork.findOrCreateOriginalEffort
@@ -232,7 +234,8 @@ open class GanttProjectImpl(
     bufferProject: BufferProject,
     mergeOption: HumanResourceMerger.MergeResourcesOption,
     importCalendarOption: ImportCalendarOption?,
-    closeCurrentProject: Boolean
+    closeCurrentProject: Boolean,
+    baselineNameCollision: BaselineNameCollision?
   ): TaskMapping {
       // THE UNANSWERED CALENDAR QUESTION STOPS HERE, BEFORE THE FIRST WRITE. Added in this fork.
       // It has to be the very first statement of the method: the calendar is only the second step
@@ -262,6 +265,14 @@ open class GanttProjectImpl(
           bufferProject.taskManager, humanResourceManager,
           result, original2ImportedResource
         )
+        // BASELINES, WIRED UP IN THIS FORK. Placed directly after importAssignments, as the file
+        // comment on importBaselines() always said it belonged -- this is that one line, now with
+        // the decision it was missing. Null means the caller has not decided (or has nothing to
+        // decide, e.g. an importer whose buffer project never has baselines) and baselines are
+        // simply not carried over, same as today.
+        if (baselineNameCollision != null) {
+          importBaselines(bufferProject.baselines, baselines, result, baselineNameCollision, bufferProject.projectName)
+        }
         return result
       } finally {
         origTaskManager.setEventsEnabled(true)

@@ -23,6 +23,7 @@ import biz.ganttproject.app.NotificationManagerImpl;
 import biz.ganttproject.core.calendar.GPCalendarCalc;
 import biz.ganttproject.core.calendar.ImportCalendarOption;
 import biz.ganttproject.core.calendar.WeekendCalendarImpl;
+import net.sourceforge.ganttproject.fork.BaselineNameCollision;
 import biz.ganttproject.core.model.task.TaskDefaultColumn;
 import biz.ganttproject.core.option.*;
 import biz.ganttproject.core.table.ColumnList;
@@ -163,9 +164,10 @@ abstract class GanttProjectBase implements IGanttProject, UIFacade {
   public @NotNull Map<Task, Task> importProject(
     @NotNull BufferProject bufferProject,
     @NotNull HumanResourceMerger.MergeResourcesOption mergeResourcesOption,
-    @Nullable ImportCalendarOption importCalendarOption, boolean closeCurrentProject) {
+    @Nullable ImportCalendarOption importCalendarOption, boolean closeCurrentProject,
+    @Nullable BaselineNameCollision baselineNameCollision) {
     return GanttProjectImplKt.restoreProject(this, myProjectImpl.getListeners(), closeCurrentProject,
-      () -> myProjectImpl.importProject(bufferProject, mergeResourcesOption, importCalendarOption, closeCurrentProject)
+      () -> myProjectImpl.importProject(bufferProject, mergeResourcesOption, importCalendarOption, closeCurrentProject, baselineNameCollision)
     );
   }
 
