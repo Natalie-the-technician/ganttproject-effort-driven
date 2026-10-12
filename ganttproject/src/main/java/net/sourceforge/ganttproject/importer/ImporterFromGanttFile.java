@@ -28,6 +28,7 @@ import net.sourceforge.ganttproject.document.Document;
 import net.sourceforge.ganttproject.document.FileDocument;
 import net.sourceforge.ganttproject.fork.BaselineCollisionAnswer;
 import net.sourceforge.ganttproject.fork.BaselineNameCollision;
+import net.sourceforge.ganttproject.fork.BaselineNameCollisionDialogKt;
 import net.sourceforge.ganttproject.gui.UIFacade;
 import net.sourceforge.ganttproject.resource.HumanResourceMerger;
 import net.sourceforge.ganttproject.resource.MergeResourcesEnum;
@@ -39,7 +40,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-import static net.sourceforge.ganttproject.fork.BaselineNameCollisionDialogKt.askBaselineNameCollisionBlocking;
 import static net.sourceforge.ganttproject.fork.BaselineNameCollisionQuestionKt.baselineNameCollisions;
 import static net.sourceforge.ganttproject.importer.BufferProjectImportKt.importBufferProject;
 import static net.sourceforge.ganttproject.importer.AskingImportCalendarOptionKt.unansweredCalendarQuestionText;
@@ -47,6 +47,12 @@ import static net.sourceforge.ganttproject.importer.AskingImportCalendarOptionKt
 public class ImporterFromGanttFile extends ImporterBase {
   private final HumanResourceMerger.MergeResourcesOption myMergeResourcesOption = new HumanResourceMerger.MergeResourcesOption();
   private final ImportCalendarOption myImportCalendarOption = new AskingImportCalendarOption();
+
+  // A FIELD, NOT A DIRECT CALL, so a test can replace it with a fake answer instead of opening a
+  // real window -- the same reason myImportCalendarOption is a field reachable by reflection in
+  // ImportCalendarQuestionTest. The production value is the real, blocking modal dialog.
+  private java.util.function.Function<List<String>, BaselineCollisionAnswer> myBaselineCollisionAsk =
+      BaselineNameCollisionDialogKt::askBaselineNameCollisionBlocking;
 
   private final GPOption[] myOptions = new GPOption[]{myMergeResourcesOption, myImportCalendarOption};
 
@@ -165,7 +171,7 @@ public class ImporterFromGanttFile extends ImporterBase {
         // importBaselines() for any baseline -- see the "!collides" branch there.
         baselineNameCollision = BaselineNameCollision.APPEND_AS_IS;
       } else {
-        BaselineCollisionAnswer answer = askBaselineNameCollisionBlocking(collidingBaselineNames);
+        BaselineCollisionAnswer answer = myBaselineCollisionAsk.apply(collidingBaselineNames);
         if (answer == null) {
           // OHNE ANTWORT PASSIERT NICHTS: the dialog was closed without a choice. Nothing of this
           // import has been written to the target project yet -- document.read() above only
