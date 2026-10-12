@@ -248,10 +248,17 @@ class ForkI18nTest {
    * test exists to satisfy.
    */
   private val GERMAN_TRANSLATION_EXEMPT = setOf<String>(
-    // Measured 12.10.2026: comparing every key in i18n.properties against i18n_de.properties
-    // finds NONE currently missing a German counterpart (271 keys in each file, identical sets).
-    // This set stays empty until a key is deliberately added English-only; it exists so that
-    // such a key can be exempted WITH A REASON instead of this test being weakened or deleted.
+    // Measured 12.10.2026, corrected same day (dirigent-gantt caught the first count): comparing
+    // every key [keysOf] reads from i18n.properties against i18n_de.properties finds NONE
+    // currently missing a German counterpart -- 276 keys in each file, identical sets. [keysOf]
+    // reads EVERY property name in the file via `Properties.stringPropertyNames()`, not only
+    // ones starting with "fork." -- the file also carries five keys of a DIFFERENT, pre-existing
+    // naming convention (`option.comparisonAtStartup.label`, `option.resourceChartColors.*`,
+    // `option.ganttChartDefaults.*`; present in both files already, unrelated to this branch). A
+    // first count that grepped only `^fork\.` therefore undercounted by exactly those five (271
+    // instead of 276) -- counting what the key PREFIX suggests rather than what [keysOf] actually
+    // reads. This set stays empty until a key is deliberately added English-only; it exists so
+    // that such a key can be exempted WITH A REASON instead of this test being weakened or deleted.
   )
 
   @Test
