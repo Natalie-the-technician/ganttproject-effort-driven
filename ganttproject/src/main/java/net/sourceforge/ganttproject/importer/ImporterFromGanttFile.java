@@ -26,6 +26,8 @@ import biz.ganttproject.core.table.ColumnList;
 import net.sourceforge.ganttproject.IGanttProject;
 import net.sourceforge.ganttproject.document.Document;
 import net.sourceforge.ganttproject.document.FileDocument;
+import net.sourceforge.ganttproject.fork.BaselineCollisionAnswer;
+import net.sourceforge.ganttproject.fork.BaselineNameCollision;
 import net.sourceforge.ganttproject.gui.UIFacade;
 import net.sourceforge.ganttproject.resource.HumanResourceMerger;
 import net.sourceforge.ganttproject.resource.MergeResourcesEnum;
@@ -37,6 +39,8 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import static net.sourceforge.ganttproject.fork.BaselineNameCollisionDialogKt.askBaselineNameCollisionBlocking;
+import static net.sourceforge.ganttproject.fork.BaselineNameCollisionQuestionKt.baselineNameCollisions;
 import static net.sourceforge.ganttproject.importer.BufferProjectImportKt.importBufferProject;
 import static net.sourceforge.ganttproject.importer.AskingImportCalendarOptionKt.unansweredCalendarQuestionText;
 
@@ -148,8 +152,32 @@ public class ImporterFromGanttFile extends ImporterBase {
         algs.getScheduler().setEnabled(true);
       }
 
+      // THE BASELINE-NAME QUESTION, ADDED IN THIS FORK. "einmal fragen, für alle" (Natalie,
+      // 10.10.2026): collisions are collected ONCE for the whole file, not per baseline, and the
+      // dialog -- if there is anything to ask about at all -- falls at most once per call of this
+      // method. bufferProject.getBaselines() is only known from here on, after document.read()
+      // above; that is why this cannot be a wizard-page option decided ahead of time the way the
+      // calendar question above is.
+      List<String> collidingBaselineNames = baselineNameCollisions(bufferProject.getBaselines(), targetProject.getBaselines());
+      BaselineNameCollision baselineNameCollision;
+      if (collidingBaselineNames.isEmpty()) {
+        // Nothing collides, so nothing is asked, and the value below is never read by
+        // importBaselines() for any baseline -- see the "!collides" branch there.
+        baselineNameCollision = BaselineNameCollision.APPEND_AS_IS;
+      } else {
+        BaselineCollisionAnswer answer = askBaselineNameCollisionBlocking(collidingBaselineNames);
+        if (answer == null) {
+          // OHNE ANTWORT PASSIERT NICHTS: the dialog was closed without a choice. Nothing of this
+          // import has been written to the target project yet -- document.read() above only
+          // parsed the file into the throwaway bufferProject -- so returning here leaves the
+          // target exactly as it was, the same guarantee the unanswered calendar question gives.
+          return;
+        }
+        baselineNameCollision = answer.getPolicy();
+      }
+
       importBufferProject(targetProject, bufferProject, BufferProjectImportKt.asImportBufferProjectApi(getUiFacade()),
-          myMergeResourcesOption, myImportCalendarOption, false);
+          myMergeResourcesOption, myImportCalendarOption, false, baselineNameCollision);
     } catch (Exception  e) {
       getUiFacade().showErrorDialog(e);
     }
