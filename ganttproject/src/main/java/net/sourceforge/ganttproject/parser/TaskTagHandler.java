@@ -25,6 +25,7 @@ import biz.ganttproject.core.option.ListOption;
 import biz.ganttproject.core.table.ColumnList;
 import biz.ganttproject.lib.fx.TreeCollapseView;
 import com.google.common.collect.ImmutableList;
+import net.sourceforge.ganttproject.fork.TaskLoadProblems;
 import net.sourceforge.ganttproject.gui.UIFacade;
 import net.sourceforge.ganttproject.task.Task;
 import net.sourceforge.ganttproject.task.TaskManager;
@@ -40,6 +41,15 @@ public class TaskTagHandler  {
     myTreeFacade = treeFacade;
   }
 
+  /**
+   * [fork change] The dangling dependencies and unreadable custom property values of the last
+   * {@link #process} call. Kept here for the same reason as
+   * {@link ResourceTagHandler#getVacationProblems()}: the TaskLoader is built and dropped inside
+   * that method, and the caller -- the one with a user interface -- has no other way to reach
+   * what it collected.
+   */
+  private TaskLoadProblems myTaskLoadProblems = new TaskLoadProblems();
+
   public void process(XmlProject xmlProject) {
     var taskLoader = new TaskLoader(getManager(), myTreeFacade);
     taskLoader.loadTaskCustomPropertyDefinitions(xmlProject);
@@ -47,7 +57,14 @@ public class TaskTagHandler  {
       taskLoader.loadTask(parent, child);
       return true;
     });
-    TaskSerializerKt.loadDependencyGraph(taskLoader.getDependencies(), myManager, taskLoader.getLegacyFixedStartTasks());
+    TaskSerializerKt.loadDependencyGraph(taskLoader.getDependencies(), myManager, taskLoader.getLegacyFixedStartTasks(),
+        taskLoader.getTaskLoadProblems());
+    myTaskLoadProblems = taskLoader.getTaskLoadProblems();
+  }
+
+  /** [fork change] Empty before the first {@link #process}, never null. */
+  public TaskLoadProblems getTaskLoadProblems() {
+    return myTaskLoadProblems;
   }
 
   private TaskManager getManager() {

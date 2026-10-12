@@ -35,6 +35,9 @@ import biz.ganttproject.ganttview.TaskFilterManager
 import biz.ganttproject.lib.fx.TreeCollapseView
 import com.google.common.base.Charsets
 import net.sourceforge.ganttproject.GPLogger
+import net.sourceforge.ganttproject.fork.CustomPropertyProblem
+import net.sourceforge.ganttproject.fork.DanglingDependencyProblem
+import net.sourceforge.ganttproject.fork.TaskLoadProblems
 import net.sourceforge.ganttproject.gui.zoom.ZoomManager
 import net.sourceforge.ganttproject.task.CostStub
 import net.sourceforge.ganttproject.task.Task
@@ -56,6 +59,13 @@ class TaskLoader(private val taskManager: TaskManager, private val treeCollapseV
   val legacyFixedStartTasks = mutableListOf<Task>()
   val dependencies = mutableListOf<GanttDependStructure>()
   private val mapXmlGantt = mutableMapOf<XmlTask, Task>()
+
+  /**
+   * [fork change] The dangling dependencies and unreadable custom property values of THIS load.
+   * Read after loading by whoever has a user interface -- this class and [loadDependencyGraph]
+   * have none. Same split as [net.sourceforge.ganttproject.fork.VacationProblems].
+   */
+  val taskLoadProblems = TaskLoadProblems()
 
   fun loadTaskCustomPropertyDefinitions(xmlProject: XmlProject) {
     val bufferCustomPropertyManager = CustomColumnsManager()
@@ -173,7 +183,17 @@ class TaskLoader(private val taskManager: TaskManager, private val treeCollapseV
       xmlCustomProperty.value?.let { valueStr ->
         when {
           cc.type == java.lang.String::class.java -> valueStr
-          cc.type == java.lang.Boolean::class.java -> java.lang.Boolean.valueOf(valueStr)
+          cc.type == java.lang.Boolean::class.java -> {
+            // [fork change] Boolean.valueOf() never throws: anything other than "true" (any case)
+            // becomes false, so a typo or a leftover text from another column was silently turning
+            // into a value nobody wrote. Still load as false -- the column has no other value to
+            // offer -- but say so, because a correction nobody can check must be said out loud.
+            if (!valueStr.equals("true", ignoreCase = true) && !valueStr.equals("false", ignoreCase = true)) {
+              taskLoadProblems.recordCustomProperty(
+                CustomPropertyProblem(taskName = task.name, taskID = task.taskID, columnName = cc.name, rawValue = valueStr))
+            }
+            java.lang.Boolean.valueOf(valueStr)
+          }
           cc.type == java.lang.Integer::class.java -> Integer.valueOf(valueStr)
           cc.type == java.lang.Double::class.java -> java.lang.Double.valueOf(valueStr)
           GregorianCalendar::class.java.isAssignableFrom(cc.type) ->
@@ -204,10 +224,24 @@ data class GanttDependStructure(
   var hardness: Hardness = Hardness.STRONG
 )
 
-fun loadDependencyGraph(deps: List<GanttDependStructure>, taskManager: TaskManager, legacyFixedStartTasks: List<Task>) {
+fun loadDependencyGraph(
+  deps: List<GanttDependStructure>,
+  taskManager: TaskManager,
+  legacyFixedStartTasks: List<Task>,
+  problems: TaskLoadProblems = TaskLoadProblems()
+) {
   deps.forEach { ds ->
-    val dependee: Task = taskManager.getTask(ds.taskID) ?: return@forEach
-    val dependant: Task = taskManager.getTask(ds.successorTaskID) ?: return@forEach
+    val dependee: Task? = taskManager.getTask(ds.taskID)
+    val dependant: Task? = taskManager.getTask(ds.successorTaskID)
+    if (dependee == null || dependant == null) {
+      // [fork change] A <depend> naming a task id this file does not have used to vanish here
+      // without a word: `?: return@forEach` on either lookup, no GPLogger.log unlike the
+      // TaskDependencyException catch two lines below. There is no task to attach it to, so the
+      // dependency still cannot be created -- but that it was dropped is said out loud now.
+      problems.recordDanglingDependency(
+        DanglingDependencyProblem(ownerTaskName = dependee?.name, ownerTaskID = ds.taskID, missingTaskID = ds.successorTaskID))
+      return@forEach
+    }
     try {
       val dep = taskManager.dependencyCollection.createDependency(dependant, dependee, FinishStartConstraintImpl())
       dep.constraint = taskManager.createConstraint(ds.dependType)
