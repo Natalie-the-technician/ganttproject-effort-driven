@@ -37,6 +37,7 @@ import org.osgi.service.prefs.Preferences;
 
 import javax.swing.*;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -130,40 +131,35 @@ public class ImporterFromGanttFile extends ImporterBase {
       getUiFacade().showErrorDialog(unansweredCalendarQuestionText());
       return;
     }
-    final File selectedFile = getFile();
     final IGanttProject targetProject = getProject();
-    getUiFacade().getUndoManager().undoableEdit("Import", new Runnable() {
-      @Override
-      public void run() {
-        getModel().getFiles().forEach( file -> {
-          final BufferProject bufferProject = createBufferProject(targetProject, getUiFacade());
-          ImporterFromGanttFile.this.run(file, targetProject, bufferProject);
-        });
-      }
-    });
-  }
 
-  private void run(File selectedFile, IGanttProject targetProject, BufferProject bufferProject) {
-    try {
-      Document document = bufferProject.getDocumentManager().getDocument(selectedFile.getAbsolutePath());
-      AlgorithmCollection algs = getProject().getTaskManager().getAlgorithmCollection();
+    // READ EVERY FILE AND RESOLVE ITS BASELINE QUESTION *BEFORE* OPENING THE UNDO TRANSACTION.
+    // ADDED IN THIS FORK, for the same reason the calendar guard above sits before
+    // getUndoManager() and not inside its Runnable: UndoManagerImpl.undoableEdit() registers an
+    // undo-stack entry UNCONDITIONALLY, before its Runnable even starts -- so a baseline question
+    // left unanswered INSIDE that Runnable would still have left an edit (an empty one, but one)
+    // on the stack. Resolving every file's question out here means an unanswered one can `return`
+    // before undoableEdit is ever called, which is what "der Import geht nicht weiter" has to mean
+    // for the baseline question too, not only for the calendar one.
+    //
+    // A FILE THAT FAILS TO READ IS SKIPPED, NOT FATAL -- same as the per-file try/catch this
+    // replaces: one bad file does not stop the others, it is reported and left out.
+    List<PreparedImport> prepared = new ArrayList<>();
+    for (File file : getModel().getFiles()) {
+      BufferProject bufferProject = createBufferProject(targetProject, getUiFacade());
       try {
-        algs.getScheduler().setEnabled(false);
-        algs.getRecalculateTaskScheduleAlgorithm().setEnabled(false);
-        algs.getAdjustTaskBoundsAlgorithm().setEnabled(false);
-        document.read();
-      } finally {
-        algs.getRecalculateTaskScheduleAlgorithm().setEnabled(true);
-        algs.getAdjustTaskBoundsAlgorithm().setEnabled(true);
-        algs.getScheduler().setEnabled(true);
+        readDocument(file, bufferProject);
+      } catch (Exception e) {
+        getUiFacade().showErrorDialog(e);
+        continue;
       }
 
       // THE BASELINE-NAME QUESTION, ADDED IN THIS FORK. "einmal fragen, für alle" (Natalie,
       // 10.10.2026): collisions are collected ONCE for the whole file, not per baseline, and the
-      // dialog -- if there is anything to ask about at all -- falls at most once per call of this
-      // method. bufferProject.getBaselines() is only known from here on, after document.read()
-      // above; that is why this cannot be a wizard-page option decided ahead of time the way the
-      // calendar question above is.
+      // dialog -- if there is anything to ask about at all -- falls at most once per file.
+      // bufferProject.getBaselines() is only known from here on, after readDocument() above; that
+      // is why this cannot be a wizard-page option decided ahead of time like the calendar
+      // question is.
       List<String> collidingBaselineNames = baselineNameCollisions(bufferProject.getBaselines(), targetProject.getBaselines());
       BaselineNameCollision baselineNameCollision;
       if (collidingBaselineNames.isEmpty()) {
@@ -173,19 +169,59 @@ public class ImporterFromGanttFile extends ImporterBase {
       } else {
         BaselineCollisionAnswer answer = myBaselineCollisionAsk.apply(collidingBaselineNames);
         if (answer == null) {
-          // OHNE ANTWORT PASSIERT NICHTS: the dialog was closed without a choice. Nothing of this
-          // import has been written to the target project yet -- document.read() above only
-          // parsed the file into the throwaway bufferProject -- so returning here leaves the
-          // target exactly as it was, the same guarantee the unanswered calendar question gives.
+          // OHNE ANTWORT PASSIERT NICHTS: the dialog was closed without a choice. Nothing of
+          // THIS IMPORT -- not this file's baselines, not this file's tasks, not any OTHER file
+          // already queued in `prepared` -- is written to the target project: undoableEdit below
+          // is simply never reached.
           return;
         }
         baselineNameCollision = answer.getPolicy();
       }
+      prepared.add(new PreparedImport(bufferProject, baselineNameCollision));
+    }
 
-      importBufferProject(targetProject, bufferProject, BufferProjectImportKt.asImportBufferProjectApi(getUiFacade()),
-          myMergeResourcesOption, myImportCalendarOption, false, baselineNameCollision);
-    } catch (Exception  e) {
-      getUiFacade().showErrorDialog(e);
+    if (prepared.isEmpty()) {
+      return;
+    }
+    getUiFacade().getUndoManager().undoableEdit("Import", new Runnable() {
+      @Override
+      public void run() {
+        for (PreparedImport p : prepared) {
+          try {
+            importBufferProject(targetProject, p.bufferProject, BufferProjectImportKt.asImportBufferProjectApi(getUiFacade()),
+                myMergeResourcesOption, myImportCalendarOption, false, p.baselineNameCollision);
+          } catch (Exception e) {
+            getUiFacade().showErrorDialog(e);
+          }
+        }
+      }
+    });
+  }
+
+  /** One file, already parsed and with its baseline question (if any) already resolved. */
+  private static class PreparedImport {
+    final BufferProject bufferProject;
+    final BaselineNameCollision baselineNameCollision;
+
+    PreparedImport(BufferProject bufferProject, BaselineNameCollision baselineNameCollision) {
+      this.bufferProject = bufferProject;
+      this.baselineNameCollision = baselineNameCollision;
+    }
+  }
+
+  /** Parses {@code file} into {@code bufferProject}. Does not touch the target project. */
+  private void readDocument(File file, BufferProject bufferProject) throws Document.DocumentException, IOException {
+    Document document = bufferProject.getDocumentManager().getDocument(file.getAbsolutePath());
+    AlgorithmCollection algs = getProject().getTaskManager().getAlgorithmCollection();
+    try {
+      algs.getScheduler().setEnabled(false);
+      algs.getRecalculateTaskScheduleAlgorithm().setEnabled(false);
+      algs.getAdjustTaskBoundsAlgorithm().setEnabled(false);
+      document.read();
+    } finally {
+      algs.getRecalculateTaskScheduleAlgorithm().setEnabled(true);
+      algs.getAdjustTaskBoundsAlgorithm().setEnabled(true);
+      algs.getScheduler().setEnabled(true);
     }
   }
 
