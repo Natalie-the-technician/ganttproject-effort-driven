@@ -443,6 +443,29 @@ straight into the target project without a buffer, so nothing is carried at all.
 calendar importer creates no tasks and is unaffected. Read in the code, not measured
 on screen.
 
+**A CSV header that collides with a custom property's internal id, rather than its
+display name, imports into the wrong place — and says nothing.** `CSVImport.kt:144`
+looks a header up with `getCustomPropertyDefinition(fieldName)`, which matches a
+column's *id*, not its *name*; the two are different strings in general, and nothing
+stops a header from colliding with either. Two outcomes follow, both silent: a header
+that matches an existing column's name but not its id creates a second column under
+that same display name instead of reusing the one already there, and a header that
+happens to equal an unrelated column's id writes its values into that column instead.
+Both are pinned as expected-to-fail in `CsvCustomPropertyIdTest` (measured
+08.10.2026): B1 — "The CSV import created a second custom column with the same name.
+Columns now: id=tpc0 name=Department class=text | id=Department name=Department
+class=text" — and B2 — "A CSV column headed 'tpc0' was written into the project's
+column named 'Department'". `GPLogger.logToLogger` is the only place this import path
+reports anything, and it is reached only when neither the id lookup nor a fresh
+`createDefinition` succeeds — which happens in neither B1 nor B2, so there is no
+error, no warning dialog and no log line. Whether the values that should have gone
+into the right column are overwritten, kept in the new duplicate, or lost outright is
+not established here. Fixing it is not a one-line change: switching the lookup to
+match by name collides with `createDefinition`'s own id allocation
+(`CustomColumnsException: Column with ID=... is already registered`, measured
+08.10.2026 and reverted) — the lookup and the creation both need to change together.
+Left as is, by decision. Read in the code, not measured on screen.
+
 **The baseline legend no longer names a quantity.** The three lines in the baseline
 dialog come from the original and used to talk about a task's *end* ("Task remains on
 schedule"). That fits the dates view and nothing else, and the dialog does not know which
