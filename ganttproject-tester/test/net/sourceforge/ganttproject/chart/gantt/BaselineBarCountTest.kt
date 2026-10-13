@@ -36,6 +36,9 @@ import biz.ganttproject.core.time.impl.GPTimeUnitStack
 import biz.ganttproject.customproperty.CustomColumnsManager
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.GanttPreviousStateTask
+import net.sourceforge.ganttproject.fork.AbsenceRun
+import net.sourceforge.ganttproject.fork.ChartComparison
+import net.sourceforge.ganttproject.fork.HiddenTaskGap
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -193,12 +196,26 @@ private class InputApiStub(
   override fun getTasksUnitOffsets(): OffsetList = offsets
   override fun getProgressBarTimeUnit(): TimeUnit = GPTimeUnitStack.DAY
   override fun getVerticalPartitioning(): VerticalPartitioning =
-    VerticalPartitioning(listOf(task)) { _, _ -> true }
+    VerticalPartitioning(listOf(task), areUnrelated = { _, _ -> true })
 
   override fun getVisibleTasks(): List<ITask> = listOf()
   override fun getVisibleTaskSceneTasks(): List<ITaskSceneTask> = listOf(task)
   override fun getTasksInDocumentOrder(): List<ITaskSceneTask> = listOf(task)
   override fun getBaseline(): List<GanttPreviousStateTask> = baseline
+
+  // DATES: the classic baseline-bar comparison this test measures (renderComparisonBand's
+  // `default` case). EFFORT/DURATIONS/DATES_AND_DURATIONS are a different fork feature and are
+  // never reached from this stub, so getOriginalEffortHours/getActualEffortHours below are never
+  // actually called -- their values are placeholders, not measured.
+  override fun getComparison(): ChartComparison = ChartComparison.DATES
+  override fun getOriginalEffortHours(rowId: Int): Double = 0.0
+  override fun getActualEffortHours(rowId: Int): Double = 0.0
+  // Empty is the ordinary case for both (see GanttChartSceneBuilder's own comment on
+  // getSeriesBars) -- this scene has neither an absence to show nor a series bar to draw.
+  override fun getAbsenceRuns(rowId: Int): List<AbsenceRun> = emptyList()
+  override fun getSeriesBars(rowId: Int): List<ITaskActivity<ITaskSceneTask>> = emptyList()
+  // Nothing is hidden in this scene: the single task is always inside the viewport.
+  override fun getHiddenTaskGaps(): List<HiddenTaskGap> = emptyList()
 
   override fun getChartApi(labelsRenderer: TaskLabelSceneBuilder<ITaskSceneTask>): TaskActivitySceneBuilder.ChartApi =
     object : TaskActivitySceneBuilder.ChartApi {

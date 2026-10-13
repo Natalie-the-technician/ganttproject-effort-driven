@@ -407,23 +407,11 @@ class LevellingAction(
         if (sichern) {
           val name = forkText("fork.baseline.name", today().toString())
           val basisplan = GanttPreviousState(name, GanttPreviousState.createTasks(taskManager))
-          // init() AND saveFile() ARE MANDATORY, and the constructor does not show it: a
-          // baseline does NOT hold its Tasks in memory but in a temporary file. `load()` -- what
-          // the saver and the chart call -- reads exactly that file. Without the two calls
-          // `myFile` is null: the baseline would be visible in the list, invisible in the chart
-          // and an exception when saving. Looked up in the code
-          // (GanttPreviousState.java:55/75/99), after the first attempt had left them out.
-          try {
-            basisplan.init()
-            basisplan.saveFile()
-            baselines().add(basisplan)
-            meldung.append(forkText("fork.baseline.done", name)).appendLine()
-          } catch (e: java.io.IOException) {
-            // No baseline is bad; half a one would be worse. Better to report and carry on --
-            // levelling itself is unaffected by it.
-            net.sourceforge.ganttproject.GPLogger.log(e)
-            meldung.append(forkText("fork.baseline.failed")).appendLine()
-          }
+          // [Since 13.10.2026 / bardsoft #2838] the constructor alone is enough -- a baseline
+          // holds its Tasks in memory from this point on, there is no further call that could
+          // fail, and `getTasks()` (what the saver and the chart call) reads that same list.
+          baselines().add(basisplan)
+          meldung.append(forkText("fork.baseline.done", name)).appendLine()
         }
         val written = applyLevellingAsSingleEdit(result.starts, taskManager, undoManager,
           forkText("fork.levelling.undo"), result.durations,

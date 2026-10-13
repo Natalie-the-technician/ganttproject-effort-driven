@@ -44,12 +44,9 @@ import java.util.Locale
  */
 class AutoBaselinePruneTest {
 
-  /** A baseline needs no tasks for this question -- only a name and a temporary file. */
+  /** A baseline needs no tasks for this question -- only a name. */
   private fun baseline(name: String): GanttPreviousState =
-    GanttPreviousState(name, emptyList<GanttPreviousStateTask>()).also {
-      it.init()
-      it.saveFile()
-    }
+    GanttPreviousState(name, emptyList<GanttPreviousStateTask>())
 
   private fun levellingName(day: String) = forkText("fork.baseline.name", day)
 
@@ -198,23 +195,23 @@ class AutoBaselinePruneTest {
   }
 
   /**
-   * A REMOVED BASELINE'S TEMPORARY FILE IS GONE. `GanttPreviousState.remove()` (line 95-97)
-   * deletes it; taking the entry out of the list alone would leave the file behind until the JVM
-   * exits, and the point of the limit is that they do not accumulate.
-   *
-   * RED against 67f8b58df:
-   *   e: .../fork/AutoBaselinePruneTest.kt:214:5 Unresolved reference 'pruneAutoBaselines'.
+   * A REMOVED BASELINE LEAVES NOTHING BEHIND TO CLEAN UP. [Since 13.10.2026 / bardsoft #2838] a
+   * baseline no longer lives in a temporary file -- `pruneAutoBaselines` only has to take the
+   * entry out of the list, and it does. A stray reference to the removed object (as `alt` is here)
+   * stays a perfectly ordinary, readable object; nothing needs to invalidate it, because nothing
+   * was ever written to disk for it in the first place.
    */
   @Test
-  fun `der entfernte basisplan laesst keine temporaere datei zurueck`() {
+  fun `der entfernte basisplan ist einfach aus der liste draussen`() {
     val alt = baseline(levellingName("2026-08-01"))
     val baselines = mutableListOf(alt, baseline(levellingName("2026-08-02")))
-    assertTrue(alt.load() != null, "Aufbau: die temporaere Datei ist lesbar")
 
-    pruneAutoBaselines(baselines, limit = 1)
+    val entfernt = pruneAutoBaselines(baselines, limit = 1)
 
-    assertNull(alt.load(),
-      "nach dem Entfernen darf die temporaere Datei nicht mehr lesbar sein")
+    assertTrue(alt !in baselines, "der aeltere ist aus der Liste draussen")
+    assertEquals(listOf(alt), entfernt, "und genau er ist der entfernte")
+    assertEquals(emptyList<GanttPreviousStateTask>(), alt.getTasks(),
+      "der entfernte bleibt ein gewoehnliches, lesbares Objekt")
   }
 
   /**

@@ -24,6 +24,7 @@ import biz.ganttproject.customproperty.CustomPropertyHolder
 import biz.ganttproject.customproperty.CustomPropertyManager
 import net.sourceforge.ganttproject.fork.findOrCreateOriginalEffort
 import net.sourceforge.ganttproject.storage.ProjectDatabase
+import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.algorithm.EffortDrivenProperties
 import net.sourceforge.ganttproject.task.algorithm.findEffortDefinition
 
@@ -52,6 +53,13 @@ fun applyEffortFieldsThenSyncColumns(
   holder: CustomPropertyHolder,
   definitions: CustomPropertyManager,
   projectDatabase: ProjectDatabase,
+  /**
+   * All of the project's tasks, already stored. [ProjectDatabase.onCustomColumnChange]'s own doc:
+   * pass an empty list only when the tasks are about to be INSERTED right after the call -- that
+   * is not the case here, a dialog edits a task of an already-open project, and an empty list
+   * would wipe every other task's custom values when a column is (re-)created.
+   */
+  tasks: List<Task>,
   fields: List<(CustomPropertyHolder) -> Unit>
 ) {
   fields.forEach { field -> field(holder) }
@@ -64,7 +72,7 @@ fun applyEffortFieldsThenSyncColumns(
   // Only when nothing has been recorded yet. A second call changes nothing.
   rememberOriginalEffort(holder, definitions)
   // Must stay AFTER the loop and after the line above: both may create a definition. See above.
-  projectDatabase.onCustomColumnChange(definitions)
+  projectDatabase.onCustomColumnChange(definitions, tasks)
 }
 
 private fun rememberOriginalEffort(

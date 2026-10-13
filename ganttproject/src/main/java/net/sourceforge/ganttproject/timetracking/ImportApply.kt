@@ -161,8 +161,12 @@ fun applyTaskImport(
 
   val actualDef = EffortDrivenProperties.findOrCreateTaskActualEffort(taskProperties)
   val ledgerDef = TimeTrackingProperties.findOrCreateImportedEntries(taskProperties)
-  // Both definitions exist now; the mirror table needs its columns before the first write.
-  projectDatabase.onCustomColumnChange(taskProperties)
+  // Both definitions exist now; the mirror table needs its columns before the first write. ALL of
+  // the project's tasks go in, not only `toWrite`: they are already stored, and recreating a
+  // column without naming them would wipe every OTHER custom value on tasks this import batch does
+  // not touch (ProjectDatabase.onCustomColumnChange's own doc). Read off any task's own manager --
+  // this function is not handed a TaskManager, and `toWrite` is non-empty here.
+  projectDatabase.onCustomColumnChange(taskProperties, toWrite.first().task.manager.tasks.toList())
 
   toWrite.forEach { change ->
     val values = change.task.customValues.copyOf()

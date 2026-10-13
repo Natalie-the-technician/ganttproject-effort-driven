@@ -50,23 +50,17 @@ sealed class BaselineGap {
 /**
  * The ids every one of [baselines] knows, read ONCE per baseline.
  *
- * THIS IS WHERE THE WHOLE PRICE OF THE QUESTION SITS. `GanttPreviousState.load()`
- * (`GanttPreviousState.java:99-118`) builds a fresh `SAXParserFactory` and a fresh `SAXParser` on
- * every call and re-reads the temporary file from disk; there is no cache anywhere. Measured on
- * 02.09.2026 against the real plan of 276 tasks: one pass costs 2.3 ms over one baseline and
- * 29.0 ms over fifteen, of which the set comparison below is 0.058 ms. So the loop reads each
- * baseline exactly once, and the caller — [LevellingStalenessBar] — asks only when it switches
- * the message on, not on every event.
- *
- * A BASELINE THAT CANNOT BE READ CONTRIBUTES NOTHING AND BREAKS NOTHING. `load()` swallows its
- * exception and hands back null; the ids it would have carried are simply missing, which can make
- * a task look uncovered. Reporting one task too many is the harmless direction — throwing inside
- * a status bar is not.
+ * [Since 13.10.2026 / bardsoft #2838] `GanttPreviousState.getTasks()` hands back the in-memory
+ * list directly (`Collections.unmodifiableList`) -- no parser, no temporary file, no re-read from
+ * disk. The 02.09.2026 measurement that used to justify calling this only on the edge
+ * (2.3 ms / 29.0 ms over one and fifteen baselines, almost all of it `load()` re-parsing) no
+ * longer applies to the cost of THIS function; [LevellingStalenessBar] still asks only when the
+ * mark switches on, which remains the right place to ask regardless of how cheap one pass is.
  */
 fun idsInBaselines(baselines: List<GanttPreviousState>): Set<Int> {
   val ids = HashSet<Int>()
   baselines.forEach { baseline ->
-    baseline.load()?.forEach { ids.add(it.id) }
+    baseline.getTasks().forEach { ids.add(it.id) }
   }
   return ids
 }

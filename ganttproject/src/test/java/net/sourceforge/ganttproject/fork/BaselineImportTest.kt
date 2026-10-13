@@ -51,14 +51,11 @@ class BaselineImportTest {
   private fun task(manager: TaskManager, name: String, duration: Int): Task =
     manager.newTaskBuilder().withName(name).withDuration(manager.createLength(duration.toLong())).build()
 
-  /** A baseline with entries, written to its temporary file the way the program does it. */
+  /** A baseline with entries. */
   private fun baseline(name: String, vararg entries: Pair<Int, Int>): GanttPreviousState =
     GanttPreviousState(name, entries.map { (id, duration) ->
       GanttPreviousStateTask(id, CalendarFactory.createGanttCalendar(2026, 9, 5), duration, false, false)
-    }).also {
-      it.init()
-      it.saveFile()
-    }
+    })
 
   @Test
   fun `der basisplan zeigt auf die NEUEN vorgaenge, nicht auf die gleichnamigen ids des ziels`() {
@@ -80,7 +77,7 @@ class BaselineImportTest {
     )
 
     assertEquals(1, zielBasisplaene.size, "der Basisplan kommt an")
-    val eintraege = zielBasisplaene.single().load()!!
+    val eintraege = zielBasisplaene.single().getTasks()
     assertEquals(1, eintraege.size)
     assertEquals(
       quellVorgangImportiert.taskID, eintraege.single().id,
@@ -98,12 +95,13 @@ class BaselineImportTest {
   }
 
   @Test
-  fun `die eintraege sind in der datei und nicht nur im hauptspeicher`() {
-    // THE OTHER THING THE CLOUD IMPORT PATH GETS WRONG: a GanttPreviousState keeps its entries in
-    // a temporary file, and load() -- what the chart and the saver call -- reads exactly that
-    // file. Without init() + saveFile() the baseline is visible in the list, invisible in the
-    // chart and an exception when saving. load() returning the entries IS the proof the file was
-    // written, because nothing else could answer.
+  fun `der importierte basisplan traegt die uebernommene dauer und ist im ziel sofort lesbar`() {
+    // THE OTHER THING THE CLOUD IMPORT PATH USED TO GET WRONG, back when a baseline kept its
+    // entries in a temporary file written by init() + saveFile(): the import path called neither,
+    // so the baseline was visible in the list but invisible in the chart. [Since 13.10.2026 /
+    // bardsoft #2838] a `GanttPreviousState` is ready to read the moment it is constructed -- this
+    // pins that `importBaselines` hands the duration through unchanged, and that `getTasks()` --
+    // what the chart and the saver call -- reads it back without anything further needed.
     val manager = taskManager()
     val original = task(manager, "A", 3)
     val importiert = task(manager, "A importiert", 3)
@@ -114,7 +112,7 @@ class BaselineImportTest {
       mapOf(original to importiert), BaselineNameCollision.APPEND_AS_IS
     )
 
-    assertEquals(3, ziel.single().load()!!.single().duration, "aus der Datei gelesen, nicht geraten")
+    assertEquals(3, ziel.single().getTasks().single().duration, "die Dauer kam unveraendert an")
   }
 
   @Test
@@ -132,7 +130,7 @@ class BaselineImportTest {
       mapOf(bleibt to bleibtImportiert), BaselineNameCollision.APPEND_AS_IS
     )
 
-    assertEquals(1, ziel.single().load()!!.size, "nur der Eintrag mit Gegenstueck kommt an")
+    assertEquals(1, ziel.single().getTasks().size, "nur der Eintrag mit Gegenstueck kommt an")
     assertEquals(mapOf("Basis" to 1), result.droppedEntries, "der andere wird GEMELDET, nicht verschwiegen")
   }
 
@@ -167,7 +165,7 @@ class BaselineImportTest {
     val result = importBaselines(quelle, ziel, mapping, BaselineNameCollision.APPEND_AS_IS)
     assertEquals(listOf("Basis", "Basis"), ziel.map { it.name })
     assertEquals(emptyMap<String, String>(), result.renamed)
-    assertEquals(listOf(5, 9), ziel.map { it.load()!!.single().duration }, "verschiedener Inhalt, gleicher Name")
+    assertEquals(listOf(5, 9), ziel.map { it.getTasks().single().duration }, "verschiedener Inhalt, gleicher Name")
   }
 
   @Test
@@ -203,7 +201,7 @@ class BaselineImportTest {
     val (ziel, quelle, mapping) = kollisionsaufbau()
     val result = importBaselines(quelle, ziel, mapping, BaselineNameCollision.REPLACE_EXISTING)
     assertEquals(listOf("Basis"), ziel.map { it.name }, "nur noch einer")
-    assertEquals(9, ziel.single().load()!!.single().duration, "und es ist der importierte")
+    assertEquals(9, ziel.single().getTasks().single().duration, "und es ist der importierte")
     assertEquals(listOf("Basis"), result.replaced, "der Verlust wird gemeldet")
   }
 
@@ -212,7 +210,7 @@ class BaselineImportTest {
     val (ziel, quelle, mapping) = kollisionsaufbau()
     val result = importBaselines(quelle, ziel, mapping, BaselineNameCollision.SKIP_COLLIDING)
     assertEquals(listOf("Basis"), ziel.map { it.name })
-    assertEquals(5, ziel.single().load()!!.single().duration, "es ist der des Ziels")
+    assertEquals(5, ziel.single().getTasks().single().duration, "es ist der des Ziels")
     assertEquals(listOf("Basis"), result.skippedForNameCollision, "und der Verlust wird gemeldet")
   }
 

@@ -74,7 +74,9 @@ class DateColumnStorageTest {
     // created a different column and reconciled before setDeadline produced the right one:
     // "Column deadline not found". The same trap as in session 3.
     findOrCreateDeadline(props)
-    db.onCustomColumnChange(props)
+    // emptyList(): the task below does not exist yet, it is inserted right after this call
+    // (ProjectDatabase.onCustomColumnChange's own doc covers exactly this case).
+    db.onCustomColumnChange(props, emptyList())
 
     val task = taskManager.newTaskBuilder().withName("mit Frist").build()
     task.setDeadline(props, LocalDate.of(2026, 8, 31))

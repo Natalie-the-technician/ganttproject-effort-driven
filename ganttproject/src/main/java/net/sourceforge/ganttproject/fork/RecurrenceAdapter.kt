@@ -218,8 +218,10 @@ fun applyRecurrencesAsSingleEdit(
   val markDef = findOrCreateRecurrenceOf(taskProperties)
   val effortDef = EffortDrivenProperties.findOrCreateTaskEffort(taskProperties)
   // Without this call the definition exists without a database column, and every write fails.
-  // Happened exactly like that in session 3.
-  projectDatabase.onCustomColumnChange(taskProperties)
+  // Happened exactly like that in session 3. All of the project's tasks, already stored -- an
+  // empty list would wipe their other custom values when the column is (re-)created
+  // (ProjectDatabase.onCustomColumnChange's own doc).
+  projectDatabase.onCustomColumnChange(taskProperties, taskManager.tasks.toList())
 
   var angelegt = 0
   undoManager.undoableEdit(editName) {

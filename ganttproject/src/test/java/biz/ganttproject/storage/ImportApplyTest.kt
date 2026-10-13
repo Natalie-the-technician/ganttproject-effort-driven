@@ -83,7 +83,7 @@ class ImportApplyTest {
     // test can remove it and check that the import creates its columns on its own.
     listener = object : CustomPropertyListener {
       override fun customPropertyChange(event: CustomPropertyEvent) {
-        projectDatabase.onCustomColumnChange(properties)
+        projectDatabase.onCustomColumnChange(properties, taskManager.tasks.toList())
       }
     }
     properties.addListener(listener)

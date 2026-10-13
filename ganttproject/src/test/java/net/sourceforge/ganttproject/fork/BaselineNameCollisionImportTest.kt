@@ -94,10 +94,7 @@ class BaselineNameCollisionImportTest {
   /** A real, readable .gan file whose only content of interest is one baseline named [name]. */
   private fun savedFileWithBaseline(name: String): File {
     val project = GanttProjectImpl()
-    project.baselines.add(GanttPreviousState(name, emptyList()).also {
-      it.init()
-      it.saveFile()
-    })
+    project.baselines.add(GanttPreviousState(name, emptyList()))
     val file = File.createTempFile("BaselineNameCollisionImportTest", ".gan").also { it.deleteOnExit() }
     FileOutputStream(file).use { out -> GanttXMLSaver(project).save(out) }
     return file
@@ -145,7 +142,7 @@ class BaselineNameCollisionImportTest {
   @Test
   fun `ohne antwort auf die basisplan-frage bleibt das zielprojekt unangetastet`() {
     val ziel = GanttProjectImpl()
-    ziel.baselines.add(GanttPreviousState("Basis", emptyList()).also { it.init(); it.saveFile() })
+    ziel.baselines.add(GanttPreviousState("Basis", emptyList()))
     val basisplaeneVorher = ziel.baselines.toList()
     val vorgaengeVorher = ziel.taskManager.tasks.size
 
@@ -173,7 +170,7 @@ class BaselineNameCollisionImportTest {
     // Belegt den Gegenbeweis: eine Fassung, die IMMER verweigert, wuerde den Fall oben auch
     // bestehen, aber aus dem falschen Grund.
     val ziel = GanttProjectImpl()
-    ziel.baselines.add(GanttPreviousState("Basis", emptyList()).also { it.init(); it.saveFile() })
+    ziel.baselines.add(GanttPreviousState("Basis", emptyList()))
 
     val datei = savedFileWithBaseline("Basis")
     val uiFacade: UIFacade = TestUIFacade()

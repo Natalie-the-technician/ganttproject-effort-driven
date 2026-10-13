@@ -47,11 +47,12 @@ import java.util.Locale
  * remember but a consequence of where the nodes hang: they are children of the very box that is
  * invisible and unmanaged while the mark is clear.
  *
- * AND IT IS NOT EVEN COMPUTED THEN. Measured on 02.09.2026 against the real plan of 276 tasks:
- * one pass over the baselines costs 2.3 ms with one baseline and 29.0 ms with fifteen, of which
- * essentially all is `GanttPreviousState.load()` re-parsing the temporary files. A question asked
- * on every keystroke would be paid for at that rate, so it is asked only on the EDGE -- when the
- * message switches itself on. The counting supplier below pins that.
+ * AND IT IS NOT EVEN COMPUTED THEN. Measured on 02.09.2026 against the real plan of 276 tasks: one
+ * pass over the baselines cost 2.3 ms with one baseline and 29.0 ms with fifteen, back when
+ * `GanttPreviousState.load()` re-parsed a temporary file per baseline. [Since 13.10.2026 /
+ * bardsoft #2838] `getTasks()` carries no such cost any more -- but it is still asked only on the
+ * EDGE, when the message switches itself on, because that stays the simpler rule regardless of
+ * how cheap one pass is. The counting supplier below pins that it is asked at most once per edge.
  */
 class LevellingStalenessBarBaselineTest {
 

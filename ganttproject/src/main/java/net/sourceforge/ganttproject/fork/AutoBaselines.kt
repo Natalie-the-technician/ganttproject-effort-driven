@@ -138,16 +138,13 @@ fun autoBaselinesToPrune(baselines: List<GanttPreviousState>,
  * runs, however many of them there are — that is the promise of this package and it has a test of
  * its own (`AutoBaselinePruneTest`).
  *
- * `remove()` AS WELL AS TAKING IT OUT OF THE LIST: a baseline lives in a temporary file
- * (`GanttPreviousState.java:95-97`), and dropping only the list entry would leave the file behind
- * until the JVM exits — which is the very thing the limit exists to prevent.
+ * TAKING IT OUT OF THE LIST IS ALL THAT IS NEEDED. [Since 13.10.2026 / bardsoft #2838] a baseline
+ * no longer lives in a temporary file; there is nothing left to delete once it is no longer
+ * referenced.
  */
 fun pruneAutoBaselines(baselines: MutableList<GanttPreviousState>,
                        limit: Int = MAX_AUTO_BASELINES_PER_KIND): List<GanttPreviousState> {
   val doomed = autoBaselinesToPrune(baselines, incoming = null, limit = limit)
-  doomed.forEach {
-    baselines.remove(it)
-    it.remove()
-  }
+  doomed.forEach { baselines.remove(it) }
   return doomed
 }

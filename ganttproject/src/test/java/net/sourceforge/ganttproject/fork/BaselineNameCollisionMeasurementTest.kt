@@ -77,7 +77,7 @@ class BaselineNameCollisionMeasurementTest {
     // They are two distinct objects with distinct content, which is why the collision is not
     // harmless: a reader cannot tell them apart by anything the interface shows.
     assertNotEquals(
-      baselines[0].load().first().duration, baselines[1].load().first().duration,
+      baselines[0].getTasks().first().duration, baselines[1].getTasks().first().duration,
       "verschiedener Inhalt (5 gegen 9 Tage), gleicher Name -- in der Liste nicht unterscheidbar"
     )
   }

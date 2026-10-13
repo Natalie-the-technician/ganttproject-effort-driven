@@ -109,6 +109,10 @@ class AssignmentAxisEventTest {
       override fun getNotificationManager(): NotificationManager? = null
       override fun getSchedulerDisabledOption(): BooleanOption =
         DefaultBooleanOption("scheduler.disabled", false)
+      // Added by bardsoft's TaskManagerConfig.getCriticalPathAlwaysOnOption() (merge
+      // nachziehen-bards-1012) -- default true, matching GanttProjectImpl's own field.
+      override fun getCriticalPathAlwaysOnOption(): BooleanOption =
+        DefaultBooleanOption("criticalPath.alwaysOn", true)
     })
   }
 

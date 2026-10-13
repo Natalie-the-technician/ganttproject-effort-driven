@@ -81,19 +81,23 @@ import javafx.scene.layout.HBox
  * nothing at all -- not because a rule says so but because there is nowhere for it to show.
  *
  * AND IT IS ONLY COMPUTED ON THE EDGE. Measured on 02.09.2026 against the real plan of 276 tasks:
- * one pass over the baselines costs 2.3 ms with one baseline and 29.0 ms with fifteen, essentially
- * all of it `GanttPreviousState.load()` re-parsing temporary files, and there is no cache anywhere.
- * Asking on every task event would pay that on every keystroke. The mark is a LATCH -- it changes
- * value at most once between two levelling runs, and [LevellingStaleness] only calls its listeners
- * on a change -- so asking when the message switches itself on costs the pass once per cycle.
+ * one pass over the baselines cost 2.3 ms with one baseline and 29.0 ms with fifteen, back when
+ * `GanttPreviousState.load()` re-parsed a temporary file per baseline on every call. [Since
+ * 13.10.2026 / bardsoft #2838] `getTasks()` hands back the in-memory list directly, so that cost
+ * is gone -- but the mark stays a LATCH regardless: it changes value at most once between two
+ * levelling runs, and [LevellingStaleness] only calls its listeners on a change, so asking when the
+ * message switches itself on still costs at most one pass per cycle rather than one per event.
  *
  * WHAT THAT COSTS IN TRUTH, said plainly: a task added while the message is ALREADY on does not
  * update the second statement until the next levelling run clears the mark. The statement is then
  * too small, never too large, and it corrects itself at the next cycle. The other direction --
- * recomputing on `taskAdded` -- is rejected on an EXTRAPOLATION from the measured pass, not on a
- * measurement of its own: opening the real plan fires 276 of those events, and 276 passes at the
- * measured 2.3 / 29.0 ms is 0.6 s with one baseline and 8 s with fifteen, spent before the user
- * has done anything at all.
+ * recomputing on `taskAdded` -- was rejected on an EXTRAPOLATION from the pre-13.10.2026 measured
+ * pass (opening the real plan fires 276 of those events, and 276 passes at the then-measured
+ * 2.3 / 29.0 ms was 0.6 s with one baseline and 8 s with fifteen, spent before the user had done
+ * anything at all). [Since 13.10.2026 / bardsoft #2838] that extrapolation no longer holds --
+ * `getTasks()` has no parse cost left to multiply -- but the latch stays: a baseline tab held open
+ * through many `taskAdded` events still does one pass per levelling cycle instead of one per
+ * event, and that is simpler to reason about than "cheap enough today," not a measured need.
  */
 class LevellingStalenessBar(
   private val staleness: LevellingStaleness,

@@ -35,11 +35,12 @@ WHY THE CLOUD ONE CANNOT SIMPLY BE REUSED, which is the whole reason this file i
      DIFFERENT, EXISTING task of the target project, because low ids are taken there too. That is
      worse than losing the baseline: it would draw the imported project's history onto the target
      project's own tasks, and nothing in the interface would say so.
-  2. THE TEMPORARY FILE. A `GanttPreviousState` does not hold its entries in memory but in a
-     temporary file, written by `init()` + `saveFile()`. The cloud path calls neither (see
-     `importPreviousStateTasks`), which leaves a baseline that is visible in the list, invisible in
-     the chart and an exception when the project is saved. Found in the code, not by guessing --
-     `GanttPreviousState.java:55/75/99`, and documented once before in `LevellingActions.kt`.
+  2. [NO LONGER A REASON, since 13.10.2026 / bardsoft #2838 -- was reason 2 until the merge of
+     nachziehen-bards-1012.] A `GanttPreviousState` used to hold its entries in a temporary file,
+     written by `init()` + `saveFile()`, which the cloud path's `importPreviousStateTasks` never
+     called. That is moot now: a baseline is in-memory from construction on, and the cloud path
+     already builds one correctly (`GanttPreviousState(baseline.name, tasks)`, no further call
+     needed). Reason 1, the id translation, is the one this file still exists for.
 
 WHAT THIS FILE DOES NOT DECIDE, ON PURPOSE: what happens when the target project already has a
 baseline of the same name. [BaselineNameCollision] lists the possibilities, this file implements
@@ -60,7 +61,6 @@ package net.sourceforge.ganttproject.fork
 import net.sourceforge.ganttproject.GanttPreviousState
 import net.sourceforge.ganttproject.GanttPreviousStateTask
 import net.sourceforge.ganttproject.task.Task
-import java.io.IOException
 
 /**
  * What to do with an imported baseline whose name the target project already uses.
@@ -126,9 +126,7 @@ data class BaselineImportResult(
    * project, and keeping its id untranslated would point it at a stranger (see the file comment),
    * so it is dropped and counted.
    */
-  val droppedEntries: Map<String, Int> = emptyMap(),
-  /** Baselines that could not be written to their temporary file. */
-  val failed: Map<String, String> = emptyMap()
+  val droppedEntries: Map<String, Int> = emptyMap()
 )
 
 /**
@@ -163,10 +161,9 @@ fun importBaselines(
   val skipped = mutableListOf<String>()
   val replaced = mutableListOf<String>()
   val dropped = mutableMapOf<String, Int>()
-  val failed = mutableMapOf<String, String>()
 
   sourceBaselines.forEach { source ->
-    val originalEntries = source.load() ?: emptyList()
+    val originalEntries = source.getTasks()
     val translated = originalEntries.mapNotNull { entry ->
       id2id[entry.id]?.let { newId ->
         GanttPreviousStateTask(newId, entry.start, entry.duration, entry.isMilestone, entry.hasNested())
@@ -195,30 +192,18 @@ fun importBaselines(
       renamed[source.name] = name
     }
 
-    try {
-      val carried = GanttPreviousState(name, translated).also {
-        // init() AND saveFile() ARE BOTH MANDATORY: the entries live in a temporary file, not in
-        // memory. The cloud import path omits them, which is why it must not be copied here.
-        it.init()
-        it.saveFile()
-      }
-      if (collides && onNameCollision == BaselineNameCollision.REPLACE_EXISTING) {
-        val victim = targetBaselines.first { it.name == name }
-        targetBaselines[targetBaselines.indexOf(victim)] = carried
-        victim.remove()
-        replaced.add(name)
-      } else {
-        targetBaselines.add(carried)
-      }
-      imported.add(carried)
-    } catch (e: IOException) {
-      // No baseline is bad; half a one would be worse. The rest of the import is unaffected, so
-      // this is reported and carried on with -- the same decision LevellingActions.kt made.
-      failed[source.name] = e.message ?: e.javaClass.simpleName
+    val carried = GanttPreviousState(name, translated)
+    if (collides && onNameCollision == BaselineNameCollision.REPLACE_EXISTING) {
+      val victim = targetBaselines.first { it.name == name }
+      targetBaselines[targetBaselines.indexOf(victim)] = carried
+      replaced.add(name)
+    } else {
+      targetBaselines.add(carried)
     }
+    imported.add(carried)
   }
 
-  return BaselineImportResult(imported, renamed, skipped, replaced, dropped, failed)
+  return BaselineImportResult(imported, renamed, skipped, replaced, dropped)
 }
 
 /** "QUELLPROJEKT: Basis", or "Imported: Basis" when the imported project has no name. */

@@ -75,12 +75,7 @@ class BaselineAppendTest {
     ByteArrayOutputStream().also { GanttXMLSaver(project).save(it) }.toString(Charsets.UTF_8)
 
   private fun newBaseline(project: GanttProjectImpl, name: String) =
-    GanttPreviousState(name, GanttPreviousState.createTasks(project.taskManager)).also {
-      // init() AND saveFile() are mandatory: a baseline holds its entries in a temporary file,
-      // not in memory (GanttPreviousState.java:55/75). Without them load() runs into a null file.
-      it.init()
-      it.saveFile()
-    }
+    GanttPreviousState(name, GanttPreviousState.createTasks(project.taskManager))
 
   /**
    * A plan with three kinds of entry, so that the "unchanged" check covers all five fields and
@@ -119,15 +114,14 @@ class BaselineAppendTest {
   fun `der ergaenzte vorgang steht mit seiner geplanten lage im basisplan`() {
     val (project, baseline, _) = projectWithBaseline()
     val neu = futureTask(project)
-    assertTrue(baseline.load().none { it.id == neu.taskID },
+    assertTrue(baseline.getTasks().none { it.id == neu.taskID },
       "Vorbedingung: der neue Vorgang darf noch nicht im Basisplan stehen")
 
     val result = appendToBaseline(baseline, neu, project.taskManager)
     val appended = assertInstanceOf(BaselineAppendResult.Appended::class.java, result)
 
-    // load() and not the field: this reads the temporary file back, i.e. the round trip through
-    // HistorySaver -> XML -> PreviousStateTasksTagHandler that the saver and the chart also take.
-    val eintrag = appended.baseline.load().firstOrNull { it.id == neu.taskID }
+    // getTasks() -- the in-memory list the saver and the chart also read.
+    val eintrag = appended.baseline.getTasks().firstOrNull { it.id == neu.taskID }
     assertTrue(eintrag != null, "der neue Vorgang fehlt im ergaenzten Basisplan")
     assertEquals(LocalDate.of(2026, 10, 5), eintrag!!.start.time.toModelLocalDate())
     assertEquals(7, eintrag.duration)
@@ -165,7 +159,7 @@ class BaselineAppendTest {
   @Test
   fun `die alten eintraege kommen wert fuer wert unveraendert wieder heraus`() {
     val (project, baseline, _) = projectWithBaseline()
-    val vorher = baseline.load().map { it.snapshot() }
+    val vorher = baseline.getTasks().map { it.snapshot() }
     assertEquals(3, vorher.size, "Vorbedingung: drei Eintraege im Ausgangs-Basisplan")
     assertTrue(vorher.any { it.hasNested }, "Vorbedingung: ein Sammelvorgang ist dabei")
     assertTrue(vorher.any { it.isMilestone }, "Vorbedingung: ein Meilenstein ist dabei")
@@ -174,12 +168,12 @@ class BaselineAppendTest {
     val appended = appendToBaseline(baseline, neu, project.taskManager)
       as BaselineAppendResult.Appended
 
-    val nachher = appended.baseline.load().map { it.snapshot() }
+    val nachher = appended.baseline.getTasks().map { it.snapshot() }
     assertEquals(vorher.size + 1, nachher.size)
     // Value for value AND in the same order: the old entries are the head of the new list.
     assertEquals(vorher, nachher.take(vorher.size), "ein alter Eintrag hat sich veraendert")
     // And the source itself is untouched -- it still has its three entries.
-    assertEquals(vorher, baseline.load().map { it.snapshot() },
+    assertEquals(vorher, baseline.getTasks().map { it.snapshot() },
       "der Quell-Basisplan selbst wurde veraendert")
   }
 
@@ -190,7 +184,7 @@ class BaselineAppendTest {
   fun `ein schon eingetragener vorgang wird nicht doppelt aufgenommen`() {
     val (project, baseline, tasks) = projectWithBaseline()
     val schonDrin = tasks.first()
-    val vorher = baseline.load().map { it.snapshot() }
+    val vorher = baseline.getTasks().map { it.snapshot() }
 
     val result = appendToBaseline(baseline, schonDrin, project.taskManager)
 
@@ -199,7 +193,7 @@ class BaselineAppendTest {
     // The decision is SKIP, not replace: the baseline holds what was PLANNED then. Overwriting
     // the entry with today's values would destroy exactly what the baseline exists for, and
     // nothing in the file would show it -- a previous-task carries no timestamp and no origin.
-    assertEquals(vorher, baseline.load().map { it.snapshot() },
+    assertEquals(vorher, baseline.getTasks().map { it.snapshot() },
       "ein vorhandener Eintrag darf beim Uebergehen nicht angefasst werden")
   }
 
@@ -220,7 +214,7 @@ class BaselineAppendTest {
 
     val appended = appendToBaseline(baseline, ueberWochenende, project.taskManager)
       as BaselineAppendResult.Appended
-    val eintrag = appended.baseline.load().first { it.id == ueberWochenende.taskID }
+    val eintrag = appended.baseline.getTasks().first { it.id == ueberWochenende.taskID }
 
     assertEquals(3, eintrag.duration, "die Dauer sind Arbeitstage")
     assertFalse(eintrag.duration == 5, "keine Kalendertage")

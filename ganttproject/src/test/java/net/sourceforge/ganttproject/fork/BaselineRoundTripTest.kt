@@ -60,15 +60,11 @@ class BaselineRoundTripTest {
       .withName("Vorgang").withStartDate(LocalDate.of(2026, 8, 17).toModelDate())
       .withDuration(project.taskManager.createLength(5)).build()
 
-    // init() and saveFile() are part of it: a baseline holds its Tasks in a temporary file, not
-    // in memory. Without them it is visible in the list, invisible in the chart and an exception
-    // when saving.
+    // [Since 13.10.2026 / bardsoft #2838] the constructor alone is enough -- a baseline holds its
+    // Tasks in memory from this point on.
     project.baselines.add(
       GanttPreviousState("Vor der Verteilung 2026-08-17",
-        GanttPreviousState.createTasks(project.taskManager)).also {
-          it.init()
-          it.saveFile()
-        })
+        GanttPreviousState.createTasks(project.taskManager)))
 
     val xml = saveToXml(project)
     assertTrue(xml.contains("previous"), "kein Basisplan in der Datei:\n$xml")
@@ -93,10 +89,7 @@ class BaselineRoundTripTest {
       .withStartDate(LocalDate.of(2026, 8, 17).toModelDate())
       .withDuration(tm.createLength(5)).build()
 
-    project.baselines.add(GanttPreviousState("vorher", GanttPreviousState.createTasks(tm)).also {
-      it.init()
-      it.saveFile()
-    })
+    project.baselines.add(GanttPreviousState("vorher", GanttPreviousState.createTasks(tm)))
 
     // Now move, the way levelling does.
     val mutator = task.createMutator()
@@ -104,10 +97,10 @@ class BaselineRoundTripTest {
       LocalDate.of(2026, 9, 21).toModelDate()))
     mutator.commit()
 
-    // load() reads the temporary file -- exactly the path the saver (HistorySaver:45) and the
-    // chart (GanttGraphicArea:237) take. A test against the field in memory would not have
-    // noticed the missing init()/saveFile().
-    val gesichert = project.baselines[0].load().first { it.id == task.taskID }
+    // getTasks() -- exactly the path the saver (HistorySaver:45) and the chart
+    // (GanttGraphicArea:258) take. It returns the list `createTasks` built above, not the
+    // mutated Task, which is the entire point: a baseline is a snapshot, not a live view.
+    val gesichert = project.baselines[0].getTasks().first { it.id == task.taskID }
     assertEquals(LocalDate.of(2026, 8, 17), gesichert.start.time.toModelLocalDate(),
       "der Basisplan haelt den August, nicht den September")
     assertEquals(5, gesichert.duration)

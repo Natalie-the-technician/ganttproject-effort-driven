@@ -59,7 +59,9 @@ class RecurrenceAction(
     // cannot fill in either. Here and not at program startup -- a column that comes into being in
     // the constructor makes every file unloadable that contains the same column.
     findOrCreateRecurrence(taskProperties)
-    projectDatabase.onCustomColumnChange(taskProperties)
+    // All of the project's tasks, already stored -- an empty list would wipe their other custom
+    // values when the column is (re-)created (ProjectDatabase.onCustomColumnChange's own doc).
+    projectDatabase.onCustomColumnChange(taskProperties, taskManager.tasks.toList())
 
     val plan = planRecurrences(taskManager, taskProperties, resourceProperties)
 

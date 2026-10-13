@@ -43,10 +43,12 @@ import java.util.Locale
  * "the last one in the list" is insertion order and nothing more. A question asked against ALL
  * baselines needs no such choice, and with a single baseline it says exactly what one expects.
  *
- * THE PRICE IS IN load(), NOT IN THE COMPARISON, measured on 02.09.2026 against the real plan of
- * 276 tasks: one pass over 15 baselines takes 29.0 ms, of which 29.0 ms is `load()` and 0.058 ms
- * is the set comparison. That is why [idsInBaselines] loads each baseline exactly ONCE per pass,
- * and why the display asks only when it switches itself on -- both are pinned here.
+ * THE PRICE USED TO BE IN load(), NOT IN THE COMPARISON: measured on 02.09.2026 against the real
+ * plan of 276 tasks, one pass over 15 baselines took 29.0 ms, almost all of it `load()` re-parsing
+ * temporary files, against 0.058 ms for the set comparison. [Since 13.10.2026 / bardsoft #2838]
+ * `getTasks()` has no parse cost left -- but [idsInBaselines] still reads each baseline exactly
+ * ONCE per pass, which stays worth pinning as a plain invariant, and the display still asks only
+ * when it switches itself on (see [LevellingStalenessBar]).
  */
 class BaselineCoverageTest {
 
@@ -62,13 +64,13 @@ class BaselineCoverageTest {
     }
   }
 
-  /** Counts its own load() calls -- the class is not final and neither is the method. */
+  /** Counts its own getTasks() calls -- the class is not final and neither is the method. */
   private class CountingBaseline(name: String, tasks: List<GanttPreviousStateTask>) :
     GanttPreviousState(name, tasks) {
     var loads = 0
-    override fun load(): MutableList<GanttPreviousStateTask>? {
+    override fun getTasks(): List<GanttPreviousStateTask> {
       loads++
-      return super.load()
+      return super.getTasks()
     }
   }
 
@@ -76,11 +78,8 @@ class BaselineCoverageTest {
     taskManager.newTaskBuilder().withName(name).withStartDate(start.toModelDate())
       .withDuration(taskManager.createLength(days.toLong())).build()
 
-  /** init() AND saveFile() are mandatory: a baseline lives in a temporary file, not in memory. */
   private fun GanttProjectImpl.takeBaseline(name: String): CountingBaseline =
     CountingBaseline(name, GanttPreviousState.createTasks(taskManager)).also {
-      it.init()
-      it.saveFile()
       baselines.add(it)
     }
 
@@ -211,12 +210,10 @@ class BaselineCoverageTest {
   }
 
   /**
-   * EACH BASELINE IS READ EXACTLY ONCE PER PASS. This is not tidiness: measured on the real plan,
-   * `load()` is 29.0 of the 29.0 ms a 15-baseline pass costs, and the comparison is 0.058 ms.
-   * A second read per baseline would double the only part that is expensive.
-   *
-   * RED against 67f8b58df:
-   *   e: .../fork/BaselineCoverageTest.kt:229:5 Unresolved reference 'tasksNotInAnyBaseline'.
+   * EACH BASELINE IS READ EXACTLY ONCE PER PASS. Before 13.10.2026 this was not tidiness: measured
+   * on the real plan, `load()` was 29.0 of the 29.0 ms a 15-baseline pass cost, and a second read
+   * per baseline would have doubled the only expensive part. [Since bardsoft #2838] `getTasks()`
+   * has no such cost left, but the invariant stays worth pinning as a plain regression guard.
    */
   @Test
   fun `jeder basisplan wird je durchgang genau einmal gelesen`() {
@@ -228,31 +225,13 @@ class BaselineCoverageTest {
 
     tasksNotInAnyBaseline(project.taskManager, project.baselines)
 
-    assertEquals(1, a.loads, "der erste Basisplan wurde mehr als einmal von der Platte gelesen")
-    assertEquals(1, b.loads, "der zweite Basisplan wurde mehr als einmal von der Platte gelesen")
+    assertEquals(1, a.loads, "der erste Basisplan wurde mehr als einmal gelesen")
+    assertEquals(1, b.loads, "der zweite Basisplan wurde mehr als einmal gelesen")
   }
 
-  /**
-   * A BASELINE THAT CANNOT BE READ CONTRIBUTES NOTHING AND BREAKS NOTHING. `load()` swallows its
-   * exception and returns null (`GanttPreviousState.java:99-118`); a message that throws in the
-   * status bar would be worse than one that reports a task too many.
-   *
-   * RED against 67f8b58df:
-   *   e: .../fork/BaselineCoverageTest.kt:252:21 Unresolved reference 'idsInBaselines'.
-   */
-  @Test
-  fun `ein nicht lesbarer basisplan bricht den durchgang nicht ab`() {
-    val project = project()
-    val angebot = project.addTask("Angebot", LocalDate.of(2026, 8, 3), 5)
-    val kaputt = project.takeBaseline("Geloescht")
-    val heil = project.takeBaseline("Heil")
-    // remove() deletes the temporary file; load() then runs into an IOException and returns null.
-    kaputt.remove()
-
-    val kennungen = idsInBaselines(project.baselines)
-
-    assertTrue(kennungen.contains(angebot.rowId),
-      "der lesbare Basisplan muss trotzdem zaehlen")
-    assertEquals(1, heil.loads, "und er wurde genau einmal gelesen")
-  }
+  // The test that stood here until 13.10.2026, "ein nicht lesbarer basisplan bricht den
+  // durchgang nicht ab", is gone: it exercised `remove()` deleting a baseline's temporary file so
+  // that a later `load()` hit an IOException and returned null. [Since bardsoft #2838] there is no
+  // temporary file and no such failure mode -- `getTasks()` cannot return null, so the scenario
+  // this test guarded against can no longer happen.
 }

@@ -120,6 +120,7 @@ class TaskHomeWorkDialogTest {
         holder = gehalten,
         definitions = props,
         projectDatabase = projectDatabase,
+        tasks = task.manager.tasks.toList(),
         fields = listOf({ h -> applyHomeWorkMark(h, props, gezeigt) }))
     }
     return homeWorkMark(holder, props)

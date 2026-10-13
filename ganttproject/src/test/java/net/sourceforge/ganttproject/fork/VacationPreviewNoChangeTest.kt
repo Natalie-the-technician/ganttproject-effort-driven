@@ -149,7 +149,10 @@ class VacationPreviewNoChangeTest {
   private fun daysOffIdentities(plan: Plan): String =
     plan.resourceManager.resources.sortedBy { it.id }.joinToString("\n") { person ->
       val list = person.daysOff
-      (0 until list.size).joinToString(",") { System.identityHashCode(list.getElementAt(it)).toString() }
+      // list[it] and not getElementAt(it): HumanResource.daysOff hands out an unmodifiable List
+      // view now (bardsoft, "Hand out a resource's days off as an unmodifiable List view"), not
+      // the old custom collection with a getElementAt method.
+      (0 until list.size).joinToString(",") { System.identityHashCode(list[it]).toString() }
     }
 
   private fun buildPlan(): Triple<Plan, HumanResource, List<Task>> {

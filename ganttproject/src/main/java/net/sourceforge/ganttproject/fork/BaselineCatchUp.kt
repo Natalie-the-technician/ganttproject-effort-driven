@@ -46,8 +46,9 @@ import java.util.Locale
  * into the question before anything is written, and the user can say no.
  *
  * ONE NEW BASELINE, NOT ONE PER TASK. `appendToBaseline` builds a whole new baseline per call, so
- * supplementing three tasks produces two throwaway ones on the way. They are removed again —
- * otherwise the tidy-up limit would be counting files nobody can reach.
+ * supplementing three tasks produces two throwaway ones on the way; only the last is kept.
+ * [Since 13.10.2026 / bardsoft #2838] the throwaway ones need no cleanup of their own -- they are
+ * in-memory objects that nothing references once `current` moves past them.
  */
 class BaselineCatchUp(
   private val taskManager: TaskManager,
@@ -126,34 +127,17 @@ class BaselineCatchUp(
 
   private fun schreiben(quelle: GanttPreviousState, fehlend: List<Task>, name: String) {
     var current = quelle
-    val zwischenschritte = mutableListOf<GanttPreviousState>()
     fehlend.forEach { task ->
       when (val ergebnis = appendToBaseline(current, task, taskManager, name)) {
-        is BaselineAppendResult.Appended -> {
-          if (current !== quelle) {
-            zwischenschritte.add(current)
-          }
-          current = ergebnis.baseline
-        }
+        is BaselineAppendResult.Appended -> current = ergebnis.baseline
         // Cannot happen -- these tasks were selected BECAUSE no baseline holds them -- but a
         // silently skipped task must not abort the rest either.
         is BaselineAppendResult.AlreadyPresent -> Unit
-        is BaselineAppendResult.Failed -> {
-          // Half a supplement would be worse than none: nothing goes into the list, and the
-          // throwaway files of the steps so far are cleaned up. The source is NEVER removed.
-          zwischenschritte.forEach { it.remove() }
-          if (current !== quelle) {
-            current.remove()
-          }
-          report(true, forkText("fork.baseline.catchup.failed"))
-          return
-        }
       }
     }
     if (current === quelle) {
       return
     }
-    zwischenschritte.forEach { it.remove() }
     val liste = baselines()
     liste.add(current)
     // AFTER adding, so the new one is counted -- and it is the youngest, so it is never the one

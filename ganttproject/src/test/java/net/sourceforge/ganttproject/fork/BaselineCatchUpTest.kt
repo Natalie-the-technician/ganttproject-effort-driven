@@ -27,7 +27,6 @@ import net.sourceforge.ganttproject.GanttProjectImpl
 import net.sourceforge.ganttproject.task.Task
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -76,16 +75,11 @@ class BaselineCatchUpTest {
 
   private fun GanttProjectImpl.takeBaseline(name: String): GanttPreviousState =
     GanttPreviousState(name, GanttPreviousState.createTasks(taskManager)).also {
-      it.init()
-      it.saveFile()
       baselines.add(it)
     }
 
   private fun baseline(name: String): GanttPreviousState =
-    GanttPreviousState(name, emptyList<GanttPreviousStateTask>()).also {
-      it.init()
-      it.saveFile()
-    }
+    GanttPreviousState(name, emptyList<GanttPreviousStateTask>())
 
   private fun catchUp(project: GanttProjectImpl, frage: Frage,
                       berichte: MutableList<Pair<Boolean, String>> = mutableListOf(),
@@ -115,23 +109,23 @@ class BaselineCatchUpTest {
   @Test
   fun `der nachtrag legt einen neuen basisplan an und laesst den alten unveraendert`() {
     val (project, alt, spaeter) = planMitLuecke()
-    val alteEintraege = alt.load()!!.map { Triple(it.id, it.start.time, it.duration) }
+    val alteEintraege = alt.getTasks().map { Triple(it.id, it.start.time, it.duration) }
 
     catchUp(project, Frage(true)).run()
 
     assertEquals(2, project.baselines.size, "der neue Basisplan tritt neben den alten")
     assertSame(alt, project.baselines[0], "der alte bleibt an seiner Stelle und ist derselbe")
     assertEquals("Stand vom August", alt.name, "und er behaelt seinen Namen")
-    assertEquals(alteEintraege, alt.load()!!.map { Triple(it.id, it.start.time, it.duration) },
+    assertEquals(alteEintraege, alt.getTasks().map { Triple(it.id, it.start.time, it.duration) },
       "kein Eintrag des alten Basisplans darf sich geaendert haben")
-    assertFalse(alt.load()!!.any { it.id == spaeter.taskID },
+    assertFalse(alt.getTasks().any { it.id == spaeter.taskID },
       "und der nachgetragene Vorgang gehoert NICHT in den alten Basisplan")
   }
 
   /**
    * THE NEW ONE HOLDS THE OLD ENTRIES UNCHANGED PLUS THE MISSING TASK. Unchanged means from the
-   * BASELINE's file, not from today's plan -- that is the whole reason `appendToBaseline` reads
-   * through `load()`.
+   * BASELINE's own in-memory entries, not from today's plan -- that is the whole reason
+   * `appendToBaseline` reads through `getTasks()` and not through the current task state.
    *
    * RED against 67f8b58df:
    *   e: .../fork/BaselineCatchUpTest.kt:144:35 Cannot infer type for type parameter 'T'. Specify it explicitly.
@@ -139,11 +133,11 @@ class BaselineCatchUpTest {
   @Test
   fun `der neue basisplan traegt die alten eintraege wertgleich und den fehlenden vorgang dazu`() {
     val (project, alt, spaeter) = planMitLuecke()
-    val alteEintraege = alt.load()!!.associate { it.id to Triple(it.start.time, it.duration, it.isMilestone) }
+    val alteEintraege = alt.getTasks().associate { it.id to Triple(it.start.time, it.duration, it.isMilestone) }
 
     catchUp(project, Frage(true)).run()
 
-    val neu = project.baselines[1].load()!!
+    val neu = project.baselines[1].getTasks()
     assertEquals(alteEintraege.size + 1, neu.size, "genau ein Eintrag kommt dazu")
     neu.filter { alteEintraege.containsKey(it.id) }.forEach {
       assertEquals(alteEintraege[it.id], Triple(it.start.time, it.duration, it.isMilestone),
@@ -323,12 +317,11 @@ class BaselineCatchUpTest {
   }
 
   /**
-   * NO LEFTOVER TEMPORARY FILES FROM THE INTERMEDIATE STEPS. `appendToBaseline` builds a whole new
-   * baseline per task, so supplementing three tasks produces two throwaway ones on the way. They
-   * have to go, or the tidy-up limit would be measuring the wrong thing.
-   *
-   * RED against 67f8b58df:
-   *   e: .../fork/BaselineCatchUpTest.kt:339:35 Cannot infer type for type parameter 'T'. Specify it explicitly.
+   * THE INTERMEDIATE STEPS LEAVE NO BASELINES BEHIND IN THE LIST. `appendToBaseline` builds a
+   * whole new baseline per task, so supplementing three tasks produces two throwaway ones on the
+   * way; only the last one is ever added to `project.baselines`. [Since 13.10.2026 /
+   * bardsoft #2838] there is no temporary file to leak either -- a throwaway `GanttPreviousState`
+   * is plain memory, gone once nothing references it.
    */
   @Test
   fun `die zwischenschritte hinterlassen keine basisplaene in der liste`() {
@@ -339,8 +332,10 @@ class BaselineCatchUpTest {
     catchUp(project, Frage(true)).run()
 
     assertEquals(2, project.baselines.size,
-      "drei nachgetragene Vorgaenge duerfen genau EINEN neuen Basisplan ergeben")
-    assertNotNull(project.baselines[1].load(),
-      "und der eine muss lesbar sein")
+      "drei nachgetragene Vorgaenge duerfen genau EINEN neuen Basisplan ergeben, nicht drei")
+    // 1 Eintrag aus dem alten Basisplan ("Angebot") + 3 nachgetragene ("Spaeter geplant",
+    // "Noch einer", "Und noch einer").
+    assertEquals(4, project.baselines[1].getTasks().size,
+      "und der eine muss den alten Eintrag plus alle drei nachgetragenen tragen")
   }
 }

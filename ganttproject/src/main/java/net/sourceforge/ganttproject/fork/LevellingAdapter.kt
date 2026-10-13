@@ -1026,8 +1026,12 @@ fun applyBackfillAsSingleEdit(
   val effortDef = EffortDrivenProperties.findOrCreateTaskEffort(taskProperties)
   // Without this call the definition exists without a database column, and every write fails.
   // Happened exactly like that in session 3. What is passed is the MANAGER, not the single
-  // definition -- the database reconciles all columns.
-  projectDatabase.onCustomColumnChange(taskProperties)
+  // definition -- the database reconciles all columns. The task list is ALL of the project's
+  // tasks, not just the ones this backfill touches: they are already stored, and recreating a
+  // column without naming them would wipe every OTHER custom value they hold (ProjectDatabase.kt:
+  // "pass an empty list if the tasks are going to be inserted right after this call" -- they are
+  // not, here).
+  projectDatabase.onCustomColumnChange(taskProperties, taskManager.tasks.toList())
 
   var touched = 0
   undoManager.undoableEdit(editName) {

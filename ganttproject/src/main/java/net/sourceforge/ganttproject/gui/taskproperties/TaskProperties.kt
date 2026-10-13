@@ -70,6 +70,7 @@ class TaskPropertiesController(private val task: Task, roleManager: RoleManager,
           holder = it,
           definitions = task.manager.customPropertyManager,
           projectDatabase = projectDatabase,
+          tasks = task.manager.tasks.toList(),
           // [fork change] The home working mark of package B2 joins this list and nothing else
           // changes here -- which is exactly what the note above promised a further field would
           // cost.

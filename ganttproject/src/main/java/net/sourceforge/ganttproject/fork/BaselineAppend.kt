@@ -20,12 +20,10 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.fork
 
-import net.sourceforge.ganttproject.GPLogger
 import net.sourceforge.ganttproject.GanttPreviousState
 import net.sourceforge.ganttproject.GanttPreviousStateTask
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskManager
-import java.io.IOException
 
 /**
  * Taking a single task into an EXISTING baseline.
@@ -40,26 +38,27 @@ import java.io.IOException
  * exactly one setter, `setName`; the task list arrives in the constructor, is `private final` and
  * has no way in from outside. There is no `addTask`. So appending is a rewrite -- but a
  * LOSS-FREE one, and that is the point: the old values do not come from the current plan but
- * from the baseline's own file. `HistorySaver.saveBaseline` (line 45) calls `nextState.load()`;
+ * from the baseline's own entries. `HistorySaver.saveBaseline` (line 45) calls `nextState.getTasks()`;
  * the current plan becomes the source only when a baseline is CREATED
  * (`GanttPreviousState.createTasks`, called from `BaselineDialogAction` and `LevellingActions`).
  * The path here is therefore:
  *
- *     source.load()  ->  the old entries + one new one  ->  a new GanttPreviousState,
- *     init(), saveFile()
+ *     source.getTasks()  ->  the old entries + one new one  ->  a new GanttPreviousState
  *
- * READ VIA load(), NOT VIA THE FIELD. `load()` re-parses the temporary file and hands back a
- * fresh, mutable `ArrayList` (`PreviousStateTasksTagHandler.getTasks()`). The list a baseline was
- * CONSTRUCTED with is a different matter: `BaselineSerializer.kt:37` builds it with Kotlin's
- * `.toList()`, which is read-only to its static type. `myTasks` is private and final anyway, so
- * `load()` is the only way in -- and it is the same way the saver and the chart take, which is
- * why what is appended here is exactly what ends up in the file.
+ * READ VIA getTasks(), NOT A COPY OF THE FIELD. [Since 13.10.2026 / bardsoft #2838] A baseline no
+ * longer holds its entries in a temporary file; `GanttPreviousState.getTasks()` hands back the
+ * in-memory list directly (`Collections.unmodifiableList`), the same one the saver and the chart
+ * read. There is no re-parse and no failure mode here any more -- unlike the old `load()`, this
+ * call cannot return null.
  *
  * WHAT THIS DOES NOT DECIDE, ON PURPOSE. Appending does not touch `IGanttProject.getBaselines()`.
- * It hands back a finished, saved baseline and leaves the caller one line of choice:
+ * It hands back a finished baseline and leaves the caller one line of choice:
  *
- *     replace:    baselines[baselines.indexOf(source)] = result.baseline; source.remove()
+ *     replace:    baselines[baselines.indexOf(source)] = result.baseline
  *     alongside:  baselines.add(result.baseline)          // with a name of the caller's choosing
+ *
+ * No further cleanup of [source] is needed either way -- a dropped `GanttPreviousState` is plain
+ * memory, not a file, and goes when nothing references it any more.
  *
  * The [name] parameter exists for exactly that second flavour. Whether a supplemented baseline
  * takes the old one's place or steps beside it with a timestamp in its name is an open question
@@ -69,8 +68,8 @@ import java.io.IOException
  */
 sealed class BaselineAppendResult {
   /**
-   * A new baseline, already `init()`ed and `saveFile()`d, holding the old entries unchanged plus
-   * one. It is NOT in any baseline list yet -- see the note on the cut above.
+   * A new baseline holding the old entries unchanged plus one. It is NOT in any baseline list yet
+   * -- see the note on the cut above.
    */
   data class Appended(val baseline: GanttPreviousState,
                       val entries: List<GanttPreviousStateTask>) : BaselineAppendResult()
@@ -80,12 +79,6 @@ sealed class BaselineAppendResult {
    * [appendToBaseline]. The caller can tell the user; the source baseline is untouched.
    */
   data class AlreadyPresent(val taskId: Int) : BaselineAppendResult()
-
-  /**
-   * The temporary file could not be read or written. Nothing was changed. Half a baseline would
-   * be worse than none: an entry silently missing looks exactly like a task that is on plan.
-   */
-  data class Failed(val reason: String, val cause: IOException?) : BaselineAppendResult()
 }
 
 /**
@@ -124,35 +117,17 @@ fun baselineEntryFor(task: Task, taskManager: TaskManager): GanttPreviousStateTa
  */
 fun appendToBaseline(source: GanttPreviousState, task: Task, taskManager: TaskManager,
                      name: String = source.name): BaselineAppendResult {
-  // load() and not the field: it re-parses the baseline's temporary file, which is the same
-  // source the saver reads from. A read failure comes back as null -- load() swallows the
-  // exception and returns null (GanttPreviousState.java:99-118).
-  val existing = source.load()
-    ?: return BaselineAppendResult.Failed(
-      "the baseline '${source.name}' could not be read back", null)
+  val existing = source.getTasks()
 
   existing.firstOrNull { it.id == task.taskID }?.let {
     return BaselineAppendResult.AlreadyPresent(task.taskID)
   }
 
-  // Our own copy. load() already hands out a fresh list, so this changes nothing today -- but it
-  // states that the source's entries are read, never written.
+  // Our own copy: getTasks() hands back an unmodifiable view, and the new entry is added to a
+  // list of its own rather than to the source's.
   val entries = ArrayList(existing)
   entries.add(baselineEntryFor(task, taskManager))
 
-  return try {
-    // init() AND saveFile() are both mandatory and the constructor does not show it: a baseline
-    // holds its entries in a temporary file, not in memory. Without the two calls myFile is null
-    // and the thing would be visible in the list, invisible in the chart, and an exception when
-    // saving the project.
-    val appended = GanttPreviousState(name, entries).also {
-      it.init()
-      it.saveFile()
-    }
-    BaselineAppendResult.Appended(appended, entries)
-  } catch (e: IOException) {
-    // Over the logger, not System.err -- GanttProject redirects the latter.
-    GPLogger.log(e)
-    BaselineAppendResult.Failed("the supplemented baseline could not be written", e)
-  }
+  val appended = GanttPreviousState(name, entries)
+  return BaselineAppendResult.Appended(appended, entries)
 }

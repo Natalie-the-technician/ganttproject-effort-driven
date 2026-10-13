@@ -78,7 +78,7 @@ class EffortPropertyStorageTest {
     // ever adds a column to the mirror table.
     listener = object : CustomPropertyListener {
       override fun customPropertyChange(event: CustomPropertyEvent) {
-        projectDatabase.onCustomColumnChange(customPropertyManager)
+        projectDatabase.onCustomColumnChange(customPropertyManager, taskManager.tasks.toList())
       }
     }
     customPropertyManager.addListener(listener)
@@ -114,7 +114,7 @@ class EffortPropertyStorageTest {
 
     // Exactly what the task properties dialog does: create the definition, then write a value.
     val def = EffortDrivenProperties.findOrCreateTaskEffort(cpm)
-    proxy.onCustomColumnChange(cpm)
+    proxy.onCustomColumnChange(cpm, proxyTaskManager.tasks.toList())
     val edited = task.customValues.copyOf().also { it.setValue(def, 20.0) }
     task.createMutator().also { it.setCustomProperties(edited) }.commit()
 
@@ -270,7 +270,7 @@ class EffortPropertyStorageTest {
       "the mirror column must be missing here, otherwise this test proves nothing")
 
     // This is what TaskPropertiesController.save() now does before committing.
-    projectDatabase.onCustomColumnChange(customPropertyManager)
+    projectDatabase.onCustomColumnChange(customPropertyManager, taskManager.tasks.toList())
 
     val edited2 = task.customValues.copyOf().also { it.setValue(def, 30.0) }
     task.createMutator().also { it.setCustomProperties(edited2) }.commit()
@@ -325,7 +325,7 @@ class EffortPropertyStorageTest {
       "the mirror column must be missing here, otherwise this test proves nothing")
 
     // This is what TaskPropertiesController.save() does before committing.
-    projectDatabase.onCustomColumnChange(customPropertyManager)
+    projectDatabase.onCustomColumnChange(customPropertyManager, taskManager.tasks.toList())
 
     val edited2 = task.customValues.copyOf().also { it.setValue(def, 31.0) }
     task.createMutator().also { it.setCustomProperties(edited2) }.commit()
@@ -356,7 +356,7 @@ class EffortPropertyStorageTest {
     holder.setValue(EffortDrivenProperties.findOrCreateTaskEffort(customPropertyManager), 20.0)
     holder.setValue(
       EffortDrivenProperties.findOrCreateTaskActualEffort(customPropertyManager), 12.5)
-    projectDatabase.onCustomColumnChange(customPropertyManager)
+    projectDatabase.onCustomColumnChange(customPropertyManager, taskManager.tasks.toList())
     task.createMutator().also { it.setCustomProperties(holder) }.commit()
 
     assertEquals(20.0, readEffortColumn())
@@ -386,6 +386,7 @@ class EffortPropertyStorageTest {
       holder = holder,
       definitions = customPropertyManager,
       projectDatabase = projectDatabase,
+      tasks = taskManager.tasks.toList(),
       // Stand-ins for the two panel fields: each creates its definition on first use, exactly
       // like applyEffort/applyActualEffort do.
       fields = listOf(
