@@ -31,6 +31,23 @@ import java.util.Date
 import java.util.Locale
 
 /**
+ * STALE DUPLICATE -- flagged during the nachziehen-bards-1012 API adaptation (2026-10-13), not
+ * deleted. bardsoft's own upstream commit fcea4c56c ("Join the three days-off test classes into
+ * one, and cover the new methods") deleted this file (and HumanResourceDaysOffViewTest.kt) outright,
+ * folding every assertion into [HumanResourceDaysOffTest] in this same package -- see that file's
+ * class doc, which names this one by name as superseded. That deletion is one of the 48 commits this
+ * merge brings in, but it did not survive the merge resolution: this file is still here, now running
+ * two of its five tests against assumptions bardsoft's own change already invalidated (GanttDaysOff
+ * gaining a real equals(Object); getDaysOff() becoming an unmodifiable view) -- the two fixes below
+ * patch those two tests to the new semantics, kept in parallel with the (also still passing)
+ * superseding assertions in HumanResourceDaysOffTest, rather than resolve the duplication.
+ *
+ * `git rm` and plain `rm` on this file were both denied by the Claude Code auto-mode classifier
+ * (destructive-operation guard) in this session; a second, differently-worded attempt was not made,
+ * per the standing rule that two denials of the same action mean the path is closed, not a cue to
+ * route around it. Deleting it (restoring bardsoft's actual intent) is the right fix and is left for
+ * Natalie or dirigent-gantt to do with the permission this session does not have.
+ *
  * A resource can be given a day off through [HumanResource.addDaysOff], but until now it could only
  * be taken away again by reaching into the list handed out by [HumanResource.getDaysOff] and
  * mutating it. These tests pin the counterpart of addDaysOff: [HumanResource.removeDaysOff] for a
@@ -109,11 +126,12 @@ class HumanResourceRemoveDaysOffTest {
     person.addDaysOff(daysOff(9, 10))
 
     view.changed = 0
-    // Deliberately an interval the resource has never been given. GanttDaysOff does not override
-    // equals(Object) -- it only overloads equals(GanttDaysOff) -- so an interval with the very same
-    // dates is still a different one as far as the list is concerned. That is the behaviour pinned
-    // here, so that it cannot change unnoticed.
-    assertFalse(person.removeDaysOff(daysOff(9, 10)), "an interval that is not there cannot be removed")
+    // A genuinely different interval -- not one that merely looks different by identity. GanttDaysOff
+    // now overrides equals(Object) (bardsoft's upstream merge gave it a real one, so that
+    // List.remove() -- which calls equals(Object), not the old equals(GanttDaysOff) overload -- can
+    // match by value), so a fresh object built from the SAME dates as an existing entry would in fact
+    // be found and removed. Using different dates keeps this test about "not there at all".
+    assertFalse(person.removeDaysOff(daysOff(13, 14)), "an interval that is not there cannot be removed")
 
     assertEquals(0, view.changed, "a removal that removed nothing must not notify anybody")
     assertEquals(1, person.daysOff.size, "the existing day off must be untouched")
@@ -149,25 +167,28 @@ class HumanResourceRemoveDaysOffTest {
 
   /**
    * The one caller in the tree, GanttDialogPerson.applyChanges(), throws all the intervals away and
-   * writes the edited ones back. This pins that going through clearDaysOff() instead of reaching
-   * into the handed-out list costs the very same number of notifications -- neither more (which
-   * would be a regression) nor zero where there used to be one.
+   * writes the edited ones back (nowadays through setDaysOff(), which is pinned separately; this test
+   * predates that and pinned the equivalent clearDaysOff()-plus-loop sequence instead). This pins that
+   * clearing and re-adding costs the very same number of notifications -- neither more (which would be
+   * a regression) nor zero where there used to be one.
+   *
+   * There used to be a second path compared here, mutating the list handed out by getDaysOff()
+   * directly instead of calling clearDaysOff(). bardsoft's upstream merge made getDaysOff() hand out
+   * an unmodifiable view (see its own doc comment), so that path no longer compiles into working code
+   * -- .clear() on the result now throws UnsupportedOperationException. Removed rather than adapted:
+   * the whole point of the unmodifiable view is that mutating the handed-out list is no longer a
+   * supported way to change a resource's days off, so a comparison against it has nothing left to
+   * pin.
    *
    * Red before the change:
    * e: file:///.../HumanResourceRemoveDaysOffTest.kt:157:19 Unresolved reference 'clearDaysOff'.
    */
   @Test
-  fun `the dialog's clear-all-and-rewrite costs the same notifications either way`() {
+  fun `the dialog's clear-all-and-rewrite costs (M greater than 0 then 1 else 0) plus N notifications`() {
     // M = intervals before the Ok, N = intervals in the dialog when Ok is pressed.
     for (m in 0..3) {
       for (n in 0..3) {
         val expected = (if (m > 0) 1 else 0) + n
-
-        val (viaList, listView) = newPersonWithView()
-        repeat(m) { viaList.addDaysOff(daysOff(it + 1, it + 2)) }
-        listView.changed = 0
-        viaList.daysOff.clear()
-        repeat(n) { viaList.addDaysOff(daysOff(it + 10, it + 11)) }
 
         val (viaMethod, methodView) = newPersonWithView()
         repeat(m) { viaMethod.addDaysOff(daysOff(it + 1, it + 2)) }
@@ -175,8 +196,7 @@ class HumanResourceRemoveDaysOffTest {
         viaMethod.clearDaysOff()
         repeat(n) { viaMethod.addDaysOff(daysOff(it + 10, it + 11)) }
 
-        assertEquals(expected, listView.changed, "M=$m N=$n: the old way through the handed-out list")
-        assertEquals(expected, methodView.changed, "M=$m N=$n: the new way through clearDaysOff()")
+        assertEquals(expected, methodView.changed, "M=$m N=$n: clearDaysOff() plus re-adding")
         assertEquals(n, viaMethod.daysOff.size, "M=$m N=$n: the rewritten intervals must be the only ones")
       }
     }
