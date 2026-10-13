@@ -71,7 +71,7 @@ import java.time.LocalDate
 fun HumanResource.daysOffRanges(): List<Pair<LocalDate, LocalDate>> {
   val list = this.daysOff
   return (0 until list.size).mapNotNull { i ->
-    val interval = list.getElementAt(i) ?: return@mapNotNull null
+    val interval = list[i] ?: return@mapNotNull null
     interval.start.time.toModelLocalDate() to interval.finish.time.toModelLocalDate()
   }
 }

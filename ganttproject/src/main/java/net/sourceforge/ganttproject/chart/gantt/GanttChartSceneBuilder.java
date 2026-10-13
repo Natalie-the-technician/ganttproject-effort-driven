@@ -646,7 +646,16 @@ public class GanttChartSceneBuilder {
       Date endDate = input.getCalendar().shiftDate(startDate, duration);
       ComparisonResult result = ChartComparisonKt.compareDates(endDate, t.getEnd().getTime());
       if (result == ComparisonResult.NO_BAND) {
-        return;
+        // [fork change, absorbing bardsoft's #2849] The end date alone misses a task whose
+        // duration changed while its end date did not move. Such a task still gets a bar --
+        // without a colour, since neither "later" nor "earlier" answers "am I on schedule" --
+        // so that the change is visible at all. Mirrors getBaselineStyles below, which
+        // BaselineStylesTest pins directly against the same two rules.
+        if (ChartComparisonKt.compareDurations(taskBaseline.getDuration(), t.getDuration().getLength())
+            == ComparisonResult.NO_BAND) {
+          return;
+        }
+        result = ComparisonResult.NEUTRAL;
       }
       List<ITaskActivity<ITaskSceneTask>> baselineActivities = new ArrayList<ITaskActivity<ITaskSceneTask>>();
       if (t.isMilestone()) {
@@ -660,6 +669,35 @@ public class GanttChartSceneBuilder {
           ComparisonAxis.DATES, false);
       return;
     }
+  }
+
+  /**
+   * [fork change] Whether a baseline bar is drawn at all and which styles it gets, kept as its
+   * own static method because {@code BaselineStylesTest} (from bardsoft's #2849) pins it
+   * directly. Delegates to the same two rules {@link #renderBaseline} uses above --
+   * {@link ChartComparisonKt#compareDates} for the colour, {@link ChartComparisonKt#compareDurations}
+   * only to decide whether a task is drawn at all when its end date did not move but its
+   * duration did. Kept as the single source of truth for both so they cannot drift apart.
+   *
+   * @return the styles to add to the baseline bar, or {@code null} if nothing changed and no
+   * baseline bar is to be drawn.
+   */
+  static List<String> getBaselineStyles(boolean isMilestone, int baselineDuration, int currentDuration,
+                                        Date baselineEnd, Date currentEnd) {
+    ComparisonResult dateResult = ChartComparisonKt.compareDates(baselineEnd, currentEnd);
+    if (dateResult == ComparisonResult.NO_BAND
+        && ChartComparisonKt.compareDurations(baselineDuration, currentDuration) == ComparisonResult.NO_BAND) {
+      return null;
+    }
+    List<String> styles = new ArrayList<String>();
+    if (isMilestone) {
+      styles.add("milestone");
+    }
+    String colourStyle = ChartComparisonKt.styleName(dateResult);
+    if (colourStyle != null) {
+      styles.add(colourStyle);
+    }
+    return styles;
   }
 
   /**

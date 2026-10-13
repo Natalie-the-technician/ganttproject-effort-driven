@@ -110,7 +110,7 @@ abstract class GanttProjectBase implements IGanttProject, UIFacade {
 
   private final RssFeedChecker myRssChecker;
   final TaskManagerConfigImpl myTaskManagerConfig;
-  private final TaskManager myTaskManager;
+  private final TaskManagerImpl myTaskManager;
   protected final TwoPhaseBarrierImpl<UIFacade> myUiInitializationPromise = new TwoPhaseBarrierImpl<>("UI initialization");
   private Updater myUpdater;
   protected final TaskActions myTaskActions;
@@ -176,7 +176,7 @@ abstract class GanttProjectBase implements IGanttProject, UIFacade {
   class TaskManagerConfigImpl implements TaskManagerConfig {
     final DefaultColorOption myDefaultColorOption = new DefaultTaskColorOption();
     final DefaultBooleanOption mySchedulerDisabledOption = new DefaultBooleanOption("scheduler.disabled", false);
-
+    final DefaultBooleanOption myCriticalPathAlwaysOnOption = new DefaultBooleanOption("criticalPath.alwaysOn", true);
     @Override
     public Color getDefaultColor() {
       return getUIFacade().getGanttChart().getTaskDefaultColorOption().getValue();
@@ -190,6 +190,11 @@ abstract class GanttProjectBase implements IGanttProject, UIFacade {
     @Override
     public BooleanOption getSchedulerDisabledOption() {
       return mySchedulerDisabledOption;
+    }
+
+    @Override
+    public BooleanOption getCriticalPathAlwaysOnOption() {
+      return myCriticalPathAlwaysOnOption;
     }
 
     @Override
@@ -223,7 +228,7 @@ abstract class GanttProjectBase implements IGanttProject, UIFacade {
     }
 
     GPOptionGroup getTaskOptions() {
-      return new GPOptionGroup("task", mySchedulerDisabledOption);
+      return new GPOptionGroup("task", mySchedulerDisabledOption, myCriticalPathAlwaysOnOption);
     }
   }
 
@@ -245,7 +250,7 @@ abstract class GanttProjectBase implements IGanttProject, UIFacade {
 
     myProjectDatabase = databaseProxy;
     myTaskManagerConfig = new TaskManagerConfigImpl();
-    myTaskManager = TaskManager.Access.newInstance(null, myTaskManagerConfig);
+    myTaskManager = (TaskManagerImpl) TaskManager.Access.newInstance(null, myTaskManagerConfig, myProjectDatabase::createTaskUpdateBuilder);
     myProjectImpl = new GanttProjectImpl((TaskManagerImpl) myTaskManager, databaseProxy);
     addProjectEventListener(databaseProxy.createProjectEventListener());
     myTaskManager.addTaskListener(databaseProxy.createTaskEventListener());
@@ -306,6 +311,7 @@ abstract class GanttProjectBase implements IGanttProject, UIFacade {
     myUndoManager.addUndoableEditTxnFactory(databaseProxy.createUndoTxnFactory());
     //myUndoManager.addUndoableEditListener(databaseProxy.createUndoListener());
     myUndoManager.addUndoableEditTxnFactory(getTaskFilterManager().createUndoTxnFactory());
+    myUndoManager.addUndoableEditListener(myTaskManager.createUndoableEditListener());
     myProjectUIFacade = new ProjectUIFacadeImpl(stage, myUIFacade, myDocumentManager, myUndoManager, myProjectImpl);
     databaseProxy.setProjectOpenActivityFactory(myProjectUIFacade.getProjectOpenActivityFactory());
 

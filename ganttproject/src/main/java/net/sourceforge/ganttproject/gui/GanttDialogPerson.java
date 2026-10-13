@@ -46,6 +46,7 @@ import kotlin.Pair;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 public class GanttDialogPerson {
@@ -348,10 +349,14 @@ public class GanttDialogPerson {
     // none.
     homeOfficePanel.save();
 
-    person.clearDaysOff();
+    List<GanttDaysOff> daysOff = new ArrayList<>();
     for (DateInterval interval : myDaysOffModel.getIntervals()) {
-      person.addDaysOff(new GanttDaysOff(interval.getStart(), interval.getEnd()));
+      daysOff.add(new GanttDaysOff(interval.getStart(), interval.getEnd()));
     }
+    // One call rather than clearDaysOff() plus a loop of addDaysOff(): the listeners are interested
+    // in the intervals the user ended up with, not in the resource passing through every partial
+    // state on the way there, and each of those states used to cost a load distribution reset.
+    person.setDaysOff(daysOff);
     myAssignmentsPanel.commit();
   }
 
@@ -374,8 +379,8 @@ public class GanttDialogPerson {
         super.remove(interval);
       }
     };
-    DefaultListModel<GanttDaysOff> daysOff = person.getDaysOff();
-    for (int i = 0; i < daysOff.getSize(); i++) {
+    List<GanttDaysOff> daysOff = person.getDaysOff();
+    for (int i = 0; i < daysOff.size(); i++) {
       GanttDaysOff next = daysOff.get(i);
       myDaysOffModel.add(DateInterval.Companion.createFromModelDates(next.getStart().getTime(),
           next.getFinish().getTime()));

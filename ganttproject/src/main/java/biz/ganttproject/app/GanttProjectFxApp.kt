@@ -138,6 +138,7 @@ class GanttProjectFxApp : Application() {
 //      }
       appScene.onKeyPressed = EventHandler { event ->
         ganttProject.appLevelActions.firstOrNull { it.triggeredBy(event) }?.let { action ->
+          event.consume()
           SwingUtilities.invokeLater {
               action.actionPerformed(null)
           }

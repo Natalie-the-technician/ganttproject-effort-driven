@@ -27,7 +27,6 @@ import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskImpl
 import org.jooq.DSLContext
 import org.jooq.Insert
-import org.jooq.impl.DSL
 import java.math.BigDecimal
 
 fun buildInsertTaskQuery(dsl: DSLContext, task: Task): Insert<TaskRecord> {
@@ -37,7 +36,7 @@ fun buildInsertTaskQuery(dsl: DSLContext, task: Task): Insert<TaskRecord> {
     costManualValue = task.cost.manualValue
     isCostCalculated = task.cost.isCalculated
   }
-  var q = dsl
+  val q = dsl
     .insertInto(Tables.TASK)
     .set(Tables.TASK.UID, task.uid)
     .set(Tables.TASK.NUM, task.taskID)
@@ -57,25 +56,8 @@ fun buildInsertTaskQuery(dsl: DSLContext, task: Task): Insert<TaskRecord> {
     .set(Tables.TASK.COST, task.cost.value)
     .set(Tables.TASK.IS_COST_CALCULATED, isCostCalculated)
     .set(Tables.TASK.NOTES, task.externalizedNotes())
-  val customProps = mutableMapOf<Any, Any>()
-  task.manager.customPropertyManager.definitions.forEach { def ->
-    if (def.calculationMethod == null) {
-
-      task.customValues.getValue(def)?.let {
-       // [fork change] Convert date values. jOOQ does not know GregorianCalendar and throws
-       // "Type class java.util.GregorianCalendar is not supported in dialect DEFAULT" -- with
-       // that EVERY date column holding a value was unusable, a user-created one as well. Found
-       // on screen when the column "Fertig bis" got its first value.
-       //
-       // The conversion goes through the calendar fields, NOT through toInstant(): GanttProject
-       // bends the default time zone at startup, and java.time does not see the bending. The
-       // reasoning is in fork/LegacyDates.kt.
-       customProps[DSL.field(""" "${def.id}" """, sqlType(def.type))] = sqlValue(it)
-      }
-    }
-  }
-  q.set(customProps)
-  return q
+  val customProps = mapCustomPropertiesToJooq(task.manager.customPropertyManager, task.customValues)
+  return q.set(customProps)
 }
 
 fun buildInsertTaskDto(task: Task): OperationDto.InsertOperationDto {
@@ -108,28 +90,4 @@ fun buildInsertTaskDto(task: Task): OperationDto.InsertOperationDto {
       Tables.TASK.NOTES.name to task.externalizedNotes(),
     )
   )
-}
-
-/**
- * [fork change] The type jOOQ understands for this column.
- *
- * It does not understand `GregorianCalendar`; it does understand `LocalDate`, and the H2 column is
- * `date` anyway (SqlCustomPropertyStorageManager:107).
- */
-private fun sqlType(type: Class<*>): Class<*> =
-  if (java.util.GregorianCalendar::class.java.isAssignableFrom(type) ||
-      java.util.Date::class.java.isAssignableFrom(type)) java.time.LocalDate::class.java else type
-
-/** [fork change] The value in the form that matches [sqlType]. */
-private fun sqlValue(value: Any): Any = when (value) {
-  is java.util.GregorianCalendar -> java.time.LocalDate.of(
-    value.get(java.util.Calendar.YEAR),
-    value.get(java.util.Calendar.MONTH) + 1,
-    value.get(java.util.Calendar.DAY_OF_MONTH))
-  is java.util.Date -> java.util.GregorianCalendar().let { c ->
-    c.time = value
-    java.time.LocalDate.of(c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH) + 1,
-      c.get(java.util.Calendar.DAY_OF_MONTH))
-  }
-  else -> value
 }

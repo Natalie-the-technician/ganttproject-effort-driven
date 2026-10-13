@@ -18,13 +18,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 package net.sourceforge.ganttproject.document;
 
+import biz.ganttproject.app.InternationalizationCoreKt;
+import biz.ganttproject.app.Localizer;
 import biz.ganttproject.core.io.XmlProject;
 import biz.ganttproject.core.option.GPOption;
 import biz.ganttproject.core.table.ColumnList;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import io.milton.http.exceptions.NotAuthorizedException;
 import net.sourceforge.ganttproject.IGanttProject;
-// [fork change] for the named read errors instead of "Failed to parse document".
+// [fork change] for the vacation- and task-load problem reports below.
 import net.sourceforge.ganttproject.fork.ForkI18nKt;
 import net.sourceforge.ganttproject.fork.TaskLoadProblems;
 import net.sourceforge.ganttproject.fork.VacationProblems;
@@ -44,9 +47,17 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.SocketTimeoutException;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
+import javax.net.ssl.SSLException;
 
 /**
  * @author bard
@@ -166,14 +177,7 @@ public class ProxyDocument implements Document {
       getHumanResourceManager().setEventsEnabled(false);
       doParse();
     } catch (Exception e) {
-      // [fork change] Name the reason instead of calling everything "Failed to parse document".
-      //
-      // BUG IN THE ORIGINAL: this catch catches EVERYTHING -- including a rejected login and an
-      // unreachable server -- and then claims the file is not readable. Observed on screen: at
-      // startup GanttProject reported exactly that, while in truth a 401 came back because no
-      // password is stored for the WebDAV server. Whoever believes the message looks for the
-      // fault in their project file instead of in the credentials.
-      throw new DocumentException(describeReadFailure(e), e);
+      throw new DocumentException(getReadFailureMessage(e), e);
     } finally {
       getTaskManager().setEventsEnabled(true);
       getHumanResourceManager().setEventsEnabled(true);
@@ -181,26 +185,48 @@ public class ProxyDocument implements Document {
   }
 
   /**
-   * [fork change] Searches the cause chain for a reason that is NOT a read error of the file,
-   * and names it.
-   *
-   * Only two cases are distinguished, and both deliberately: a rejected login and an unreachable
-   * server lead to completely different next steps than a broken file. Everything else keeps the
-   * existing text -- a message that lists every possibility helps nobody.
+   * Picks the message for a failure which happened while reading a document. The failures which
+   * send the user to a different place than a broken file get their own text: a rejected
+   * authentication, a server which cannot be reached, a server which does not answer in time and
+   * a secure connection which cannot be established. Anything else keeps the generic message.
    */
-  private static String describeReadFailure(Throwable failure) {
-    for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-      if (cause instanceof io.milton.http.exceptions.NotAuthorizedException) {
-        return ForkI18nKt.forkText("fork.document.notAuthorized");
+  static String getReadFailureMessage(Throwable failure) {
+    return getReadFailureMessage(failure, InternationalizationCoreKt.getRootLocalizer());
+  }
+
+  /**
+   * The same, with the localizer passed in, so that a test can see which key is asked for.
+   *
+   * <p>The chain is walked with the exceptions already visited kept aside, because a cause chain
+   * may contain a loop of any length: an exception which reports itself as its own cause, but also
+   * two exceptions which report each other, or a loop which the chain only enters further down.
+   * Guava's {@code Throwables.getCausalChain} finds such a loop as well, but it answers with an
+   * {@code IllegalArgumentException} instead of a shortened chain, and this method runs while a
+   * read failure is being reported: an exception thrown here would replace the failure the user is
+   * supposed to read about with a failure of the reporting itself.
+   */
+  static String getReadFailureMessage(Throwable failure, Localizer i18n) {
+    Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+    for (Throwable cause = failure; cause != null && visited.add(cause); cause = cause.getCause()) {
+      if (cause instanceof NotAuthorizedException) {
+        return i18n.formatText("document.error.read.authenticationRejected");
       }
-      if (cause instanceof java.net.UnknownHostException || cause instanceof java.net.ConnectException) {
-        return ForkI18nKt.forkText("fork.document.unreachable");
+      if (cause instanceof SSLException) {
+        // The server did answer, so this is not a reachability problem: the user has to look at the
+        // certificate or at the protocol settings, not at the address.
+        return i18n.formatText("document.error.read.insecureConnection");
       }
-      if (cause == cause.getCause()) {
-        break;
+      if (cause instanceof SocketTimeoutException) {
+        // The server may be reachable and merely slow, which is different advice than an
+        // unreachable one: waiting and trying again can help here.
+        return i18n.formatText("document.error.read.timedOut");
+      }
+      if (cause instanceof UnknownHostException || cause instanceof ConnectException
+          || cause instanceof NoRouteToHostException) {
+        return i18n.formatText("document.error.read.serverUnreachable");
       }
     }
-    return "Failed to parse document";
+    return i18n.formatText("document.error.read.parseFailure");
   }
 
   public void createContents() throws IOException {
