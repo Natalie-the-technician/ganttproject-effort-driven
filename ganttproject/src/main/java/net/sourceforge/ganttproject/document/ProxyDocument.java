@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableList;
 import net.sourceforge.ganttproject.IGanttProject;
 // [fork change] for the named read errors instead of "Failed to parse document".
 import net.sourceforge.ganttproject.fork.ForkI18nKt;
+import net.sourceforge.ganttproject.fork.TaskLoadProblems;
 import net.sourceforge.ganttproject.fork.VacationProblems;
 import net.sourceforge.ganttproject.gui.GPColorChooser;
 import net.sourceforge.ganttproject.gui.NotificationChannel;
@@ -260,6 +261,25 @@ public class ProxyDocument implements Document {
         null)));
   }
 
+  /**
+   * [fork change] Shows what the load could not use: a dependency naming a task this file does
+   * not have, or a custom field value that is not a valid literal of its column's type. The stock
+   * code dropped both without a word -- see {@link TaskSerializerKt#loadDependencyGraph} and
+   * {@link TaskLoader#loadCustomProperties}. Same split as {@link #reportVacationProblems}.
+   */
+  private void reportTaskLoadProblems(TaskLoadProblems problems) {
+    String message = problems.message();
+    if (message == null) {
+      return;
+    }
+    var manager = myUIFacade.getNotificationManager();
+    manager.addNotifications(List.of(manager.createNotification(
+        NotificationChannel.WARNING,
+        ForkI18nKt.forkText("fork.taskLoad.title"),
+        "<p>" + message.replace("\n", "<br>") + "</p>",
+        null)));
+  }
+
   private void doParse() throws DocumentException {
     GPParser opener = myParserFactory.newParser();
     HumanResourceManager hrManager = getHumanResourceManager();
@@ -283,6 +303,9 @@ public class ProxyDocument implements Document {
         // only written to the log.
         reportVacationProblems(resourceHandler.getVacationProblems());
         taskHandler.process(xmlProject);
+        // [fork change] Same reasoning as reportVacationProblems above, for a dangling dependency
+        // or a custom field value that is not a valid literal of its column's type.
+        reportTaskLoadProblems(taskHandler.getTaskLoadProblems());
 
         List<GPOption<?>> optionsToRead = new ArrayList<>(myUIFacade.getGanttViewProvider().getOptions());
         optionsToRead.add(GPColorChooser.getRecentColorsOption());

@@ -41,7 +41,7 @@ import net.sourceforge.ganttproject.gui.UIConfiguration
 import net.sourceforge.ganttproject.gui.UIFacade
 import net.sourceforge.ganttproject.gui.options.model.GP1XOptionConverter
 import net.sourceforge.ganttproject.importer.BufferProject
-import net.sourceforge.ganttproject.importer.TaskMapping
+import net.sourceforge.ganttproject.importer.ProjectImportResult
 import net.sourceforge.ganttproject.language.GanttLanguage
 import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.resource.HumanResourceMerger
@@ -49,6 +49,8 @@ import net.sourceforge.ganttproject.resource.OverwritingMerger
 import net.sourceforge.ganttproject.roles.RoleManager
 import net.sourceforge.ganttproject.storage.LazyProjectDatabaseProxy
 // [fork change] New import for the trigger of the duration calculation.
+import net.sourceforge.ganttproject.fork.BaselineNameCollision
+import net.sourceforge.ganttproject.fork.importBaselines
 import net.sourceforge.ganttproject.fork.findOrCreateDateFixed
 import net.sourceforge.ganttproject.fork.findOrCreateDeadline
 import net.sourceforge.ganttproject.fork.findOrCreateOriginalEffort
@@ -232,8 +234,19 @@ open class GanttProjectImpl(
     bufferProject: BufferProject,
     mergeOption: HumanResourceMerger.MergeResourcesOption,
     importCalendarOption: ImportCalendarOption?,
-    closeCurrentProject: Boolean
-  ): TaskMapping {
+    closeCurrentProject: Boolean,
+    baselineNameCollision: BaselineNameCollision?
+  ): ProjectImportResult {
+      // THE UNANSWERED CALENDAR QUESTION STOPS HERE, BEFORE THE FIRST WRITE. Added in this fork.
+      // It has to be the very first statement of the method: the calendar is only the second step
+      // below, so checking it there would already have imported the roles -- half an import, for a
+      // question nobody answered. Throwing is right and a return is not: reaching this point means
+      // the wizard's disabled button AND the importer's own refusal were both bypassed, and a
+      // caller who did that has to hear about it rather than get a quietly calendar-less import.
+      require(importCalendarOption?.isUndecided() != true) {
+        "The calendar question of this import has no answer (ImportCalendarOption.Values.UNDECIDED)." +
+          " Nothing was imported. Ask the user before calling importProject."
+      }
       roleManager.importData(bufferProject.roleManager)
       if (importCalendarOption != null) {
         activeCalendar.importCalendar(bufferProject.activeCalendar, importCalendarOption)
@@ -252,7 +265,15 @@ open class GanttProjectImpl(
           bufferProject.taskManager, humanResourceManager,
           result, original2ImportedResource
         )
-        return result
+        // BASELINES, WIRED UP IN THIS FORK. Placed directly after importAssignments, as the file
+        // comment on importBaselines() always said it belonged -- this is that one line, now with
+        // the decision it was missing. Null means the caller has not decided (or has nothing to
+        // decide, e.g. an importer whose buffer project never has baselines) and baselines are
+        // simply not carried over, same as today.
+        if (baselineNameCollision != null) {
+          importBaselines(bufferProject.baselines, baselines, result, baselineNameCollision, bufferProject.projectName)
+        }
+        return ProjectImportResult(result, that2thisCustomDefs)
       } finally {
         origTaskManager.setEventsEnabled(true)
       }

@@ -230,6 +230,58 @@ class ForkI18nTest {
   }
 
   /**
+   * The companion check in the OTHER direction, added 12.10.2026 (`dirigent-gantt`, after
+   * `tasksaver-stillen-verlust-beheben` added nine keys to the English file only): the test above
+   * does not cover a key that exists in English but not in German, and cannot -- it only ever
+   * computes `german - english`.
+   *
+   * Both directions are real risks, and for a DIFFERENT reason each: a missing ENGLISH key shows
+   * a bare key name on any non-German system, which [ForkI18n.formatText] is built to make visible
+   * on purpose (see its kdoc). A missing GERMAN key instead falls back to the English text
+   * ([ForkLocalizer.formatTextOrNull] falls through to [RootLocalizer], and [ForkI18n.bundlesFor]
+   * falls through to [defaultBundle] before that) -- silent, not a bare key. For Natalie, who works
+   * in German, that silent fallback IS the damage this fork exists to avoid, so this direction is
+   * checked too, even though it is the one the original asymmetry call did not already catch.
+   *
+   * [GERMAN_TRANSLATION_EXEMPT] holds keys that are deliberately English-only, each with a reason.
+   * An exemption list without a reason per entry is a hole with a lid on it -- see the warning this
+   * test exists to satisfy.
+   */
+  private val GERMAN_TRANSLATION_EXEMPT = setOf<String>(
+    // Measured 12.10.2026, corrected same day (dirigent-gantt caught the first count): comparing
+    // every key [keysOf] reads from i18n.properties against i18n_de.properties finds NONE
+    // currently missing a German counterpart -- 276 keys in each file, identical sets. [keysOf]
+    // reads EVERY property name in the file via `Properties.stringPropertyNames()`, not only
+    // ones starting with "fork." -- the file also carries five keys of a DIFFERENT, pre-existing
+    // naming convention (`option.comparisonAtStartup.label`, `option.resourceChartColors.*`,
+    // `option.ganttChartDefaults.*`; present in both files already, unrelated to this branch). A
+    // first count that grepped only `^fork\.` therefore undercounted by exactly those five (271
+    // instead of 276) -- counting what the key PREFIX suggests rather than what [keysOf] actually
+    // reads. This set stays empty until a key is deliberately added English-only; it exists so
+    // that such a key can be exempted WITH A REASON instead of this test being weakened or deleted.
+  )
+
+  @Test
+  fun `every english fork key has a german counterpart`() {
+    val englishKeys = keysOf("/language/fork/i18n.properties")
+    val germanKeys = keysOf("/language/fork/i18n_de.properties")
+    val missing = (englishKeys - germanKeys) - GERMAN_TRANSLATION_EXEMPT
+
+    // Guard: if the files could not be read, both sets are empty and the check below is vacuous.
+    assertNotNull(englishKeys.firstOrNull(), "the english file was not read, so this test proves nothing")
+    // Guard against the exemption list swallowing the whole comparison: this test must still
+    // check a real, non-trivial number of keys, not run over what is left after exempting most
+    // of them.
+    assertTrue(englishKeys.size - GERMAN_TRANSLATION_EXEMPT.size > 250,
+      "the exemption list leaves too few keys actually checked (${englishKeys.size - GERMAN_TRANSLATION_EXEMPT.size} " +
+        "of ${englishKeys.size}) for this test to mean anything")
+    assertEquals(emptySet<String>(), missing,
+      "these english keys have no german translation -- EITHER translate them, OR name the key " +
+        "in GERMAN_TRANSLATION_EXEMPT with a reason why it stays english-only. A silent fallback " +
+        "to english is exactly what Natalie, working in german, would not notice")
+  }
+
+  /**
    * The display name of a custom property is its COLUMN HEADER, so it is translated. The id is
    * not, and everything looks the property up by that id.
    *

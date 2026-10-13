@@ -111,7 +111,12 @@ class ImporterWizardModel: WizardModel("wizard.import", i18n.formatText("importW
 
   init {
     canFinish = {
+      // unansweredQuestion ADDED IN THIS FORK. While an importer has a question of its own with no
+      // answer -- today that is the calendar question of ImporterFromGanttFile -- the finish button
+      // stays disabled, so the import cannot start with a default nobody chose. The importer
+      // refuses in its own run() as well; this is the lock the user can see.
       importer != null && files.isNotEmpty() && errorMessage.value.isNullOrBlank()
+        && importer?.unansweredQuestion == null
     }
     hasNext = { when (currentPage) {
       0 -> importer != null

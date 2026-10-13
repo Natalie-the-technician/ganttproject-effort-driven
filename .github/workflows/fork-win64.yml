@@ -1,0 +1,170 @@
+# Builds the fork's Windows package on a real Windows runner.
+#
+# WHY THIS EXISTS AT ALL: `distWin64Zip` cannot be produced on Linux. It depends on
+# `distApp`, which calls `jpackage --type app-image` with the JDK that runs Gradle, and
+# jpackage is not a cross compiler -- it only ever builds for the host. Measured on the
+# Linux build machine with jdk-21.0.12-full: `jpackage --help` offers exactly
+# {"app-image", "rpm", "deb"}, and a minimal app-image there produced `bin/TestApp`
+# starting with 7f 45 4c 46 (ELF), no .exe anywhere. `distApp` would in fact not even
+# produce a mislabelled package: it asserts on `GanttProject/GanttProject.exe` and dies
+# with "jpackage lieferte keinen Starter". A Windows runner is the only way.
+#
+# Deliberately a separate file rather than a change to build-packages.yml: that one
+# uploads to Google Cloud with secrets this fork does not have, and builds an MSI via
+# NSIS. Nothing here touches upstream's workflows.
+name: Fork Windows package
+
+on:
+  push:
+    branches: ['paket-windows']
+
+# The release step needs to write; nothing else here does. Kept at workflow level
+# because this workflow has exactly one job.
+permissions:
+  contents: write
+
+jobs:
+  win64:
+    name: distWin64Zip on windows-latest
+    runs-on: windows-latest
+    steps:
+      # fetch-depth: 0 so that main is reachable below. checkout fetches only the
+      # triggering ref, so origin/main still has to be fetched explicitly.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # BUILDS THE TREE OF main, NOT OF THIS BRANCH -- on purpose.
+      #
+      # The package name carries `forkCommit`, which ganttproject-builder/build.gradle
+      # derives from `git rev-parse --short=8 HEAD` of the checked-out tree. Built from
+      # this branch, the name would carry the commit of the branch, i.e. of a state that
+      # differs from main by this very workflow file -- a file that never enters the
+      # package. The name would then point at a commit nobody released.
+      #
+      # Checked out detached, so the branch is not moved and main is not moved either.
+      # The workflow definition has already been read by then and keeps running even
+      # though the file is no longer in the working tree.
+      - name: Check out the tree of main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git checkout --detach origin/main
+          echo "BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_SHORT=$(git rev-parse --short=8 HEAD)" >> "$GITHUB_ENV"
+          echo "Building tree $(git rev-parse HEAD)"
+
+      # Without the localization submodule distBin aborts with "copyPlugin not found".
+      # Done after the detach, so the submodule matches the tree that gets built.
+      - name: Check out submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          git submodule update --init --force --recursive --depth=1
+
+      # jdk+fx is not a convenience: the build does not compile without the JavaFX
+      # modules. `distRuntime` additionally needs a FULL JDK -- it jlinks the bundled
+      # runtime from jmods/ and aborts by itself if that directory is missing.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'liberica'
+          java-version: '21'
+          java-package: jdk+fx
+          cache: 'gradle'
+
+      # Printed before the build, so a missing jmods/ is visible as such instead of
+      # surfacing as a jlink failure halfway through a long log.
+      - name: Check the JDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+          ls "$JAVA_HOME/jmods" | head -5
+          echo "jmods total: $(ls "$JAVA_HOME/jmods" | wc -l)"
+
+      # No VERSION override: ganttproject-builder/VERSION carries 3.4.3395, and the
+      # generic package of this release was built from exactly that.
+      - name: Build distWin64Zip
+        run: ./gradlew distWin64Zip --console=plain
+
+      # A build that failed leaves a log nobody can read at a glance; this repeats the
+      # compiler diagnostics at the end where they are findable.
+      - name: Compiler diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          grep -rE '^(e|w): |error:|FAILED|Failed to ' build ganttproject-builder/build 2>/dev/null | head -50 || echo "none found"
+
+      # The package is only a Windows package if there is a Windows launcher in it. This
+      # is checked here as well, not only after the download, so a wrong result never
+      # leaves the runner under a win64 name.
+      - name: Verify the result
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=ganttproject-builder/dist-app/GanttProject/GanttProject.exe
+          test -f "$exe" || { echo "no launcher: $exe"; exit 1; }
+          magic=$(head -c 2 "$exe" | od -An -c | tr -d ' \n')
+          echo "launcher magic: $magic"
+          test "$magic" = "MZ" || { echo "launcher is not a PE binary"; exit 1; }
+          ls -l build/distributions
+          zip=$(ls build/distributions/*win64*.zip)
+          echo "ZIP_PATH=$zip" >> "$GITHUB_ENV"
+          echo "ZIP_NAME=$(basename "$zip")" >> "$GITHUB_ENV"
+          echo "ZIP_SHA256=$(sha256sum "$zip" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "ZIP_BYTES=$(stat -c %s "$zip")" >> "$GITHUB_ENV"
+          case "$(basename "$zip")" in
+            *"$BUILD_SHORT"*) ;;
+            *) echo "package name does not carry $BUILD_SHORT"; exit 1 ;;
+          esac
+
+      # Convenience copy for looking at it in the browser. continue-on-error on
+      # purpose: this repository has already had a build taken down by a full artifact
+      # quota, and a package that exists as a release is worth more than a green
+      # artifact step. The release below is the copy that counts.
+      - name: Upload artifact
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-win64-zip
+          path: build/distributions/*win64*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      # Uses the preinstalled gh CLI with the built-in token rather than a third-party
+      # action -- same reasoning as in android-app.yml: the smallest possible supply
+      # chain for a public repository. No personal token is needed or present.
+      #
+      # The tag is attached to THIS branch commit, never to main: the release is a means
+      # of transport for the file, not the version marker. Tagging the version is
+      # somebody else's decision.
+      - name: Publish as a prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: paket-fork.4-win64
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          notes=$(printf '%s\n' \
+            "Windows package of the fork, built on windows-latest." \
+            "" \
+            "Built tree: $BUILD_SHA" \
+            "File: $ZIP_NAME" \
+            "Size: $ZIP_BYTES bytes" \
+            "SHA-256: $ZIP_SHA256" \
+            "" \
+            "Prerelease: the tag transports the file, it does not name the version.")
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP_PATH" --clobber
+            gh release edit "$TAG" --notes "$notes" --prerelease
+          else
+            gh release create "$TAG" "$ZIP_PATH" \
+              --target "$TARGET_SHA" \
+              --title "Windows package $ZIP_NAME" \
+              --notes "$notes" \
+              --prerelease
+          fi
