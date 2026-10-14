@@ -64,8 +64,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -202,52 +205,85 @@ public class GanttOptions extends SaverBase {
       File file = getOptionsFile();
       ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
       doSave(outBuffer);
-      BufferedOutputStream outFile = new BufferedOutputStream(new FileOutputStream(file));
-      // Take the settings file away from the rest of the machine before anything is written into it.
-      // A plain FileOutputStream leaves it at whatever the umask allows, which is 0644 in the
-      // ordinary case -- readable by every other user of the machine. The file holds the GP Cloud
-      // auth token, the GP Cloud user id and the WebDAV server list, so that is more than a detail.
+
+      // Write the new options into a fresh file next to the real one -- narrowed to its owner from
+      // the moment it is created, not after the fact -- and only then swap it in with an atomic
+      // rename. The file holds the GP Cloud auth token, the GP Cloud user id and the WebDAV server
+      // list, so a window in which the finished file stands open to every other user of the machine
+      // is more than a detail.
       //
-      // After opening the stream and before the copy, on purpose: opening creates the file empty, so
-      // at this point there is nothing in it yet. Narrowing it afterwards would leave a moment in
-      // which the finished file, token and all, stands open to everybody.
-      restrictToOwner(file);
-      ByteStreams.copy(new ByteArrayInputStream(outBuffer.toByteArray()), outFile);
-      outFile.flush();
-      outFile.close();
+      // A reader who opens the path only after the rename gets either the untouched old file or the
+      // new one, which was never anything but owner-only -- there is no moment of a widely-readable
+      // file with the new token in it. A reader who already held the old file open from before the
+      // rename keeps reading through that handle regardless of its permissions, same as with any
+      // POSIX rename; no permission scheme can take an already-open handle away, narrowing before or
+      // after the write makes no difference to that case.
+      //
+      // Because the real file is only ever touched by the rename itself, an exception anywhere above
+      // leaves it exactly as it was after the previous successful save, never truncated and empty.
+      File tempFile = createRestrictedTempFile(file.getParentFile());
+      try {
+        try (OutputStream out = new BufferedOutputStream(new FileOutputStream(tempFile))) {
+          ByteStreams.copy(new ByteArrayInputStream(outBuffer.toByteArray()), out);
+        }
+        moveIntoPlace(tempFile, file);
+      } finally {
+        // No-op if moveIntoPlace already moved it away.
+        tempFile.delete();
+      }
     } catch (Throwable e) {
       GPLogger.log(e);
     }
   }
 
   /**
-   * Narrows the options file to its owner. Never fatal: the caller is in the middle of writing the
-   * options, and a file mode which could not be set is a far smaller problem than losing them.
+   * A temp file in {@code directory}, owner-only from the moment it is created wherever the platform
+   * supports it.
    *
    * A filesystem without POSIX permissions -- Windows above all -- answers with
-   * {@link UnsupportedOperationException}. That is a normal answer there, not an error, and it is
-   * swallowed without a word; the file simply keeps the permissions the platform gives it.
+   * {@link UnsupportedOperationException}, which is a normal answer there, not an error: the file
+   * simply keeps whatever permissions the platform gives new files. A filesystem which claims POSIX
+   * support but refuses this particular call (a FUSE mount, some network shares) is logged and falls
+   * back the same way. Either way the caller still gets a usable temp file to save into -- losing the
+   * narrower permissions is a far smaller problem than losing the options.
    */
-  private void restrictToOwner(File file) {
+  File createRestrictedTempFile(File directory) throws IOException {
     try {
-      setOwnerOnlyPermissions(file);
+      return createRestrictedTempFileImpl(directory);
     } catch (UnsupportedOperationException e) {
-      // No POSIX permissions on this filesystem. Nothing to do here and nothing worth reporting.
+      return Files.createTempFile(directory.toPath(), ".ganttproject", ".tmp").toFile();
     } catch (IOException e) {
-      // A read-only mount, a network share which ignores modes, a file which went away. Worth a
-      // line in the log, but still no reason to drop the options on the floor.
       GPLogger.log(e);
+      return Files.createTempFile(directory.toPath(), ".ganttproject", ".tmp").toFile();
     }
   }
 
   /**
-   * The platform call on its own, so that the branch which a POSIX machine cannot reach can still
-   * be tested: a test overrides this to throw {@link UnsupportedOperationException}, which is
-   * exactly what the real call does on Windows.
+   * The platform call on its own, so that the branches which a POSIX machine cannot reach can still
+   * be tested: a test overrides this to throw {@link UnsupportedOperationException} or
+   * {@link IOException}, which is what the real call does on an unsupporting or uncooperative
+   * filesystem respectively.
    */
-  void setOwnerOnlyPermissions(File file) throws IOException {
-    Files.setPosixFilePermissions(
-        file.toPath(), EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+  File createRestrictedTempFileImpl(File directory) throws IOException {
+    return Files.createTempFile(directory.toPath(), ".ganttproject", ".tmp",
+        PosixFilePermissions.asFileAttribute(EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE))
+    ).toFile();
+  }
+
+  /**
+   * Puts {@code tempFile} in place of {@code target} with as close to a single filesystem operation
+   * as the platform allows, so that a reader of {@code target} never sees it half-written.
+   */
+  private void moveIntoPlace(File tempFile, File target) throws IOException {
+    try {
+      Files.move(tempFile.toPath(), target.toPath(),
+          StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+    } catch (AtomicMoveNotSupportedException e) {
+      // Not on the same filesystem (a symlinked ~/.ganttproject, say), or a platform which cannot do
+      // an atomic rename here. A plain move is still one filesystem call and still better than
+      // writing the real file in place.
+      Files.move(tempFile.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    }
   }
 
   private void doSave(OutputStream out) throws Exception {

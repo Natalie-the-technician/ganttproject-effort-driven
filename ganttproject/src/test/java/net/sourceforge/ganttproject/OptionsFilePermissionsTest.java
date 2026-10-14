@@ -31,6 +31,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -40,19 +41,24 @@ import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The permissions of the options file which {@link GanttOptions#save()} writes.
  *
  * The file holds the GP Cloud auth token, the GP Cloud user id and the WebDAV server list, and it is
- * created by a plain {@code FileOutputStream}, which leaves it at whatever the umask allows. With the
- * usual umask of 0022 that is 0644, and every other user of the machine reads the token.
+ * written through a fresh, owner-only temp file which is then renamed into place -- never through a
+ * plain {@code FileOutputStream} straight onto the real file, which would leave it at whatever the
+ * umask allows (0644 with the usual umask of 0022, readable by every other user of the machine) for
+ * however long the write takes.
  *
- * The second half of these tests is about the platform which cannot do any of this: on a filesystem
- * without POSIX permissions {@code Files.setPosixFilePermissions} throws, and losing the options
- * because a file mode could not be set would be a worse bug than the one being fixed.
+ * None of this exists on a filesystem without POSIX permissions -- Windows above all, where
+ * {@code Files.getPosixFilePermissions} and the restricted-attribute temp file both throw
+ * {@link UnsupportedOperationException}. Every test which reads a POSIX mode skips itself there
+ * instead of failing, through {@link #modeOf}; losing the options because a file mode could not be
+ * read or set would be a worse bug than the one being fixed.
  */
 public class OptionsFilePermissionsTest {
   private String myOriginalUserHome;
@@ -83,9 +89,39 @@ public class OptionsFilePermissionsTest {
   }
 
   /**
-   * The control for the test above: a file created the way save() used to create it, in the same
-   * directory and in the same run, is NOT owner-only. Without this the assertion above would also
-   * pass on a machine whose umask happens to be 0077, and it would prove nothing.
+   * The upgrade case: every existing installation already has a {@code ~/.ganttproject} created by
+   * the old, unrestricted code, wide open before this fix ever runs on it. A test which only ever
+   * measures a file that {@code save()} itself created from nothing would never notice if the fix
+   * only worked for brand-new files and left an inherited, already-world-readable one untouched --
+   * so this one plants that wide-open file by hand first.
+   */
+  @Test
+  public void anInheritedWorldReadableOptionsFileIsNarrowedBySave() throws IOException {
+    File file = GanttOptions.getOptionsFile();
+    try (OutputStream out = new FileOutputStream(file)) {
+      out.write("<ganttproject-options/>".getBytes(StandardCharsets.UTF_8));
+    }
+    Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString("rw-r--r--"));
+    assertEquals("rw-r--r--", modeOf(file), "could not plant the wide-open file this test relies on");
+
+    GanttOptions options = newOptions();
+    options.save();
+
+    assertEquals("rw-------", modeOf(file),
+        "save() left an inherited, already-world-readable options file exactly as wide open as it "
+            + "found it");
+    assertCompleteOptionsFile(file);
+  }
+
+  /**
+   * The control for the test above: a file created the way save() used to create it before this fix,
+   * in the same directory and in the same run, is NOT owner-only. Without this the assertion above
+   * would also pass on a machine whose umask happens to be 0077, and it would prove nothing.
+   *
+   * On such a machine this control itself cannot tell the fix from its absence -- every file in the
+   * directory comes out owner-only regardless of what save() does. That is not a failure of the code
+   * under test, so it is skipped, not failed: a hard assertion here would be red on every hardened
+   * machine (umask 0077) even though nothing is wrong.
    */
   @Test
   public void aPlainFileOutputStreamInTheSameDirectoryIsNotOwnerOnly() throws IOException {
@@ -94,19 +130,27 @@ public class OptionsFilePermissionsTest {
       out.write(42);
     }
 
-    assertNotEquals("rw-------", modeOf(control),
-        "the umask of this run is already 0077, so the test above cannot tell the fix from its "
-            + "absence. Run the tests with umask 0022.");
+    assumeFalse("rw-------".equals(modeOf(control)),
+        "the umask of this run is already 0077, so this control cannot tell the fix from its "
+            + "absence -- skipping rather than failing. Run the tests with umask 0022 to exercise it.");
   }
 
   /**
    * Windows, and every other filesystem without POSIX permissions: the platform call throws
    * {@link UnsupportedOperationException}, and the options still have to reach the disk whole. The
-   * throw is put in by hand because a POSIX machine cannot produce it.
+   * throw is put in by hand because a POSIX machine cannot produce it on its own.
+   *
+   * What this cannot measure is the resulting file mode on a real non-POSIX filesystem -- that is not
+   * observable from a POSIX machine, see the class comment, and this test is run on one. Measured
+   * here instead: {@code Files.createTempFile} without a {@code FileAttribute} -- the fallback this
+   * exercises -- turns out to default to owner-only permissions on THIS (POSIX) filesystem on its
+   * own, regardless of the forced exception. That is a property of this machine's JDK and filesystem,
+   * not of the fix, and it would not hold on Windows, which has no POSIX permissions to default. So
+   * this test only checks what it safely can: that the options are not lost.
    */
   @Test
   public void optionsAreSavedWholeWhereThePlatformCannotSetPermissions() throws IOException {
-    GanttOptions options = newOptionsWhosePermissionCallThrows(
+    GanttOptions options = newOptionsWhoseTempFileCallThrows(
         new UnsupportedOperationException("posix:permissions not supported"));
 
     options.save();
@@ -114,20 +158,46 @@ public class OptionsFilePermissionsTest {
     File file = GanttOptions.getOptionsFile();
     assertTrue(file.exists(), "the options were lost because the file mode could not be set");
     assertCompleteOptionsFile(file);
-    assertEquals(modeOfAPlainlyCreatedFile(), modeOf(file),
-        "the file mode was changed although the platform call failed");
   }
 
-  /** The same for an I/O failure: a read-only mount, a share which ignores modes. */
+  /** The same for an I/O failure: a FUSE mount, a share which claims POSIX support and refuses it. */
   @Test
   public void optionsAreSavedWholeWhenThePermissionCallFails() throws IOException {
-    GanttOptions options = newOptionsWhosePermissionCallThrows(new IOException("read-only file system"));
+    GanttOptions options = newOptionsWhoseTempFileCallThrows(new IOException("read-only file system"));
 
     options.save();
 
     File file = GanttOptions.getOptionsFile();
     assertTrue(file.exists(), "the options were lost because the file mode could not be set");
     assertCompleteOptionsFile(file);
+  }
+
+  /**
+   * The point of writing into a temp file and renaming it into place, spelled out as a test: a
+   * failure partway through a save must not destroy the options from the previous, successful one.
+   *
+   * Before this fix, {@code save()} opened the real file with a plain {@code FileOutputStream} --
+   * which truncates it to empty immediately -- before anything could go wrong, so any exception
+   * afterwards (a {@code RuntimeException} from the permission call among them) left an empty options
+   * file on disk. Writing into a separate temp file first means the real file is only ever touched by
+   * the final, successful rename.
+   */
+  @Test
+  public void aFailedSaveDoesNotDestroyThePreviousOptionsFile() throws IOException {
+    GanttOptions firstSave = newOptions();
+    firstSave.save();
+    File file = GanttOptions.getOptionsFile();
+    assertCompleteOptionsFile(file);
+    String previousContent = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+
+    GanttOptions secondSave = newOptionsWhoseTempFileCallThrows(new RuntimeException("disk went away"));
+    secondSave.save();
+
+    assertTrue(file.exists(), "the previous options file was removed by the failed save");
+    String contentAfterFailedSave = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+    assertEquals(previousContent, contentAfterFailedSave,
+        "a save() that fails partway through must leave the previous options file untouched, not "
+            + "an empty or partial one");
   }
 
   private void assertCompleteOptionsFile(File file) throws IOException {
@@ -137,32 +207,30 @@ public class OptionsFilePermissionsTest {
         "the options document is cut off, so the copy did not finish: " + xml);
   }
 
-  /** The mode as `ls -l` writes it, so that a failure says `rw-r--r--` and not a set of enums. */
+  /**
+   * The mode as `ls -l` writes it, so that a failure says `rw-r--r--` and not a set of enums.
+   *
+   * Skips the calling test rather than failing it on a filesystem without POSIX permissions --
+   * Windows above all, where this call throws {@link UnsupportedOperationException}.
+   */
   private String modeOf(File file) throws IOException {
+    assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
+        "no POSIX file permissions on this filesystem");
     return PosixFilePermissions.toString(Files.getPosixFilePermissions(file.toPath()));
-  }
-
-  /** What a file in this directory looks like when nobody narrows it -- measured, not assumed. */
-  private String modeOfAPlainlyCreatedFile() throws IOException {
-    File control = new File(System.getProperty("user.home"), "plain-control");
-    try (OutputStream out = new FileOutputStream(control)) {
-      out.write(42);
-    }
-    return modeOf(control);
   }
 
   private GanttOptions newOptions() {
     return newOptions(null);
   }
 
-  private GanttOptions newOptionsWhosePermissionCallThrows(Exception thrown) {
+  private GanttOptions newOptionsWhoseTempFileCallThrows(Exception thrown) {
     return newOptions(thrown);
   }
 
   /**
    * A GanttOptions with the two collaborators which doSave reads. With {@code thrown} given, the
-   * platform call which narrows the file throws it instead of running -- that is the only way to
-   * reach the non-POSIX branch from a POSIX machine.
+   * call which creates the owner-only temp file throws it instead of running -- that is the only way
+   * to reach the non-POSIX and failure branches from a POSIX machine that does not fail.
    */
   private GanttOptions newOptions(Exception thrown) {
     RoleManager roleManager = createNiceMock(RoleManager.class);
@@ -175,7 +243,7 @@ public class OptionsFilePermissionsTest {
         ? new GanttOptions(roleManager, documentManager, false)
         : new GanttOptions(roleManager, documentManager, false) {
           @Override
-          void setOwnerOnlyPermissions(File file) throws IOException {
+          File createRestrictedTempFileImpl(File directory) throws IOException {
             if (thrown instanceof IOException) {
               throw (IOException) thrown;
             }
