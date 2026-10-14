@@ -85,7 +85,7 @@ jobs:
           ls "$JAVA_HOME/jmods" | head -5
           echo "jmods total: $(ls "$JAVA_HOME/jmods" | wc -l)"
 
-      # No VERSION override: ganttproject-builder/VERSION carries 3.4.3395, and the
+      # No VERSION override: ganttproject-builder/VERSION carries 3.4.3396, and the
       # generic package of this release was built from exactly that.
       - name: Build distWin64Zip
         run: ./gradlew distWin64Zip --console=plain
@@ -145,7 +145,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: paket-fork.4-win64
+          TAG: paket-fork.5-win64
           TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
