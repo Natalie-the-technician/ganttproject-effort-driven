@@ -55,10 +55,16 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * however long the write takes.
  *
  * None of this exists on a filesystem without POSIX permissions -- Windows above all, where
- * {@code Files.getPosixFilePermissions} and the restricted-attribute temp file both throw
- * {@link UnsupportedOperationException}. Every test which reads a POSIX mode skips itself there
- * instead of failing, through {@link #modeOf}; losing the options because a file mode could not be
- * read or set would be a worse bug than the one being fixed.
+ * {@code Files.getPosixFilePermissions}, {@code Files.setPosixFilePermissions} and the
+ * restricted-attribute temp file all throw {@link UnsupportedOperationException}. Every test that
+ * reads or writes a POSIX mode itself -- not through {@link GanttOptions#save()}, which already
+ * catches this on the real, non-test code path -- calls {@link #assumePosixFilePermissionsSupported}
+ * before doing so, so it skips there instead of failing. This is NOT a class-wide
+ * {@code @BeforeEach}: {@link #optionsAreSavedWholeWhereThePlatformCannotSetPermissions},
+ * {@link #optionsAreSavedWholeWhenThePermissionCallFails} and
+ * {@link #aFailedSaveDoesNotDestroyThePreviousOptionsFile} touch no POSIX API directly and are meant
+ * to run, and pass, on Windows -- a blanket skip there would throw away the only coverage this class
+ * has of {@code save()}'s actual behaviour on a non-POSIX filesystem.
  */
 public class OptionsFilePermissionsTest {
   private String myOriginalUserHome;
@@ -97,6 +103,8 @@ public class OptionsFilePermissionsTest {
    */
   @Test
   public void anInheritedWorldReadableOptionsFileIsNarrowedBySave() throws IOException {
+    assumePosixFilePermissionsSupported();
+
     File file = GanttOptions.getOptionsFile();
     try (OutputStream out = new FileOutputStream(file)) {
       out.write("<ganttproject-options/>".getBytes(StandardCharsets.UTF_8));
@@ -210,13 +218,28 @@ public class OptionsFilePermissionsTest {
   /**
    * The mode as `ls -l` writes it, so that a failure says `rw-r--r--` and not a set of enums.
    *
-   * Skips the calling test rather than failing it on a filesystem without POSIX permissions --
-   * Windows above all, where this call throws {@link UnsupportedOperationException}.
+   * Calls {@link #assumePosixFilePermissionsSupported} itself, since every caller reads a POSIX
+   * mode through here -- but a caller that WRITES one first (as
+   * {@link #anInheritedWorldReadableOptionsFileIsNarrowedBySave} does) cannot rely on this guard to
+   * cover that earlier write; it must call {@link #assumePosixFilePermissionsSupported} itself
+   * before that write. The guard belongs at each place a POSIX mode is actually touched, not at one
+   * shared spot a test may or may not reach first.
    */
   private String modeOf(File file) throws IOException {
+    assumePosixFilePermissionsSupported();
+    return PosixFilePermissions.toString(Files.getPosixFilePermissions(file.toPath()));
+  }
+
+  /**
+   * Skips the calling test rather than failing it on a filesystem without POSIX permissions --
+   * Windows above all, where {@code Files.getPosixFilePermissions} and
+   * {@code Files.setPosixFilePermissions} both throw {@link UnsupportedOperationException}. Call
+   * this immediately before any direct use of either, in every test that makes one -- not only the
+   * first such use in a test, and not through a helper a test may bypass.
+   */
+  private void assumePosixFilePermissionsSupported() {
     assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
         "no POSIX file permissions on this filesystem");
-    return PosixFilePermissions.toString(Files.getPosixFilePermissions(file.toPath()));
   }
 
   private GanttOptions newOptions() {
