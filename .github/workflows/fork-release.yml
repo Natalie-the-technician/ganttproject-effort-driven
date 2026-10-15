@@ -1,0 +1,302 @@
+# Builds BOTH fork packages from one tag push and publishes ONE real GitHub release with
+# both files attached, plus a SHA256SUMS over both.
+#
+# WHY A SEPARATE FILE FROM fork-win64.yml: that workflow is triggered by a branch push
+# (`paket-windows`) and exists to produce a throwaway Windows package to look at without
+# ever setting a tag -- it is the only proven path this fork has for a Windows build, and
+# Natalie's standing rule is not to touch it until this one is proven. Mixing a tag-triggered,
+# three-job release pipeline into that file's single `on:` block would change the blast
+# radius of the proven branch trigger for no benefit; a second file keeps both paths intact.
+#
+# WHY A TAG PUSH AND NOT A BRANCH PUSH: GitHub executes the version of a workflow file that
+# is present in the commit that triggered the event, not the version on the default branch
+# (confirmed in GitHub's own docs on 2026-10-15, "events-that-trigger-workflows": "Runs your
+# workflow when you push a commit or tag [...]. This includes workflows that are not merged
+# into the default branch."). Concretely: this file has to be on `main` BEFORE the release
+# tag is created, and the tag has to point at a commit that already contains it -- tagging
+# `main` as it stands right now, before this file is merged, would trigger nothing at all.
+name: Fork release
+
+on:
+  push:
+    tags: ['v*-fork.*']
+
+# release job needs to create a release and upload assets; nothing else here does. Kept at
+# workflow level because every job that writes shares the same need.
+permissions:
+  contents: write
+
+jobs:
+  generic:
+    name: distZip on ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      # Default checkout behaviour is enough here: the ref that triggered this workflow IS
+      # the tag, so the tree checked out is already the exact commit being released. No
+      # "check out the tree of main" detour is needed -- that detour in fork-win64.yml exists
+      # only because that workflow's trigger (the `paket-windows` branch) differs from main.
+      - uses: actions/checkout@v4
+
+      # Without the localization submodule distBin aborts with "copyPlugin not found".
+      - name: Check out submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          git submodule update --init --force --recursive --depth=1
+
+      # jdk+fx is not a convenience: the build does not compile without the JavaFX modules,
+      # for distZip exactly as much as for distWin64Zip -- this is a compile-time dependency
+      # of the whole tree, not something specific to the Windows package.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'liberica'
+          java-version: '21'
+          java-package: jdk+fx
+          cache: 'gradle'
+
+      # MEASURED, not assumed: distZip depends only on distBin, which depends only on eight
+      # `:<module>:copyPlugin` tasks, and every one of those depends only on `jar`/`assemble`
+      # -- compiling and packaging, nothing that runs the application or a test. The only
+      # place in this repository that runs under Xvfb is `.github/workflows/gradle.yml`,
+      # and only for `./gradlew build`, which (unlike `assemble`) pulls in `test` -- and the
+      # UI tests are what actually need a screen. `distZip` never reaches `test`. No Xvfb here.
+      - name: Build distZip
+        run: ./gradlew distZip --console=plain
+
+      - name: Compiler diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          grep -rE '^(e|w): |error:|FAILED|Failed to ' build ganttproject-builder/build 2>/dev/null | head -50 || echo "none found"
+
+      # Equivalent in spirit to fork-win64.yml's launcher check: a package is only the generic
+      # package if it actually contains a working generic distribution, checked here rather
+      # than trusting Gradle's exit code.
+      #
+      # Three things that have each been wrong before, silently, in a package nobody caught
+      # until it shipped (see commit message / report for the measurements):
+      #   - the archive's own jars are named "*.jar.lib", not "*.jar" -- searching for "*.jar"
+      #     finds 5 entries here instead of 155 and would call a half package complete;
+      #   - the two Linux/macOS launchers need their executable bit INSIDE the zip, not just on
+      #     disk before zipping -- `unzip -l` does not show permissions at all, only `zipinfo`/
+      #     `unzip -Z` does, and this was wrong in every prior generic package until the
+      #     ganttproject-builder/build.gradle fix in this same change;
+      #   - the package name must carry this run's own short commit, or it silently names a
+      #     commit nobody can reproduce.
+      - name: Verify the result
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          short=$(git rev-parse --short=8 HEAD)
+          ls -l build/distributions
+          zip=$(ls build/distributions/*generic*.zip)
+          name=$(basename "$zip")
+          case "$name" in
+            *"$short"*) ;;
+            *) echo "package name does not carry $short"; exit 1 ;;
+          esac
+          jar_count=$(unzip -Z1 "$zip" | grep -cE '\.jar(\.lib)?$')
+          echo "jar-ish entries: $jar_count"
+          test "$jar_count" -ge 100 || { echo "too few jar entries ($jar_count) -- half a package?"; exit 1; }
+          for launcher in ganttproject ganttproject.command; do
+            perm=$(unzip -Z "$zip" "$launcher" | awk '{print $1}')
+            case "$perm" in
+              -rwx*) ;;
+              *) echo "$launcher is not executable inside the zip: $perm"; exit 1 ;;
+            esac
+          done
+          test -f build/distributions/"$name" || { echo "missing: $name"; exit 1; }
+          bytes=$(stat -c %s "$zip")
+          sha=$(sha256sum "$zip" | cut -d' ' -f1)
+          echo "ZIP: $name ($bytes bytes, sha256 $sha)"
+          {
+            echo "zip_name=$name"
+            echo "zip_bytes=$bytes"
+            echo "zip_sha256=$sha"
+            echo "build_sha=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-generic-zip
+          path: build/distributions/*generic*.zip
+          if-no-files-found: error
+          retention-days: 7
+    outputs:
+      zip_name: ${{ steps.verify.outputs.zip_name }}
+      zip_bytes: ${{ steps.verify.outputs.zip_bytes }}
+      zip_sha256: ${{ steps.verify.outputs.zip_sha256 }}
+      build_sha: ${{ steps.verify.outputs.build_sha }}
+
+  win64:
+    name: distWin64Zip on windows-latest
+    runs-on: windows-latest
+    steps:
+      # Same reasoning as the generic job: the triggering ref already IS the release commit,
+      # so plain checkout is correct here -- unlike fork-win64.yml, which is triggered by a
+      # branch and has to detour via main's tree for exactly that reason.
+      - uses: actions/checkout@v4
+
+      - name: Check out submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          git submodule update --init --force --recursive --depth=1
+
+      # jdk+fx, full: the build does not compile without the JavaFX modules, and distRuntime
+      # (pulled in by distApp, which distWin64Zip needs) jlinks the bundled runtime straight
+      # out of jmods/ and aborts by itself if that directory is missing.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'liberica'
+          java-version: '21'
+          java-package: jdk+fx
+          cache: 'gradle'
+
+      - name: Check the JDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+          ls "$JAVA_HOME/jmods" | head -5
+          echo "jmods total: $(ls "$JAVA_HOME/jmods" | wc -l)"
+
+      - name: Build distWin64Zip
+        run: ./gradlew distWin64Zip --console=plain
+
+      - name: Compiler diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          grep -rE '^(e|w): |error:|FAILED|Failed to ' build ganttproject-builder/build 2>/dev/null | head -50 || echo "none found"
+
+      # Same check as fork-win64.yml: a package is only a Windows package if there is a real
+      # Windows launcher inside it, checked here rather than trusting the exit code.
+      - name: Verify the result
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          short=$(git rev-parse --short=8 HEAD)
+          exe=ganttproject-builder/dist-app/GanttProject/GanttProject.exe
+          test -f "$exe" || { echo "no launcher: $exe"; exit 1; }
+          magic=$(head -c 2 "$exe" | od -An -c | tr -d ' \n')
+          echo "launcher magic: $magic"
+          test "$magic" = "MZ" || { echo "launcher is not a PE binary"; exit 1; }
+          ls -l build/distributions
+          zip=$(ls build/distributions/*win64*.zip)
+          name=$(basename "$zip")
+          case "$name" in
+            *"$short"*) ;;
+            *) echo "package name does not carry $short"; exit 1 ;;
+          esac
+          bytes=$(stat -c %s "$zip")
+          sha=$(sha256sum "$zip" | cut -d' ' -f1)
+          echo "ZIP: $name ($bytes bytes, sha256 $sha)"
+          {
+            echo "zip_name=$name"
+            echo "zip_bytes=$bytes"
+            echo "zip_sha256=$sha"
+            echo "build_sha=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fork-win64-zip
+          path: build/distributions/*win64*.zip
+          if-no-files-found: error
+          retention-days: 7
+    outputs:
+      zip_name: ${{ steps.verify.outputs.zip_name }}
+      zip_bytes: ${{ steps.verify.outputs.zip_bytes }}
+      zip_sha256: ${{ steps.verify.outputs.zip_sha256 }}
+      build_sha: ${{ steps.verify.outputs.build_sha }}
+
+  release:
+    name: Publish the release
+    needs: [generic, win64]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download both packages
+        uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+
+      # Re-measured here, not just trusted from the build jobs: artifacts travel through a
+      # separate upload/download round trip, and a short, half-transferred file would still
+      # have a plausible name. Comparing against what each build job itself measured catches
+      # that without needing a second independent tool.
+      - name: Verify both packages arrived intact
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -l packages
+          check_one() {
+            local expected_name="$1" expected_bytes="$2" expected_sha="$3"
+            local path="packages/$expected_name"
+            test -f "$path" || { echo "missing after download: $expected_name"; exit 1; }
+            local bytes=$(stat -c %s "$path")
+            local sha=$(sha256sum "$path" | cut -d' ' -f1)
+            test "$bytes" = "$expected_bytes" || { echo "$expected_name: size $bytes != reported $expected_bytes"; exit 1; }
+            test "$sha" = "$expected_sha" || { echo "$expected_name: sha256 $sha != reported $expected_sha"; exit 1; }
+            echo "OK: $expected_name ($bytes bytes, sha256 $sha)"
+          }
+          check_one "${{ needs.generic.outputs.zip_name }}" "${{ needs.generic.outputs.zip_bytes }}" "${{ needs.generic.outputs.zip_sha256 }}"
+          check_one "${{ needs.win64.outputs.zip_name }}" "${{ needs.win64.outputs.zip_bytes }}" "${{ needs.win64.outputs.zip_sha256 }}"
+
+      # Format: GNU sha256sum's own default output, two spaces between hash and filename, no
+      # path prefix, LF line endings -- checked against the format of the fork.4 release's own
+      # SHA256SUMS (`cat -A`) rather than assumed, so a local `sha256sum -c SHA256SUMS` next to
+      # the unpacked files keeps working the same way it always has.
+      - name: Write SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd packages
+          sha256sum *.zip > SHA256SUMS
+          cat SHA256SUMS
+
+      # Uses the preinstalled gh CLI with the built-in token, same reasoning as fork-win64.yml:
+      # the smallest possible supply chain for a public repository, no personal token needed
+      # or present (there is none on this machine to begin with).
+      #
+      # No --prerelease: measured against api.github.com/.../releases on 2026-10-15, the two
+      # existing real releases (fork.1, fork.2) both report "prerelease": false; only the
+      # Windows-only scratch release from fork-win64.yml ("paket-fork.4-win64") is true. A real
+      # release with both packages, as decided for fork.5, means leaving this flag off.
+      #
+      # if/else on whether the release already exists, same as fork-win64.yml: the tag itself
+      # cannot be re-pushed, but a re-run of this job alone (e.g. "re-run failed jobs" after the
+      # release step failed partway) must not die on "release already exists".
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          notes=$(printf '%s\n' \
+            "Fork release, both packages built from this tag's commit." \
+            "" \
+            "Generic build tree: ${{ needs.generic.outputs.build_sha }}" \
+            "Windows build tree: ${{ needs.win64.outputs.build_sha }}" \
+            "" \
+            "SHA256SUMS:" \
+            "$(cat packages/SHA256SUMS)")
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" packages/*.zip packages/SHA256SUMS --clobber
+            gh release edit "$TAG" --title "$TAG" --notes "$notes"
+          else
+            gh release create "$TAG" \
+              packages/*.zip \
+              packages/SHA256SUMS \
+              --title "$TAG" \
+              --notes "$notes"
+          fi
