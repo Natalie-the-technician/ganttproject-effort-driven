@@ -123,6 +123,21 @@ tasks.register('distZip', Zip) {
     // ganttproject-launch4j.xml still point at it. Both build paths are commented out in this fork
     // and not usable, but they are not meant to break silently.
     exclude 'ganttproject.exe'
+    // [fork change] Zip does not inherit the Unix permissions distBin already set.
+    //
+    // distBin copies these two launchers with filePermissions unix("rwxr-xr-x") above, and that is
+    // honoured on disk -- `dist-bin/ganttproject` is 0755 after the build, on every build OS. But
+    // Gradle's Zip task does not read a source file's Unix mode when it adds an entry; every entry
+    // in the archive got 0644 regardless of what was on disk, on every released package measured so
+    // far (fork.2, fork.4, fork.5 -- all built on Linux). The launcher was never executable for
+    // whoever unzipped it; `chmod +x ganttproject` was always a silent, undocumented extra step.
+    // Restated here because the Zip task, unlike the plain copy above, needs its own permission
+    // override to avoid dropping back to the default.
+    filesMatching(['ganttproject', 'ganttproject.command']) {
+        permissions {
+            unix("rwxr-xr-x")
+        }
+    }
 }
 tasks.distZip.dependsOn distBin
 
