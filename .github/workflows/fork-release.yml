@@ -279,6 +279,13 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          # Without this the step fails in 10 seconds with "failed to run git: fatal: not a
+          # git repository": this job only downloads artifacts, it never checks the tree out,
+          # and gh infers the target repository from the git remote. Measured on run #1,
+          # 16.10.2026 -- both packages were built and verified, only publishing failed.
+          # GH_REPO removes the need for a checkout here; a checkout would also work but
+          # costs a clone for nothing.
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
