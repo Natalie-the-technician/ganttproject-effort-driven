@@ -380,6 +380,41 @@ internal class CommandLineProjectOpenStrategy(
     if (path != null) {
       doOpenStartupDocument(path)
     } else {
+      // [fork change] THE PLAIN START GETS THIS FORK'S COLUMNS TOO.
+      //
+      // WHAT WAS MEASURED, 20.10.2026 on the running program: whoever starts the program and
+      // plans straight away plans WITHOUT all eleven fork columns. Way A (the empty startup
+      // document) gave 0 of 11, way B (*Project > New*) 11 of 11, way C (opening a foreign .gan)
+      // 11 of 11. The two existing calls to `ensureCapacityColumns()` sit in
+      // `GanttProject.open()` and in `ProjectUIFacadeImpl.createProject` -- and nowhere else.
+      //
+      // WHY HERE: this is the one place every launch passes through. `MainApplication` calls
+      // `AppBuilder.withDocument(files[0])` or `withDocument(null)`, and both end up in this
+      // method. The empty startup document itself is made at the END of the `GanttProject`
+      // constructor (`myObservableDocument.set(documentManager.newUntitledDocument())`) -- so it
+      // does NOT come about through the same mechanism as *Project > New*: no wizard, no
+      // `project.close()`, no `fireProjectCreated()`. A call placed in the constructor would
+      // therefore have to be right about a listener order that nothing fixes; here the UI is
+      // initialized (`whenAppInitialized`) and nothing is reset afterwards.
+      //
+      // WHY IN THIS BRANCH AND NOT ABOVE THE `if`, and THIS IS THE TRAP OF THE CHANGE: the
+      // columns must never be created before something is READ into the same project without a
+      // reset in between. `CustomColumnsManager.addNewCustomColumn` throws then --
+      // "Column with ID=hours_per_day is already registered" -- and in the program that arrives
+      // as `DocumentException: Failed to parse document` for the whole file. MEASURED, and it is
+      // not theory: `StartwegSpaltenTest` pins that exception down. The `path != null` branch has
+      // exactly such a read without a reset in it: when the open fails, `tryImportDocument` runs
+      // an importer straight into this project. So that branch is left alone, and it needs
+      // nothing -- `GanttProject.open()` creates the columns there itself.
+      //
+      // WHY THE BRANCH TAKEN HERE IS SAFE: `maybeOpenLastDocument()` either opens nothing -- the
+      // option is off, the recent list is empty, the user declines the confirmation, each of
+      // which leaves the empty startup document standing, and each of which is way A -- or it
+      // goes through `projectUiFacade.openProject`, and that path runs `project.close()` before
+      // reading (`ProjectUIFacadeImpl.onDocumentReady`). `GanttProject.close()` calls `reset()`
+      // on BOTH property managers, so whatever is created here is gone again before a single byte
+      // is read, and `GanttProject.open()` creates it anew afterwards. Way C stays way C.
+      ensureForkColumns(project.resourceCustomPropertyManager, project.taskCustomColumnManager)
       maybeOpenLastDocument()
     }
   }

@@ -124,12 +124,9 @@ open class GanttProjectImpl(
   }
 
   /**
-   * [fork change] Creates the two daily-rate columns in case they do not exist yet.
-   *
-   * WHY AT ALL: until now the "Hours per day" column only came into being when somebody created
-   * it by hand in the column manager -- anyone who did not know that went on planning silently
-   * with the default of eight hours. With the "Hours schedule" that would be worse still: a
-   * property one cannot see is a property one cannot fill in either.
+   * [fork change] Creates this fork's eleven columns in THIS project, in case they do not exist
+   * yet. The list itself lives in the top-level [ensureForkColumns] below, because the startup
+   * path reaches a project only through [IGanttProject] and must not keep a second list.
    *
    * WHY NOT IN THE CONSTRUCTOR, and that is measured on the machine: created there, LOADING then
    * fails for every file that contains the same column --
@@ -142,32 +139,7 @@ open class GanttProjectImpl(
    * findOrCreate is then a no-op.
    */
   fun ensureCapacityColumns() {
-    val ressourcen = humanResourceManager.customPropertyManager
-    val vorgaenge = taskManager.customPropertyManager
-    EffortDrivenProperties.findOrCreateResourceHours(ressourcen)
-    EffortDrivenProperties.findOrCreateResourceSchedule(ressourcen)
-    findOrCreateUtilisation(ressourcen)
-    // [fork change] The working week -- for the same reason the four above are listed here:
-    // a property nobody can see is a property nobody can fill in either.
-    findOrCreateWorkWeek(ressourcen)
-    // ALL of this fork's columns, and all of them at that. MEASURED ON 17.08.2026: four of them
-    // -- "Finish by", "Utilisation (%)", "Waiting", "Date fixed" -- were created NOWHERE. They
-    // existed in the code but could not be filled in by anybody; levelling read them dutifully
-    // and always found nothing. The same family of bug as the dead menu items from session 8:
-    // built, not reachable, and from the outside indistinguishable from "does not work".
-    findOrCreateRecurrence(vorgaenge)
-    // [fork change] recurrence_of belongs to the same feature as recurrence and was missing here.
-    // Until now it only came into being at the first recurring Task (RecurrenceAdapter). Same
-    // construction, same idempotence: search first, create only when nothing is found.
-    findOrCreateRecurrenceOf(vorgaenge)
-    findOrCreateDeadline(vorgaenge)
-    findOrCreateWaitOnly(vorgaenge)
-    // [fork change] "On site only" -- the task mark for home working. Listed here for the reason
-    // the comment above gives: a column nobody can see is a column nobody can fill in. The mark
-    // itself stays harmless when it exists and holds nothing, see TaskOnSiteOnly.kt.
-    findOrCreateOnSiteOnly(vorgaenge)
-    findOrCreateDateFixed(vorgaenge)
-    findOrCreateOriginalEffort(vorgaenge)
+    ensureForkColumns(humanResourceManager.customPropertyManager, taskManager.customPropertyManager)
   }
 
   override fun setModified() {
@@ -411,4 +383,54 @@ internal fun createProjectModificationListener(project: IGanttProject, uiFacade:
       timerBarrier.isPaused = false
     }
   }
+}
+
+
+/**
+ * [fork change] Enters this fork's eleven custom columns into the two managers given, creating
+ * only what is missing.
+ *
+ * WHY AT ALL: until now the "Hours per day" column only came into being when somebody created
+ * it by hand in the column manager -- anyone who did not know that went on planning silently
+ * with the default of eight hours. With the "Hours schedule" that would be worse still: a
+ * property one cannot see is a property one cannot fill in either.
+ *
+ * WHY IT TAKES THE TWO MANAGERS AND NOT A PROJECT: the startup path
+ * (`CommandLineProjectOpenStrategy.openStartupDocument`) holds an [IGanttProject] and has no way
+ * to a [GanttProjectImpl] -- `GanttProjectBase.getProject()` returns the window object itself,
+ * which merely OWNS a [GanttProjectImpl]. Both managers, however, are on the interface. So the
+ * list of columns stands here ONCE and all three entry points -- opening a file
+ * (`GanttProject.open`), *Project > New* (`ProjectUIFacadeImpl.createProject`) and the plain
+ * start -- share it. A second list would drift apart; the eleventh column added to one of them
+ * and not to the other is exactly the kind of mistake that leaves everything green.
+ *
+ * IDEMPOTENT, and every one of the eleven has to be: `findOrCreate*` searches by id OR name
+ * first and creates nothing when it finds something. That is what makes the call safe both after
+ * reading a file that brings the same columns along and before it.
+ */
+fun ensureForkColumns(resourceProperties: CustomPropertyManager, taskProperties: CustomPropertyManager) {
+  EffortDrivenProperties.findOrCreateResourceHours(resourceProperties)
+  EffortDrivenProperties.findOrCreateResourceSchedule(resourceProperties)
+  findOrCreateUtilisation(resourceProperties)
+  // [fork change] The working week -- for the same reason the four above are listed here:
+  // a property nobody can see is a property nobody can fill in either.
+  findOrCreateWorkWeek(resourceProperties)
+  // ALL of this fork's columns, and all of them at that. MEASURED ON 17.08.2026: four of them
+  // -- "Finish by", "Utilisation (%)", "Waiting", "Date fixed" -- were created NOWHERE. They
+  // existed in the code but could not be filled in by anybody; levelling read them dutifully
+  // and always found nothing. The same family of bug as the dead menu items from session 8:
+  // built, not reachable, and from the outside indistinguishable from "does not work".
+  findOrCreateRecurrence(taskProperties)
+  // [fork change] recurrence_of belongs to the same feature as recurrence and was missing here.
+  // Until now it only came into being at the first recurring Task (RecurrenceAdapter). Same
+  // construction, same idempotence: search first, create only when nothing is found.
+  findOrCreateRecurrenceOf(taskProperties)
+  findOrCreateDeadline(taskProperties)
+  findOrCreateWaitOnly(taskProperties)
+  // [fork change] "On site only" -- the task mark for home working. Listed here for the reason
+  // the comment above gives: a column nobody can see is a column nobody can fill in. The mark
+  // itself stays harmless when it exists and holds nothing, see TaskOnSiteOnly.kt.
+  findOrCreateOnSiteOnly(taskProperties)
+  findOrCreateDateFixed(taskProperties)
+  findOrCreateOriginalEffort(taskProperties)
 }

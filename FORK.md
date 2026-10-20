@@ -291,7 +291,7 @@ cannot be clicked.
 
 ## Custom properties
 
-Eleven properties in total, stored in the project file like any other custom column.
+Thirteen properties in total, stored in the project file like any other custom column.
 A project therefore remains readable in the original GanttProject — the columns simply
 appear as ordinary user-defined columns there.
 
@@ -299,20 +299,24 @@ appear as ordinary user-defined columns there.
 |---|---|---|---|
 | `effort_hours` | Task | Double | on first value |
 | `effort_actual_hours` | Task | Double | on first value |
-| `effort_original_hours` | Task | Double | on open / new |
-| `deadline` | Task | Date | on open / new |
-| `wait_only` | Task | Boolean | on open / new |
-| `date_fixed` | Task | Boolean | on open / new |
-| `recurrence` | Task | Text | on open / new |
-| `recurrence_of` | Task | Text | on open / new |
-| `hours_per_day` | Resource | Double | on open / new |
-| `hours_schedule` | Resource | Text | on open / new |
-| `utilisation_percent` | Resource | Integer | on open / new |
+| `effort_original_hours` | Task | Double | on start / open / new |
+| `deadline` | Task | Date | on start / open / new |
+| `wait_only` | Task | Boolean | on start / open / new |
+| `on_site_only` | Task | Boolean | on start / open / new |
+| `date_fixed` | Task | Boolean | on start / open / new |
+| `recurrence` | Task | Text | on start / open / new |
+| `recurrence_of` | Task | Text | on start / open / new |
+| `hours_per_day` | Resource | Double | on start / open / new |
+| `hours_schedule` | Resource | Text | on start / open / new |
+| `utilisation_percent` | Resource | Integer | on start / open / new |
+| `work_week` | Resource | Text | on start / open / new |
 
-Nine are created when a project is opened or created. `effort_hours` and
-`effort_actual_hours` are created only when a value is actually entered, so that
-projects which do not use the feature do not silently gain a column. The effort fields
-sit in the task properties dialog and are there regardless.
+Eleven are created when the program starts, when a project file is opened and by
+*Project > New* — all three paths share one list, `ensureForkColumns` in
+`GanttProjectImpl.kt`. `effort_hours` and `effort_actual_hours` are created only when a
+value is actually entered, so that projects which do not use the feature do not silently
+gain a column. The effort fields sit in the task properties dialog and are there
+regardless.
 
 All default to null. `DEFAULT_HOURS_PER_DAY` is 8.0.
 
@@ -432,9 +436,9 @@ writing anywhere else would let the tab overwrite the fields with the copy it to
 the dialog was opened. The task table columns are a third route and work as well. Read in
 the code, not measured on screen.
 
-**Importing does not create this fork's columns.** They are created in two places
-only: when a project file is opened, and by *Project > New*. None of the import paths
-goes through either. What the imports for `.gan`, CSV and MS Project do — and pasting
+**Importing does not create this fork's columns.** They are created in three places
+only: when the program starts, when a project file is opened, and by *Project > New*.
+None of the import paths goes through any of them. What the imports for `.gan`, CSV and MS Project do — and pasting
 from the clipboard with them — is carry the column *definitions* over from the source
 project, so a file that already has the columns keeps them. A source without them
 leaves you with a project that has none, and effort has nowhere to go until you add
