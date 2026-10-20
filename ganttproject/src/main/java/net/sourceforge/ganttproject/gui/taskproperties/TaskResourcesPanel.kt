@@ -293,8 +293,49 @@ class TaskResourcesPanel(
 
       // [fork change] blockingCol, noEffortCol, hoursPerDayCol and absenceCol are new, the
       // remaining columns are the original ones.
-      columns.addAll(idCol, nameCol, unitCol, coordinatorCol, roleCol,
-        blockingCol, noEffortCol, hoursPerDayCol, absenceCol)
+      val originalColumns = listOf(idCol, nameCol, unitCol, coordinatorCol, roleCol)
+      val forkColumns = listOf(blockingCol, noEffortCol, hoursPerDayCol, absenceCol)
+      columns.addAll(originalColumns)
+      columns.addAll(forkColumns)
+
+      /*
+       * [fork change] THE TABLE ASKS FOR THE WIDTH OF THE ORIGINAL COLUMNS, NOT FOR ALL OF THEM.
+       *
+       * WHAT WENT WRONG WITHOUT THIS LINE. A `TableView` hands its preferred width — the sum of
+       * its column widths — straight on to whoever lays it out, here through two `BorderPane`s
+       * into the tab and from there into the task properties dialog, which is a window of its own
+       * and is sized by its content. Every column this fork added therefore widened the DIALOG by
+       * its own width. Measured in the running program on 20.10.2026 with `xdotool
+       * getwindowgeometry` on the window `Properties for …`:
+       *
+       *     original 08564e556 :  968 x 566
+       *     this fork 4b15bcdb8: 1458 x 577
+       *
+       * and 1458 − 968 = 490 = 130 + 110 + 90 + 160, the four columns above to the pixel. On a
+       * 1024x768 screen the dialog was cut off on both sides; under the window manager `mutter`
+       * the window is clipped to the screen and the right-aligned button bar lands OUTSIDE it, so
+       * `Ok` is not merely off-screen but gone. Closing the dialog then discards every edit,
+       * including those to ORIGINAL fields such as `Duration` — silently: no message, no asterisk
+       * in the title, `Save` greyed out.
+       *
+       * WHY THE COLUMNS ARE NOT MADE NARROWER INSTEAD. The dialog has to lose the whole 490 px to
+       * match the original, and the four columns together ARE 490 px. Narrowing them is the same
+       * as deleting them; `Absence blocks` would have to become `Abs…`.
+       *
+       * WHY NOTHING IS HIDDEN BY THIS. The table's resize policy is `unconstrained-resize`, so
+       * the columns keep their full widths and the table scrolls sideways instead of squeezing
+       * them — headers stay readable, and the four columns stay reachable. `maxWidth` is left at
+       * its default of `Double.MAX_VALUE`, so the table grows again as soon as the dialog is made
+       * wider: measured in `TaskResourcesPanelWidthTest`, at 1458 px of tab width the horizontal
+       * scroll bar disappears altogether and all nine columns are in view, which is exactly
+       * today's picture on a screen that has the room.
+       *
+       * WHY IT IS DERIVED AND NOT WRITTEN OUT. Taken from the original columns themselves, so
+       * that a column width changed upstream moves this budget with it, and a NEW fork column
+       * costs the dialog nothing at all. That is the point: this closes the class of defect, not
+       * just today's instance of it.
+       */
+      prefWidth = originalColumns.sumOf { it.prefWidth } + TABLE_BORDER_WIDTH
     }
 
     // Create split layout with table and cost panel
@@ -469,6 +510,15 @@ private val EFFORT_LABEL_ACTUAL_HOURS get() = forkText("fork.effort.actualHours"
 // [fork change] Labels of the two assignment axes.
 private val AXIS_LABEL_BLOCKING get() = forkText("fork.assignment.blocking")
 private val AXIS_LABEL_NO_EFFORT get() = forkText("fork.assignment.noEffort")
+
+/**
+ * [fork change] The table's own border, 1 px on each side, which its preferred width has to carry
+ * on top of the columns. Measured: `TableView.getInsets()` of this table is
+ * `Insets [top=1.0, right=1.0, bottom=1.0, left=1.0]` and its preferred width with the five
+ * original columns (50 + 200 + 80 + 100 + 150 = 580) is 582. Should the stylesheet ever change
+ * that border, `TaskResourcesPanelWidthTest` goes red rather than the dialog growing quietly.
+ */
+private const val TABLE_BORDER_WIDTH = 2.0
 
 /** [fork change] The days of this task on which this person is away. See `AbsenceStripe.kt`. */
 private val ABSENCE_LABEL get() = forkText("fork.assignment.absence")
