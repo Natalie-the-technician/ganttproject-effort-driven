@@ -229,8 +229,8 @@ class LocalStorage(
     this.paneElements.filenameInput.styleClass.add("filename-input")
     this.paneElements.filenameInput.right = btnBrowse
     if (this.mode == StorageDialogBuilder.Mode.SAVE) {
-      this.paneElements.filenameInput.text = currentDocument.fileName
-      this.state.setCurrentFile(currentDocument.fileName)
+      this.paneElements.filenameInput.text = localFileName(currentDocument.fileName)
+      this.state.setCurrentFile(localFileName(currentDocument.fileName))
       this.state.currentFile.addListener { _, _, newValue ->
         Platform.runLater { paneElements.confirmationCheckBox?.isSelected = false }
       }
@@ -278,5 +278,22 @@ internal fun localBreadcrumbPath(
       return alsPfad
     }
   }
-  return defaultFolder.toPath().resolve(fileName ?: "project.gan")
+  return defaultFolder.toPath().resolve(localFileName(fileName))
+}
+
+/**
+ * [fork change] The name which is used when the name of the current document is of no use as a local file name.
+ */
+internal const val DEFAULT_LOCAL_FILE_NAME = "project.gan"
+
+/**
+ * [fork change] The name of the current document, to be used as a local file name.
+ *
+ * HttpDocument.getFileName() returns the WHOLE WebDAV URL. In the file name field that gives a name with slashes
+ * and hence a parent folder which does not exist; so for an address we take its last component.
+ */
+internal fun localFileName(rawName: String?): String = when {
+  rawName.isNullOrBlank() -> DEFAULT_LOCAL_FILE_NAME
+  rawName.contains("://") -> rawName.substringAfterLast('/').ifBlank { DEFAULT_LOCAL_FILE_NAME }
+  else -> rawName
 }

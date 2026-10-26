@@ -236,13 +236,15 @@ class StoragePane internal constructor(
     //
     // The path worked, one only had to click the server on the left. But the preselection is an
     // assertion about what the person probably wants, and here it was wrong.
-    val currentStorageId = storageUiList.filterIsInstance<WebdavStorage>()
-      .map { it.id }
-      .firstOrNull { rootUrl -> rootUrl.isNotBlank() && currentDocument.uri?.toString()?.startsWith(rootUrl) == true }
-    val initialStorageId = selectedId ?: when {
-      mode == StorageDialogBuilder.Mode.OPEN -> recentProjects.id
-      else -> currentStorageId ?: localStorage.id
-    }
+    // [fork change] The decision itself lives in initialStorageId(), so that it can be tested without JavaFX.
+    val initialStorageId = initialStorageId(
+      selectedId = selectedId,
+      mode = mode,
+      currentDocument = currentDocument,
+      webdavRootUrls = storageUiList.filterIsInstance<WebdavStorage>().map { it.id },
+      recentProjectsId = recentProjects.id,
+      localStorageId = localStorage.id
+    )
 
     // Iterate the list of available storages and create for each storage:
     // - a list item with optional settings button if settings are available
@@ -313,3 +315,36 @@ class StoragePane internal constructor(
 
 private val i18n = RootLocalizer.createWithRootKey("storageView")
 private val fileChooserLocalizer = RootLocalizer.createWithRootKey("storageService.local", BROWSE_PANE_LOCALIZER)
+
+/**
+ * [fork change] The storage which is selected when the storage dialog opens.
+ *
+ * The identifier of a WebDAV storage is the root URL of its server. This is the same test which
+ * RecentDocAsFolderItem applies to the recently opened documents.
+ */
+internal fun initialStorageId(
+  selectedId: String?,
+  mode: StorageDialogBuilder.Mode,
+  currentDocument: Document?,
+  webdavRootUrls: List<String>,
+  recentProjectsId: String,
+  localStorageId: String
+): String =
+  selectedId ?: when (mode) {
+    StorageDialogBuilder.Mode.OPEN -> recentProjectsId
+    StorageDialogBuilder.Mode.SAVE ->
+      documentStorageUrl(currentDocument)?.let { url ->
+        webdavRootUrls.firstOrNull { it.isNotBlank() && url.startsWith(it) }
+      } ?: localStorageId
+  }
+
+/**
+ * [fork change] The location of the document as a plain string, to be matched against the storage identifiers.
+ *
+ * NOT Document.getURI(): HttpDocument builds it with the single-argument java.net.URI constructor and returns
+ * null as soon as that throws -- which it does for a space in the resource name. Such a document looked like a
+ * document without a location, and the dialog fell back to the local storage. Measured on this fork before the
+ * change (SpaceProbe, 26.10.2026): the old expression `uri?.toString()?.startsWith(root)` is false for
+ * ".../projects/plan neu.gan". Document.getPath() is a plain string and never goes through java.net.URI.
+ */
+internal fun documentStorageUrl(document: Document?): String? = document?.path?.ifBlank { null }
