@@ -37,6 +37,9 @@ import org.slf4j.LoggerFactory
 
 private const val DOCUMENT_URL = "http://webdav.example.invalid/projects/test.gan"
 
+/** [fork] See WebDavStorageImpl.java:73, commit 6d4c7f3ab. */
+private const val FORK_DEFAULT_LOCK_TIMEOUT = 120
+
 private fun createDocumentManager(): DocumentCreator {
   val project = EasyMock.createNiceMock<IGanttProject>(IGanttProject::class.java)
   val uiFacade = EasyMock.createNiceMock<UIFacade>(UIFacade::class.java)
@@ -87,17 +90,19 @@ class WebDavLockTimeoutTest {
   }
 
   /**
-   * The default value of the option is -1, and it must arrive at the document as well:
-   * we want the value which is configured, not a value which is hardcoded elsewhere.
+   * [fork] The default value of the option is 120 minutes (upstream: -1), and it must arrive at the
+   * document as well: we want the value which is configured, not a value which is hardcoded elsewhere.
+   * The fork's default is set in WebDavStorageImpl.java:73 (commit 6d4c7f3ab): -1 means "never lock",
+   * which would be a protective feature that is off as shipped.
    */
   @Test
   fun `default lock timeout reaches the document`() {
     val documentManager = createDocumentManager()
     val timeoutOption = (documentManager.webDavStorageUi as WebDavStorageImpl).webDavLockTimeoutOption
-    assertEquals(HttpDocument.NO_LOCK, timeoutOption.value)
+    assertEquals(FORK_DEFAULT_LOCK_TIMEOUT, timeoutOption.value)
 
     val document = (documentManager.getDocument(DOCUMENT_URL) as ProxyDocument).realDocument
-    assertEquals(HttpDocument.NO_LOCK, (document as HttpDocument).lockTimeout)
+    assertEquals(FORK_DEFAULT_LOCK_TIMEOUT, (document as HttpDocument).lockTimeout)
   }
 
   /**
