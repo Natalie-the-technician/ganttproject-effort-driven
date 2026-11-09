@@ -55,6 +55,8 @@ fun buildInsertTaskQuery(dsl: DSLContext, task: Task): Insert<TaskRecord> {
     .set(Tables.TASK.COST_MANUAL_VALUE, costManualValue)
     .set(Tables.TASK.COST, task.cost.value)
     .set(Tables.TASK.IS_COST_CALCULATED, isCostCalculated)
+    .set(Tables.TASK.EFFORT, task.effort)
+    .set(Tables.TASK.IS_EFFORT_DRIVEN, task.isEffortDriven)
     .set(Tables.TASK.NOTES, task.externalizedNotes())
   val customProps = mapCustomPropertiesToJooq(task.manager.customPropertyManager, task.customValues)
   return q.set(customProps)

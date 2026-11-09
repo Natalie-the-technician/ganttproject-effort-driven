@@ -33,6 +33,7 @@ import org.jooq.SQLDialect
 import org.jooq.conf.ParamType
 import org.jooq.impl.DSL
 import org.jooq.impl.SQLDataType
+import java.math.BigDecimal
 import java.awt.Color
 import java.time.LocalDate
 import java.util.*
@@ -96,6 +97,10 @@ class H2TaskUpdateBuilder(
     append(TASK.COST_MANUAL_VALUE, newValue.manualValue)
     append(TASK.COST, newValue.value)
   }
+
+  override fun setEffort(oldValue: BigDecimal?, newValue: BigDecimal?) = append(TASK.EFFORT, newValue)
+
+  override fun setEffortDriven(oldValue: Boolean, newValue: Boolean) = append(TASK.IS_EFFORT_DRIVEN, newValue)
 
   override fun setCritical(oldValue: Boolean, newValue: Boolean) {
     // The value of this property is calculated by the scheduler and is written into the database by

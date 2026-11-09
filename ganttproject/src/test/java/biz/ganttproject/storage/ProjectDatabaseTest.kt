@@ -487,6 +487,28 @@ class ProjectDatabaseTest {
   }
 
   @Test
+  fun `effort and the effort driven flag are written to the database`() {
+    projectDatabase.init()
+    val task = taskManager.newTaskBuilder().withUid("someuid1").withId(1).withName("Name1")
+      .withStartDate(TestSetupHelper.newMonday().time).build()
+    projectDatabase.insertTask(task)
+    task.createMutator().also {
+      it.setEffort(BigDecimal("12.5"))
+      it.setEffortDriven(true)
+      it.commit()
+    }
+    val record = dsl.selectFrom(Task.TASK).where(Task.TASK.UID.eq("someuid1")).fetchSingle()
+    assertEquals(0, BigDecimal("12.5").compareTo(record.effort))
+    assertTrue(record.isEffortDriven)
+
+    task.createMutator().also {
+      it.setEffort(null)
+      it.commit()
+    }
+    assertTrue(dsl.selectFrom(Task.TASK).where(Task.TASK.UID.eq("someuid1")).fetchSingle().effort == null)
+  }
+
+  @Test
   fun `add custom property`() {
     projectDatabase.init()
 

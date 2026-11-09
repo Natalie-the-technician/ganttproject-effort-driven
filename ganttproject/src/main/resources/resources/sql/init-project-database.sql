@@ -18,6 +18,8 @@ create table if not exists Task (
     is_cost_calculated      boolean                     null,
     notes                   varchar                     null,
     cost                    numeric(1000, 2)            null,
+    effort                  numeric(1000, 2)            null,
+    is_effort_driven        boolean                 not null DEFAULT false,
 
     CONSTRAINT task_pkey primary key (uid)
 );
@@ -70,5 +72,7 @@ CREATE VIEW TaskViewForComputedColumns AS
     cost_manual_value,
     is_cost_calculated,
     notes,
-    42.0 AS cost
+    42.0 AS cost,
+    effort,
+    is_effort_driven
     FROM Task;

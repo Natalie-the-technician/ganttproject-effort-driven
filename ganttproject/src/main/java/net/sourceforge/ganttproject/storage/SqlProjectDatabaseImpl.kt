@@ -38,6 +38,7 @@ import org.jooq.*
 import org.jooq.conf.ParamType
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.field
+import java.math.BigDecimal
 import java.awt.Color
 import java.sql.Connection
 import java.sql.SQLException
@@ -548,6 +549,11 @@ class SqlTaskUpdateBuilder(private val task: Task,
     appendUpdate(TASK.COST_MANUAL_VALUE, oldValue.manualValue, newValue.manualValue)
     appendUpdate(TASK.COST, oldValue.value, newValue.value)
   }
+
+  override fun setEffort(oldValue: BigDecimal?, newValue: BigDecimal?) = appendUpdate(TASK.EFFORT, oldValue, newValue)
+
+  override fun setEffortDriven(oldValue: Boolean, newValue: Boolean) =
+    appendUpdate(TASK.IS_EFFORT_DRIVEN, oldValue, newValue)
 
   override fun setCustomProperties(
     oldCustomProperties: CustomPropertyHolder,
