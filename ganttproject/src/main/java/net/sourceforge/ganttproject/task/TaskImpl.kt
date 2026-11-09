@@ -27,6 +27,7 @@ import net.sourceforge.ganttproject.GPLogger
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.storage.ProjectDatabaseException
 import net.sourceforge.ganttproject.task.algorithm.ShiftTaskTreeAlgorithm
+import net.sourceforge.ganttproject.task.algorithm.effortDrivenDurationDays
 import java.awt.Color
 import java.math.BigDecimal
 
@@ -193,6 +194,7 @@ internal open class MutatorImpl(
       throw IllegalStateException("Mutator for task ${taskImpl.taskID} is commiting twice")
     }
     var hasActualDatesChange = false
+    deriveDurationFromEffort()
     try {
       milestoneChange.ifChanged {
         taskImpl.isMilestone = it
@@ -312,6 +314,27 @@ internal open class MutatorImpl(
       val oldStart: GanttCalendar = myStartChange.oldValue
       val oldEnd: GanttCalendar = myEndChange.oldValue!!
       myManager.fireTaskScheduleChanged(taskImpl, oldStart, oldEnd)
+    }
+  }
+
+  /**
+   * The duration of an effort driven task follows from its effort and assignments, so it is set here, in the same
+   * commit and thus in the same undo step as the change which asked for it. A duration set by hand is replaced.
+   */
+  private fun deriveDurationFromEffort() {
+    if (!(effortChange.hasChange() || effortDrivenChange.hasChange() || myDurationChange.hasChange())) {
+      return
+    }
+    val isMilestone = milestoneChange.newValueOrElse { taskImpl.isMilestone }
+    if (!effortDrivenChange.newValueOrElse { taskImpl.isEffortDriven } || isMilestone || taskImpl.isSupertask) {
+      return
+    }
+    val effort = effortChange.newValueOrElse { EffortValue(taskImpl.effort) }.effort
+    effortDrivenDurationDays(effort, taskImpl.assignments)?.let {
+      // Drop what was asked for, then ask for the derived duration the usual way, which moves the end along.
+      myDurationChange.clear()
+      myEndChange.clear()
+      setDuration(myManager.createLength(it))
     }
   }
 

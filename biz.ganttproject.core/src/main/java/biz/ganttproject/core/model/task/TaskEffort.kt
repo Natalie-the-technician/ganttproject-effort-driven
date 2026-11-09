@@ -18,10 +18,18 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package biz.ganttproject.core.model.task
 
+import java.math.BigDecimal
+
 /**
  * The unit in which task effort is stored and written to the project file is decided here and nowhere else:
  * the effort value is a decimal number of hours, and this is the name of its attribute in the .gan file.
  */
 object TaskEffort {
   const val XML_ATTRIBUTE = "effort-hours"
+
+  /** Hours per day assumed for a resource which has none set. */
+  const val DEFAULT_HOURS_PER_DAY = 8.0
+
+  /** Converts a stored effort value to hours. The only place which knows the unit of the stored value. */
+  fun toHours(effort: BigDecimal): BigDecimal = effort
 }
