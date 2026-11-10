@@ -348,6 +348,33 @@ class EffortDrivenDurationTest {
     assertEquals(true, task.days() < 9, "the duration shrinks as in master, it was ${task.days()}")
   }
 
+  private fun Task.setEndTo(day: Int) {
+    createMutator().also {
+      it.setEnd(CalendarFactory.createGanttCalendar(2026, 10, day))
+      it.commit()
+    }
+  }
+
+  @Test
+  fun `setting only the end of an effort driven task gives the derived duration and takes the end back`() {
+    val task = task("20")
+    task.assign(resource("a", "4"), 100f)
+    val end = task.end.time
+    task.setEndTo(27)
+    assertEquals(5, task.days())
+    assertEquals(end, task.end.time, "the end has to follow from the start and the derived duration")
+  }
+
+  @Test
+  fun `setting only the end of a task without the flag keeps the end`() {
+    val task = task("20", effortDriven = false)
+    task.assign(resource("a", "4"), 100f)
+    val end = task.end.time
+    task.setEndTo(27)
+    assertEquals(false, end == task.end.time, "the end has to stay where it was set")
+    assertEquals(true, task.days() > 5, "the duration follows the end as in master, it was ${task.days()}")
+  }
+
   private fun save(): String {
     val out = ByteArrayOutputStream()
     GanttXMLSaver(project).save(out)
