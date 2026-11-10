@@ -33,6 +33,8 @@ import javafx.scene.layout.BackgroundFill
 import javafx.scene.layout.CornerRadii
 import javafx.scene.layout.StackPane
 import javafx.util.StringConverter
+import net.sourceforge.ganttproject.gui.taskproperties.hoursPerDayValidator
+import net.sourceforge.ganttproject.gui.taskproperties.parseHoursPerDay
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RoleManager
@@ -47,6 +49,7 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   private val emailOption = ObservableString("email", resource.mail)
   private val roleOption = ObservableChoice<Role>("role", resource.role,
     RoleManager.Access.getInstance().getEnabledRoles().toList(), roleStringConverter)
+  internal val hoursPerDayOption = ObservableString("hoursPerDay", resource.hoursPerDay?.toPlainString(), hoursPerDayValidator)
   private val rateOption = ObservableMoney("standardRate", resource.standardPayRate)
   private val totalCostOption = ObservableMoney("totalCost", resource.totalCost).also {
     it.setWritable(false)
@@ -65,6 +68,7 @@ class MainPropertiesPanel(private val resource: HumanResource) {
       text(phoneOption)
       text(emailOption)
       dropdown(roleOption)
+      text(hoursPerDayOption)
 
       skip()
       title("section.rate")
@@ -84,6 +88,15 @@ class MainPropertiesPanel(private val resource: HumanResource) {
     emailOption.ifChanged(resource::setMail)
     roleOption.ifChanged(resource::setRole)
     rateOption.ifChanged(resource::setStandardPayRate)
+    hoursPerDayOption.ifChanged {
+      val hoursPerDay = parseHoursPerDay(it)
+      val current = resource.hoursPerDay
+      // An emptied field of a resource without hours per day is not a change.
+      val isSame = if (hoursPerDay == null || current == null) hoursPerDay == current else hoursPerDay.compareTo(current) == 0
+      if (!isSame) {
+        resource.hoursPerDay = hoursPerDay
+      }
+    }
   }
 
 }
