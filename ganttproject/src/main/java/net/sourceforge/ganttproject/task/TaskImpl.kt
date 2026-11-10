@@ -336,7 +336,12 @@ internal open class MutatorImpl(
       // Drop what was asked for, then ask for the derived duration the usual way, which moves the end along.
       myDurationChange.clear()
       myEndChange.clear()
-      setDuration(myManager.createLength(it))
+      val length = myManager.createLength(it)
+      setDuration(length)
+      if (myStartChange.hasChange() && !myEndChange.hasChange()) {
+        // The derived duration may be the stored one, which setDuration takes for no change and leaves the end alone.
+        setEnd(CalendarFactory.createGanttCalendar(taskImpl.shiftDate(getStart().time, length)))
+      }
     }
   }
 

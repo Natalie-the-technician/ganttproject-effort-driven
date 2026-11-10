@@ -19,6 +19,7 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject
 
 import biz.ganttproject.core.io.XmlProjectImporter
+import biz.ganttproject.core.model.task.ConstraintType
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.CalendarFactory.LocaleApi
 import biz.ganttproject.core.time.CalendarFactory.setLocaleApi
@@ -28,11 +29,13 @@ import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.event.TaskListenerAdapter
 import net.sourceforge.ganttproject.task.event.TaskScheduleEvent
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayOutputStream
 import java.math.BigDecimal
 import java.text.DateFormat
+import java.time.Duration
 import java.util.Locale
 
 class EffortDrivenDurationTest {
@@ -373,6 +376,66 @@ class EffortDrivenDurationTest {
     task.setEndTo(27)
     assertEquals(false, end == task.end.time, "the end has to stay where it was set")
     assertEquals(true, task.days() > 5, "the duration follows the end as in master, it was ${task.days()}")
+  }
+
+  @Test
+  fun `moving the start of an effort driven task moves the end along also when the derived duration is the stored one`() {
+    val task = task("20")
+    task.assign(resource("a", "4"), 100f)
+    assertEquals(5, task.days())
+    task.moveStartTo(9)
+    assertEquals(5, task.days(), "the duration stays the derived one")
+    assertEquals(project.taskManager.calendar.shiftDate(task.start.time, task.duration), task.end.time,
+      "the end follows from the start and the derived duration")
+  }
+
+  private fun dependency(dependant: Task, dependee: Task, type: ConstraintType) {
+    project.taskManager.dependencyCollection.createDependency(dependant, dependee, project.taskManager.createConstraint(type))
+  }
+
+  private fun plainTask(startDay: Int, days: Long): Task =
+    project.taskManager.newTaskBuilder().withName("p").withStartDate(CalendarFactory.createGanttCalendar(2026, 10, startDay).time)
+      .withDuration(project.taskManager.createLength(days)).build()
+
+  private fun effortTask(startDay: Int): Task = task("20").also {
+    it.assign(resource("r${project.humanResourceManager.resources.size}", "4"), 100f)
+    it.moveStartTo(startDay)
+  }
+
+  @Test
+  fun `a finish-finish dependency moves the whole effort driven task and keeps its derived duration`() {
+    val predecessor = plainTask(9, 10)
+    val task = effortTask(9)
+    dependency(task, predecessor, ConstraintType.finishfinish)
+    project.taskManager.algorithmCollection.scheduler.run()
+    assertEquals(5, task.days())
+    assertEquals(predecessor.end.time, task.end.time, "the dependency is fulfilled")
+    assertEquals(project.taskManager.calendar.shiftDate(task.start.time, task.duration), task.end.time)
+  }
+
+  @Test
+  fun `a finish-start dependency moves the whole effort driven task and keeps its derived duration`() {
+    val predecessor = plainTask(9, 10)
+    val task = effortTask(9)
+    dependency(task, predecessor, ConstraintType.finishstart)
+    project.taskManager.algorithmCollection.scheduler.run()
+    assertEquals(5, task.days())
+    assertEquals(true, task.start.time >= predecessor.end.time, "the dependency is fulfilled")
+    assertEquals(project.taskManager.calendar.shiftDate(task.start.time, task.duration), task.end.time)
+  }
+
+  @Test
+  fun `a chain of two effort driven tasks is scheduled and ends`() {
+    val predecessor = plainTask(9, 10)
+    val first = effortTask(9)
+    val second = effortTask(9)
+    dependency(first, predecessor, ConstraintType.finishfinish)
+    dependency(second, first, ConstraintType.finishfinish)
+    assertTimeoutPreemptively(Duration.ofSeconds(30)) { project.taskManager.algorithmCollection.scheduler.run() }
+    assertEquals(predecessor.end.time, first.end.time)
+    assertEquals(first.end.time, second.end.time)
+    assertEquals(5, first.days())
+    assertEquals(5, second.days())
   }
 
   private fun save(): String {
