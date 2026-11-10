@@ -208,7 +208,7 @@ class TaskResourcesPanel(
         prefWidth = 150.0
       }
 
-      columns.addAll(idCol, nameCol, unitCol, hoursPerDayCol, coordinatorCol, roleCol)
+      columns.addAll(idCol, nameCol, unitCol, coordinatorCol, roleCol, hoursPerDayCol)
     }
 
     // Create split layout with table and cost panel
