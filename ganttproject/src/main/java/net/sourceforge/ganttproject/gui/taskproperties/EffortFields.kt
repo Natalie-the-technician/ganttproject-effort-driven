@@ -63,6 +63,19 @@ fun parseHoursPerDay(text: String?): BigDecimal? = parseDecimal(text, BigDecimal
 val hoursPerDayValidator = ValueValidator<String> { text -> parseHoursPerDay(text); text }
 
 /**
+ * Validator of the hours per day field of a resource which had [initial] before the dialog was opened.
+ * An empty field is rejected if there was a value, so that it cannot be dropped by accident and fall back to the default
+ * without notice. If there was none, the field may stay empty.
+ */
+fun hoursPerDayValidatorFor(initial: BigDecimal?) = ValueValidator<String> { text ->
+  if (initial != null && text.isBlank()) {
+    throw ValidationException(validatorI18N("validator.decimal.error.parse", arrayOf(text.trim())))
+  }
+  parseHoursPerDay(text)
+  text
+}
+
+/**
  * The effort and the "effort driven" switch of the task properties dialog.
  * The duration which follows from them is calculated when the task mutator is committed.
  */

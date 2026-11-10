@@ -88,6 +88,27 @@ class EffortFieldsTest {
   }
 
   @Test
+  fun `an empty hours per day is rejected if the resource had a value`() {
+    val validator = hoursPerDayValidatorFor(BigDecimal("7.5"))
+    assertThrows(ValidationException::class.java) { validator.parse("") }
+    assertThrows(ValidationException::class.java) { validator.parse("  ") }
+    assertThrows(ValidationException::class.java) { validator.parse("0") }
+    assertThrows(ValidationException::class.java) { validator.parse("25") }
+    validator.parse("24")
+    validator.parse("6,5")
+  }
+
+  @Test
+  fun `an empty hours per day is accepted if the resource had none`() {
+    val validator = hoursPerDayValidatorFor(null)
+    validator.parse("")
+    validator.parse("  ")
+    assertThrows(ValidationException::class.java) { validator.parse("0") }
+    assertThrows(ValidationException::class.java) { validator.parse("25") }
+    validator.parse("24")
+  }
+
+  @Test
   fun `effort and the switch are written to the task on commit`() {
     val task = newTask()
     val fields = TaskEffortFields(task)
@@ -243,6 +264,14 @@ class EffortFieldsTest {
     assertEquals("6.5", hoursPerDayText(a))
     assertEquals("", hoursPerDayText(b))
     assertEquals("", hoursPerDayText(null))
+  }
+
+  @Test
+  fun `the resource dialog rejects an empty hours per day only if the resource had a value`() {
+    val withHours = project.humanResourceManager.create("a", 0).also { it.hoursPerDay = BigDecimal("7.5") }
+    val withoutHours = project.humanResourceManager.create("b", 1)
+    assertThrows(ValidationException::class.java) { MainPropertiesPanel(withHours).hoursPerDayOption.validator.parse("") }
+    MainPropertiesPanel(withoutHours).hoursPerDayOption.validator.parse("")
   }
 
   @Test

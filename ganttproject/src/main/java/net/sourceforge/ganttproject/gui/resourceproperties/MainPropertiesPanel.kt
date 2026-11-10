@@ -34,7 +34,7 @@ import javafx.scene.layout.BackgroundFill
 import javafx.scene.layout.CornerRadii
 import javafx.scene.layout.StackPane
 import javafx.util.StringConverter
-import net.sourceforge.ganttproject.gui.taskproperties.hoursPerDayValidator
+import net.sourceforge.ganttproject.gui.taskproperties.hoursPerDayValidatorFor
 import net.sourceforge.ganttproject.gui.taskproperties.parseHoursPerDay
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.roles.Role
@@ -50,7 +50,7 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   private val emailOption = ObservableString("email", resource.mail)
   private val roleOption = ObservableChoice<Role>("role", resource.role,
     RoleManager.Access.getInstance().getEnabledRoles().toList(), roleStringConverter)
-  internal val hoursPerDayOption = ObservableString("hoursPerDay", resource.hoursPerDay?.toPlainString(), hoursPerDayValidator)
+  internal val hoursPerDayOption = ObservableString("hoursPerDay", resource.hoursPerDay?.toPlainString(), hoursPerDayValidatorFor(resource.hoursPerDay))
   private val rateOption = ObservableMoney("standardRate", resource.standardPayRate)
   private val totalCostOption = ObservableMoney("totalCost", resource.totalCost).also {
     it.setWritable(false)
