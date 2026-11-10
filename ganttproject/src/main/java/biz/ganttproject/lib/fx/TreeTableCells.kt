@@ -113,6 +113,8 @@ class TextCell<S, T>(
 
   private var savedGraphic: Node? = null
   var graphicSupplier: (T) -> Node? = { null }
+  /** Tells if the cell of a given row may be edited, in addition to the column being editable. */
+  var isRowEditable: (S) -> Boolean = { true }
   private val disclosureNode: Node? get() = parent?.lookup(".arrow")
 
   private val textField: TextField = createTextField().also {
@@ -151,7 +153,7 @@ class TextCell<S, T>(
     if (this.index == -1) {
       return
     }
-    if (!isEditable) {
+    if (!isEditable || tableRow?.item?.let(isRowEditable) == false) {
       onEditingCompleted()
       return
     }
@@ -341,13 +343,19 @@ class GanttCalendarStringConverter : StringConverter<GanttCalendar>() {
     CalendarFactory.createGanttCalendar(validator.parse(text))
 }
 
-fun <S> createDateColumn(name: String, getValue: (S) -> GanttCalendar?, setValue: (S, GanttCalendar) -> Unit): TreeTableColumn<S, GanttCalendar> =
+fun <S> createDateColumn(
+  name: String,
+  getValue: (S) -> GanttCalendar?,
+  setValue: (S, GanttCalendar) -> Unit,
+  isEditableRow: (S) -> Boolean = { true }
+): TreeTableColumn<S, GanttCalendar> =
   TreeTableColumn<S, GanttCalendar>(name).apply {
     setCellValueFactory {
       ReadOnlyObjectWrapper(getValue(it.value.value))
     }
     val converter = GanttCalendarStringConverter()
     cellFactory = Callback { TextCell<S, GanttCalendar>(converter.adapt()).also {
+      it.isRowEditable = isEditableRow
       it.styleClass.add("text-left")
       it.isDisable = !this@apply.isEditable
       it.isEditable = this@apply.isEditable
@@ -366,13 +374,14 @@ fun <S> createBooleanColumn(name: String, getValue: (S) -> Boolean?, setValue: (
     onEditCommit = EventHandler {event -> setValue(event.rowValue.value, event.newValue) }
   }
 
-fun <S> createIntegerColumn(name: String, getValue: (S) -> Int?, setValue: (S, Int) -> Unit) =
+fun <S> createIntegerColumn(name: String, getValue: (S) -> Int?, setValue: (S, Int) -> Unit, isEditableRow: (S) -> Boolean = { true }) =
   TreeTableColumn<S, Number>(name).apply {
     setCellValueFactory {
       ReadOnlyObjectWrapper(getValue(it.value.value))
     }
     cellFactory = Callback {
       TextCell<S, Number>(NumberStringConverter(getNumberFormat()).adapt()).also {
+        it.isRowEditable = isEditableRow
         it.styleClass.add("text-right")
         it.isDisable = !this@apply.isEditable
         it.isEditable = this@apply.isEditable

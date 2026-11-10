@@ -105,6 +105,9 @@ open class ColumnBuilder<NodeType, DefaultColumnType: BuiltinColumn>(
   }
 
 
+  /** Tells if the cell of a given column in the row of a given node may be edited. */
+  protected open fun isEditableCell(node: NodeType, modelColumn: DefaultColumnType): Boolean = true
+
   protected open fun createDefaultColumn(modelColumn: DefaultColumnType): TreeTableColumn<NodeType, out Any> {
     return when {
       // TEXT column
@@ -138,7 +141,8 @@ open class ColumnBuilder<NodeType, DefaultColumnType: BuiltinColumn>(
                   undoManager.undoableEdit("Edit properties") {
                       tableModel.setValue(value, node, modelColumn)
                   }
-              }
+              },
+              isEditableRow = { node -> isEditableCell(node, modelColumn) }
           )
       }
 

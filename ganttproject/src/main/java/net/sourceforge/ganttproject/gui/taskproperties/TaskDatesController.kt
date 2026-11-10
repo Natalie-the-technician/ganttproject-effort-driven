@@ -27,6 +27,7 @@ import biz.ganttproject.core.time.TimeDuration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import net.sourceforge.ganttproject.task.Task
+import net.sourceforge.ganttproject.task.isDurationDerived
 import org.w3c.util.DateParser
 import java.time.LocalDate
 import java.util.Calendar

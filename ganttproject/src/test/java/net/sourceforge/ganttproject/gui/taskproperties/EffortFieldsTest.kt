@@ -28,6 +28,8 @@ import kotlinx.coroutines.Dispatchers
 import net.sourceforge.ganttproject.GanttProjectImpl
 import net.sourceforge.ganttproject.gui.resourceproperties.MainPropertiesPanel
 import net.sourceforge.ganttproject.task.Task
+import net.sourceforge.ganttproject.task.hasDerivedDuration
+import net.sourceforge.ganttproject.task.isDurationDerived
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -141,6 +143,22 @@ class EffortFieldsTest {
     assertFalse(isDurationDerived(isEffortDriven = false, isMilestone = false, isSummary = false))
     assertFalse(isDurationDerived(isEffortDriven = true, isMilestone = true, isSummary = false))
     assertFalse(isDurationDerived(isEffortDriven = true, isMilestone = false, isSummary = true))
+  }
+
+  @Test
+  fun `the duration of a task is derived while the switch is on, except for milestones and summary tasks`() {
+    val task = newTask()
+    assertFalse(task.hasDerivedDuration())
+
+    task.createMutator().also { it.setEffortDriven(true); it.commit() }
+    assertTrue(task.hasDerivedDuration())
+
+    task.createMutator().also { it.setMilestone(true); it.commit() }
+    assertFalse(task.hasDerivedDuration())
+
+    val summary = newTask().also { it.createMutator().also { m -> m.setEffortDriven(true); m.commit() } }
+    project.taskManager.newTaskBuilder().withName("child").withParent(summary).build()
+    assertFalse(summary.hasDerivedDuration())
   }
 
   @Test

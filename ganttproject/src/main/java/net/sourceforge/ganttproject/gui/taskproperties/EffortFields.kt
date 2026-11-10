@@ -80,10 +80,3 @@ class TaskEffortFields(private val task: Task) {
     effortDrivenOption.ifChanged(mutator::setEffortDriven)
   }
 }
-
-/**
- * Tells if the duration (and thus the end) of a task is derived from its effort, so that it must not be edited.
- * Milestones and summary tasks are not effort driven, whatever the switch says.
- */
-fun isDurationDerived(isEffortDriven: Boolean, isMilestone: Boolean, isSummary: Boolean): Boolean =
-  isEffortDriven && !isMilestone && !isSummary
