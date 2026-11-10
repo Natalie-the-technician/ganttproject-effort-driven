@@ -29,6 +29,7 @@ import biz.ganttproject.core.option.ObservableString
 import javafx.collections.FXCollections
 import javafx.geometry.Insets
 import javafx.scene.layout.Background
+import javafx.collections.MapChangeListener
 import javafx.scene.layout.BackgroundFill
 import javafx.scene.layout.CornerRadii
 import javafx.scene.layout.StackPane
@@ -76,6 +77,9 @@ class MainPropertiesPanel(private val resource: HumanResource) {
       money(totalCostOption)
       numeric(totalLoadOption)
     }
+    pane.validationErrors.addListener(MapChangeListener {
+      validationErrors.setAll(pane.validationErrors.values)
+    })
     onRequestFocus = pane::requestFocus
     children.add(pane.node)
   }
@@ -83,6 +87,10 @@ class MainPropertiesPanel(private val resource: HumanResource) {
   fun requestFocus() = onRequestFocus()
 
   fun save() {
+    // A value which is marked as invalid is never taken over, neither the last valid text before it.
+    if (validationErrors.isNotEmpty()) {
+      return
+    }
     nameOption.ifChanged(resource::setName)
     phoneOption.ifChanged(resource::setPhone)
     emailOption.ifChanged(resource::setMail)
