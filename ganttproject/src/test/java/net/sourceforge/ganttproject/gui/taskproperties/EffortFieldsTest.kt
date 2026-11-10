@@ -211,4 +211,63 @@ class EffortFieldsTest {
     panel.save()
     assertNull(resource.hoursPerDay)
   }
+
+  @Test
+  fun `a comma is accepted as the decimal separator`() {
+    assertEquals(BigDecimal("20.5"), parseDecimal("20,5", BigDecimal.ZERO))
+    assertEquals(BigDecimal("6.5"), parseHoursPerDay(" 6,5 "))
+    assertEquals(BigDecimal("20.5"), effortValidator.let { it.parse("20,5"); parseDecimal("20.5", BigDecimal.ZERO) })
+    // A comma next to a point, or more than one comma, is not a number.
+    assertThrows(ValidationException::class.java) { parseDecimal("1,000.5", BigDecimal.ZERO) }
+    assertThrows(ValidationException::class.java) { parseDecimal("1,0,5", BigDecimal.ZERO) }
+    // The comma does not get around the bounds.
+    assertThrows(ValidationException::class.java) { parseHoursPerDay("24,5") }
+  }
+
+  @Test
+  fun `the effort field takes a comma and writes the number to the task`() {
+    val task = newTask()
+    val fields = TaskEffortFields(task)
+    fields.effortOption.value = "12,5"
+    task.createMutator().also { fields.save(it); it.commit() }
+    assertEquals(0, BigDecimal("12.5").compareTo(task.effort))
+  }
+
+  @Test
+  fun `the table of assignments shows the hours per day of the resource`() {
+    val withHours = project.humanResourceManager.create("a", 0).also { it.hoursPerDay = BigDecimal("6.5") }
+    val withoutHours = project.humanResourceManager.create("b", 1)
+    val task = newTask()
+    val a = task.assignmentCollection.addAssignment(withHours)
+    val b = task.assignmentCollection.addAssignment(withoutHours)
+    assertEquals("6.5", hoursPerDayText(a))
+    assertEquals("", hoursPerDayText(b))
+    assertEquals("", hoursPerDayText(null))
+  }
+
+  @Test
+  fun `the OK button is disabled as long as there is a validation error`() {
+    val errors = javafx.collections.FXCollections.observableArrayList<String>()
+    val disabled = javafx.beans.property.SimpleBooleanProperty(false)
+    net.sourceforge.ganttproject.gui.bindDisabledToErrors(errors, disabled)
+    assertFalse(disabled.get())
+    errors.add("hours per day: 25 is not allowed")
+    assertTrue(disabled.get())
+    errors.clear()
+    assertFalse(disabled.get())
+  }
+
+  @Test
+  fun `a resource dialog with a validation error does not write the last valid text`() {
+    val resource = project.humanResourceManager.create("a", 0)
+    val panel = MainPropertiesPanel(resource)
+    // Typing 25 passes "2", which is valid, and stops at "25", which is not.
+    panel.hoursPerDayOption.value = "2"
+    panel.validationErrors.add("25 is not allowed")
+    panel.save()
+    assertNull(resource.hoursPerDay)
+    panel.validationErrors.clear()
+    panel.save()
+    assertEquals(0, BigDecimal("2").compareTo(resource.hoursPerDay))
+  }
 }
