@@ -297,6 +297,57 @@ class EffortDrivenDurationTest {
     assertEquals(5, restored.days())
   }
 
+  @Test
+  fun `a milestone made effort driven in one commit keeps its duration and its dates`() {
+    // The control is a milestone which is not effort driven: whatever master does to a milestone, this one must match.
+    // This pins the behaviour, it does not tell the milestone checks in the algorithm and in the mutator apart:
+    // measured with both removed, the test stays green because master keeps the duration of a milestone anyway.
+    val control = project.taskManager.newTaskBuilder().withName("c").build()
+    control.createMutator().also { it.setMilestone(true); it.commit() }
+
+    val milestone = project.taskManager.newTaskBuilder().withName("m").build()
+    milestone.createMutator().also {
+      it.setMilestone(true)
+      it.setEffort(BigDecimal("20"))
+      it.setEffortDriven(true)
+      it.commit()
+    }
+    milestone.assign(resource("a", "4"), 100f)
+    assertEquals(control.days(), milestone.days())
+    assertEquals(milestone.start.time, milestone.end.time)
+  }
+
+  private fun Task.moveStartTo(day: Int) {
+    createMutator().also {
+      it.setStart(CalendarFactory.createGanttCalendar(2026, 10, day))
+      it.commit()
+    }
+  }
+
+  @Test
+  fun `moving the start of an effort driven task derives the duration from the new start`() {
+    // Dragging the start of the bar sets only the start, which leaves the end where it was.
+    val task = task("20")
+    task.assign(resource("a", "4"), 100f)
+    task.moveStartTo(9)
+    val end = task.end.time
+    task.moveStartTo(11)
+    assertEquals(5, task.days())
+    assertEquals(false, task.end.time == end, "the end has to move along with the start")
+  }
+
+  @Test
+  fun `moving the start of a task without the flag leaves the end where it was`() {
+    val task = task("20", effortDriven = false)
+    task.assign(resource("a", "4"), 100f)
+    task.moveStartTo(9)
+    task.createMutator().also { it.setDuration(project.taskManager.createLength(9)); it.commit() }
+    val end = task.end.time
+    task.moveStartTo(11)
+    assertEquals(end, task.end.time)
+    assertEquals(true, task.days() < 9, "the duration shrinks as in master, it was ${task.days()}")
+  }
+
   private fun save(): String {
     val out = ByteArrayOutputStream()
     GanttXMLSaver(project).save(out)

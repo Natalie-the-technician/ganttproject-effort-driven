@@ -319,10 +319,11 @@ internal open class MutatorImpl(
 
   /**
    * The duration of an effort driven task follows from its effort and assignments, so it is set here, in the same
-   * commit and thus in the same undo step as the change which asked for it. A duration set by hand is replaced.
+   * commit and thus in the same undo step as the change which asked for it. A duration set by hand is replaced, and
+   * so is the duration which a moved start would leave behind, because it keeps the end where it was.
    */
   private fun deriveDurationFromEffort() {
-    if (!(effortChange.hasChange() || effortDrivenChange.hasChange() || myDurationChange.hasChange())) {
+    if (!(effortChange.hasChange() || effortDrivenChange.hasChange() || myDurationChange.hasChange() || myStartChange.hasChange())) {
       return
     }
     val isMilestone = milestoneChange.newValueOrElse { taskImpl.isMilestone }
