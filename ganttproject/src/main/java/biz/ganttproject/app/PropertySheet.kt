@@ -222,6 +222,7 @@ class PropertyPaneBuilderImpl(private val localizer: Localizer, private val grid
 
   fun createBooleanOptionEditor(option: ObservableBoolean): Node {
     return CheckBox().also {checkBox ->
+      checkBox.isSelected = option.value
       checkBox.onAction = EventHandler {
         option.set(checkBox.isSelected, checkBox)
       }
