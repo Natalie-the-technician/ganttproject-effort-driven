@@ -37,7 +37,7 @@ fun parseDecimal(text: String?, min: BigDecimal, isMinExclusive: Boolean = false
     return null
   }
   val value = try {
-    BigDecimal(trimmed)
+    BigDecimal(withDecimalPoint(trimmed))
   } catch (e: NumberFormatException) {
     throw ValidationException(validatorI18N("validator.decimal.error.parse", arrayOf(trimmed)))
   }
@@ -47,6 +47,9 @@ fun parseDecimal(text: String?, min: BigDecimal, isMinExclusive: Boolean = false
   }
   return value
 }
+
+/** A comma as the decimal separator is accepted, as long as there is no point which could be a separator too. */
+private fun withDecimalPoint(text: String) = if (text.count { it == ',' } == 1 && '.' !in text) text.replace(',', '.') else text
 
 fun decimalValidator(min: BigDecimal, isMinExclusive: Boolean = false, max: BigDecimal? = null) =
   ValueValidator<String> { text -> parseDecimal(text, min, isMinExclusive, max); text }
