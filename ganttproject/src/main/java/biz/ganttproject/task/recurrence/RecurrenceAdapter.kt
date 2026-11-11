@@ -196,18 +196,22 @@ private fun createPlanned(plan: RecurrencePlan, taskManager: TaskManager): Int {
 private fun findOrCreateGroup(taskManager: TaskManager, source: Task): Task {
   val groupOrigin = RecurrenceOrigin(source.taskID)
   taskManager.tasks.firstOrNull { it.recurrenceOrigin == groupOrigin }?.let { return it }
-  // The group takes the place of the source task in the outline.
+  val hierarchy = taskManager.taskHierarchy
+  val container = hierarchy.getContainer(source)
+  val index = hierarchy.getTaskIndex(source)
   val group = taskManager.newTaskBuilder()
     .withName(source.name)
     .withStartDate(source.start.time)
     .withDuration(source.duration)
-    .withParent(taskManager.taskHierarchy.getContainer(source))
+    .withParent(container)
     .build()
   group.createMutator().also {
     it.setRecurrenceOrigin(groupOrigin)
     it.commit()
   }
+  // The group takes the place of the source task in the outline, a new task would be added at the end.
+  hierarchy.move(group, container, index)
   // The group has to exist before the source moves into it.
-  taskManager.taskHierarchy.move(source, group)
+  hierarchy.move(source, group)
   return group
 }

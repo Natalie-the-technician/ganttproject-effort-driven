@@ -219,6 +219,18 @@ class TestRecurrenceAdapter {
   }
 
   @Test
+  fun `the group takes the place of the source task among its siblings`() {
+    val before = taskManager.newTaskBuilder().withName("before").withStartDate(monday.toModelDate()).build()
+    val task = source()
+    val after = taskManager.newTaskBuilder().withName("after").withStartDate(monday.toModelDate()).build()
+    run()
+    val group = taskManager.tasks.single { it.isRecurrenceGroup() }
+    val hierarchy = taskManager.taskHierarchy
+    assertEquals(listOf(before, group, after), hierarchy.getNestedTasks(hierarchy.rootTask).toList())
+    assertSame(task, hierarchy.getNestedTasks(group).first(), "the source is the first task of the group")
+  }
+
+  @Test
   fun `a second run reuses the group`() {
     val task = source(rule = RecurrenceRule(RecurrenceUnit.WEEK, count = 2))
     run()
