@@ -66,6 +66,7 @@ class TestRecurrenceAdapter {
     task.createMutator().also {
       it.setRecurrenceRule(rule)
       it.setEffort(effort?.let(::BigDecimal))
+      it.setCompletionPercentage(40)
       it.commit()
     }
     return task
