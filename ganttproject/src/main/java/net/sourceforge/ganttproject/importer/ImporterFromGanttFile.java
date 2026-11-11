@@ -29,6 +29,7 @@ import net.sourceforge.ganttproject.document.FileDocument;
 import net.sourceforge.ganttproject.gui.UIFacade;
 import net.sourceforge.ganttproject.resource.HumanResourceMerger;
 import net.sourceforge.ganttproject.resource.MergeResourcesEnum;
+import net.sourceforge.ganttproject.task.Task;
 import net.sourceforge.ganttproject.task.algorithm.AlgorithmCollection;
 import org.osgi.service.prefs.Preferences;
 
@@ -36,7 +37,9 @@ import javax.swing.*;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
+import static net.sourceforge.ganttproject.importer.BaselineImportKt.importBaselines;
 import static net.sourceforge.ganttproject.importer.BufferProjectImportKt.importBufferProject;
 
 public class ImporterFromGanttFile extends ImporterBase {
@@ -105,8 +108,9 @@ public class ImporterFromGanttFile extends ImporterBase {
         algs.getScheduler().setEnabled(true);
       }
 
-      importBufferProject(targetProject, bufferProject, BufferProjectImportKt.asImportBufferProjectApi(getUiFacade()),
-          myMergeResourcesOption, myImportCalendarOption, false);
+      Map<Task, Task> taskMapping = importBufferProject(targetProject, bufferProject,
+          BufferProjectImportKt.asImportBufferProjectApi(getUiFacade()), myMergeResourcesOption, myImportCalendarOption, false);
+      importBaselines(bufferProject.getBaselines(), targetProject.getBaselines(), taskMapping);
     } catch (Exception  e) {
       getUiFacade().showErrorDialog(e);
     }
