@@ -193,7 +193,7 @@ private class InputApiStub(
   override fun getTasksUnitOffsets(): OffsetList = offsets
   override fun getProgressBarTimeUnit(): TimeUnit = GPTimeUnitStack.DAY
   override fun getVerticalPartitioning(): VerticalPartitioning =
-    VerticalPartitioning(listOf(task)) { _, _ -> true }
+    VerticalPartitioning(listOf(task), { _, _ -> true })
 
   override fun getVisibleTasks(): List<ITask> = listOf()
   override fun getVisibleTaskSceneTasks(): List<ITaskSceneTask> = listOf(task)
