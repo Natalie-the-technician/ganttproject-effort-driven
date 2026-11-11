@@ -342,4 +342,29 @@ class EffortFieldsTest {
     panel.save()
     assertEquals(0, BigDecimal("2").compareTo(resource.hoursPerDay))
   }
+
+  @Test
+  fun `original effort is written to the task on commit and does not change the duration`() {
+    val task = newTask()
+    val before = task.duration.length
+    val fields = TaskEffortFields(task)
+    assertEquals("", fields.originalEffortOption.value ?: "")
+    fields.originalEffortOption.value = "9,5"
+    task.createMutator().also { fields.save(it); it.commit() }
+    assertEquals(0, BigDecimal("9.5").compareTo(task.originalEffort))
+    assertEquals(before, task.duration.length)
+    assertNull(task.effort)
+  }
+
+  @Test
+  fun `the original effort field is filled from the task and an emptied field clears it`() {
+    val task = newTask()
+    task.createMutator().also { it.setOriginalEffort(BigDecimal("5")); it.commit() }
+    val fields = TaskEffortFields(task)
+    assertEquals("5", fields.originalEffortOption.value)
+
+    fields.originalEffortOption.value = ""
+    task.createMutator().also { fields.save(it); it.commit() }
+    assertNull(task.originalEffort)
+  }
 }

@@ -167,6 +167,28 @@ public class GPCsvExportTest extends TaskTestCase {
     assertEquals("0,3.5", lines[1].trim());
   }
 
+  public void testOriginalEffortAndEstimateFactorColumns() throws Exception {
+    HumanResourceManager hrManager = new HumanResourceManager(null, new CustomColumnsManager());
+    TaskManager taskManager = getTaskManager();
+    CSVOptions csvOptions = enableOnly(TaskDefaultColumn.ID.getStub().getID(), TaskDefaultColumn.ORIGINAL_EFFORT.getStub().getID(),
+        TaskDefaultColumn.ESTIMATE_FACTOR.getStub().getID());
+
+    Task task1 = createTask();
+    createTask();
+    task1.setOriginalEffort(new java.math.BigDecimal("8"));
+    task1.setActualEffort(new java.math.BigDecimal("12"));
+
+    GanttCSVExport exporter = new GanttCSVExport(taskManager, hrManager, new RoleManagerImpl(), csvOptions);
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    try (SpreadsheetWriter writer = exporter.createWriter(outputStream, CSV)) {
+      exporter.save(writer);
+    }
+    String[] lines = new String(outputStream.toByteArray(), Charsets.UTF_8.name()).split("\n");
+    assertEquals("tableColID,tableColOriginalEffort,tableColEstimateFactor", lines[0].trim());
+    assertEquals("0,8,1.5", lines[1].trim());
+    assertEquals("1,,", lines[2].trim());
+  }
+
   public void testResourceAssignments() throws Exception {
     HumanResourceManager hrManager = new HumanResourceManager(null, new CustomColumnsManager());
     TaskManager taskManager = getTaskManager();

@@ -87,6 +87,7 @@ class TaskEffortFields(private val task: Task) {
   val actualEffortOption = ObservableString("actualEffort", task.totalActualEffort?.toPlainString(), effortValidator).also {
     it.setWritable(!task.hasAssignmentActualEffort)
   }
+  val originalEffortOption = ObservableString("originalEffort", task.originalEffort?.toPlainString(), effortValidator)
   val effortDrivenOption = ObservableBoolean("effortDriven", task.isEffortDriven)
 
   fun save(mutator: TaskMutator) {
@@ -103,6 +104,13 @@ class TaskEffortFields(private val task: Task) {
         if (!isSameEffort(actualEffort, task.actualEffort)) {
           mutator.setActualEffort(actualEffort)
         }
+      }
+    }
+    // The original effort is only kept for comparison, it never changes the duration either.
+    originalEffortOption.ifChanged {
+      val originalEffort = parseDecimal(it, BigDecimal.ZERO)
+      if (!isSameEffort(originalEffort, task.originalEffort)) {
+        mutator.setOriginalEffort(originalEffort)
       }
     }
     effortDrivenOption.ifChanged(mutator::setEffortDriven)

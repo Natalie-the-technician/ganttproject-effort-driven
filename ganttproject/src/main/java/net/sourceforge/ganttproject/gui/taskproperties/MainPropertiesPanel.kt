@@ -146,6 +146,7 @@ class MainPropertiesPanel(private val task: Task, private val taskView: TaskView
       }
       checkbox(effortFields.effortDrivenOption)
       text(effortFields.effortOption)
+      text(effortFields.originalEffortOption)
       text(effortFields.actualEffortOption)
 
       skip()

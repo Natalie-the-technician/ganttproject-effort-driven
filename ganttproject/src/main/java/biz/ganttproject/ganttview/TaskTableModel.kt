@@ -32,6 +32,7 @@ import biz.ganttproject.customproperty.CustomColumnsException
 import biz.ganttproject.customproperty.CustomPropertyDefinition
 import net.sourceforge.ganttproject.task.CostStub
 import net.sourceforge.ganttproject.task.Task
+import net.sourceforge.ganttproject.task.estimateQuality
 import net.sourceforge.ganttproject.task.TaskImpl
 import net.sourceforge.ganttproject.task.TaskProperties
 import net.sourceforge.ganttproject.task.hasAssignmentActualEffort
@@ -70,6 +71,8 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
       TaskDefaultColumn.EFFORT         -> t.effort
       TaskDefaultColumn.EFFORT_DRIVEN  -> t.isEffortDriven
       TaskDefaultColumn.ACTUAL_EFFORT  -> t.totalActualEffort
+      TaskDefaultColumn.ORIGINAL_EFFORT -> t.originalEffort
+      TaskDefaultColumn.ESTIMATE_FACTOR -> t.estimateQuality?.factor
       else -> {
         null
       }
@@ -185,6 +188,15 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
         val actualEffort = value.toString().trim().takeIf { it.isNotEmpty() }?.let { BigDecimal(it) }
         node.createMutator().also {
           it.setActualEffort(actualEffort)
+          it.commit()
+        }
+      } catch (e: NumberFormatException) {
+        throw ValidationException(MessageFormat.format("Can't parse {0} as number", value))
+      }
+      TaskDefaultColumn.ORIGINAL_EFFORT -> try {
+        val originalEffort = value.toString().trim().takeIf { it.isNotEmpty() }?.let { BigDecimal(it) }
+        node.createMutator().also {
+          it.setOriginalEffort(originalEffort)
           it.commit()
         }
       } catch (e: NumberFormatException) {
