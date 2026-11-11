@@ -21,6 +21,7 @@ package biz.ganttproject.task.recurrence
 import biz.ganttproject.core.calendar.GPCalendar
 import biz.ganttproject.core.model.task.RecurrenceOrigin
 import biz.ganttproject.core.model.task.RecurrenceProblem
+import biz.ganttproject.core.model.task.RecurrenceRule
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskManager
 import net.sourceforge.ganttproject.undo.GPUndoManager
@@ -60,28 +61,42 @@ data class RecurrencePlan(
 /** Collects what would be created. Changes nothing. */
 fun planRecurrences(taskManager: TaskManager): RecurrencePlan {
   val isWorkingDay = workingDayTest(taskManager.calendar)
-  val existing = taskManager.tasks.mapNotNull { it.recurrenceOrigin }.map { it.sourceTaskId to it.date }.toSet()
+  val existing = existingOccurrences(taskManager)
   val planned = mutableListOf<PlannedOccurrence>()
   val problems = mutableListOf<RecurrenceProblemReport>()
   var series = 0
   taskManager.tasks.forEach { task ->
     // A task created from a rule does not repeat itself, otherwise every run would repeat the repetitions.
     val rule = task.recurrenceRule?.takeIf { task.recurrenceOrigin == null } ?: return@forEach
-    val first = task.start.time.toModelLocalDate()
-    rule.problemFor(first, isWorkingDay)?.let {
-      problems.add(RecurrenceProblemReport(task.name.orEmpty(), it))
-      return@forEach
-    }
-    // The first date is the source task itself.
-    val missing = rule.occurrences(first, isWorkingDay).drop(1)
-      .filter { (task.taskID to it) !in existing }
-      .map { PlannedOccurrence(task.taskID, it) }
-    if (missing.isNotEmpty()) {
+    val plan = planSeries(task, rule, isWorkingDay, existing)
+    problems.addAll(plan.problems)
+    if (plan.occurrences.isNotEmpty()) {
       series++
-      planned.addAll(missing)
+      planned.addAll(plan.occurrences)
     }
   }
   return RecurrencePlan(planned, problems, series)
+}
+
+/** Collects what [rule] would create for [task], whatever rule the task has now. Changes nothing. */
+fun planRecurrence(task: Task, rule: RecurrenceRule, taskManager: TaskManager): RecurrencePlan =
+  planSeries(task, rule, workingDayTest(taskManager.calendar), existingOccurrences(taskManager))
+
+private fun existingOccurrences(taskManager: TaskManager): Set<Pair<Int, LocalDate?>> =
+  taskManager.tasks.mapNotNull { it.recurrenceOrigin }.map { it.sourceTaskId to it.date }.toSet()
+
+private fun planSeries(
+  task: Task, rule: RecurrenceRule, isWorkingDay: (LocalDate) -> Boolean, existing: Set<Pair<Int, LocalDate?>>
+): RecurrencePlan {
+  val first = task.start.time.toModelLocalDate()
+  rule.problemFor(first, isWorkingDay)?.let {
+    return RecurrencePlan(emptyList(), listOf(RecurrenceProblemReport(task.name.orEmpty(), it)), 0)
+  }
+  // The first date is the source task itself.
+  val missing = rule.occurrences(first, isWorkingDay).drop(1)
+    .filter { (task.taskID to it) !in existing }
+    .map { PlannedOccurrence(task.taskID, it) }
+  return RecurrencePlan(missing, emptyList(), if (missing.isEmpty()) 0 else 1)
 }
 
 /**
@@ -95,39 +110,86 @@ fun applyRecurrences(plan: RecurrencePlan, taskManager: TaskManager, undoManager
   }
   var created = 0
   undoManager.undoableEdit(editName) {
-    // The scheduler is paused while the tasks are written, every new task would run it over the whole graph.
-    val scheduler = taskManager.algorithmCollection.scheduler
-    val wasEnabled = scheduler.isEnabled
-    scheduler.isEnabled = false
-    try {
-      val groups = mutableMapOf<Int, Task>()
-      plan.occurrences.map { it.sourceTaskId }.distinct().forEach { sourceId ->
-        val source = taskManager.getTask(sourceId) ?: return@forEach
-        groups[sourceId] = findOrCreateGroup(taskManager, source)
-      }
-      plan.occurrences.forEach { occurrence ->
-        val source = taskManager.getTask(occurrence.sourceTaskId) ?: return@forEach
-        val task = taskManager.newTaskBuilder()
-          .withPrototype(source)
-          .withStartDate(occurrence.date.toModelDate())
-          .withCompletion(0)
-          .withParent(groups[occurrence.sourceTaskId] ?: taskManager.taskHierarchy.getContainer(source))
-          .build()
-        // The prototype brings the effort along, the assignments have to be copied.
-        source.assignments.forEach { assignment ->
-          assignment.resource?.let { task.assignmentCollection.addAssignment(it).load = assignment.load }
-        }
-        task.createMutator().also {
-          it.setRecurrenceOrigin(RecurrenceOrigin(occurrence.sourceTaskId, occurrence.date))
-          it.commit()
-        }
-        created++
-      }
-    } finally {
-      scheduler.isEnabled = wasEnabled
-    }
-    scheduler.run()
+    created = createPlanned(plan, taskManager)
   }
+  return created
+}
+
+/**
+ * Sets [rule] on [task] and creates its missing repeated tasks, all as one undoable edit. Repeated tasks which
+ * exist already are kept, also those which the new rule does not produce any more.
+ *
+ * @return the number of created tasks, or null if the rule cannot be applied; then nothing changes.
+ */
+fun setRecurrence(task: Task, rule: RecurrenceRule, taskManager: TaskManager, undoManager: GPUndoManager, editName: String): Int? {
+  val plan = planRecurrence(task, rule, taskManager)
+  if (plan.hasProblems) {
+    return null
+  }
+  var created = 0
+  undoManager.undoableEdit(editName) {
+    task.createMutator().also {
+      it.setRecurrenceRule(rule)
+      it.commit()
+    }
+    created = createPlanned(plan, taskManager)
+  }
+  return created
+}
+
+/**
+ * Removes the rule of [task] as one undoable edit. The repeated tasks stay: they are ordinary tasks which may have
+ * been moved, assigned or completed, and they keep their origin, so a rule set again later does not duplicate them.
+ */
+fun removeRecurrence(task: Task, undoManager: GPUndoManager, editName: String) {
+  if (task.recurrenceRule == null) {
+    return
+  }
+  undoManager.undoableEdit(editName) {
+    task.createMutator().also {
+      it.setRecurrenceRule(null)
+      it.commit()
+    }
+  }
+}
+
+private fun createPlanned(plan: RecurrencePlan, taskManager: TaskManager): Int {
+  if (plan.occurrences.isEmpty()) {
+    return 0
+  }
+  var created = 0
+  // The scheduler is paused while the tasks are written, every new task would run it over the whole graph.
+  val scheduler = taskManager.algorithmCollection.scheduler
+  val wasEnabled = scheduler.isEnabled
+  scheduler.isEnabled = false
+  try {
+    val groups = mutableMapOf<Int, Task>()
+    plan.occurrences.map { it.sourceTaskId }.distinct().forEach { sourceId ->
+      val source = taskManager.getTask(sourceId) ?: return@forEach
+      groups[sourceId] = findOrCreateGroup(taskManager, source)
+    }
+    plan.occurrences.forEach { occurrence ->
+      val source = taskManager.getTask(occurrence.sourceTaskId) ?: return@forEach
+      val task = taskManager.newTaskBuilder()
+        .withPrototype(source)
+        .withStartDate(occurrence.date.toModelDate())
+        .withCompletion(0)
+        .withParent(groups[occurrence.sourceTaskId] ?: taskManager.taskHierarchy.getContainer(source))
+        .build()
+      // The prototype brings the effort along, the assignments have to be copied.
+      source.assignments.forEach { assignment ->
+        assignment.resource?.let { task.assignmentCollection.addAssignment(it).load = assignment.load }
+      }
+      task.createMutator().also {
+        it.setRecurrenceOrigin(RecurrenceOrigin(occurrence.sourceTaskId, occurrence.date))
+        it.commit()
+      }
+      created++
+    }
+  } finally {
+    scheduler.isEnabled = wasEnabled
+  }
+  scheduler.run()
   return created
 }
 
