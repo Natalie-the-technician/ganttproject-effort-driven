@@ -121,6 +121,17 @@ public class TaskRendererImpl2 extends ChartRendererBase {
     }
 
     @Override
+    public ChartComparison getComparison() {
+      return myModel.getComparison();
+    }
+
+    @Override
+    public ComparisonResult getEffortComparison(int rowId) {
+      Task task = myModel.getTaskManager().getTask(rowId);
+      return task == null ? ComparisonResult.NO_BAND : ChartComparisonKt.getEffortComparison(task);
+    }
+
+    @Override
     public TaskActivitySceneBuilder.ChartApi getChartApi(TaskLabelSceneBuilder<ITaskSceneTask> labelsRenderer) {
       return new TaskActivitySceneChartApi(myModel) {
         @Override
@@ -189,7 +200,7 @@ public class TaskRendererImpl2 extends ChartRendererBase {
 
   public int calculateRowHeight() {
     int rowHeight = chartRenderer.myLabelsRenderer.calculateRowHeight();
-    if (myModel.getBaseline() != null) {
+    if (myModel.getBaseline() != null || myModel.getComparison().getNeedsBandRoomWithoutBaseline()) {
       rowHeight = rowHeight + 8;
     }
     return rowHeight;

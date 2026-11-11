@@ -55,6 +55,8 @@ public class ChartModelImpl extends ChartModelBase {
 
   private List<GanttPreviousStateTask> myBaseline;
 
+  private ChartComparison myComparison = ChartComparison.DATES;
+
   public ChartModelImpl(TaskManager taskManager, TimeUnitStack timeUnitStack, final UIConfiguration projectConfig) {
     super(taskManager, timeUnitStack, projectConfig);
     this.taskManager = taskManager;
@@ -227,12 +229,26 @@ public class ChartModelImpl extends ChartModelBase {
     return myBaseline;
   }
 
+  public ChartComparison getComparison() {
+    return myComparison;
+  }
+
+  /**
+   * Selects what the band underneath the task bars compares and returns the new row height, like
+   * {@link #setBaseline}: some views draw a band without a baseline.
+   */
+  public int setComparison(ChartComparison comparison) {
+    myComparison = comparison;
+    return calculateRowHeight();
+  }
+
   @Override
   public ChartModelBase createCopy() {
     ChartModelImpl result = new ChartModelImpl(getTaskManager(), getTimeUnitStack(), getProjectConfig());
     super.setupCopy(result);
     result.setVisibleTasks(getVisibleTasks());
     result.setBaseline(getBaseline());
+    result.setComparison(getComparison());
     return result;
   }
 
