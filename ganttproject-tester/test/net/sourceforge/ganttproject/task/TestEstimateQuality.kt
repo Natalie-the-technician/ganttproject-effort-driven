@@ -30,7 +30,10 @@ import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 
 class TestEstimateQuality {
-  private val taskManager = TestSetupHelper.newTaskManagerBuilder().build()
+  private val builder = TestSetupHelper.newTaskManagerBuilder()
+  private val taskManager = builder.build()
+  private val alice = builder.resourceManager.create("alice", 1)
+  private val bob = builder.resourceManager.create("bob", 2)
 
   private fun newTask() = taskManager.newTaskBuilder().withName("t").build()
 
@@ -161,6 +164,31 @@ class TestEstimateQuality {
     val quality = task.estimateQuality!!
     assertNull(quality.factor, "dividing by zero has to give no factor")
     assertEquals(BigDecimal("4"), quality.extraHours)
+  }
+
+  @Test
+  fun `actual effort recorded only per assignment gives the factor`() {
+    val task = newTask()
+    task.edit { setEffort(BigDecimal("9")) }
+    task.assignmentCollection.addAssignment(alice).actualEffort = BigDecimal("6")
+    task.assignmentCollection.addAssignment(bob).actualEffort = BigDecimal("6")
+    assertNull(task.actualEffort, "nothing was recorded on the task itself")
+    val quality = task.estimateQuality!!
+    assertEquals(0, BigDecimal("12").compareTo(quality.actualHours))
+    assertEquals(0, BigDecimal("3").compareTo(quality.extraHours))
+    assertEquals(0, BigDecimal("12").divide(BigDecimal("9"), java.math.MathContext.DECIMAL32).compareTo(quality.factor))
+  }
+
+  @Test
+  fun `the actual effort per assignment wins over the task's own value in the factor`() {
+    val task = newTask()
+    task.edit {
+      setEffort(BigDecimal("8"))
+      setActualEffort(BigDecimal("2"))
+    }
+    task.assignmentCollection.addAssignment(alice).actualEffort = BigDecimal("4")
+    task.assignmentCollection.addAssignment(bob).actualEffort = BigDecimal("8")
+    assertEquals(0, BigDecimal("1.5").compareTo(task.estimateQuality!!.factor))
   }
 
   @Test
