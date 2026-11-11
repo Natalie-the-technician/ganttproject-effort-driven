@@ -34,6 +34,8 @@ import net.sourceforge.ganttproject.task.CostStub
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskImpl
 import net.sourceforge.ganttproject.task.TaskProperties
+import net.sourceforge.ganttproject.task.hasAssignmentActualEffort
+import net.sourceforge.ganttproject.task.totalActualEffort
 import net.sourceforge.ganttproject.task.dependency.TaskDependency
 import net.sourceforge.ganttproject.task.dependency.TaskDependencyException
 import java.math.BigDecimal
@@ -67,7 +69,7 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
       TaskDefaultColumn.IS_CRITICAL    -> t.isCritical
       TaskDefaultColumn.EFFORT         -> t.effort
       TaskDefaultColumn.EFFORT_DRIVEN  -> t.isEffortDriven
-      TaskDefaultColumn.ACTUAL_EFFORT  -> t.actualEffort
+      TaskDefaultColumn.ACTUAL_EFFORT  -> t.totalActualEffort
       else -> {
         null
       }
@@ -177,6 +179,9 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
         throw ValidationException(MessageFormat.format("Can't parse {0} as number", value))
       }
       TaskDefaultColumn.ACTUAL_EFFORT -> try {
+        if (node.hasAssignmentActualEffort) {
+          throw ValidationException("The actual effort of this task is the sum over its assignments")
+        }
         val actualEffort = value.toString().trim().takeIf { it.isNotEmpty() }?.let { BigDecimal(it) }
         node.createMutator().also {
           it.setActualEffort(actualEffort)

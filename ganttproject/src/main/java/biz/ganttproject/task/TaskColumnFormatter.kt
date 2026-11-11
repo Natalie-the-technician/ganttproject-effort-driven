@@ -25,6 +25,7 @@ import biz.ganttproject.core.option.ColorOption.Util.getColor
 import net.sourceforge.ganttproject.language.GanttLanguage
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskProperties
+import net.sourceforge.ganttproject.task.totalActualEffort
 
 class DefaultTaskColumnFormatter(private val localizer: Localizer) {
   fun formatTaskColumn(task: Task, columnId: String): String? {
@@ -54,7 +55,7 @@ class DefaultTaskColumnFormatter(private val localizer: Localizer) {
         TaskDefaultColumn.IS_CRITICAL -> null
         TaskDefaultColumn.EFFORT -> task.effort?.let { getNumberFormat().format(it) }
         TaskDefaultColumn.EFFORT_DRIVEN -> null
-        TaskDefaultColumn.ACTUAL_EFFORT -> task.actualEffort?.let { getNumberFormat().format(it) }
+        TaskDefaultColumn.ACTUAL_EFFORT -> task.totalActualEffort?.let { getNumberFormat().format(it) }
       }
     } ?: run {
       if (columnId == "taskDates") {

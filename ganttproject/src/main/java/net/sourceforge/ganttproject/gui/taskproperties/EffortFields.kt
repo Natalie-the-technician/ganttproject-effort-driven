@@ -25,6 +25,8 @@ import biz.ganttproject.core.option.ValueValidator
 import biz.ganttproject.core.option.validatorI18N
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskMutator
+import net.sourceforge.ganttproject.task.hasAssignmentActualEffort
+import net.sourceforge.ganttproject.task.totalActualEffort
 import java.math.BigDecimal
 
 /**
@@ -81,7 +83,10 @@ fun hoursPerDayValidatorFor(initial: BigDecimal?) = ValueValidator<String> { tex
  */
 class TaskEffortFields(private val task: Task) {
   val effortOption = ObservableString("effort", task.effort?.toPlainString(), effortValidator)
-  val actualEffortOption = ObservableString("actualEffort", task.actualEffort?.toPlainString(), effortValidator)
+  // Once the assignments have actual effort, the field shows their sum and is edited per assignment.
+  val actualEffortOption = ObservableString("actualEffort", task.totalActualEffort?.toPlainString(), effortValidator).also {
+    it.setWritable(!task.hasAssignmentActualEffort)
+  }
   val effortDrivenOption = ObservableBoolean("effortDriven", task.isEffortDriven)
 
   fun save(mutator: TaskMutator) {
@@ -92,10 +97,12 @@ class TaskEffortFields(private val task: Task) {
       }
     }
     // The actual effort is only recorded, it never changes the duration.
-    actualEffortOption.ifChanged {
-      val actualEffort = parseDecimal(it, BigDecimal.ZERO)
-      if (!isSameEffort(actualEffort, task.actualEffort)) {
-        mutator.setActualEffort(actualEffort)
+    if (actualEffortOption.isWritable.value) {
+      actualEffortOption.ifChanged {
+        val actualEffort = parseDecimal(it, BigDecimal.ZERO)
+        if (!isSameEffort(actualEffort, task.actualEffort)) {
+          mutator.setActualEffort(actualEffort)
+        }
       }
     }
     effortDrivenOption.ifChanged(mutator::setEffortDriven)
