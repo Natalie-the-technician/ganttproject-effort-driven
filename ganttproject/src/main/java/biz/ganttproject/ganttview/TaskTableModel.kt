@@ -67,6 +67,7 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
       TaskDefaultColumn.IS_CRITICAL    -> t.isCritical
       TaskDefaultColumn.EFFORT         -> t.effort
       TaskDefaultColumn.EFFORT_DRIVEN  -> t.isEffortDriven
+      TaskDefaultColumn.ACTUAL_EFFORT  -> t.actualEffort
       else -> {
         null
       }
@@ -170,6 +171,15 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
         val effort = value.toString().trim().takeIf { it.isNotEmpty() }?.let { BigDecimal(it) }
         node.createMutator().also {
           it.setEffort(effort)
+          it.commit()
+        }
+      } catch (e: NumberFormatException) {
+        throw ValidationException(MessageFormat.format("Can't parse {0} as number", value))
+      }
+      TaskDefaultColumn.ACTUAL_EFFORT -> try {
+        val actualEffort = value.toString().trim().takeIf { it.isNotEmpty() }?.let { BigDecimal(it) }
+        node.createMutator().also {
+          it.setActualEffort(actualEffort)
           it.commit()
         }
       } catch (e: NumberFormatException) {

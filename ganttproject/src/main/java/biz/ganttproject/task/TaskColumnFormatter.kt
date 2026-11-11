@@ -54,6 +54,7 @@ class DefaultTaskColumnFormatter(private val localizer: Localizer) {
         TaskDefaultColumn.IS_CRITICAL -> null
         TaskDefaultColumn.EFFORT -> task.effort?.let { getNumberFormat().format(it) }
         TaskDefaultColumn.EFFORT_DRIVEN -> null
+        TaskDefaultColumn.ACTUAL_EFFORT -> task.actualEffort?.let { getNumberFormat().format(it) }
       }
     } ?: run {
       if (columnId == "taskDates") {

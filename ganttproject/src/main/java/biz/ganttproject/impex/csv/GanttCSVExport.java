@@ -219,6 +219,9 @@ public class GanttCSVExport {
             case EFFORT:
               writer.print(task.getEffort() == null ? "" : task.getEffort().toPlainString());
               break;
+            case ACTUAL_EFFORT:
+              writer.print(task.getActualEffort() == null ? "" : task.getActualEffort().toPlainString());
+              break;
             case EFFORT_DRIVEN:
               writer.print(task.isEffortDriven());
               break;
