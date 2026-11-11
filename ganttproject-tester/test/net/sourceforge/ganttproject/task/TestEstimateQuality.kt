@@ -18,7 +18,10 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.task
 
+import biz.ganttproject.core.io.XmlTasks
+import biz.ganttproject.lib.fx.SimpleTreeCollapseView
 import net.sourceforge.ganttproject.TestSetupHelper
+import net.sourceforge.ganttproject.parser.TaskLoader
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -175,5 +178,19 @@ class TestEstimateQuality {
     child.edit { setOriginalEffort(BigDecimal("9")) }
     assertNull(summary.estimateQuality, "the effort of a summary task is not its own")
     assertEquals(BigDecimal("9"), child.estimateQuality!!.originalHours)
+  }
+
+  @Test
+  fun `task loader reads the original effort and loads none for a task without one`() {
+    val xmlTask = XmlTasks.XmlTask(id = 1, uid = "", name = "T", startDate = "2026-11-09").also {
+      it.originalEffort = BigDecimal("16.25")
+    }
+    val loader = TaskLoader(taskManager, SimpleTreeCollapseView())
+    assertEquals(BigDecimal("16.25"), loader.loadTask(null, xmlTask).originalEffort)
+
+    val plain = XmlTasks.XmlTask(id = 2, uid = "", name = "U", startDate = "2026-11-09").also {
+      it.effort = BigDecimal("4")
+    }
+    assertNull(loader.loadTask(null, plain).originalEffort, "loading must not invent an original effort")
   }
 }
