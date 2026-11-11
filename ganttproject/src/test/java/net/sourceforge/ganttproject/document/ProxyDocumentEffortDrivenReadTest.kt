@@ -18,6 +18,7 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
  */
 package net.sourceforge.ganttproject.document
 
+import biz.ganttproject.core.model.task.CapacityChange
 import biz.ganttproject.core.option.DefaultStringOption
 import biz.ganttproject.core.option.GPOptionGroup
 import biz.ganttproject.core.table.ColumnList
@@ -42,7 +43,9 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
+import java.math.BigDecimal
 import java.text.DateFormat
+import java.time.LocalDate
 import java.util.Locale
 
 /**
@@ -79,13 +82,24 @@ class ProxyDocumentEffortDrivenReadTest {
     assertEquals(1, project.taskManager.getTask(1).duration.length)
   }
 
-  private fun projectXml(effortDriven: Boolean) = """
+  @Test
+  fun `reading a document gives the resource its utilization and changes of hours and derives the duration`() {
+    // 4 hours on the Monday and Tuesday, then 8, at 50 percent: 2 + 2 + 4 + 4 + 4 + 4 = 20 in six days
+    read(projectXml(effortDriven = true, resourceAttrs = """ utilization="50"""",
+      resourceChildren = """<hours-change date="2026-11-11" hours="8"/>"""))
+    val resource = project.humanResourceManager.getById(0)
+    assertEquals(50, resource.utilization)
+    assertEquals(listOf(CapacityChange(LocalDate.of(2026, 11, 11), BigDecimal(8))), resource.hoursSchedule)
+    assertEquals(6, project.taskManager.getTask(1).duration.length)
+  }
+
+  private fun projectXml(effortDriven: Boolean, resourceAttrs: String = "", resourceChildren: String = "") = """
     <project name="p">
       <tasks>
         <task id="1" uid="u1" name="T" start="2026-11-09" duration="1" effort-hours="20" effort-driven="$effortDriven"/>
       </tasks>
       <resources>
-        <resource id="0" name="R" function="Default:0" contacts="" phone="" hours-per-day="4"/>
+        <resource id="0" name="R" function="Default:0" contacts="" phone="" hours-per-day="4"$resourceAttrs>$resourceChildren</resource>
       </resources>
       <allocations>
         <allocation task-id="1" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
