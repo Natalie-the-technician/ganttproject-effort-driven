@@ -79,13 +79,14 @@ class TestActualEffort {
   }
 
   @Test
-  fun `a task created from a prototype and the unplugged clone take actual effort along`() {
+  fun `the unplugged clone keeps actual effort and a task created from a prototype starts without it`() {
     val prototype = newTask()
     prototype.createMutator().also {
       it.setActualEffort(BigDecimal("3"))
       it.commit()
     }
-    assertEquals(BigDecimal("3"), taskManager.newTaskBuilder().withPrototype(prototype).build().actualEffort)
+    // Effort spent is not a property of a template.
+    assertNull(taskManager.newTaskBuilder().withPrototype(prototype).build().actualEffort)
     assertEquals(BigDecimal("3"), prototype.unpluggedClone().actualEffort)
   }
 
