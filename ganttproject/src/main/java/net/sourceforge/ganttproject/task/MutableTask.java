@@ -79,5 +79,7 @@ public interface MutableTask {
 
   void setActualEffort(BigDecimal actualEffort);
 
+  void setOriginalEffort(BigDecimal originalEffort);
+
   void setCustomProperties(CustomPropertyHolder customProperties) throws CustomColumnsException;
 }

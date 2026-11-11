@@ -121,6 +121,8 @@ public class TaskImpl implements Task {
 
   private BigDecimal myActualEffort;
 
+  private BigDecimal myOriginalEffort;
+
   private boolean isEffortDriven;
 
   private boolean isUnplugged = false;
@@ -187,6 +189,7 @@ public class TaskImpl implements Task {
     myCost.setValue(copy.myCost);
     myEffort = copy.myEffort;
     myActualEffort = copy.myActualEffort;
+    myOriginalEffort = copy.myOriginalEffort;
     isEffortDriven = copy.isEffortDriven;
 
     myDependencySlice = new TaskDependencySliceImpl(this, myManager.getDependencyCollection(), TaskDependencySlice.COMPLETE_SLICE_FXN);
@@ -811,6 +814,16 @@ public class TaskImpl implements Task {
   @Override
   public void setActualEffort(BigDecimal actualEffort) {
     myActualEffort = actualEffort;
+  }
+
+  @Override
+  public BigDecimal getOriginalEffort() {
+    return myOriginalEffort;
+  }
+
+  @Override
+  public void setOriginalEffort(BigDecimal originalEffort) {
+    myOriginalEffort = originalEffort;
   }
 
   @Override

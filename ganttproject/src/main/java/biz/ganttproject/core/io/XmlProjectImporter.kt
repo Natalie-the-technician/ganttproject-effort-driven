@@ -278,6 +278,7 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
     task.effort = xmlTask.effort
     task.isEffortDriven = xmlTask.isEffortDriven ?: false
     task.actualEffort = xmlTask.actualEffort
+    task.originalEffort = xmlTask.originalEffort
     xmlTask.shape?.let {
       task.shape = buildShapePaint(it, task.color)
     }
