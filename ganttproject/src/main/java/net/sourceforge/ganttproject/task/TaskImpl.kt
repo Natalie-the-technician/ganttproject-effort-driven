@@ -265,9 +265,11 @@ internal open class MutatorImpl(
       }
       recurrenceRuleChange.ifChanged {
         taskImpl.recurrenceRule = it.rule
+        taskUpdateBuilder?.setRecurrenceRule(recurrenceRuleChange.oldValue.rule, it.rule)
       }
       recurrenceOriginChange.ifChanged {
         taskImpl.recurrenceOrigin = it.origin
+        taskUpdateBuilder?.setRecurrenceOrigin(recurrenceOriginChange.oldValue.origin, it.origin)
       }
       criticalFlagChange.ifChanged {
         taskImpl.isCritical = it
