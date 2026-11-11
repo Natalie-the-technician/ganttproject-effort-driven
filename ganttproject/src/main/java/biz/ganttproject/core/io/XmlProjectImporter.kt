@@ -25,6 +25,7 @@ import biz.ganttproject.core.chart.render.ShapePaint
 import biz.ganttproject.core.model.task.ConstraintType.fromPersistentValue
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.GanttCalendar
+import net.sourceforge.ganttproject.parser.capacityChanges
 import net.sourceforge.ganttproject.GanttPreviousState
 import net.sourceforge.ganttproject.GanttPreviousStateTask
 import net.sourceforge.ganttproject.GanttProjectImpl
@@ -227,6 +228,8 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
       resource.mail = xmlRes.email
       resource.phone = xmlRes.phone
       resource.hoursPerDay = xmlRes.hoursPerDay
+      resource.utilization = xmlRes.utilization
+      resource.hoursSchedule = xmlRes.capacityChanges()
       xmlRes.props.forEach { xmlProp ->
         val prop = resCustomPropManager.definitions.find { it.id == xmlProp.definitionId }
         if (prop != null) {

@@ -332,7 +332,7 @@ internal open class MutatorImpl(
       return
     }
     val effort = effortChange.newValueOrElse { EffortValue(taskImpl.effort) }.effort
-    effortDrivenDurationDays(effort, taskImpl.assignments)?.let {
+    effortDrivenDurationDays(effort, taskImpl.assignments, getStart().toLocalDate(), myManager.calendar)?.let {
       // Drop what was asked for, then ask for the derived duration the usual way, which moves the end along.
       myDurationChange.clear()
       myEndChange.clear()

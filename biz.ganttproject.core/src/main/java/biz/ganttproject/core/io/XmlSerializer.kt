@@ -333,6 +333,14 @@ data class XmlResources(
     @get:JsonInclude(JsonInclude.Include.NON_NULL)
     @get:JacksonXmlProperty(isAttribute = true, localName = "hours-per-day") var hoursPerDay: BigDecimal? = null,
 
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    @get:JacksonXmlProperty(isAttribute = true) var utilization: Int? = null,
+
+    @get:JacksonXmlElementWrapper(useWrapping = false)
+    @get:JacksonXmlProperty(localName = "hours-change")
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY)
+    var hoursChanges: List<XmlHoursChange> = emptyList(),
+
     @get:JsonInclude(JsonInclude.Include.NON_NULL) var rate: XmlRate? = null,
 
     @get:JacksonXmlElementWrapper(useWrapping = false)
@@ -342,6 +350,11 @@ data class XmlResources(
     data class XmlCustomProperty(
       @get:JacksonXmlProperty(isAttribute = true, localName = "definition-id") var definitionId: String = "",
       @get:JacksonXmlProperty(isAttribute = true) var value: String = ""
+    )
+
+    data class XmlHoursChange(
+      @get:JacksonXmlProperty(isAttribute = true) var date: String = "",
+      @get:JacksonXmlProperty(isAttribute = true) var hours: BigDecimal = BigDecimal(0)
     )
 
     data class XmlRate(

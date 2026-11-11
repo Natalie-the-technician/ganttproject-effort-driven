@@ -19,6 +19,8 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject.resource;
 
 import biz.ganttproject.core.calendar.GanttDaysOff;
+import biz.ganttproject.core.model.task.CapacityChange;
+import biz.ganttproject.core.model.task.CapacitySchedule;
 import biz.ganttproject.customproperty.*;
 import com.google.common.base.Strings;
 import kotlin.Unit;
@@ -60,6 +62,10 @@ public class HumanResource implements CustomPropertyHolder {
   private BigDecimal myStandardPayRate;
 
   private BigDecimal myHoursPerDay;
+
+  private Integer myUtilization;
+
+  private List<CapacityChange> myHoursSchedule = Collections.emptyList();
 
   private final List<GanttDaysOff> myDaysOffList = new ArrayList<>();
 
@@ -111,6 +117,8 @@ public class HumanResource implements CustomPropertyHolder {
     setRole(copy.getRole());
     setStandardPayRate(copy.getStandardPayRate());
     setHoursPerDay(copy.getHoursPerDay());
+    setUtilization(copy.getUtilization());
+    setHoursSchedule(copy.getHoursSchedule());
     myManager = copy.myManager;
     // Straight into the list rather than through addDaysOff(): the copy is not in the manager yet
     // and must not be announced, which is what areEventsEnabled = false above takes care of for the
@@ -414,6 +422,29 @@ public class HumanResource implements CustomPropertyHolder {
 
   public void setHoursPerDay(BigDecimal hoursPerDay) {
     myHoursPerDay = hoursPerDay;
+    fireResourceChanged();
+  }
+
+  /** Share of the working hours which this resource spends on the project, in percent; {@code null} means 100. */
+  public Integer getUtilization() {
+    return myUtilization;
+  }
+
+  public void setUtilization(Integer utilization) {
+    myUtilization = utilization;
+    fireResourceChanged();
+  }
+
+  /**
+   * Working hours per day which differ from {@link #getHoursPerDay()} from a date on, sorted by date. Empty if the
+   * hours per day are the same all the time.
+   */
+  public List<CapacityChange> getHoursSchedule() {
+    return myHoursSchedule;
+  }
+
+  public void setHoursSchedule(List<CapacityChange> hoursSchedule) {
+    myHoursSchedule = Collections.unmodifiableList(new CapacitySchedule(BigDecimal.ZERO, hoursSchedule).getChanges());
     fireResourceChanged();
   }
 
