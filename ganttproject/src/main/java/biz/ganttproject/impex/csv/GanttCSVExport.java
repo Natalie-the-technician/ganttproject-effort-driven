@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 package biz.ganttproject.impex.csv;
 
+import biz.ganttproject.core.model.task.CapacityScheduleKt;
 import biz.ganttproject.app.InternationalizationCoreKt;
 import biz.ganttproject.core.model.task.TaskDefaultColumn;
 import biz.ganttproject.core.option.BooleanOption;
@@ -323,6 +324,12 @@ public class GanttCSVExport {
               break;
             case HOURS_PER_DAY:
               writer.print(p.getHoursPerDay() == null ? "" : p.getHoursPerDay().toPlainString());
+              break;
+            case UTILIZATION:
+              writer.print(p.getUtilization() == null ? "" : p.getUtilization().toString());
+              break;
+            case HOURS_SCHEDULE:
+              writer.print(CapacityScheduleKt.formatCapacityChanges(p.getHoursSchedule()));
               break;
           }
         }

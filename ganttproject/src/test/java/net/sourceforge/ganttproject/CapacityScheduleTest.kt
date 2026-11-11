@@ -21,6 +21,8 @@ package net.sourceforge.ganttproject
 import biz.ganttproject.core.model.task.CapacityChange
 import biz.ganttproject.core.model.task.CapacitySchedule
 import biz.ganttproject.core.model.task.daysNeeded
+import biz.ganttproject.core.model.task.formatCapacityChanges
+import biz.ganttproject.core.model.task.parseCapacityChanges
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -96,5 +98,27 @@ class CapacityScheduleTest {
   @Test
   fun `a fraction of a day is a whole day`() {
     assertEquals(2, daysNeeded(hours("8.5"), monday, CapacitySchedule(hours("8")), weekdays))
+  }
+
+  @Test
+  fun `typed changes are read with either separator, a decimal comma and line breaks`() {
+    assertEquals(listOf(change("2027-04-01", "6"), change("2027-10-01", "7.5"), change("2027-12-01", "0")),
+      parseCapacityChanges("2027-04-01: 6; 2027-10-01 = 7,5\n2027-12-01:0"))
+    assertEquals(emptyList<CapacityChange>(), parseCapacityChanges("  "))
+  }
+
+  @Test
+  fun `a typed text with one invalid entry is not read at all`() {
+    listOf("2027-04-01", "04/01/2027: 6", "2027-04-01: six", "2027-04-01: -1", "2027-04-01: 24.5", "2027-04-01: 6; oops").forEach {
+      assertNull(parseCapacityChanges(it), it)
+    }
+    assertEquals(listOf(change("2027-04-01", "24")), parseCapacityChanges("2027-04-01: 24"))
+  }
+
+  @Test
+  fun `formatted changes are read back`() {
+    val changes = listOf(change("2027-04-01", "6.50"), change("2027-10-01", "8"))
+    assertEquals("2027-04-01: 6.5; 2027-10-01: 8", formatCapacityChanges(changes))
+    assertEquals(listOf(change("2027-04-01", "6.5"), change("2027-10-01", "8")), parseCapacityChanges(formatCapacityChanges(changes)))
   }
 }

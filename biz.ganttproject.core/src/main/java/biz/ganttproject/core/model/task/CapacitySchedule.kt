@@ -80,3 +80,32 @@ fun daysNeeded(effortHours: BigDecimal, start: LocalDate, schedule: CapacitySche
   }
   return null
 }
+
+/**
+ * Reads changes of working hours as typed by a user: `2027-04-01: 6; 2027-10-01: 8`. Entries are separated by `;` or a
+ * line break, date and hours by `:` or `=`, and the hours may have a comma. Dates are ISO dates, because a date such
+ * as `03.04.05` means three different days in three countries. Hours are from 0 to 24.
+ *
+ * @return null if any entry is not valid, so that a typing error never leaves the schedule half read.
+ */
+fun parseCapacityChanges(text: String): List<CapacityChange>? =
+  text.split(';', '\n').map { it.trim() }.filter { it.isNotEmpty() }.map { entry ->
+    val separator = entry.indexOfFirst { it == ':' || it == '=' }
+    if (separator < 0) {
+      return null
+    }
+    val day = try {
+      LocalDate.parse(entry.substring(0, separator).trim())
+    } catch (e: java.time.format.DateTimeParseException) {
+      return null
+    }
+    val hours = entry.substring(separator + 1).trim().replace(',', '.').toBigDecimalOrNull() ?: return null
+    if (hours.signum() < 0 || hours > CapacitySchedule.MAX_HOURS_PER_DAY) {
+      return null
+    }
+    CapacityChange(day, hours)
+  }
+
+/** The inverse of [parseCapacityChanges]. */
+fun formatCapacityChanges(changes: List<CapacityChange>): String =
+  changes.joinToString("; ") { "${it.from}: ${it.hoursPerDay.stripTrailingZeros().toPlainString()}" }
