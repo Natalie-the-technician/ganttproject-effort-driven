@@ -272,6 +272,23 @@ class EffortFieldsTest {
   }
 
   @Test
+  fun `the actual effort field shows the sum over the assignments and is then read only`() {
+    val task = newTask()
+    task.createMutator().also { it.setActualEffort(BigDecimal("9")); it.commit() }
+    val a = task.assignmentCollection.addAssignment(project.humanResourceManager.create("a", 0))
+    task.assignmentCollection.addAssignment(project.humanResourceManager.create("b", 1)).actualEffort = BigDecimal("1.5")
+    a.actualEffort = BigDecimal("2")
+    assertEquals("2", actualEffortText(a))
+    val fields = TaskEffortFields(task)
+    assertEquals("3.5", fields.actualEffortOption.value)
+    assertFalse(fields.actualEffortOption.isWritable.value)
+
+    fields.actualEffortOption.value = "1"
+    task.createMutator().also { fields.save(it); it.commit() }
+    assertEquals(BigDecimal("9"), task.actualEffort, "a read only field does not write the task's own value")
+  }
+
+  @Test
   fun `the effort field takes a comma and writes the number to the task`() {
     val task = newTask()
     val fields = TaskEffortFields(task)

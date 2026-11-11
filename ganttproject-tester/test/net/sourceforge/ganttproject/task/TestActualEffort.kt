@@ -25,11 +25,15 @@ import net.sourceforge.ganttproject.parser.TaskLoader
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 
 class TestActualEffort {
-  private val taskManager = TestSetupHelper.newTaskManagerBuilder().build()
+  private val builder = TestSetupHelper.newTaskManagerBuilder()
+  private val taskManager = builder.build()
+  private val alice = builder.resourceManager.create("alice", 1)
+  private val bob = builder.resourceManager.create("bob", 2)
 
   private fun newTask() = taskManager.newTaskBuilder().withName("t").build()
 
@@ -113,5 +117,70 @@ class TestActualEffort {
     assertThrows(IllegalArgumentException::class.java) { task.addActualEffortHours(BigDecimal.ZERO) }
     assertThrows(IllegalArgumentException::class.java) { task.addActualEffortHours(BigDecimal("-1")) }
     assertNull(task.actualEffort)
+  }
+
+  @Test
+  fun `the actual effort of a task is the sum over its assignments once one of them has a value`() {
+    val task = newTask()
+    task.createMutator().also { it.setActualEffort(BigDecimal("5")); it.commit() }
+    val a = task.assignmentCollection.addAssignment(alice)
+    val b = task.assignmentCollection.addAssignment(bob)
+    assertEquals(BigDecimal("5"), task.actualEffortHours, "assignments without values leave the task's own value")
+
+    a.actualEffort = BigDecimal("2")
+    assertTrue(task.hasAssignmentActualEffort)
+    assertEquals(0, BigDecimal("2").compareTo(task.actualEffortHours))
+    b.actualEffort = BigDecimal("1.5")
+    assertEquals(0, BigDecimal("3.5").compareTo(task.actualEffortHours))
+    assertEquals(BigDecimal("5"), task.actualEffort, "the task's own value is kept")
+
+    a.actualEffort = null
+    b.actualEffort = null
+    assertEquals(BigDecimal("5"), task.actualEffortHours, "without values per assignment the task's own value is back")
+  }
+
+  @Test
+  fun `hours are added per resource and a resource has to be assigned`() {
+    val task = newTask()
+    task.assignmentCollection.addAssignment(alice)
+    task.addActualEffortHours(BigDecimal("1.5"), alice)
+    task.addActualEffortHours(BigDecimal("2"), alice)
+    assertEquals(0, BigDecimal("3.5").compareTo(task.assignmentCollection.getAssignment(alice).actualEffortHours))
+    assertEquals(0, BigDecimal("3.5").compareTo(task.actualEffortHours))
+
+    assertThrows(IllegalArgumentException::class.java) { task.addActualEffortHours(BigDecimal("1"), bob) }
+    assertThrows(IllegalArgumentException::class.java) { task.addActualEffortHours(BigDecimal.ZERO, alice) }
+    assertThrows(IllegalStateException::class.java, { task.addActualEffortHours(BigDecimal("1")) },
+      "hours without a resource would not show in the sum")
+    assertNull(task.actualEffort)
+  }
+
+  @Test
+  fun `deleting an assignment takes its actual effort along`() {
+    val task = newTask()
+    task.assignmentCollection.addAssignment(alice).actualEffort = BigDecimal("2")
+    task.assignmentCollection.addAssignment(bob).actualEffort = BigDecimal("3")
+    task.assignmentCollection.getAssignment(bob).delete()
+    assertEquals(0, BigDecimal("2").compareTo(task.actualEffortHours))
+    task.assignmentCollection.getAssignment(alice).delete()
+    assertNull(task.actualEffortHours)
+  }
+
+  @Test
+  fun `an assignment added through the mutator keeps its actual effort`() {
+    val task = newTask()
+    task.assignmentCollection.createMutator().also {
+      it.addAssignment(alice).actualEffort = BigDecimal("4")
+      it.commit()
+    }
+    assertEquals(BigDecimal("4"), task.assignmentCollection.getAssignment(alice).actualEffort)
+  }
+
+  @Test
+  fun `the unplugged clone keeps the actual effort of assignments and a task created from a prototype has none`() {
+    val prototype = newTask()
+    prototype.assignmentCollection.addAssignment(alice).actualEffort = BigDecimal("6")
+    assertEquals(BigDecimal("6"), prototype.unpluggedClone().assignmentCollection.getAssignment(alice).actualEffort)
+    assertNull(taskManager.newTaskBuilder().withPrototype(prototype).build().actualEffortHours)
   }
 }

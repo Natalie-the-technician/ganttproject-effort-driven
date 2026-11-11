@@ -211,7 +211,7 @@ class TaskResourcesPanel(
 
       // Effort which the resource actually spent on the task, in hours
       val actualEffortCol = TableColumn2<ResourceAssignmentRow, String>(i18n.formatText("tableColActualEffort")).apply {
-        setCellValueFactory { SimpleStringProperty(it.value.assignment?.actualEffort?.toPlainString() ?: "") }
+        setCellValueFactory { SimpleStringProperty(actualEffortText(it.value.assignment)) }
         setCellFactory { TextFieldTableCell(DefaultStringConverter()) }
         setOnEditCommit { event ->
           model.setValueAt(event.newValue, event.tablePosition.row, 5)
@@ -389,6 +389,10 @@ private class ResourceAssignmentTableModel(task: Task) {
 /** Hours per day of the resource of the assignment, empty if the resource has none set. */
 internal fun hoursPerDayText(assignment: ResourceAssignment?): String =
   assignment?.resource?.hoursPerDay?.toPlainString() ?: ""
+
+/** Actual effort of the assignment, empty if none was recorded. */
+internal fun actualEffortText(assignment: ResourceAssignment?): String =
+  assignment?.actualEffort?.toPlainString() ?: ""
 
 /**
  * Row data class for the table.

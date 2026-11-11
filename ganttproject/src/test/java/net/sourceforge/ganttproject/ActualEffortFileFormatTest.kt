@@ -19,13 +19,16 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject
 
 import biz.ganttproject.core.io.XmlProjectImporter
+import biz.ganttproject.core.io.parseXmlProject
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.CalendarFactory.LocaleApi
 import biz.ganttproject.core.time.CalendarFactory.setLocaleApi
 import net.sourceforge.ganttproject.io.GanttXMLSaver
+import net.sourceforge.ganttproject.parser.AllocationTagHandler
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayOutputStream
@@ -96,6 +99,46 @@ class ActualEffortFileFormatTest {
   @Test
   fun `the attribute is not written when there is no actual effort`() {
     val saved = save(XmlProjectImporter().import(projectXml("""effort-hours="4"""")))
+    assertFalse(saved.contains("actual-effort-hours"), "no actual effort was set, the document was:\n$saved")
+  }
+
+  private fun assignedProjectXml(allocationAttrs: String = "", withAllocation: Boolean = true) = """
+    <project name="p">
+      <tasks>
+        <task id="1" uid="u1" name="T" start="2026-11-09" duration="1"/>
+      </tasks>
+      <resources>
+        <resource id="0" name="R" function="Default:0" contacts="" phone=""/>
+      </resources>
+      <allocations>
+        ${if (withAllocation) """<allocation task-id="1" resource-id="0" function="Default:0" responsible="true" load="100.0" $allocationAttrs/>""" else ""}
+      </allocations>
+    </project>
+  """.trimIndent()
+
+  private fun IGanttProject.assignment() = taskManager.getTask(1).assignmentCollection.getAssignment(humanResourceManager.getById(0))
+
+  @Test
+  fun `actual effort of an assignment survives a save and load`() {
+    val saved = save(XmlProjectImporter().import(assignedProjectXml("""actual-effort-hours="2.75"""")))
+    assertTrue(Regex("<allocation [^>]*actual-effort-hours=\"2.75\"").containsMatchIn(saved), "the allocation has to carry the value:\n$saved")
+    assertEquals(BigDecimal("2.75"), XmlProjectImporter().import(saved).assignment().actualEffort)
+  }
+
+  @Test
+  fun `the file reader of the application loads the actual effort of an assignment`() {
+    // Documents are opened through the tag handlers, not through XmlProjectImporter.
+    val project = XmlProjectImporter().import(assignedProjectXml(withAllocation = false))
+    AllocationTagHandler(project.humanResourceManager, project.taskManager, project.roleManager)
+      .process(parseXmlProject(assignedProjectXml("""actual-effort-hours="1.5"""")))
+    assertEquals(BigDecimal("1.5"), project.assignment().actualEffort)
+  }
+
+  @Test
+  fun `an allocation without the attribute loads with no actual effort and none is written`() {
+    val project = XmlProjectImporter().import(assignedProjectXml())
+    assertNull(project.assignment().actualEffort)
+    val saved = save(project)
     assertFalse(saved.contains("actual-effort-hours"), "no actual effort was set, the document was:\n$saved")
   }
 }
