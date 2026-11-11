@@ -199,6 +199,7 @@ private class InputApiStub(
   override fun getVisibleTaskSceneTasks(): List<ITaskSceneTask> = listOf(task)
   override fun getTasksInDocumentOrder(): List<ITaskSceneTask> = listOf(task)
   override fun getBaseline(): List<GanttPreviousStateTask> = baseline
+  override fun getHiddenTaskGaps(): List<HiddenTaskGap> = listOf()
 
   override fun getChartApi(labelsRenderer: TaskLabelSceneBuilder<ITaskSceneTask>): TaskActivitySceneBuilder.ChartApi =
     object : TaskActivitySceneBuilder.ChartApi {
