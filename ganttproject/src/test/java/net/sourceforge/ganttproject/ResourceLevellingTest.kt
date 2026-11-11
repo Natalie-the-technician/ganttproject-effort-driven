@@ -206,6 +206,14 @@ class ResourceLevellingTest {
   }
 
   @Test
+  fun `an assignment with load zero is not held back by an overloaded day`() {
+    val result = levelTasks(
+      listOf(task("a", 1, fixed = monday), task("b", 1, order = 1, fixed = monday), task("watch", 1, order = 2, load = 0)),
+      monday, weekdays)
+    assertEquals(monday, result.starts["watch"])
+  }
+
+  @Test
   fun `a missed deadline is reported with the missing working days`() {
     // b waits for a and ends on Friday the next week, three working days after its deadline on Tuesday.
     val result = levelTasks(

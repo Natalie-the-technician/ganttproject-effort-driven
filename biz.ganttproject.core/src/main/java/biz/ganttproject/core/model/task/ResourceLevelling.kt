@@ -286,7 +286,8 @@ fun findEarliestWindow(
     val blockedAt = window.firstOrNull { day ->
       task.pools.any { pool ->
         val load = task.loadIn(pool)
-        (used[pool]?.get(day) ?: 0) + load > maxOf(capacityOf(pool), load)
+        // A load of zero fits even on a day which fixed dates have overloaded.
+        load > 0 && (used[pool]?.get(day) ?: 0) + load > maxOf(capacityOf(pool), load)
       }
     } ?: return window
     candidate = nextWorkingDay(blockedAt.plusDays(1), isWorkingDay)
