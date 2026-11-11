@@ -148,6 +148,25 @@ public class GPCsvExportTest extends TaskTestCase {
     assertEquals("1,", lines[2].trim());
   }
 
+  public void testActualEffortColumnSumsAssignments() throws Exception {
+    HumanResourceManager hrManager = new HumanResourceManager(null, new CustomColumnsManager());
+    TaskManager taskManager = getTaskManager();
+    CSVOptions csvOptions = enableOnly(TaskDefaultColumn.ID.getStub().getID(), TaskDefaultColumn.ACTUAL_EFFORT.getStub().getID());
+
+    Task task = createTask();
+    task.setActualEffort(new java.math.BigDecimal("9"));
+    task.getAssignmentCollection().addAssignment(hrManager.create("Alice", 1)).setActualEffort(new java.math.BigDecimal("2"));
+    task.getAssignmentCollection().addAssignment(hrManager.create("Bob", 2)).setActualEffort(new java.math.BigDecimal("1.5"));
+
+    GanttCSVExport exporter = new GanttCSVExport(taskManager, hrManager, new RoleManagerImpl(), csvOptions);
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    try (SpreadsheetWriter writer = exporter.createWriter(outputStream, CSV)) {
+      exporter.save(writer);
+    }
+    String[] lines = new String(outputStream.toByteArray(), Charsets.UTF_8.name()).split("\n");
+    assertEquals("0,3.5", lines[1].trim());
+  }
+
   public void testResourceAssignments() throws Exception {
     HumanResourceManager hrManager = new HumanResourceManager(null, new CustomColumnsManager());
     TaskManager taskManager = getTaskManager();
