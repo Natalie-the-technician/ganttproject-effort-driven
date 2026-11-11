@@ -246,6 +246,32 @@ class EffortFieldsTest {
   }
 
   @Test
+  fun `actual effort is written to the task on commit and does not change the duration`() {
+    val task = newTask()
+    val before = task.duration.length
+    val fields = TaskEffortFields(task)
+    assertEquals("", fields.actualEffortOption.value ?: "")
+    fields.actualEffortOption.value = "3,5"
+    task.createMutator().also { fields.save(it); it.commit() }
+    assertEquals(0, BigDecimal("3.5").compareTo(task.actualEffort))
+    assertEquals(before, task.duration.length)
+    assertNull(task.effort)
+  }
+
+  @Test
+  fun `the actual effort field is filled from the task, an emptied field clears it and a negative one is rejected`() {
+    val task = newTask()
+    task.createMutator().also { it.setActualEffort(BigDecimal("5")); it.commit() }
+    val fields = TaskEffortFields(task)
+    assertEquals("5", fields.actualEffortOption.value)
+    assertThrows(ValidationException::class.java) { effortValidator.parse("-2") }
+
+    fields.actualEffortOption.value = ""
+    task.createMutator().also { fields.save(it); it.commit() }
+    assertNull(task.actualEffort)
+  }
+
+  @Test
   fun `the effort field takes a comma and writes the number to the task`() {
     val task = newTask()
     val fields = TaskEffortFields(task)

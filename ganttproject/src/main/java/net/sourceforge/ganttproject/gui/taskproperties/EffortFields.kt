@@ -76,23 +76,32 @@ fun hoursPerDayValidatorFor(initial: BigDecimal?) = ValueValidator<String> { tex
 }
 
 /**
- * The effort and the "effort driven" switch of the task properties dialog.
+ * The effort, the effort actually spent and the "effort driven" switch of the task properties dialog.
  * The duration which follows from them is calculated when the task mutator is committed.
  */
 class TaskEffortFields(private val task: Task) {
   val effortOption = ObservableString("effort", task.effort?.toPlainString(), effortValidator)
+  val actualEffortOption = ObservableString("actualEffort", task.actualEffort?.toPlainString(), effortValidator)
   val effortDrivenOption = ObservableBoolean("effortDriven", task.isEffortDriven)
 
   fun save(mutator: TaskMutator) {
     effortOption.ifChanged {
       val effort = parseDecimal(it, BigDecimal.ZERO)
-      val current = task.effort
-      // An emptied field of a task without effort is not a change.
-      val isSame = if (effort == null || current == null) effort == current else effort.compareTo(current) == 0
-      if (!isSame) {
+      if (!isSameEffort(effort, task.effort)) {
         mutator.setEffort(effort)
+      }
+    }
+    // The actual effort is only recorded, it never changes the duration.
+    actualEffortOption.ifChanged {
+      val actualEffort = parseDecimal(it, BigDecimal.ZERO)
+      if (!isSameEffort(actualEffort, task.actualEffort)) {
+        mutator.setActualEffort(actualEffort)
       }
     }
     effortDrivenOption.ifChanged(mutator::setEffortDriven)
   }
+
+  // An emptied field of a task without effort is not a change.
+  private fun isSameEffort(effort: BigDecimal?, current: BigDecimal?) =
+    if (effort == null || current == null) effort == current else effort.compareTo(current) == 0
 }
