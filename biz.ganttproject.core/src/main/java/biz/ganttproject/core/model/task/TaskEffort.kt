@@ -30,6 +30,9 @@ object TaskEffort {
   /** Attribute of the effort actually spent on a task, in the same unit as [XML_ATTRIBUTE]. */
   const val ACTUAL_XML_ATTRIBUTE = "actual-effort-hours"
 
+  /** Attribute of the effort the task was first estimated with, in the same unit as [XML_ATTRIBUTE]. */
+  const val ORIGINAL_XML_ATTRIBUTE = "original-effort-hours"
+
   /** Hours per day assumed for a resource which has none set. */
   const val DEFAULT_HOURS_PER_DAY = 8.0
 

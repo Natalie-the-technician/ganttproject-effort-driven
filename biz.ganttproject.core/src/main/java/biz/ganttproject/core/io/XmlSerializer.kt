@@ -273,6 +273,10 @@ data class XmlTasks(
     var actualEffort: BigDecimal? = null,
 
     @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    @get:JacksonXmlProperty(isAttribute = true, localName = TaskEffort.ORIGINAL_XML_ATTRIBUTE)
+    var originalEffort: BigDecimal? = null,
+
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
     @get:JacksonXmlCData
     var notes: String? = null,
 
