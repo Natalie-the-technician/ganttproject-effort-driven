@@ -22,6 +22,8 @@ import java.awt.Color;
 import java.math.BigDecimal;
 
 import biz.ganttproject.core.chart.render.ShapePaint;
+import biz.ganttproject.core.model.task.RecurrenceOrigin;
+import biz.ganttproject.core.model.task.RecurrenceRule;
 import biz.ganttproject.core.time.GanttCalendar;
 import biz.ganttproject.core.time.TimeDuration;
 import biz.ganttproject.customproperty.CustomColumnsException;
@@ -76,6 +78,10 @@ public interface MutableTask {
   void setEffort(BigDecimal effort);
 
   void setEffortDriven(boolean effortDriven);
+
+  void setRecurrenceRule(RecurrenceRule rule);
+
+  void setRecurrenceOrigin(RecurrenceOrigin origin);
 
   void setCustomProperties(CustomPropertyHolder customProperties) throws CustomColumnsException;
 }

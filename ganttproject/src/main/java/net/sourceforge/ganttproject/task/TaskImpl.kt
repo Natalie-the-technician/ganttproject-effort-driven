@@ -19,6 +19,8 @@
 package net.sourceforge.ganttproject.task
 
 import biz.ganttproject.core.chart.render.ShapePaint
+import biz.ganttproject.core.model.task.RecurrenceOrigin
+import biz.ganttproject.core.model.task.RecurrenceRule
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.GanttCalendar
 import biz.ganttproject.core.time.TimeDuration
@@ -152,6 +154,10 @@ internal class MutatorReentered(taskImpl: TaskImpl, private val delegate: Mutato
 // FieldChange treats null as "no change", so a nullable effort is wrapped to make clearing it a change.
 data class EffortValue(val effort: BigDecimal?)
 
+// The same wrapping for the recurrence fields, which are nullable too.
+data class RecurrenceRuleValue(val rule: RecurrenceRule?)
+data class RecurrenceOriginValue(val origin: RecurrenceOrigin?)
+
 data class EarliestStartValue(val startDate: GanttCalendar?, val isEnabled: Boolean)
 
 internal open class MutatorImpl(
@@ -167,6 +173,8 @@ internal open class MutatorImpl(
   private val costChange = FieldChange(myPropertiesEventSender, taskImpl.cost)
   private val effortChange = FieldChange(myPropertiesEventSender, EffortValue(taskImpl.effort))
   private val effortDrivenChange = FieldChange(myPropertiesEventSender, taskImpl.isEffortDriven)
+  private val recurrenceRuleChange = FieldChange(myPropertiesEventSender, RecurrenceRuleValue(taskImpl.recurrenceRule))
+  private val recurrenceOriginChange = FieldChange(myPropertiesEventSender, RecurrenceOriginValue(taskImpl.recurrenceOrigin))
   private val criticalFlagChange = FieldChange(myPropertiesEventSender, taskImpl.isCritical)
   private val customPropertiesChange = FieldChange<CustomPropertyHolder>(myPropertiesEventSender, taskImpl.customValues.copyOf())
   private val expansionChange = FieldChange(myPropertiesEventSender, taskImpl.expand)
@@ -254,6 +262,12 @@ internal open class MutatorImpl(
       }
       effortDrivenChange.ifChanged {
         taskImpl.isEffortDriven = it
+      }
+      recurrenceRuleChange.ifChanged {
+        taskImpl.recurrenceRule = it.rule
+      }
+      recurrenceOriginChange.ifChanged {
+        taskImpl.recurrenceOrigin = it.origin
       }
       criticalFlagChange.ifChanged {
         taskImpl.isCritical = it
@@ -366,6 +380,10 @@ internal open class MutatorImpl(
   override fun setEffort(effort: BigDecimal?) { effortChange.setValue(EffortValue(effort)) }
 
   override fun setEffortDriven(effortDriven: Boolean) { effortDrivenChange.setValue(effortDriven) }
+
+  override fun setRecurrenceRule(rule: RecurrenceRule?) { recurrenceRuleChange.setValue(RecurrenceRuleValue(rule)) }
+
+  override fun setRecurrenceOrigin(origin: RecurrenceOrigin?) { recurrenceOriginChange.setValue(RecurrenceOriginValue(origin)) }
 
   override fun setShape(shape: ShapePaint) { shapeChange.setValue(shape) }
 
