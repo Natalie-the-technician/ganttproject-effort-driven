@@ -169,6 +169,8 @@ class TaskLevellingTest {
     task("first", 3, anna to 100f)
     val second = effortTask("second", "16", anna)
     assertEquals(2, second.duration.length)
+    val levelTask = collectLevelTasks(project.taskManager, monday).single { it.id == second.taskID.toString() }
+    assertEquals(4, durationAtStart(project.taskManager)(levelTask, monday.plusDays(3)))
     level()
     assertEquals(monday.plusDays(3), second.startDay())
     assertEquals(4, second.duration.length)
