@@ -153,6 +153,8 @@ internal class MutatorReentered(taskImpl: TaskImpl, private val delegate: Mutato
 // FieldChange treats null as "no change", so a nullable effort is wrapped to make clearing it a change.
 data class EffortValue(val effort: BigDecimal?)
 
+data class DeadlineValue(val deadline: GanttCalendar?)
+
 data class EarliestStartValue(val startDate: GanttCalendar?, val isEnabled: Boolean)
 
 internal open class MutatorImpl(
@@ -168,6 +170,9 @@ internal open class MutatorImpl(
   private val costChange = FieldChange(myPropertiesEventSender, taskImpl.cost)
   private val effortChange = FieldChange(myPropertiesEventSender, EffortValue(taskImpl.effort))
   private val effortDrivenChange = FieldChange(myPropertiesEventSender, taskImpl.isEffortDriven)
+  private val deadlineChange = FieldChange(myPropertiesEventSender, DeadlineValue(taskImpl.deadline))
+  private val waitOnlyChange = FieldChange(myPropertiesEventSender, taskImpl.isWaitOnly)
+  private val dateFixedChange = FieldChange(myPropertiesEventSender, taskImpl.isDateFixed)
   private val criticalFlagChange = FieldChange(myPropertiesEventSender, taskImpl.isCritical)
   private val customPropertiesChange = FieldChange<CustomPropertyHolder>(myPropertiesEventSender, taskImpl.customValues.copyOf())
   private val expansionChange = FieldChange(myPropertiesEventSender, taskImpl.expand)
@@ -256,6 +261,15 @@ internal open class MutatorImpl(
       }
       effortDrivenChange.ifChanged {
         taskImpl.isEffortDriven = it
+      }
+      deadlineChange.ifChanged {
+        taskImpl.deadline = it.deadline
+      }
+      waitOnlyChange.ifChanged {
+        taskImpl.isWaitOnly = it
+      }
+      dateFixedChange.ifChanged {
+        taskImpl.isDateFixed = it
       }
       criticalFlagChange.ifChanged {
         taskImpl.isCritical = it
@@ -396,6 +410,12 @@ internal open class MutatorImpl(
   override fun setEffort(effort: BigDecimal?) { effortChange.setValue(EffortValue(effort)) }
 
   override fun setEffortDriven(effortDriven: Boolean) { effortDrivenChange.setValue(effortDriven) }
+
+  override fun setDeadline(deadline: GanttCalendar?) { deadlineChange.setValue(DeadlineValue(deadline)) }
+
+  override fun setWaitOnly(waitOnly: Boolean) { waitOnlyChange.setValue(waitOnly) }
+
+  override fun setDateFixed(dateFixed: Boolean) { dateFixedChange.setValue(dateFixed) }
 
   override fun setShape(shape: ShapePaint) { shapeChange.setValue(shape) }
 

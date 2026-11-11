@@ -77,5 +77,11 @@ public interface MutableTask {
 
   void setEffortDriven(boolean effortDriven);
 
+  void setDeadline(GanttCalendar deadline);
+
+  void setWaitOnly(boolean waitOnly);
+
+  void setDateFixed(boolean dateFixed);
+
   void setCustomProperties(CustomPropertyHolder customProperties) throws CustomColumnsException;
 }

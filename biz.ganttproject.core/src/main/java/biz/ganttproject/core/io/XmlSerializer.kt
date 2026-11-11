@@ -269,6 +269,18 @@ data class XmlTasks(
     var isEffortDriven: Boolean? = null,
 
     @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    @get:JacksonXmlProperty(isAttribute = true, localName = "deadline")
+    var deadline: String? = null,
+
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    @get:JacksonXmlProperty(isAttribute = true, localName = "wait-only")
+    var isWaitOnly: Boolean? = null,
+
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    @get:JacksonXmlProperty(isAttribute = true, localName = "date-fixed")
+    var isDateFixed: Boolean? = null,
+
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
     @get:JacksonXmlCData
     var notes: String? = null,
 

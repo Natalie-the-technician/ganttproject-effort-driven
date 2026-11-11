@@ -121,6 +121,12 @@ public class TaskImpl implements Task {
 
   private boolean isEffortDriven;
 
+  private GanttCalendar myDeadline;
+
+  private boolean isWaitOnly;
+
+  private boolean isDateFixed;
+
   private boolean isUnplugged = false;
 
   public final static int NONE = 0;
@@ -185,6 +191,9 @@ public class TaskImpl implements Task {
     myCost.setValue(copy.myCost);
     myEffort = copy.myEffort;
     isEffortDriven = copy.isEffortDriven;
+    myDeadline = copy.myDeadline;
+    isWaitOnly = copy.isWaitOnly;
+    isDateFixed = copy.isDateFixed;
 
     myDependencySlice = new TaskDependencySliceImpl(this, myManager.getDependencyCollection(), TaskDependencySlice.COMPLETE_SLICE_FXN);
     myDependencySliceAsDependant = new TaskDependencySliceAsDependant(this, myManager.getDependencyCollection());
@@ -808,6 +817,36 @@ public class TaskImpl implements Task {
   @Override
   public void setEffortDriven(boolean effortDriven) {
     isEffortDriven = effortDriven;
+  }
+
+  @Override
+  public GanttCalendar getDeadline() {
+    return myDeadline;
+  }
+
+  @Override
+  public void setDeadline(GanttCalendar deadline) {
+    myDeadline = deadline;
+  }
+
+  @Override
+  public boolean isWaitOnly() {
+    return isWaitOnly;
+  }
+
+  @Override
+  public void setWaitOnly(boolean waitOnly) {
+    isWaitOnly = waitOnly;
+  }
+
+  @Override
+  public boolean isDateFixed() {
+    return isDateFixed;
+  }
+
+  @Override
+  public void setDateFixed(boolean dateFixed) {
+    isDateFixed = dateFixed;
   }
 
   @Override

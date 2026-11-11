@@ -280,6 +280,9 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
     task.cost = CostStub(xmlTask.costManualValue ?: BigDecimal.ZERO, xmlTask.isCostCalculated ?: true)
     task.effort = xmlTask.effort
     task.isEffortDriven = xmlTask.isEffortDriven ?: false
+    task.deadline = xmlTask.deadline?.let { GanttCalendar.parseXMLDate(it) }
+    task.isWaitOnly = xmlTask.isWaitOnly ?: false
+    task.isDateFixed = xmlTask.isDateFixed ?: false
     xmlTask.shape?.let {
       task.shape = buildShapePaint(it, task.color)
     }

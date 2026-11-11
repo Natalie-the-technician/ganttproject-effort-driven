@@ -93,10 +93,19 @@ class ProxyDocumentEffortDrivenReadTest {
     assertEquals(6, project.taskManager.getTask(1).duration.length)
   }
 
-  private fun projectXml(effortDriven: Boolean, resourceAttrs: String = "", resourceChildren: String = "") = """
+  @Test
+  fun `reading a document gives the task its deadline and the wait only and date fixed flags`() {
+    read(projectXml(effortDriven = false, taskAttrs = """ deadline="2026-12-24" wait-only="true" date-fixed="true""""))
+    val task = project.taskManager.getTask(1)
+    assertEquals("2026-12-24", task.deadline?.toXMLString())
+    assertEquals(true, task.isWaitOnly)
+    assertEquals(true, task.isDateFixed)
+  }
+
+  private fun projectXml(effortDriven: Boolean, resourceAttrs: String = "", resourceChildren: String = "", taskAttrs: String = "") = """
     <project name="p">
       <tasks>
-        <task id="1" uid="u1" name="T" start="2026-11-09" duration="1" effort-hours="20" effort-driven="$effortDriven"/>
+        <task id="1" uid="u1" name="T" start="2026-11-09" duration="1" effort-hours="20" effort-driven="$effortDriven"$taskAttrs/>
       </tasks>
       <resources>
         <resource id="0" name="R" function="Default:0" contacts="" phone="" hours-per-day="4"$resourceAttrs>$resourceChildren</resource>

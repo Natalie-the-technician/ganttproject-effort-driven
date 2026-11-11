@@ -96,6 +96,13 @@ class TaskSaver(private val taskCollapseView: TreeCollapseView<Task>): SaverBase
     if (task.isEffortDriven) {
       addAttribute("effort-driven", true, attrs)
     }
+    task.deadline?.let { addAttribute("deadline", it.toXMLString(), attrs) }
+    if (task.isWaitOnly) {
+      addAttribute("wait-only", true, attrs)
+    }
+    if (task.isDateFixed) {
+      addAttribute("date-fixed", true, attrs)
+    }
     startElement("task", attrs, handler)
     cdataElement("notes", task.externalizedNotes(), attrs, handler)
 

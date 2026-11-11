@@ -67,6 +67,9 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
       TaskDefaultColumn.IS_CRITICAL    -> t.isCritical
       TaskDefaultColumn.EFFORT         -> t.effort
       TaskDefaultColumn.EFFORT_DRIVEN  -> t.isEffortDriven
+      TaskDefaultColumn.DEADLINE       -> t.deadline
+      TaskDefaultColumn.WAIT_ONLY      -> t.isWaitOnly
+      TaskDefaultColumn.DATE_FIXED     -> t.isDateFixed
       else -> {
         null
       }
@@ -177,6 +180,18 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
       }
       TaskDefaultColumn.EFFORT_DRIVEN -> node.createMutator().also {
         it.setEffortDriven(value as Boolean)
+        it.commit()
+      }
+      TaskDefaultColumn.DEADLINE -> node.createMutator().also {
+        it.setDeadline(value as? GanttCalendar)
+        it.commit()
+      }
+      TaskDefaultColumn.WAIT_ONLY -> node.createMutator().also {
+        it.setWaitOnly(value as Boolean)
+        it.commit()
+      }
+      TaskDefaultColumn.DATE_FIXED -> node.createMutator().also {
+        it.setDateFixed(value as Boolean)
         it.commit()
       }
       else -> {
