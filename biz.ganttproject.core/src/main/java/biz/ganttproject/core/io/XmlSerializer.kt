@@ -355,13 +355,15 @@ data class XmlResources(
   }
 }
 
-@JsonPropertyOrder("task-id", "resource-id", "function", "responsible", "load")
+@JsonPropertyOrder("task-id", "resource-id", "function", "responsible", "load", TaskEffort.ACTUAL_XML_ATTRIBUTE)
 data class XmlAllocation(
   @get:JacksonXmlProperty(isAttribute = true, localName = "task-id") var taskId: Int = 0,
   @get:JacksonXmlProperty(isAttribute = true, localName = "resource-id") var resourceId: Int = 0,
   @get:JacksonXmlProperty(isAttribute = true, localName = "function") var role: String? = null,
   @get:JacksonXmlProperty(isAttribute = true, localName = "responsible") var isCoordinator: Boolean = false,
-  @get:JacksonXmlProperty(isAttribute = true) var load: Float = 0.0f
+  @get:JacksonXmlProperty(isAttribute = true) var load: Float = 0.0f,
+  @get:JsonInclude(JsonInclude.Include.NON_NULL)
+  @get:JacksonXmlProperty(isAttribute = true, localName = TaskEffort.ACTUAL_XML_ATTRIBUTE) var actualEffort: BigDecimal? = null
 )
 @JsonPropertyOrder("start", "end", "resourceid")
 data class XmlVacation(

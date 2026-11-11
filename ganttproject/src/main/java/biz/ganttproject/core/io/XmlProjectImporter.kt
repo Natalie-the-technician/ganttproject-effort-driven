@@ -146,6 +146,7 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
     val assignment = task.assignmentCollection.addAssignment(resource)
     assignment.load = it.load
     assignment.isCoordinator = it.isCoordinator
+    assignment.actualEffort = it.actualEffort
     it.role?.let { function ->
       val role = findRole(function)
       if (role != null) {
