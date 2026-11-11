@@ -82,6 +82,7 @@ fun hoursPerDayValidatorFor(initial: BigDecimal?) = ValueValidator<String> { tex
 class TaskEffortFields(private val task: Task) {
   val effortOption = ObservableString("effort", task.effort?.toPlainString(), effortValidator)
   val actualEffortOption = ObservableString("actualEffort", task.actualEffort?.toPlainString(), effortValidator)
+  val originalEffortOption = ObservableString("originalEffort", task.originalEffort?.toPlainString(), effortValidator)
   val effortDrivenOption = ObservableBoolean("effortDriven", task.isEffortDriven)
 
   fun save(mutator: TaskMutator) {
@@ -96,6 +97,13 @@ class TaskEffortFields(private val task: Task) {
       val actualEffort = parseDecimal(it, BigDecimal.ZERO)
       if (!isSameEffort(actualEffort, task.actualEffort)) {
         mutator.setActualEffort(actualEffort)
+      }
+    }
+    // The original effort is only kept for comparison, it never changes the duration either.
+    originalEffortOption.ifChanged {
+      val originalEffort = parseDecimal(it, BigDecimal.ZERO)
+      if (!isSameEffort(originalEffort, task.originalEffort)) {
+        mutator.setOriginalEffort(originalEffort)
       }
     }
     effortDrivenOption.ifChanged(mutator::setEffortDriven)

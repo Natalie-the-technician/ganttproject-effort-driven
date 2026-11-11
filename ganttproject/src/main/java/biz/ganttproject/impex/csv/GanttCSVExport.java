@@ -222,6 +222,15 @@ public class GanttCSVExport {
             case ACTUAL_EFFORT:
               writer.print(task.getActualEffort() == null ? "" : task.getActualEffort().toPlainString());
               break;
+            case ORIGINAL_EFFORT:
+              writer.print(task.getOriginalEffort() == null ? "" : task.getOriginalEffort().toPlainString());
+              break;
+            case ESTIMATE_FACTOR: {
+              var quality = EstimateQualityKt.getEstimateQuality(task);
+              var factor = quality == null ? null : quality.getFactor();
+              writer.print(factor == null ? "" : factor.toPlainString());
+              break;
+            }
             case EFFORT_DRIVEN:
               writer.print(task.isEffortDriven());
               break;

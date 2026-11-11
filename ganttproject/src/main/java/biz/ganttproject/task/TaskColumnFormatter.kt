@@ -24,6 +24,7 @@ import biz.ganttproject.core.model.task.TaskDefaultColumn
 import biz.ganttproject.core.option.ColorOption.Util.getColor
 import net.sourceforge.ganttproject.language.GanttLanguage
 import net.sourceforge.ganttproject.task.Task
+import net.sourceforge.ganttproject.task.estimateQuality
 import net.sourceforge.ganttproject.task.TaskProperties
 
 class DefaultTaskColumnFormatter(private val localizer: Localizer) {
@@ -55,6 +56,8 @@ class DefaultTaskColumnFormatter(private val localizer: Localizer) {
         TaskDefaultColumn.EFFORT -> task.effort?.let { getNumberFormat().format(it) }
         TaskDefaultColumn.EFFORT_DRIVEN -> null
         TaskDefaultColumn.ACTUAL_EFFORT -> task.actualEffort?.let { getNumberFormat().format(it) }
+        TaskDefaultColumn.ORIGINAL_EFFORT -> task.originalEffort?.let { getNumberFormat().format(it) }
+        TaskDefaultColumn.ESTIMATE_FACTOR -> task.estimateQuality?.factor?.let { getNumberFormat().format(it) }
       }
     } ?: run {
       if (columnId == "taskDates") {
