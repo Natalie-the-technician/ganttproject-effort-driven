@@ -60,7 +60,7 @@ fun capacitySchedule(assignments: Array<ResourceAssignment>): CapacitySchedule {
   })
 }
 
-private fun GPCalendar.isWorkingDay(day: LocalDate): Boolean =
+internal fun GPCalendar.isWorkingDay(day: LocalDate): Boolean =
   getDayMask(Date.from(day.atStartOfDay(ZoneId.systemDefault()).toInstant())) and GPCalendar.DayMask.WORKING != 0
 
 /**
