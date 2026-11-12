@@ -20,6 +20,7 @@ package net.sourceforge.ganttproject.action.task
 
 import biz.ganttproject.app.DefaultLocalizer
 import biz.ganttproject.app.RootLocalizer
+import biz.ganttproject.core.calendar.GanttDaysOff
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.CalendarFactory.LocaleApi
 import biz.ganttproject.core.time.CalendarFactory.setLocaleApi
@@ -196,6 +197,19 @@ class LevellingActionTest {
     action(answer = true).actionPerformed(null)
     assertEquals(1, edits)
     assertEquals(monday.plusDays(3), startOf(second))
+  }
+
+  @Test
+  fun `levelling starts an effort driven task after a day off on its start`() {
+    val anna = resource("anna")
+    anna.addDaysOff(GanttDaysOff(CalendarFactory.createGanttCalendar(2026, 10, 2).time,
+      CalendarFactory.createGanttCalendar(2026, 10, 3).time))
+    val first = task("first", 1, anna to 100f).also { t ->
+      t.createMutator().also { it.setEffort(BigDecimal(16)); it.setEffortDriven(true); it.commit() }
+    }
+    action(answer = true).actionPerformed(null)
+    assertEquals(monday.plusDays(1), startOf(first))
+    assertEquals(2, first.duration.length)
   }
 
   @Test
