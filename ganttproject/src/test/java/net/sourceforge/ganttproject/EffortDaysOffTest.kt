@@ -50,6 +50,7 @@ import java.util.Locale
 class EffortDaysOffTest {
   private lateinit var project: GanttProjectImpl
   private val monday = LocalDate.of(2026, 11, 2)
+  private var storedDays = 1L
 
   private val undoManager = object : GPUndoManager {
     override fun undoableEdit(localizedName: String, runnableEdit: Runnable) = runnableEdit.run()
@@ -93,7 +94,7 @@ class EffortDaysOffTest {
   private fun effortTask(effort: String, vararg resources: HumanResource): Task =
     project.taskManager.newTaskBuilder().withName("t")
       .withStartDate(date(monday))
-      .withDuration(project.taskManager.createLength(1)).build().also { task ->
+      .withDuration(project.taskManager.createLength(storedDays)).build().also { task ->
         resources.forEach { task.assignmentCollection.addAssignment(it).load = 100f }
         task.createMutator().also {
           it.setEffort(BigDecimal(effort))
@@ -159,16 +160,18 @@ class EffortDaysOffTest {
   @Test
   fun `a day off on a non working day changes nothing`() {
     val anna = resource("anna")
-    anna.dayOff(monday.plusDays(5), monday.plusDays(6))
-    assertEquals(3, effortTask("24", anna).days())
+    anna.dayOff(monday.plusDays(5))
+    // Saturday is no day of the task, so it is neither counted nor does it cost a day: Monday to Friday, then Monday.
+    assertEquals(6, effortTask("48", anna).days())
   }
 
   @Test
   fun `days off without hours per day keep the stored duration and end`() {
     val anna = resource("anna", "0")
     anna.dayOff(monday.plusDays(1))
+    storedDays = 5
     val task = assertTimeoutPreemptively(Duration.ofSeconds(10), ThrowingSupplier { effortTask("24", anna) })
-    assertEquals(1, task.days())
+    assertEquals(5, task.days())
   }
 
   @Test
