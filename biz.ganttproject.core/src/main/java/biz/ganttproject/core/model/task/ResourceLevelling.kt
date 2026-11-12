@@ -125,13 +125,16 @@ fun LevelTask.loadIn(pool: String): Int = loads[pool] ?: SHARED_POOL_LOAD
  * @param durationAt the duration of a task if it starts on the given day; it depends on the day when working hours
  * change over time.
  * @param capacityOf how many percent of a working day of a pool may be booked.
+ * @param canStartOn whether a task may start on the given day, such as not on a day off of its resources. A task
+ * with a fixed start is not asked.
  */
 fun levelTasks(
   tasks: List<LevelTask>,
   projectStart: LocalDate,
   isWorkingDay: (LocalDate) -> Boolean,
   durationAt: (LevelTask, LocalDate) -> Int = { task, _ -> task.durationDays },
-  capacityOf: (String) -> Int = { 100 }
+  capacityOf: (String) -> Int = { 100 },
+  canStartOn: (LevelTask, LocalDate) -> Boolean = { _, _ -> true }
 ): LevelResult {
   val byId = tasks.associateBy { it.id }
   val order = topologicalOrder(tasks) ?: return LevelResult(emptyMap(), listOf(LevelConflict.Cycle(tasks.map { it.id })))
@@ -176,7 +179,7 @@ fun levelTasks(
       }
       workingDays(start, durationAt(task, start), isWorkingDay)
     } else {
-      findEarliestWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf)
+      findEarliestWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf, canStartOn)
     }
     place(task, days)
   }
@@ -277,10 +280,15 @@ fun findEarliestWindow(
   durationAt: (LevelTask, LocalDate) -> Int,
   used: Map<String, Map<LocalDate, Int>>,
   isWorkingDay: (LocalDate) -> Boolean,
-  capacityOf: (String) -> Int
+  capacityOf: (String) -> Int,
+  canStartOn: (LevelTask, LocalDate) -> Boolean = { _, _ -> true }
 ): List<LocalDate> {
   var candidate = nextWorkingDay(earliest, isWorkingDay)
   repeat(MAX_SEARCH_DAYS) {
+    if (!canStartOn(task, candidate)) {
+      candidate = nextWorkingDay(candidate.plusDays(1), isWorkingDay)
+      return@repeat
+    }
     // The duration depends on the start day when working hours change, so it is asked for every candidate.
     val window = workingDays(candidate, durationAt(task, candidate), isWorkingDay)
     val blockedAt = window.firstOrNull { day ->

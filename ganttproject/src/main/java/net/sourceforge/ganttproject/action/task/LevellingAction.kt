@@ -30,6 +30,7 @@ import net.sourceforge.ganttproject.task.algorithm.applyLevelling
 import net.sourceforge.ganttproject.task.algorithm.capacityProblems
 import net.sourceforge.ganttproject.task.algorithm.collectLevelTasks
 import net.sourceforge.ganttproject.task.algorithm.durationAtStart
+import net.sourceforge.ganttproject.task.algorithm.startAllowed
 import net.sourceforge.ganttproject.task.algorithm.workingDayTest
 import net.sourceforge.ganttproject.undo.GPUndoManager
 import java.awt.event.ActionEvent
@@ -69,7 +70,8 @@ class LevellingAction(
     }
     // Unfinished work is not laid into the past; started work stays where it is anyway.
     val from = maxOf(taskManager.projectStart.toModelLocalDate(), today)
-    val result = levelTasks(tasks, from, workingDayTest(taskManager.calendar), durationAtStart(taskManager))
+    val result = levelTasks(tasks, from, workingDayTest(taskManager.calendar), durationAtStart(taskManager),
+      canStartOn = startAllowed(taskManager))
     if (result.conflicts.any { it is LevelConflict.Cycle }) {
       report.show(true, i18n("task.level.cycle"))
       return

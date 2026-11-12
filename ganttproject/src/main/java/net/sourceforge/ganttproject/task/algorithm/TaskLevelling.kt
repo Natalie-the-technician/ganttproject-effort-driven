@@ -93,6 +93,20 @@ private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today
 }
 
 /**
+ * Whether a task may start on the given day. An effort driven task does not start on a day off of any of its
+ * resources, it starts when all of them are back; a day off later in the task lengthens it instead. Every other task
+ * may start on any day.
+ */
+fun startAllowed(taskManager: TaskManager): (LevelTask, LocalDate) -> Boolean = { levelTask, start ->
+  val task = taskManager.getTask(levelTask.id.toInt())
+  if (task == null || !task.isEffortDriven || task.isMilestone) {
+    true
+  } else {
+    task.assignments.none { it.resource?.daysOffRanges()?.covers(start) == true }
+  }
+}
+
+/**
  * The duration of a task if it starts on the given day. An effort driven task is derived again, because its duration
  * depends on the start when the working hours of its resources change; every other task keeps its duration.
  */

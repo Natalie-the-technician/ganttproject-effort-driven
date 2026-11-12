@@ -70,7 +70,7 @@ fun capacitySchedule(assignments: Array<ResourceAssignment>): CapacitySchedule {
 fun HumanResource.daysOffRanges(): List<Pair<LocalDate, LocalDate>> =
   daysOff.map { it.start.time.toModelLocalDate() to it.finish.time.toModelLocalDate() }
 
-private fun List<Pair<LocalDate, LocalDate>>.covers(day: LocalDate): Boolean =
+internal fun List<Pair<LocalDate, LocalDate>>.covers(day: LocalDate): Boolean =
   any { (from, toExclusive) -> !day.isBefore(from) && day.isBefore(toExclusive) }
 
 private fun GPCalendar.isWorkingDay(day: LocalDate): Boolean =

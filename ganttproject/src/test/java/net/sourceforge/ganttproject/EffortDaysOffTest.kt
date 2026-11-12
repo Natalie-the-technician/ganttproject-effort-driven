@@ -28,12 +28,14 @@ import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.algorithm.applyLevelling
 import net.sourceforge.ganttproject.task.algorithm.collectLevelTasks
 import net.sourceforge.ganttproject.task.algorithm.durationAtStart
+import net.sourceforge.ganttproject.task.algorithm.startAllowed
 import net.sourceforge.ganttproject.task.algorithm.workingDayTest
 import net.sourceforge.ganttproject.undo.GPUndoListener
 import net.sourceforge.ganttproject.undo.GPUndoManager
 import net.sourceforge.ganttproject.undo.UndoableEditTxnFactory
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.ThrowingSupplier
@@ -45,7 +47,7 @@ import java.util.Locale
 
 /**
  * Days off of a resource lengthen the duration of an effort driven task, and levelling counts with the lengthened
- * duration. The week starts on Monday 2026-11-02 and every test day is a weekday unless it says otherwise.
+ * duration and does not start the task on a day off. The week starts on Monday 2026-11-02 and every test day is a weekday unless it says otherwise.
  */
 class EffortDaysOffTest {
   private lateinit var project: GanttProjectImpl
@@ -248,5 +250,125 @@ class EffortDaysOffTest {
     assertEquals(monday, first.startDay())
     assertEquals(3, first.days())
     assertEquals(monday.plusDays(3), second.startDay())
+  }
+
+  private fun level() {
+    val tasks = collectLevelTasks(project.taskManager, monday)
+    val result = levelTasks(tasks, monday, workingDayTest(project.taskManager.calendar),
+      durationAtStart(project.taskManager), canStartOn = startAllowed(project.taskManager))
+    applyLevelling(result.starts, result.durations, project.taskManager, undoManager, "level")
+  }
+
+  private fun plainTask(days: Long): Task = project.taskManager.newTaskBuilder().withName("plain")
+    .withStartDate(date(monday)).withDuration(project.taskManager.createLength(days)).build()
+
+  @Test
+  fun `levelling starts a task which would start on a day off when the resource is back`() {
+    val anna = resource("anna")
+    anna.dayOff(monday, monday.plusDays(1))
+    val task = effortTask("16", anna)
+    assertEquals(4, task.days())
+    level()
+    // Wednesday and Thursday, instead of Monday to Thursday with two days without hours.
+    assertEquals(monday.plusDays(2), task.startDay())
+    assertEquals(2, task.days())
+  }
+
+  @Test
+  fun `levelling keeps a task with a day off in the middle and lengthens it`() {
+    val anna = resource("anna")
+    anna.dayOff(monday.plusDays(1))
+    val task = effortTask("16", anna)
+    level()
+    assertEquals(monday, task.startDay())
+    assertEquals(3, task.days())
+  }
+
+  @Test
+  fun `levelling does not start a task behind its predecessor on a day off`() {
+    val bob = resource("bob")
+    bob.dayOff(monday.plusDays(2))
+    val first = plainTask(2)
+    val second = effortTask("8", bob)
+    project.taskManager.dependencyCollection.createDependency(second, first)
+    level()
+    // The predecessor ends on Tuesday and Wednesday is the day off.
+    assertEquals(monday.plusDays(3), second.startDay())
+    assertEquals(1, second.days())
+  }
+
+  @Test
+  fun `levelling starts a task with two resources when both are back`() {
+    val anna = resource("anna")
+    val bob = resource("bob")
+    anna.dayOff(monday)
+    bob.dayOff(monday, monday.plusDays(1))
+    val task = effortTask("32", anna, bob)
+    level()
+    // Anna is back on Tuesday, bob on Wednesday; from Wednesday on both bring 16 hours a day.
+    assertEquals(monday.plusDays(2), task.startDay())
+    assertEquals(2, task.days())
+  }
+
+  @Test
+  fun `levelling keeps a task with a fixed date on a day off`() {
+    val anna = resource("anna")
+    anna.dayOff(monday)
+    val task = effortTask("16", anna)
+    task.createMutator().also {
+      it.setDateFixed(true)
+      it.commit()
+    }
+    level()
+    assertEquals(monday, task.startDay())
+    assertEquals(3, task.days())
+  }
+
+  @Test
+  fun `levelling keeps a task which is not effort driven on a day off`() {
+    val anna = resource("anna")
+    anna.dayOff(monday)
+    val task = plainTask(2)
+    task.assignmentCollection.addAssignment(anna).load = 100f
+    level()
+    assertEquals(monday, task.startDay())
+    assertEquals(2, task.days())
+  }
+
+  @Test
+  fun `without days off every start is allowed and levelling places the tasks as before`() {
+    val anna = resource("anna")
+    resource("bob").dayOff(monday)
+    effortTask("16", anna)
+    plainTask(1).assignmentCollection.addAssignment(anna).load = 100f
+    val tasks = collectLevelTasks(project.taskManager, monday)
+    val canStartOn = startAllowed(project.taskManager)
+    tasks.forEach { task -> (0L..13L).forEach { assertTrue(canStartOn(task, monday.plusDays(it))) } }
+    val isWorkingDay = workingDayTest(project.taskManager.calendar)
+    val durationAt = durationAtStart(project.taskManager)
+    assertEquals(
+      levelTasks(tasks, monday, isWorkingDay, durationAt),
+      levelTasks(tasks, monday, isWorkingDay, durationAt, canStartOn = canStartOn)
+    )
+  }
+
+  @Test
+  fun `moving a predecessor counts the days off from the new start of the effort driven task`() {
+    val anna = resource("anna")
+    anna.dayOff(monday.plusDays(2))
+    val first = plainTask(1)
+    val second = effortTask("16", anna)
+    project.taskManager.dependencyCollection.createDependency(second, first)
+    // Tuesday, Wednesday off, Thursday.
+    assertEquals(monday.plusDays(1), second.startDay())
+    assertEquals(3, second.days())
+
+    first.createMutator().also {
+      it.setDuration(project.taskManager.createLength(3))
+      it.commit()
+    }
+    // The scheduler moves the second task to Thursday, behind the day off: Thursday and Friday.
+    assertEquals(monday.plusDays(3), second.startDay())
+    assertEquals(2, second.days())
   }
 }
