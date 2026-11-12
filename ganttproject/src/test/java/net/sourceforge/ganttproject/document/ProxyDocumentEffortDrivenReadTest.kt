@@ -19,26 +19,16 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 package net.sourceforge.ganttproject.document
 
 import biz.ganttproject.core.model.task.CapacityChange
-import biz.ganttproject.core.option.DefaultStringOption
-import biz.ganttproject.core.option.GPOptionGroup
-import biz.ganttproject.core.table.ColumnList
-import biz.ganttproject.lib.fx.TreeCollapseView
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.CalendarFactory.LocaleApi
 import biz.ganttproject.core.time.CalendarFactory.setLocaleApi
 import net.sourceforge.ganttproject.GanttProjectImpl
 import net.sourceforge.ganttproject.PrjInfos
-import net.sourceforge.ganttproject.chart.GanttChart
-import net.sourceforge.ganttproject.gui.UIFacade
-import net.sourceforge.ganttproject.gui.view.ViewProvider
-import net.sourceforge.ganttproject.gui.zoom.ZoomManager
 import net.sourceforge.ganttproject.io.GanttXMLOpen
 import net.sourceforge.ganttproject.parser.ParserFactory
 import org.easymock.EasyMock.createNiceMock
 import org.easymock.EasyMock.expect
 import org.easymock.EasyMock.replay
-import net.sourceforge.ganttproject.task.Task
-import net.sourceforge.ganttproject.task.TaskView
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -116,7 +106,7 @@ class ProxyDocumentEffortDrivenReadTest {
     </project>""".trimIndent()
 
   private fun read(xml: String) {
-    val facade = uiFacade()
+    val facade = testUiFacade()
     val parserFactory = object : ParserFactory {
       override fun newParser() = GanttXMLOpen(PrjInfos(), project.taskManager, facade)
       override fun newSaver() = throw UnsupportedOperationException()
@@ -124,40 +114,6 @@ class ProxyDocumentEffortDrivenReadTest {
     val physical = createNiceMock<Document>(Document::class.java)
     expect(physical.inputStream).andStubAnswer { ByteArrayInputStream(xml.toByteArray(Charsets.UTF_8)) }
     replay(physical)
-    ProxyDocument(null, physical, project, facade, emptyColumns(), emptyColumns(), parserFactory).read()
-  }
-
-  private fun uiFacade(): UIFacade {
-    val zoomState = createNiceMock<ZoomManager.ZoomState>(ZoomManager.ZoomState::class.java)
-    expect(zoomState.persistentName).andStubReturn("default:8")
-    val zoomManager = createNiceMock<ZoomManager>(ZoomManager::class.java)
-    expect(zoomManager.zoomState).andStubReturn(zoomState)
-    val ganttChart = createNiceMock<GanttChart>(GanttChart::class.java)
-    expect(ganttChart.taskLabelOptions).andStubReturn(
-      GPOptionGroup(
-        "taskLabels",
-        DefaultStringOption("taskLabelUp", "name"),
-        DefaultStringOption("taskLabelDown", "duration")
-      )
-    )
-    val provider = createNiceMock<ViewProvider>(ViewProvider::class.java)
-    expect(provider.options).andStubReturn(listOf(DefaultStringOption("divider", "0.5")))
-    val facade = createNiceMock<UIFacade>(UIFacade::class.java)
-    expect(facade.zoomManager).andStubReturn(zoomManager)
-    expect(facade.ganttChart).andStubReturn(ganttChart)
-    expect(facade.currentTaskView).andStubReturn(TaskView())
-    expect(facade.ganttViewProvider).andStubReturn(provider)
-    @Suppress("UNCHECKED_CAST")
-    val collapse = createNiceMock<TreeCollapseView<*>>(TreeCollapseView::class.java) as TreeCollapseView<Task>
-    expect(facade.taskCollapseView).andStubReturn(collapse)
-    replay(zoomState, zoomManager, ganttChart, provider, collapse, facade)
-    return facade
-  }
-
-  private fun emptyColumns(): ColumnList {
-    val columns = createNiceMock<ColumnList>(ColumnList::class.java)
-    expect(columns.exportData()).andStubReturn(emptyList())
-    replay(columns)
-    return columns
+    testProxyDocument(physical, project, facade, parserFactory).read()
   }
 }
