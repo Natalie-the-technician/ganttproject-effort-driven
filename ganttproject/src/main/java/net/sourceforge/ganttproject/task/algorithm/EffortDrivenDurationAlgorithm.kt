@@ -22,7 +22,9 @@ import biz.ganttproject.core.calendar.GPCalendar
 import biz.ganttproject.core.model.task.CapacityChange
 import biz.ganttproject.core.model.task.CapacitySchedule
 import biz.ganttproject.core.model.task.TaskEffort
+import biz.ganttproject.task.recurrence.toModelLocalDate
 import biz.ganttproject.core.model.task.daysNeeded
+import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.task.ResourceAssignment
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskManager
@@ -60,6 +62,17 @@ fun capacitySchedule(assignments: Array<ResourceAssignment>): CapacitySchedule {
   })
 }
 
+/**
+ * The days off of the resource as ranges which include the first day and exclude the last one. This is how the
+ * interval of a day off is stored: the person dialog and the file import both write the day after the last day off as
+ * the end of the interval.
+ */
+fun HumanResource.daysOffRanges(): List<Pair<LocalDate, LocalDate>> =
+  daysOff.map { it.start.time.toModelLocalDate() to it.finish.time.toModelLocalDate() }
+
+private fun List<Pair<LocalDate, LocalDate>>.covers(day: LocalDate): Boolean =
+  any { (from, toExclusive) -> !day.isBefore(from) && day.isBefore(toExclusive) }
+
 private fun GPCalendar.isWorkingDay(day: LocalDate): Boolean =
   getDayMask(Date.from(day.atStartOfDay(ZoneId.systemDefault()).toInstant())) and GPCalendar.DayMask.WORKING != 0
 
@@ -67,7 +80,9 @@ private fun GPCalendar.isWorkingDay(day: LocalDate): Boolean =
  * Duration in working days of a task with the given effort and assignments, at least one day.
  * Returns null if nothing can be derived: no effort, or no hours available.
  * Without a start or when the working hours do not change, the hours of one day are divided; otherwise the days from
- * [start] on are counted one by one, with the working days of [calendar].
+ * [start] on are counted one by one, with the working days of [calendar]. A day off of a resource still belongs to
+ * the task, but the resource contributes no hours on it: five days of work with one day off in the middle make six
+ * days. Days off are only taken into account when there is a [start] to count from.
  */
 fun effortDrivenDurationDays(effort: BigDecimal?, assignments: Array<ResourceAssignment>,
                              start: LocalDate? = null, calendar: GPCalendar? = null): Long? {
@@ -75,6 +90,19 @@ fun effortDrivenDurationDays(effort: BigDecimal?, assignments: Array<ResourceAss
     return null
   }
   val schedule = capacitySchedule(assignments)
+  val daysOff = assignments.map { it.resource?.daysOffRanges().orEmpty() }
+  if (start != null && daysOff.any { it.isNotEmpty() }) {
+    // No resource brings any hours on any day, so counting days would only run into the limit.
+    if (schedule.base.signum() <= 0 && schedule.changes.all { it.hoursPerDay.signum() <= 0 }) {
+      return null
+    }
+    val hoursOn = { day: LocalDate ->
+      assignments.indices.fold(BigDecimal.ZERO) { sum, i ->
+        if (daysOff[i].covers(day)) sum else sum.add(availableHoursPerDay(assignments[i], day))
+      }
+    }
+    return daysNeeded(TaskEffort.toHours(effort), start, hoursOn) { calendar?.isWorkingDay(it) ?: true }?.toLong()
+  }
   if (schedule.isConstant || start == null) {
     if (schedule.base.signum() <= 0) {
       return null

@@ -56,6 +56,14 @@ class CapacitySchedule(val base: BigDecimal, changes: List<CapacityChange> = emp
  * @return at least 1, or null if the effort is not done within [CapacitySchedule.MAX_DAYS] working days.
  */
 fun daysNeeded(effortHours: BigDecimal, start: LocalDate, schedule: CapacitySchedule,
+               isWorkingDay: (LocalDate) -> Boolean): Int? =
+  daysNeeded(effortHours, start, schedule::hoursOn, isWorkingDay)
+
+/**
+ * The same, with the hours of a day given by [hoursOn] instead of a schedule, for hours which do not follow the
+ * changes of a schedule alone, such as days off.
+ */
+fun daysNeeded(effortHours: BigDecimal, start: LocalDate, hoursOn: (LocalDate) -> BigDecimal,
                isWorkingDay: (LocalDate) -> Boolean): Int? {
   if (effortHours.signum() <= 0) {
     return 1
@@ -68,7 +76,7 @@ fun daysNeeded(effortHours: BigDecimal, start: LocalDate, schedule: CapacitySche
   while (guard++ < CapacitySchedule.MAX_DAYS * 4) {
     if (isWorkingDay(day)) {
       days++
-      remaining = remaining.subtract(schedule.hoursOn(day).max(BigDecimal.ZERO))
+      remaining = remaining.subtract(hoursOn(day).max(BigDecimal.ZERO))
       if (remaining.signum() <= 0) {
         return days
       }
