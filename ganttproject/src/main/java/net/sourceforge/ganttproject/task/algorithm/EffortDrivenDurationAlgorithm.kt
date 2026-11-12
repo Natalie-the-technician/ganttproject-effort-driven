@@ -51,6 +51,12 @@ fun availableHoursPerDay(assignment: ResourceAssignment, day: LocalDate? = null)
   return hours.multiply(utilization).divide(HUNDRED).multiply(BigDecimal(assignment.load.toString())).divide(HUNDRED)
 }
 
+/**
+ * Whether the assignment brings hours to the effort of its task. An assignment marked as no effort keeps its resource
+ * on the task, such as a reviewer, but neither its hours nor its days off change the duration.
+ */
+val ResourceAssignment.contributesEffort: Boolean get() = !isNoEffort
+
 /** Hours per day which the assignments of the task make available to it, as they change over time. */
 fun Task.capacitySchedule(): CapacitySchedule = capacitySchedule(assignments)
 
@@ -82,13 +88,15 @@ private fun GPCalendar.isWorkingDay(day: LocalDate): Boolean =
  * Without a start or when the working hours do not change, the hours of one day are divided; otherwise the days from
  * [start] on are counted one by one, with the working days of [calendar]. A day off of a resource still belongs to
  * the task, but the resource contributes no hours on it: five days of work with one day off in the middle make six
- * days. Days off are only taken into account when there is a [start] to count from.
+ * days. Days off are only taken into account when there is a [start] to count from. Assignments which do not
+ * [contributesEffort] are left out.
  */
-fun effortDrivenDurationDays(effort: BigDecimal?, assignments: Array<ResourceAssignment>,
+fun effortDrivenDurationDays(effort: BigDecimal?, allAssignments: Array<ResourceAssignment>,
                              start: LocalDate? = null, calendar: GPCalendar? = null): Long? {
   if (effort == null || effort.signum() <= 0) {
     return null
   }
+  val assignments = allAssignments.filter { it.contributesEffort }.toTypedArray()
   val schedule = capacitySchedule(assignments)
   val daysOff = assignments.map { it.resource?.daysOffRanges().orEmpty() }
   if (start != null && daysOff.any { it.isNotEmpty() }) {
