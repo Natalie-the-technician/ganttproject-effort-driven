@@ -163,10 +163,95 @@ class BaselineImportTest {
     assertEquals(listOf(own), target.baselines)
   }
 
-  private fun savedFileWithBaseline(name: String): File {
+  @Test
+  fun `no question is asked if no baseline name is taken`() {
+    val target = GanttProjectImpl()
+    target.addTask("Target task")
+    target.takeBaseline("Own")
+    val questions = mutableListOf<List<String>>()
+
+    importer(target, BaselineSnapshotUndoManager(target.baselines), listOf(savedFileWithBaseline("Imported"))) {
+      questions.add(it)
+      BaselineNameCollision.RENAME
+    }.run()
+
+    assertEquals(emptyList<List<String>>(), questions)
+    assertEquals(listOf("Own", "Imported"), target.baselines.map { it.name })
+  }
+
+  @Test
+  fun `one question is asked about all taken baseline names of an import`() {
+    val target = GanttProjectImpl()
+    target.addTask("Target task")
+    target.takeBaseline("A")
+    target.takeBaseline("B")
+    val questions = mutableListOf<List<String>>()
+    val files = listOf(savedFileWithBaseline("A", "B", "C"), savedFileWithBaseline("C", "D"))
+
+    importer(target, BaselineSnapshotUndoManager(target.baselines), files) {
+      questions.add(it)
+      BaselineNameCollision.RENAME
+    }.run()
+
+    assertEquals(listOf(listOf("A", "B", "C")), questions,
+      "one question for both files, also about the name which the first file takes for the second one")
+    assertEquals(listOf("A", "B", "A (2)", "B (2)", "C", "C (2)", "D"), target.baselines.map { it.name })
+  }
+
+  @Test
+  fun `the answer applies to all taken baseline names`() {
+    fun importWith(answer: BaselineNameCollision): Pair<List<GanttPreviousState>, List<GanttPreviousState>> {
+      val target = GanttProjectImpl()
+      target.addTask("Target task")
+      val own = listOf(target.takeBaseline("A"), target.takeBaseline("B"))
+      importer(target, BaselineSnapshotUndoManager(target.baselines), listOf(savedFileWithBaseline("A", "B", "C"))) {
+        answer
+      }.run()
+      return own to target.baselines.toList()
+    }
+
+    importWith(BaselineNameCollision.RENAME).let { (own, result) ->
+      assertEquals(listOf("A", "B", "A (2)", "B (2)", "C"), result.map { it.name })
+      assertEquals(own, result.take(2))
+    }
+    importWith(BaselineNameCollision.REPLACE).let { (own, result) ->
+      assertEquals(listOf("A", "B", "C"), result.map { it.name })
+      assertEquals(emptyList<GanttPreviousState>(), result.filter { it in own }, "both own baselines have to be replaced")
+    }
+    importWith(BaselineNameCollision.KEEP_BOTH).let { (own, result) ->
+      assertEquals(listOf("A", "B", "A", "B", "C"), result.map { it.name })
+      assertEquals(own, result.take(2))
+    }
+  }
+
+  @Test
+  fun `cancelling the question imports nothing`() {
+    val target = GanttProjectImpl()
+    target.addTask("Target task")
+    val own = target.takeBaseline("Baseline")
+    val undoManager = BaselineSnapshotUndoManager(target.baselines)
+
+    importer(target, undoManager, listOf(savedFileWithBaseline("Baseline"))) { null }.run()
+
+    assertEquals(listOf(own), target.baselines)
+    assertEquals(listOf("Target task"), target.taskManager.tasks.map { it.name }, "no task may be imported")
+    assertEquals(false, undoManager.canUndo(), "there has to be no undoable edit")
+  }
+
+  private fun importer(
+    target: GanttProjectImpl, undoManager: GPUndoManager, files: List<File>, question: (List<String>) -> BaselineNameCollision?
+  ) = ImporterFromGanttFile().also {
+    val model = ImporterWizardModel()
+    model.files = files
+    it.setContext(target, TestUIFacade(undoManager), nicePreferences())
+    it.setModel(model)
+    it.setBaselineNameCollisionQuestion(question)
+  }
+
+  private fun savedFileWithBaseline(vararg names: String): File {
     val project = GanttProjectImpl()
     project.addTask("Task in file")
-    project.takeBaseline(name)
+    names.forEach { project.takeBaseline(it) }
     val file = File.createTempFile("BaselineImportTest", ".gan").also { it.deleteOnExit() }
     FileOutputStream(file).use { GanttXMLSaver(project).save(it) }
     return file
