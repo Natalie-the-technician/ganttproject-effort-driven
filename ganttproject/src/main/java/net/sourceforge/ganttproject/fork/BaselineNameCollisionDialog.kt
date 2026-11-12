@@ -96,7 +96,9 @@ fun showBaselineNameCollisionDialog(collidingNames: List<String>, handleAnswer: 
     controller.setEscCloseEnabled(true)
     controller.setupButton(ButtonType.OK) { btn ->
       btn.styleClass.add("btn-attention")
-      btn.addEventHandler(ActionEvent.ACTION) {
+      // A filter, not a handler: the dialog pane's own handler of this button closes the dialog,
+      // and so runs onClosed, before any handler added here would run.
+      btn.addEventFilter(ActionEvent.ACTION) {
         answered = true
         handleAnswer(optionPane.toggleGroup.selectedToggle?.userData as? BaselineCollisionAnswer)
       }
@@ -104,8 +106,12 @@ fun showBaselineNameCollisionDialog(collidingNames: List<String>, handleAnswer: 
     // THE SAFETY NET "ohne Antwort passiert nichts" NEEDS: onClosed fires for EVERY way the
     // dialog ends, OK included, which is why `answered` guards it -- otherwise OK would call
     // handleAnswer twice, once with the real answer and once with null right after.
+    // Escape hides both the dialog and its window, so onClosed can run twice.
     controller.onClosed = {
-      if (!answered) handleAnswer(null)
+      if (!answered) {
+        answered = true
+        handleAnswer(null)
+      }
     }
   }
 }
