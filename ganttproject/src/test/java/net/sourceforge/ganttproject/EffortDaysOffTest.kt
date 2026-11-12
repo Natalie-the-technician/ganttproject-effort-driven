@@ -352,6 +352,52 @@ class EffortDaysOffTest {
     )
   }
 
+  private fun Task.assign(resource: HumanResource, load: Float) {
+    assignmentCollection.addAssignment(resource).load = load
+  }
+
+  @Test
+  fun `levelling does not hold a task back for a day off of a resource with load zero`() {
+    val anna = resource("anna")
+    val bob = resource("bob")
+    bob.dayOff(monday, monday.plusDays(1))
+    val task = effortTask("16", anna)
+    task.assign(bob, 0f)
+    level()
+    assertEquals(monday, task.startDay())
+    assertEquals(2, task.days())
+  }
+
+  @Test
+  fun `levelling still holds a task back for a day off of a resource with a partial load`() {
+    val anna = resource("anna")
+    val bob = resource("bob")
+    bob.dayOff(monday)
+    val task = effortTask("24", anna)
+    task.assign(bob, 50f)
+    level()
+    // From Tuesday on anna brings 8 hours and bob 4 hours a day.
+    assertEquals(monday.plusDays(1), task.startDay())
+    assertEquals(2, task.days())
+  }
+
+  @Test
+  fun `a task with only assignments without load may start on any day like a task without resources`() {
+    val anna = resource("anna")
+    val bob = resource("bob")
+    anna.dayOff(monday)
+    bob.dayOff(monday)
+    val task = effortTask("16")
+    task.assign(anna, 0f)
+    task.assign(bob, -10f)
+    val canStartOn = startAllowed(project.taskManager)
+    collectLevelTasks(project.taskManager, monday).forEach { levelTask ->
+      (0L..13L).forEach { assertTrue(canStartOn(levelTask, monday.plusDays(it))) }
+    }
+    level()
+    assertEquals(monday, task.startDay())
+  }
+
   @Test
   fun `moving a predecessor counts the days off from the new start of the effort driven task`() {
     val anna = resource("anna")
