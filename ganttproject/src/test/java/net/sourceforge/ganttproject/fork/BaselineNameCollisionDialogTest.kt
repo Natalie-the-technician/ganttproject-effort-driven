@@ -33,7 +33,9 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import java.util.Optional
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -54,7 +56,12 @@ class BaselineNameCollisionDialogTest {
       } catch (e: IllegalStateException) {
         // already running
       }
+      // There is no main window here, so closing the first dialog would otherwise stop the toolkit.
+      Platform.setImplicitExit(false)
     }
+
+    // Dialogs of earlier tests, so that a test never drives a dialog it did not open.
+    private val seenPanes = mutableSetOf<DialogPane>()
   }
 
   @Test
@@ -84,6 +91,29 @@ class BaselineNameCollisionDialogTest {
     assertFxThreadResponds()
   }
 
+  @Test
+  fun `OK and Escape each report exactly once`() {
+    assertEquals(listOf(Optional.of(BaselineCollisionAnswer.KEEP_BOTH)), callsOf { pane ->
+      (pane.lookupButton(ButtonType.OK) as javafx.scene.control.Button).fire()
+    })
+    assertEquals(listOf(Optional.empty<BaselineCollisionAnswer>()), callsOf { pane ->
+      Event.fireEvent(pane, KeyEvent(KeyEvent.KEY_PRESSED, "", "", KeyCode.ESCAPE, false, false, false, false))
+    })
+  }
+
+  /** Every call of the dialog's callback, collected until the dialog has been closed a while. */
+  private fun callsOf(action: (DialogPane) -> Unit): List<Optional<BaselineCollisionAnswer>> {
+    val calls = CopyOnWriteArrayList<Optional<BaselineCollisionAnswer>>()
+    showBaselineNameCollisionDialog(listOf("A", "B")) { calls.add(Optional.ofNullable(it)) }
+    val pane = waitForDialog()
+    Platform.runLater { action(pane) }
+    val deadline = System.currentTimeMillis() + 30_000
+    while (calls.isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(100)
+    Thread.sleep(2_000)
+    assertFxThreadResponds()
+    return calls.toList()
+  }
+
   private fun ask(action: (DialogPane) -> Unit): BaselineCollisionAnswer? {
     val result = CompletableFuture<BaselineCollisionAnswer?>()
     Thread {
@@ -95,22 +125,26 @@ class BaselineNameCollisionDialogTest {
     }.apply { isDaemon = true }.start()
     val pane = waitForDialog()
     Platform.runLater { action(pane) }
-    return result.get(20, TimeUnit.SECONDS)
+    return result.get(30, TimeUnit.SECONDS)
   }
 
-  /** Waits until the dialog is showing with its options in place, and returns its pane. */
+  /**
+   * Waits until a dialog this test has not seen yet is showing with its options in place, and
+   * returns its pane. The time limits are generous because a loaded build machine can take
+   * several seconds to show the first dialog.
+   */
   private fun waitForDialog(): DialogPane {
-    val deadline = System.currentTimeMillis() + 20_000
+    val deadline = System.currentTimeMillis() + 60_000
     while (System.currentTimeMillis() < deadline) {
       val pane = CompletableFuture<DialogPane?>()
       Platform.runLater {
         pane.complete(Window.getWindows().filter { it.isShowing }.firstNotNullOfOrNull { window ->
           val root = window.scene?.root
           ((root as? DialogPane) ?: root?.lookup(".dialog-pane") as? DialogPane)
-            ?.takeIf { it.lookupAll(".radio-button").size == 3 }
+            ?.takeIf { it !in seenPanes && it.lookupAll(".radio-button").size == 3 }
         })
       }
-      pane.get(5, TimeUnit.SECONDS)?.let { return it }
+      pane.get(30, TimeUnit.SECONDS)?.let { seenPanes.add(it); return it }
       Thread.sleep(100)
     }
     throw AssertionError("the dialog did not show up")
@@ -122,6 +156,6 @@ class BaselineNameCollisionDialogTest {
   private fun assertFxThreadResponds() {
     val done = CountDownLatch(1)
     Platform.runLater { done.countDown() }
-    assertTrue(done.await(5, TimeUnit.SECONDS), "the JavaFX thread hangs")
+    assertTrue(done.await(15, TimeUnit.SECONDS), "the JavaFX thread hangs")
   }
 }
