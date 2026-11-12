@@ -31,12 +31,12 @@ import org.junit.jupiter.api.Test
 import java.util.Date
 
 /**
- * THE COLLISION BAR — where it belongs and, above all, where it must NOT be.
+ * THE HIDDEN-TASKS MARKER — where it belongs and, above all, where it must NOT be.
  *
  * `hiddenTaskGaps` is the whole decision: what is a gap, how many gaps a run of hidden tasks makes,
  * and which row seam a gap sits on. It is a pure function over the document order and the row list,
  * so all of it can be checked here without a chart, a canvas or a screen. The drawing of it is
- * checked in `CollisionBarPainterTest` (the connection) and `CollisionBarImageTest` (the
+ * checked in `HiddenTasksMarkerPainterTest` (the connection) and `HiddenTasksMarkerImageTest` (the
  * picture).
  *
  * THE TWO CHECKS THIS FILE EXISTS FOR are `a view that hides nothing has no gap` and
@@ -44,7 +44,7 @@ import java.util.Date
  * sharp by breaking the finished code on purpose, more than once each — see the report of
  * 08.09.2026, section „Die Brueche".
  */
-class CollisionBarTest {
+class HiddenTasksMarkerTest {
 
   private val savedLocalizer = RootLocalizer
 
@@ -198,8 +198,8 @@ class CollisionBarTest {
   /**
    * ═══ THE FIRST GUARD ═══
    *
-   * A VIEW THAT HIDES NOTHING SHOWS NO BAR. Without this the mark would appear on every chart, and
-   * an ever-present warning is the same as none.
+   * A VIEW THAT HIDES NOTHING SHOWS NO MARKER. Without this the mark would appear on every chart,
+   * and an ever-present warning is the same as none.
    *
    * GREEN before the change — it has to be, it says that nothing happens. What makes it worth
    * having is that it was broken on purpose four times after the code was finished and failed each
@@ -253,7 +253,7 @@ class CollisionBarTest {
     // The table shows Rohbau and Abnahme; Fundament and Mauern are missing because Rohbau is
     // collapsed, not because anything hides them.
     assertEquals(emptyList<String>(), p.describe(p.gaps(listOf(rohbau, abnahme))),
-      "collapsing a summary task must not raise a collision bar")
+      "collapsing a summary task must not raise a hidden-tasks marker")
   }
 
   /**

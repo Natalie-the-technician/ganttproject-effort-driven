@@ -36,9 +36,9 @@ import java.awt.Color
 import java.awt.Dimension
 
 /**
- * THE COLLISION BAR ON THE REAL CHART.
+ * THE HIDDEN-TASKS MARKER ON THE REAL CHART.
  *
- * `CollisionBarTest` proves the arithmetic: which run of hidden tasks is a gap and on which
+ * `HiddenTasksMarkerTest` proves the arithmetic: which run of hidden tasks is a gap and on which
  * seam it sits. That says nothing about the running chart — as long as nobody asks
  * `hiddenTaskGaps` and nobody creates a rectangle from the answer, a chart with a filter looks
  * exactly as it did before. So this file never computes a gap itself. It builds a real
@@ -46,10 +46,10 @@ import java.awt.Dimension
  * what is on the canvas.
  *
  * WHAT IT CAN SEE AND WHAT IT CANNOT. It sees every rectangle the scene builder created, its
- * position and its style. It does not see colour — that is `CollisionBarImageTest`, which runs
+ * position and its style. It does not see colour — that is `HiddenTasksMarkerImageTest`, which runs
  * the real painter onto a real image — and it does not see the screen, which is in the report.
  */
-class CollisionBarPainterTest {
+class HiddenTasksMarkerPainterTest {
 
   /** Everything a Gantt chart needs to paint itself into nowhere. */
   private class Fixture {
@@ -229,14 +229,14 @@ class CollisionBarPainterTest {
     val abnahme = f.task("Abnahme")
 
     assertEquals(0, f.marks(listOf(rohbau, abnahme)).size,
-      "collapsing must not put a collision bar on the chart")
+      "collapsing must not put a hidden-tasks marker on the chart")
   }
 
   /**
    * THE CLIFF STAYS SHUT. The mark needs the hidden tasks, so the document order must stay
    * complete — and a hidden task must still reach neither partition, which is what the connection
-   * of 29.08.2026 is for. Both together in one place, because the collision bar is exactly the
-   * reason that connection was built the way it was (M2 §8).
+   * of 29.08.2026 is for. Both together in one place, because the hidden-tasks marker is exactly
+   * the reason that connection was built the way it was (M2 §8).
    */
   @Test
   fun `the hidden task is still in no partition and still in the document order`() {

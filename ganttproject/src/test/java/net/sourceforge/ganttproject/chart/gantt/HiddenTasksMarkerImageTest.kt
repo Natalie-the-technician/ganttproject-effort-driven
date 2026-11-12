@@ -31,12 +31,12 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Pixel tests of the collision bar: a dashed line with a solid cap at each end, drawn opaque on
- * the row seam. The colour must stay at least 40 brightness steps away from the row separator it
+ * Pixel tests of the hidden-tasks marker: a dashed line with a solid cap at each end, drawn opaque
+ * on the row seam. The colour must stay at least 40 brightness steps away from the row separator it
  * lies on, and the shape is the second cue: a horizontal cut through the mark meets the dashes
  * and the ground between them.
  */
-class CollisionBarImageTest {
+class HiddenTasksMarkerImageTest {
 
   private val bildBreite = 130
   private val bildHoehe = 50
