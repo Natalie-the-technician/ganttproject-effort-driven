@@ -23,6 +23,8 @@ import biz.ganttproject.core.model.task.LevelTask
 import biz.ganttproject.core.model.task.SHARED_POOL
 import biz.ganttproject.core.model.task.SHARED_POOL_LOAD
 import biz.ganttproject.core.model.task.endAfterWorkingDays
+import biz.ganttproject.core.model.task.nextAllowedDay
+import biz.ganttproject.core.model.task.nextWorkingDay
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.task.recurrence.toModelDate
 import biz.ganttproject.task.recurrence.toModelLocalDate
@@ -31,6 +33,7 @@ import net.sourceforge.ganttproject.task.TaskImpl
 import net.sourceforge.ganttproject.task.TaskManager
 import net.sourceforge.ganttproject.undo.GPUndoManager
 import java.time.LocalDate
+import java.util.Date
 
 /*
  * Connects the task model to the levelling calculation in biz.ganttproject.core.model.task.
@@ -92,18 +95,36 @@ private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today
   )
 }
 
+/** Whether a task may start on the given day when levelling, see [startAllowedOn]. */
+fun startAllowed(taskManager: TaskManager): (LevelTask, LocalDate) -> Boolean = { levelTask, start ->
+  taskManager.getTask(levelTask.id.toInt())?.startAllowedOn(start) ?: true
+}
+
 /**
- * Whether a task may start on the given day. An effort driven task does not start on a day off of any of its
+ * Whether this task may start on the given day. An effort driven task does not start on a day off of any of its
  * resources, it starts when all of them are back; a day off later in the task lengthens it instead. An assignment
  * without load brings no hours, so its days off do not hold the task back. Every other task may start on any day.
  */
-fun startAllowed(taskManager: TaskManager): (LevelTask, LocalDate) -> Boolean = { levelTask, start ->
-  val task = taskManager.getTask(levelTask.id.toInt())
-  if (task == null || !task.isEffortDriven || task.isMilestone) {
+fun Task.startAllowedOn(start: LocalDate): Boolean =
+  if (!isEffortDriven || isMilestone) {
     true
   } else {
-    task.assignments.filter { it.load > 0 }.none { it.resource?.daysOffRanges()?.covers(start) == true }
+    assignments.filter { it.load > 0 }.none { it.resource?.daysOffRanges()?.covers(start) == true }
   }
+
+/**
+ * The start which scheduling gives a task whose predecessors let it start at [earliest]: the task moves on to the
+ * first working day on which it may start, see [startAllowedOn]. Work which has started and a task with a fixed date
+ * stay at [earliest], and so does a task whose resources are not back within the search bound.
+ */
+fun allowedStart(task: Task, earliest: Date): Date {
+  if (task.completionPercentage > 0 || task.isDateFixed || task.isSupertask) {
+    return earliest
+  }
+  val isWorkingDay = workingDayTest(task.manager.calendar)
+  val day = earliest.toModelLocalDate()
+  val allowed = nextAllowedDay(day, isWorkingDay) { task.startAllowedOn(it) } ?: return earliest
+  return if (allowed == nextWorkingDay(day, isWorkingDay)) earliest else allowed.toModelDate()
 }
 
 /**

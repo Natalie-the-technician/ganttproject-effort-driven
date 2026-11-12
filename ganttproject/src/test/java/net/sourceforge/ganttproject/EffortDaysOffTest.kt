@@ -25,6 +25,7 @@ import biz.ganttproject.core.time.CalendarFactory.LocaleApi
 import biz.ganttproject.core.time.CalendarFactory.setLocaleApi
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.task.Task
+import net.sourceforge.ganttproject.task.algorithm.allowedStart
 import net.sourceforge.ganttproject.task.algorithm.applyLevelling
 import net.sourceforge.ganttproject.task.algorithm.collectLevelTasks
 import net.sourceforge.ganttproject.task.algorithm.durationAtStart
@@ -34,6 +35,7 @@ import net.sourceforge.ganttproject.undo.GPUndoListener
 import net.sourceforge.ganttproject.undo.GPUndoManager
 import net.sourceforge.ganttproject.undo.UndoableEditTxnFactory
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -416,5 +418,151 @@ class EffortDaysOffTest {
     // The scheduler moves the second task to Thursday, behind the day off: Thursday and Friday.
     assertEquals(monday.plusDays(3), second.startDay())
     assertEquals(2, second.days())
+  }
+
+  private fun Task.dependsOn(predecessor: Task) {
+    project.taskManager.dependencyCollection.createDependency(this, predecessor)
+  }
+
+  @Test
+  fun `scheduling starts an effort driven task behind its predecessor when its resource is back`() {
+    val anna = resource("anna")
+    anna.dayOff(monday.plusDays(2), monday.plusDays(3))
+    val second = effortTask("16", anna)
+    second.dependsOn(plainTask(2))
+    // Not Wednesday to Monday with two days without hours, but Friday and Monday.
+    assertEquals(monday.plusDays(4), second.startDay())
+    assertEquals(2, second.days())
+  }
+
+  @Test
+  fun `scheduling keeps a task behind its predecessor with a day off in the middle and lengthens it`() {
+    val anna = resource("anna")
+    anna.dayOff(monday.plusDays(2))
+    val second = effortTask("16", anna)
+    second.dependsOn(plainTask(1))
+    assertEquals(monday.plusDays(1), second.startDay())
+    assertEquals(3, second.days())
+  }
+
+  @Test
+  fun `scheduling keeps a task with a fixed date on a day off behind its predecessor`() {
+    val anna = resource("anna")
+    anna.dayOff(monday.plusDays(2))
+    val second = effortTask("16", anna)
+    second.createMutator().also {
+      it.setDateFixed(true)
+      it.commit()
+    }
+    second.dependsOn(plainTask(2))
+    assertEquals(monday.plusDays(2), second.startDay())
+    assertEquals(3, second.days())
+  }
+
+  @Test
+  fun `scheduling keeps a task which has started on a day off behind its predecessor`() {
+    val anna = resource("anna")
+    anna.dayOff(monday.plusDays(2))
+    val second = effortTask("16", anna)
+    second.createMutator().also {
+      it.setCompletionPercentage(10)
+      it.commit()
+    }
+    second.dependsOn(plainTask(2))
+    assertEquals(monday.plusDays(2), second.startDay())
+    assertEquals(3, second.days())
+  }
+
+  @Test
+  fun `scheduling does not hold a task back for a day off of a resource with load zero`() {
+    val anna = resource("anna")
+    val bob = resource("bob")
+    bob.dayOff(monday.plusDays(2))
+    val second = effortTask("16", anna)
+    second.assign(bob, 0f)
+    second.dependsOn(plainTask(2))
+    assertEquals(monday.plusDays(2), second.startDay())
+    assertEquals(2, second.days())
+  }
+
+  @Test
+  fun `scheduling keeps a task which is not effort driven on a day off behind its predecessor`() {
+    val anna = resource("anna")
+    anna.dayOff(monday.plusDays(2))
+    val second = plainTask(2)
+    second.assign(anna, 100f)
+    second.dependsOn(plainTask(2))
+    assertEquals(monday.plusDays(2), second.startDay())
+    assertEquals(2, second.days())
+  }
+
+  @Test
+  fun `a longer predecessor moves the effort driven task behind the day off and its duration follows`() {
+    val anna = resource("anna")
+    anna.dayOff(monday.plusDays(3))
+    val first = plainTask(1)
+    val second = effortTask("16", anna)
+    second.dependsOn(first)
+    // Tuesday and Wednesday.
+    assertEquals(monday.plusDays(1), second.startDay())
+    assertEquals(2, second.days())
+
+    first.createMutator().also {
+      it.setDuration(project.taskManager.createLength(3))
+      it.commit()
+    }
+    // Thursday is the day off: Friday and Monday.
+    assertEquals(monday.plusDays(4), second.startDay())
+    assertEquals(2, second.days())
+  }
+
+  @Test
+  fun `a new day off at the start moves the task behind its predecessor on`() {
+    val anna = resource("anna")
+    val second = effortTask("16", anna)
+    second.dependsOn(plainTask(2))
+    assertEquals(monday.plusDays(2), second.startDay())
+
+    anna.dayOff(monday.plusDays(2))
+    assertEquals(monday.plusDays(3), second.startDay())
+    assertEquals(2, second.days())
+
+    anna.clearDaysOff()
+    assertEquals(monday.plusDays(2), second.startDay())
+    assertEquals(2, second.days())
+  }
+
+  @Test
+  fun `a new resource with a day off at the start moves the task behind its predecessor on`() {
+    val anna = resource("anna")
+    val bob = resource("bob")
+    bob.dayOff(monday.plusDays(2))
+    val second = effortTask("32", anna)
+    second.dependsOn(plainTask(2))
+    assertEquals(monday.plusDays(2), second.startDay())
+
+    second.assign(bob, 100f)
+    // From Thursday on both bring 8 hours a day.
+    assertEquals(monday.plusDays(3), second.startDay())
+    assertEquals(2, second.days())
+  }
+
+  @Test
+  fun `without days off scheduling places the tasks as before`() {
+    val anna = resource("anna")
+    resource("bob").dayOff(monday, monday.plusDays(13))
+    val first = plainTask(2)
+    val second = effortTask("16", anna)
+    val third = effortTask("8", anna)
+    second.dependsOn(first)
+    third.dependsOn(second)
+    listOf(first, second, third).forEach { task ->
+      (0L..13L).forEach {
+        val day = date(monday.plusDays(it))
+        assertSame(day, allowedStart(task, day))
+      }
+    }
+    assertEquals(monday.plusDays(2), second.startDay())
+    assertEquals(monday.plusDays(4), third.startDay())
   }
 }

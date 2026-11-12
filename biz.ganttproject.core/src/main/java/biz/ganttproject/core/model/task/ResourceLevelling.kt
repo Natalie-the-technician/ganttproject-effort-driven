@@ -235,6 +235,18 @@ fun nextWorkingDay(from: LocalDate, isWorkingDay: (LocalDate) -> Boolean): Local
   return from
 }
 
+/** The first working day from [from] on which [isAllowed] accepts, or null if there is none within the search bound. */
+fun nextAllowedDay(from: LocalDate, isWorkingDay: (LocalDate) -> Boolean, isAllowed: (LocalDate) -> Boolean): LocalDate? {
+  var day = nextWorkingDay(from, isWorkingDay)
+  repeat(MAX_SEARCH_DAYS) {
+    if (isAllowed(day)) {
+      return day
+    }
+    day = nextWorkingDay(day.plusDays(1), isWorkingDay)
+  }
+  return null
+}
+
 /** [count] working days from [start] on, at least one. */
 fun workingDays(start: LocalDate, count: Int, isWorkingDay: (LocalDate) -> Boolean): List<LocalDate> {
   val days = mutableListOf<LocalDate>()

@@ -25,7 +25,8 @@ import net.sourceforge.ganttproject.task.TaskManager
 /**
  * Derives durations of effort driven tasks when a change of resources can alter the hours available to them:
  * assignments added, removed or given another load, hours per day edited, a resource deleted.
- * Changes of the task itself are handled when its mutator is committed.
+ * Changes of the task itself are handled when its mutator is committed. The scheduler runs as well, because days off
+ * can move the start of an effort driven task even when its duration stays the same.
  */
 class EffortDrivenTrigger(private val taskManager: TaskManager) : ResourceView {
   override fun resourceAdded(event: ResourceEvent?) {}
@@ -37,5 +38,6 @@ class EffortDrivenTrigger(private val taskManager: TaskManager) : ResourceView {
 
   private fun recalculate() {
     taskManager.algorithmCollection.effortDrivenDurationAlgorithm.run()
+    taskManager.algorithmCollection.scheduler.run()
   }
 }
