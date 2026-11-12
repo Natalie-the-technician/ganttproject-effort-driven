@@ -21,7 +21,7 @@ package net.sourceforge.ganttproject.chart.item;
 import net.sourceforge.ganttproject.chart.gantt.HiddenTaskGap;
 
 /**
- * What the pointer is over when it rests on a COLLISION BAR.
+ * What the pointer is over when it rests on a HIDDEN-TASKS MARKER.
  *
  * ITS TASK IS NULL, and that is not an omission. A gap stands for tasks the view was asked to leave
  * out; naming one of them here would put it into the tooltip, into the status bar and into every

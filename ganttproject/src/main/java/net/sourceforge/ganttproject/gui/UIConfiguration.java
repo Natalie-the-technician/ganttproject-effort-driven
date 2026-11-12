@@ -54,7 +54,7 @@ public class UIConfiguration {
   /** Color used for days off (and holidays) */
   private Color myDayOffColor;
 
-  /** Colour of the collision bar, the mark on a row seam where a view hides tasks. */
+  /** Colour of the hidden-tasks marker, the mark on a row seam where a view hides tasks. */
   private Color myHiddenGapColor;
 
   private boolean isRedlineOn;

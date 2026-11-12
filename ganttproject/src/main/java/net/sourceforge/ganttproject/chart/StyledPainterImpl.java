@@ -70,16 +70,16 @@ public class StyledPainterImpl implements Painter {
   /** Default stroke used for the primitives */
   private final static BasicStroke defaultStroke = new BasicStroke();
 
-  /** Width in pixels of the solid end cap of a collision bar. */
+  /** Width in pixels of the solid end cap of a hidden-tasks marker. */
   private static final int HIDDEN_GAP_CAP_WIDTH = 2;
 
-  /** Thickness of the dashed line between the end caps of a collision bar. */
+  /** Thickness of the dashed line between the end caps of a hidden-tasks marker. */
   private static final int HIDDEN_GAP_LINE_THICKNESS = 2;
 
-  /** Distance from the start of one dash of a collision bar to the start of the next. */
+  /** Distance from the start of one dash of a hidden-tasks marker to the start of the next. */
   private static final int HIDDEN_GAP_DASH_STEP = 9;
 
-  /** Length of one dash of a collision bar. */
+  /** Length of one dash of a hidden-tasks marker. */
   private static final int HIDDEN_GAP_DASH_LENGTH = 5;
 
   public StyledPainterImpl(final ChartUIConfiguration config) {
@@ -208,8 +208,8 @@ public class StyledPainterImpl implements Painter {
       myGraphics.drawLine(next.getRightX(), next.getTopY() + margin, next.getRightX(), next.getBottomY() - margin);
     };
     myStyle2painter.put("dayoff", myDayOffPainter);
-    // A collision bar marks a row seam where a view hides tasks: a dashed line with a solid cap at
-    // each end, drawn opaque because nothing but the row separator lies under it.
+    // A hidden-tasks marker sits on a row seam where a view hides tasks: a dashed line with a solid
+    // cap at each end, drawn opaque because nothing but the row separator lies under it.
     RectanglePainter myHiddenGapPainter = next -> {
       int left = next.getLeftX();
       int top = next.getTopY();

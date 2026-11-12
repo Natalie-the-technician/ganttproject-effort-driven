@@ -23,7 +23,7 @@ import net.sourceforge.ganttproject.task.Task
 import java.util.Date
 
 /**
- * THE COLLISION BAR — the mark that says „something is missing here".
+ * THE HIDDEN-TASKS MARKER — the mark that says „something is missing here".
  *
  * Natalie, 08.09.2026: „wenn man eine ansicht hat die nicht alle Vorgänge zeigt und es eine Lücke
  * gibt das dort der kollisionsbalken liegt und anzeigt das hier eine Lücke ist weil es einen
@@ -52,8 +52,8 @@ import java.util.Date
  * whether it is expanded. `Task.expand` CANNOT BE ASKED: M1 §2.3 measured that the JavaFX task
  * table never calls `setExpand`, so the model field is frozen at whatever was loaded from the file
  * while the truth lives in the UI map `TreeCollapseView`, which the chart renderer has no way to
- * reach. A collision bar built on `Task.expand` would appear under every summary task the user
- * collapses during the session.
+ * reach. A hidden-tasks marker built on `Task.expand` would appear under every summary task the
+ * user collapses during the session.
  *
  * SO THE ROW LIST IS ASKED INSTEAD, and it answers without any state at all. For a task that is not
  * a row, find the nearest ancestor that IS a row:
@@ -71,7 +71,7 @@ import java.util.Date
  * the work is. A mark that appeared under every collapsed task, the other way round, would be a
  * false alarm on the most ordinary action in the program and would teach the user to ignore it.
  *
- * ═══ ONE BAR PER GAP, NOT ONE PER TASK ═══
+ * ═══ ONE MARKER PER GAP, NOT ONE PER TASK ═══
  *
  * Three hidden tasks in a row are ONE gap. [hiddenTaskGaps] therefore groups maximal RUNS of
  * consecutive hidden tasks in the document order, and each run becomes one [HiddenTaskGap] spanning
@@ -88,9 +88,9 @@ import java.util.Date
  * [HiddenTaskGap] carries a count and two dates and NO names, and the tooltip built from it names
  * nothing either. A view is a deliberate act of leaving something out; a chart that whispers the
  * names undoes exactly the act the user asked for, and it does so in the one place where they
- * cannot switch it off. The bar's job is to stop a false reading of the picture, not to restore the
- * content — whoever wants the content switches the view off, which is one click away. Two dates and
- * a count say „look again with the view off" without being the view.
+ * cannot switch it off. The marker's job is to stop a false reading of the picture, not to restore
+ * the content — whoever wants the content switches the view off, which is one click away. Two dates
+ * and a count say „look again with the view off" without being the view.
  *
  * ═══ THE ONE PRECONDITION ═══
  *
@@ -116,7 +116,7 @@ data class HiddenTaskGap(
   val endExclusive: Date
 )
 
-/** The style name of a collision bar. Read by `StyledPainterImpl` to pick its painter. */
+/** The style name of a hidden-tasks marker. Read by `StyledPainterImpl` to pick its painter. */
 const val STYLE_HIDDEN_GAP = "task.hiddenGap"
 
 /**

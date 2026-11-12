@@ -200,8 +200,8 @@ public class GanttChartSceneBuilder {
   }
 
   /**
-   * Renders one collision bar per gap, on the seam between the two rows the hidden tasks were taken
-   * from. The bar is bound to the gap and not to a task, because there is no single task.
+   * Renders one hidden-tasks marker per gap, on the seam between the two rows the hidden tasks were
+   * taken from. The marker is bound to the gap and not to a task, because there is no single task.
    */
   private void renderHiddenTaskGaps(OffsetList defaultUnitOffsets) {
     List<HiddenTaskGap> gaps = input.getHiddenTaskGaps();

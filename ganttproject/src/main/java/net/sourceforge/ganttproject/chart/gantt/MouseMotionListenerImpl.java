@@ -59,8 +59,8 @@ class MouseMotionListenerImpl extends MouseMotionListenerBase {
       //myChartComponent.setDefaultCursor();
       myCursorProperty.setValue(GPCursor.Default);
 
-      // A collision bar has no task under it. The tooltip says how many tasks are hidden and between
-      // which days.
+      // A hidden-tasks marker has no task under it. The tooltip says how many tasks are hidden and
+      // between which days.
       if (itemUnderPoint instanceof HiddenGapChartItem) {
         HiddenTaskGap gap = ((HiddenGapChartItem) itemUnderPoint).getGap();
         myChartController.showTooltip(e.getX(), e.getY(), HiddenTaskGapKt.hiddenGapTooltip(

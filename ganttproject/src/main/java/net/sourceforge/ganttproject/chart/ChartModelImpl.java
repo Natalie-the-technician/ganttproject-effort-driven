@@ -84,8 +84,8 @@ public class ChartModelImpl extends ChartModelBase {
 
   @Override
   public ChartItem getChartItemWithCoordinates(int x, int y) {
-    // First: a collision bar is bound to a HiddenTaskGap, and findTaskBoundaryItem casts every model
-    // object it finds to ITaskActivity.
+    // First: a hidden-tasks marker is bound to a HiddenTaskGap, and findTaskBoundaryItem casts
+    // every model object it finds to ITaskActivity.
     ChartItem result = findHiddenGapItem(x, y);
     if (result == null) {
       result = findTaskProgressItem(x, y);
@@ -99,7 +99,7 @@ public class ChartModelImpl extends ChartModelBase {
     return result;
   }
 
-  /** The collision bar under the pointer, found by its style, or null. */
+  /** The hidden-tasks marker under the pointer, found by its style, or null. */
   private ChartItem findHiddenGapItem(int x, int y) {
     Canvas.Shape primitive = myTaskRendererImpl.getPrimitiveContainer().getPrimitive(x, y);
     if (primitive != null
