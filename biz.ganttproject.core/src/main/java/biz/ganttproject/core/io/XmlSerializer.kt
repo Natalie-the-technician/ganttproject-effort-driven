@@ -376,12 +376,16 @@ data class XmlResources(
   }
 }
 
-@JsonPropertyOrder("task-id", "resource-id", "function", "responsible", "load")
+@JsonPropertyOrder("task-id", "resource-id", "function", "responsible", "blocking", "no-effort", "load")
 data class XmlAllocation(
   @get:JacksonXmlProperty(isAttribute = true, localName = "task-id") var taskId: Int = 0,
   @get:JacksonXmlProperty(isAttribute = true, localName = "resource-id") var resourceId: Int = 0,
   @get:JacksonXmlProperty(isAttribute = true, localName = "function") var role: String? = null,
   @get:JacksonXmlProperty(isAttribute = true, localName = "responsible") var isCoordinator: Boolean = false,
+  // The resource has to be present on every day of the task, and the resource brings no hours to the effort. Both
+  // default to false, which is what a file without the attributes means.
+  @get:JacksonXmlProperty(isAttribute = true, localName = "blocking") var isBlocking: Boolean = false,
+  @get:JacksonXmlProperty(isAttribute = true, localName = "no-effort") var isNoEffort: Boolean = false,
   @get:JacksonXmlProperty(isAttribute = true) var load: Float = 0.0f
 )
 @JsonPropertyOrder("start", "end", "resourceid")

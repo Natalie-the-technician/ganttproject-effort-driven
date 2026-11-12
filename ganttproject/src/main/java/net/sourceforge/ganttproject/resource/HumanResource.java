@@ -494,6 +494,10 @@ public class HumanResource implements CustomPropertyHolder {
 
     private boolean myCoordinator;
 
+    private boolean myBlocking;
+
+    private boolean myNoEffort;
+
     private Role myRoleForAssignment;
 
     private ResourceAssignmentImpl(ResourceAssignment assignmentToTask) {
@@ -536,6 +540,36 @@ public class HumanResource implements CustomPropertyHolder {
     @Override
     public boolean isCoordinator() {
       return myCoordinator;
+    }
+
+    // The flags change durations and levelling, so a change is reported. They play no part in the load distribution,
+    // which is why the cached loads are kept.
+    @Override
+    public void setBlocking(boolean blocking) {
+      if (myBlocking == blocking) {
+        return;
+      }
+      myBlocking = blocking;
+      HumanResource.this.fireAssignmentsChanged();
+    }
+
+    @Override
+    public boolean isBlocking() {
+      return myBlocking;
+    }
+
+    @Override
+    public void setNoEffort(boolean noEffort) {
+      if (myNoEffort == noEffort) {
+        return;
+      }
+      myNoEffort = noEffort;
+      HumanResource.this.fireAssignmentsChanged();
+    }
+
+    @Override
+    public boolean isNoEffort() {
+      return myNoEffort;
     }
 
     @Override

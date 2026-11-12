@@ -51,6 +51,8 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
       ResourceAssignment copy = new ResourceAssignmentImpl(next.getResource());
       copy.setLoad(next.getLoad());
       copy.setCoordinator(next.isCoordinator());
+      copy.setBlocking(next.isBlocking());
+      copy.setNoEffort(next.isNoEffort());
       copy.setRoleForAssignment(next.getRoleForAssignment());
       addAssignment(copy);
     }
@@ -171,6 +173,26 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
     }
 
     @Override
+    public void setBlocking(boolean blocking) {
+      myAssignmentToResource.setBlocking(blocking);
+    }
+
+    @Override
+    public boolean isBlocking() {
+      return myAssignmentToResource.isBlocking();
+    }
+
+    @Override
+    public void setNoEffort(boolean noEffort) {
+      myAssignmentToResource.setNoEffort(noEffort);
+    }
+
+    @Override
+    public boolean isNoEffort() {
+      return myAssignmentToResource.isNoEffort();
+    }
+
+    @Override
     public Role getRoleForAssignment() {
       return myAssignmentToResource.getRoleForAssignment();
     }
@@ -194,6 +216,10 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
     private float myLoad;
 
     private boolean myCoordinator;
+
+    private boolean myBlocking;
+
+    private boolean myNoEffort;
 
     private Role myRoleForAssignment;
 
@@ -235,6 +261,26 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
     @Override
     public boolean isCoordinator() {
       return myCoordinator;
+    }
+
+    @Override
+    public void setBlocking(boolean blocking) {
+      myBlocking = blocking;
+    }
+
+    @Override
+    public boolean isBlocking() {
+      return myBlocking;
+    }
+
+    @Override
+    public void setNoEffort(boolean noEffort) {
+      myNoEffort = noEffort;
+    }
+
+    @Override
+    public boolean isNoEffort() {
+      return myNoEffort;
     }
 
     @Override
@@ -295,6 +341,8 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
           ResourceAssignment result = auxAddAssignment(next.myResource);
           result.setLoad(next.myAssignment.getLoad());
           result.setCoordinator(next.myAssignment.isCoordinator());
+          result.setBlocking(next.myAssignment.isBlocking());
+          result.setNoEffort(next.myAssignment.isNoEffort());
           result.setRoleForAssignment(next.myAssignment.getRoleForAssignment());
         }
         default:
@@ -369,6 +417,8 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
           ResourceAssignment copy = new ResourceAssignmentImpl(nextImportedResource);
           copy.setLoad(next.getLoad());
           copy.setCoordinator(next.isCoordinator());
+          copy.setBlocking(next.isBlocking());
+          copy.setNoEffort(next.isNoEffort());
           copy.setRoleForAssignment(next.getRoleForAssignment());
           addAssignment(copy);
         }
