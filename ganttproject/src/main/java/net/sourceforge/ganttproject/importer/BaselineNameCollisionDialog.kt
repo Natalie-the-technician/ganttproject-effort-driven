@@ -26,8 +26,7 @@ import biz.ganttproject.app.dialog
 import javafx.application.Platform
 import javafx.event.ActionEvent
 import javafx.scene.control.ButtonType
-import java.util.Optional
-import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.CompletableFuture
 
 /**
  * Shows one dialog which lists all [collidingNames] of an import and asks what to do with them.
@@ -55,7 +54,9 @@ fun showBaselineNameCollisionDialog(collidingNames: List<String>, handleAnswer: 
     controller.setEscCloseEnabled(true)
     controller.setupButton(ButtonType.OK) { btn ->
       btn.styleClass.add("btn-attention")
-      btn.addEventHandler(ActionEvent.ACTION) {
+      // A filter, because the dialog pane's own handler of this button closes the dialog and so
+      // calls onClosed before any handler added here would run.
+      btn.addEventFilter(ActionEvent.ACTION) {
         answered = true
         handleAnswer(optionPane.toggleGroup.selectedToggle?.userData as? BaselineNameCollision)
       }
@@ -73,7 +74,7 @@ fun showBaselineNameCollisionDialog(collidingNames: List<String>, handleAnswer: 
  */
 fun askBaselineNameCollision(collidingNames: List<String>): BaselineNameCollision? {
   check(!Platform.isFxApplicationThread()) { "This would block the JavaFX application thread" }
-  val queue = SynchronousQueue<Optional<BaselineNameCollision>>()
-  showBaselineNameCollisionDialog(collidingNames) { queue.put(Optional.ofNullable(it)) }
-  return queue.take().orElse(null)
+  val answer = CompletableFuture<BaselineNameCollision?>()
+  showBaselineNameCollisionDialog(collidingNames) { answer.complete(it) }
+  return answer.get()
 }
