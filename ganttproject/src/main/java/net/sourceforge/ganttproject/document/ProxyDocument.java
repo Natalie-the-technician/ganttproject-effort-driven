@@ -28,6 +28,7 @@ import com.google.common.collect.ImmutableList;
 import io.milton.http.exceptions.NotAuthorizedException;
 import net.sourceforge.ganttproject.IGanttProject;
 import net.sourceforge.ganttproject.gui.GPColorChooser;
+import net.sourceforge.ganttproject.gui.NotificationChannel;
 import net.sourceforge.ganttproject.gui.UIFacade;
 import net.sourceforge.ganttproject.io.GPSaver;
 import net.sourceforge.ganttproject.language.GanttLanguage;
@@ -265,7 +266,9 @@ public class ProxyDocument implements Document {
     HumanResourceManager hrManager = getHumanResourceManager();
     RoleManager roleManager = getRoleManager();
     TaskManager taskManager = getTaskManager();
-    ResourceTagHandler resourceHandler = new ResourceTagHandler(hrManager, roleManager, myProject.getResourceCustomPropertyManager(), myUIFacade.getZoomManager(), myResourceVisibleFields);
+    List<String> resourceProblems = new ArrayList<>();
+    ResourceTagHandler resourceHandler = new ResourceTagHandler(hrManager, roleManager, myProject.getResourceCustomPropertyManager(), myUIFacade.getZoomManager(), myResourceVisibleFields,
+        resourceProblems::add);
     AllocationTagHandler allocationHandler = new AllocationTagHandler(hrManager, getTaskManager(), getRoleManager());
     TaskTagHandler taskHandler = new TaskTagHandler(taskManager, myUIFacade.getTaskCollapseView());
 
@@ -301,6 +304,9 @@ public class ProxyDocument implements Document {
       var is = getInputStream();
       if (!opener.load(is)) {
         throw new DocumentException("Can't open document");
+      }
+      if (!resourceProblems.isEmpty()) {
+        myUIFacade.showNotificationDialog(NotificationChannel.WARNING, String.join("<br/>", resourceProblems));
       }
     } catch (IOException e) {
       throw new DocumentException(GanttLanguage.getInstance().getText("msg8") + ": " + e.getLocalizedMessage(), e);

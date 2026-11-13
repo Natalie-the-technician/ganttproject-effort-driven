@@ -118,4 +118,28 @@ class VacationDaysOffTest {
     assertTrue(saved.contains("""end="2026-11-04""""), saved)
     assertEquals(listOf(day(3) to day(4)), ranges(cloud(saved)))
   }
+
+  private fun reported(xml: String): List<Triple<String, LocalDate, LocalDate>> {
+    val problems = mutableListOf<Triple<String, LocalDate, LocalDate>>()
+    val project = GanttProjectImpl()
+    ResourceLoader(project.humanResourceManager, project.roleManager, project.resourceCustomPropertyManager) { name, start, end ->
+      problems.add(Triple(name, start, end))
+    }.loadResources(parseXmlProject(xml))
+    return problems
+  }
+
+  @Test
+  fun `a vacation which ends before it starts is reported to the user`() {
+    assertEquals(listOf(Triple("R", day(5), day(2))), reported(xml("2026-11-05" to "2026-11-02")))
+  }
+
+  @Test
+  fun `a vacation with the same start and end is reported to the user`() {
+    assertEquals(listOf(Triple("R", day(3), day(3))), reported(xml("2026-11-03" to "2026-11-03")))
+  }
+
+  @Test
+  fun `a vacation which covers days is not reported`() {
+    assertEquals(emptyList<Triple<String, LocalDate, LocalDate>>(), reported(xml("2026-11-03" to "2026-11-06")))
+  }
 }

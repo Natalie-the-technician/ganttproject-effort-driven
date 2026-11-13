@@ -21,6 +21,7 @@ package net.sourceforge.ganttproject.parser
 import biz.ganttproject.core.calendar.GanttDaysOff
 import biz.ganttproject.core.time.GanttCalendar
 import org.slf4j.LoggerFactory
+import java.time.LocalDate
 
 private val LOGGER = LoggerFactory.getLogger("VacationDaysOff")
 
@@ -29,13 +30,15 @@ private val LOGGER = LoggerFactory.getLogger("VacationDaysOff")
  *
  * The end of a days off interval is exclusive, so an interval which ends on its start, or before it, covers no day
  * and would silently drop out of the plan. Such a vacation is read as the single day of its start, and a warning is
- * logged. This is shared by the desktop and the cloud readers, so that they cannot disagree about the same file.
+ * logged and handed to [onNoDays]. This is shared by the desktop and the cloud readers, so that they cannot disagree about the same file.
  */
-fun daysOffFromFile(start: GanttCalendar, end: GanttCalendar, resourceId: Int): GanttDaysOff {
+fun daysOffFromFile(start: GanttCalendar, end: GanttCalendar, resourceId: Int,
+                    onNoDays: (start: LocalDate, end: LocalDate) -> Unit = { _, _ -> }): GanttDaysOff {
   val startDay = start.toLocalDate()
   if (!end.toLocalDate().isAfter(startDay)) {
     LOGGER.warn("Vacation of resource {} starts on {} and ends on {}, which covers no day. Reading it as the single day {}",
       resourceId, startDay, end.toLocalDate(), startDay)
+    onNoDays(startDay, end.toLocalDate())
     // GanttCalendar.fromLocalDate and not an instant, which would shift the date with the bent default time zone.
     return GanttDaysOff(start, GanttCalendar.fromLocalDate(startDay.plusDays(1)))
   }

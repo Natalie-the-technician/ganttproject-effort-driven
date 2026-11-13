@@ -35,7 +35,8 @@ import net.sourceforge.ganttproject.roles.RolePersistentID
 import net.sourceforge.ganttproject.roles.RoleSet
 
 class ResourceLoader(private val resourceManager: HumanResourceManager, private val roleManager: RoleManager,
-                     private val customPropertyManager: CustomPropertyManager) {
+                     private val customPropertyManager: CustomPropertyManager,
+                     private val onVacationWithoutDays: (resourceName: String, start: LocalDate, end: LocalDate) -> Unit = { _, _, _ -> }) {
   fun loadResources(xmlProject: XmlProject) {
     loadCustomPropertyDefinitions(xmlProject)
     xmlProject.resources.resources.forEach { xmlResource ->
@@ -79,7 +80,9 @@ class ResourceLoader(private val resourceManager: HumanResourceManager, private 
         val startDate = xmlVacation.startDate
         val endDate = xmlVacation.endDate
         if (startDate.isNotBlank() && endDate.isNotBlank()) {
-          it.addDaysOff(daysOffFromFile(GanttCalendar.parseXMLDate(startDate), GanttCalendar.parseXMLDate(endDate), xmlVacation.resourceid))
+          it.addDaysOff(daysOffFromFile(GanttCalendar.parseXMLDate(startDate), GanttCalendar.parseXMLDate(endDate), xmlVacation.resourceid) { from, to ->
+            onVacationWithoutDays(it.name, from, to)
+          })
         }
       } ?: run {
         // LOG
