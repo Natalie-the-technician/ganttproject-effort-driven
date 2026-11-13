@@ -19,6 +19,8 @@
 
 package net.sourceforge.ganttproject.task
 
+import biz.ganttproject.core.model.task.RecurrenceOrigin
+import biz.ganttproject.core.model.task.RecurrenceRule
 import biz.ganttproject.core.time.GanttCalendar
 import biz.ganttproject.storage.db.tables.records.TaskRecord
 import net.sourceforge.ganttproject.util.ColorConvertion
@@ -121,7 +123,13 @@ fun TaskManager.importFromDatabase(records: List<TaskRecord>, hierarchy: Exporte
       if (record.isMilestone) {
         builder.withLegacyMilestone()
       }
-      builder.build()
+      val task = builder.build() as TaskImpl
+      // The builder knows nothing about recurrence, and a mutator would write the values back into the database.
+      task.recurrenceRule = RecurrenceRule.fromXml(
+        record.recurrenceUnit, record.recurrenceInterval?.toString(),
+        record.recurrenceUntil?.toString(), record.recurrenceCount?.toString()
+      )
+      task.recurrenceOrigin = RecurrenceOrigin.fromXml(record.recurrenceOf?.toString(), record.recurrenceDate?.toString())
     }
   }
 

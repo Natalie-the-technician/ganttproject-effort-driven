@@ -20,6 +20,8 @@ package net.sourceforge.ganttproject.task;
 
 import biz.ganttproject.core.chart.render.ShapePaint;
 import biz.ganttproject.core.chart.scene.IdentifiableRow;
+import biz.ganttproject.core.model.task.RecurrenceOrigin;
+import biz.ganttproject.core.model.task.RecurrenceRule;
 import biz.ganttproject.core.time.GanttCalendar;
 import biz.ganttproject.core.time.TimeDuration;
 import biz.ganttproject.customproperty.CustomColumnsValues;
@@ -126,6 +128,12 @@ public interface Task extends MutableTask, IdentifiableRow {
 
   /** Whether this task needs its blocking resources on site, so that levelling keeps it off their days at home. */
   boolean isOnSiteOnly();
+
+  /** The rule by which this task repeats, or {@code null} if it does not. */
+  RecurrenceRule getRecurrenceRule();
+
+  /** Tells which task this task was created from by a recurrence rule, or {@code null} if it was not. */
+  RecurrenceOrigin getRecurrenceOrigin();
 
   TaskMutator createMutator();
 

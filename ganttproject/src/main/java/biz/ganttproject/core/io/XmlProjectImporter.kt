@@ -22,6 +22,8 @@ import biz.ganttproject.core.calendar.CalendarEvent
 import biz.ganttproject.core.calendar.GPCalendar
 import biz.ganttproject.core.chart.render.ShapePaint
 import biz.ganttproject.core.model.task.ConstraintType.fromPersistentValue
+import biz.ganttproject.core.model.task.RecurrenceOrigin
+import biz.ganttproject.core.model.task.RecurrenceRule
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.GanttCalendar
 import net.sourceforge.ganttproject.parser.capacityChanges
@@ -292,6 +294,8 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
     task.isWaitOnly = xmlTask.isWaitOnly ?: false
     task.isDateFixed = xmlTask.isDateFixed ?: false
     task.isOnSiteOnly = xmlTask.isOnSiteOnly ?: false
+    task.recurrenceRule = RecurrenceRule.fromXml(xmlTask.recurrenceUnit, xmlTask.recurrenceInterval, xmlTask.recurrenceUntil, xmlTask.recurrenceCount)
+    task.recurrenceOrigin = RecurrenceOrigin.fromXml(xmlTask.recurrenceOf, xmlTask.recurrenceDate)
     xmlTask.shape?.let {
       task.shape = buildShapePaint(it, task.color)
     }

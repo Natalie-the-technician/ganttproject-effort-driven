@@ -22,6 +22,8 @@ import biz.ganttproject.core.chart.render.ShapePaint
 import biz.ganttproject.core.io.XmlProject
 import biz.ganttproject.core.io.XmlTasks.XmlTask
 import biz.ganttproject.core.model.task.ConstraintType
+import biz.ganttproject.core.model.task.RecurrenceOrigin
+import biz.ganttproject.core.model.task.RecurrenceRule
 import biz.ganttproject.core.model.task.TaskDefaultColumn
 import biz.ganttproject.core.option.GPOption
 import biz.ganttproject.core.table.ColumnList
@@ -145,6 +147,8 @@ class TaskLoader(private val taskManager: TaskManager, private val treeCollapseV
       task.isWaitOnly = child.isWaitOnly ?: false
       task.isDateFixed = child.isDateFixed ?: false
       task.isOnSiteOnly = child.isOnSiteOnly ?: false
+      task.recurrenceRule = RecurrenceRule.fromXml(child.recurrenceUnit, child.recurrenceInterval, child.recurrenceUntil, child.recurrenceCount)
+      task.recurrenceOrigin = RecurrenceOrigin.fromXml(child.recurrenceOf, child.recurrenceDate)
       child.notes?.let {
         task.notes = it
       }

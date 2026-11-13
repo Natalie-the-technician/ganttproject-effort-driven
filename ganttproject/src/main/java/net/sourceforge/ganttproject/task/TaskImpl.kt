@@ -19,6 +19,8 @@
 package net.sourceforge.ganttproject.task
 
 import biz.ganttproject.core.chart.render.ShapePaint
+import biz.ganttproject.core.model.task.RecurrenceOrigin
+import biz.ganttproject.core.model.task.RecurrenceRule
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.GanttCalendar
 import biz.ganttproject.core.time.TimeDuration
@@ -155,6 +157,10 @@ data class EffortValue(val effort: BigDecimal?)
 
 data class DeadlineValue(val deadline: GanttCalendar?)
 
+// The same wrapping for the recurrence fields, which are nullable too.
+data class RecurrenceRuleValue(val rule: RecurrenceRule?)
+data class RecurrenceOriginValue(val origin: RecurrenceOrigin?)
+
 data class EarliestStartValue(val startDate: GanttCalendar?, val isEnabled: Boolean)
 
 internal open class MutatorImpl(
@@ -174,6 +180,8 @@ internal open class MutatorImpl(
   private val waitOnlyChange = FieldChange(myPropertiesEventSender, taskImpl.isWaitOnly)
   private val dateFixedChange = FieldChange(myPropertiesEventSender, taskImpl.isDateFixed)
   private val onSiteOnlyChange = FieldChange(myPropertiesEventSender, taskImpl.isOnSiteOnly)
+  private val recurrenceRuleChange = FieldChange(myPropertiesEventSender, RecurrenceRuleValue(taskImpl.recurrenceRule))
+  private val recurrenceOriginChange = FieldChange(myPropertiesEventSender, RecurrenceOriginValue(taskImpl.recurrenceOrigin))
   private val criticalFlagChange = FieldChange(myPropertiesEventSender, taskImpl.isCritical)
   private val customPropertiesChange = FieldChange<CustomPropertyHolder>(myPropertiesEventSender, taskImpl.customValues.copyOf())
   private val expansionChange = FieldChange(myPropertiesEventSender, taskImpl.expand)
@@ -274,6 +282,14 @@ internal open class MutatorImpl(
       }
       onSiteOnlyChange.ifChanged {
         taskImpl.isOnSiteOnly = it
+      }
+      recurrenceRuleChange.ifChanged {
+        taskImpl.recurrenceRule = it.rule
+        taskUpdateBuilder?.setRecurrenceRule(recurrenceRuleChange.oldValue.rule, it.rule)
+      }
+      recurrenceOriginChange.ifChanged {
+        taskImpl.recurrenceOrigin = it.origin
+        taskUpdateBuilder?.setRecurrenceOrigin(recurrenceOriginChange.oldValue.origin, it.origin)
       }
       criticalFlagChange.ifChanged {
         taskImpl.isCritical = it
@@ -423,6 +439,10 @@ internal open class MutatorImpl(
   override fun setDateFixed(dateFixed: Boolean) { dateFixedChange.setValue(dateFixed) }
 
   override fun setOnSiteOnly(onSiteOnly: Boolean) { onSiteOnlyChange.setValue(onSiteOnly) }
+
+  override fun setRecurrenceRule(rule: RecurrenceRule?) { recurrenceRuleChange.setValue(RecurrenceRuleValue(rule)) }
+
+  override fun setRecurrenceOrigin(origin: RecurrenceOrigin?) { recurrenceOriginChange.setValue(RecurrenceOriginValue(origin)) }
 
   override fun setShape(shape: ShapePaint) { shapeChange.setValue(shape) }
 

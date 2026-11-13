@@ -21,6 +21,8 @@ package net.sourceforge.ganttproject.task;
 import biz.ganttproject.core.calendar.AlwaysWorkingTimeCalendarImpl;
 import biz.ganttproject.core.calendar.GPCalendarCalc;
 import biz.ganttproject.core.chart.render.ShapePaint;
+import biz.ganttproject.core.model.task.RecurrenceOrigin;
+import biz.ganttproject.core.model.task.RecurrenceRule;
 import biz.ganttproject.core.time.GanttCalendar;
 import biz.ganttproject.core.time.TimeDuration;
 import biz.ganttproject.core.time.TimeDurationImpl;
@@ -128,6 +130,10 @@ public class TaskImpl implements Task {
   private boolean isDateFixed;
 
   private boolean isOnSiteOnly;
+
+  private RecurrenceRule myRecurrenceRule;
+
+  private RecurrenceOrigin myRecurrenceOrigin;
 
   private boolean isUnplugged = false;
 
@@ -860,6 +866,26 @@ public class TaskImpl implements Task {
   @Override
   public void setOnSiteOnly(boolean onSiteOnly) {
     isOnSiteOnly = onSiteOnly;
+  }
+
+  @Override
+  public RecurrenceRule getRecurrenceRule() {
+    return myRecurrenceRule;
+  }
+
+  @Override
+  public void setRecurrenceRule(RecurrenceRule rule) {
+    myRecurrenceRule = rule;
+  }
+
+  @Override
+  public RecurrenceOrigin getRecurrenceOrigin() {
+    return myRecurrenceOrigin;
+  }
+
+  @Override
+  public void setRecurrenceOrigin(RecurrenceOrigin origin) {
+    myRecurrenceOrigin = origin;
   }
 
   @Override

@@ -106,6 +106,16 @@ class TaskSaver(private val taskCollapseView: TreeCollapseView<Task>): SaverBase
     if (task.isOnSiteOnly) {
       addAttribute("on-site-only", true, attrs)
     }
+    task.recurrenceRule?.let { rule ->
+      addAttribute("recurrence-unit", rule.unit.xmlValue, attrs)
+      addAttribute("recurrence-interval", rule.interval, attrs)
+      rule.until?.let { addAttribute("recurrence-until", it.toString(), attrs) }
+      rule.count?.let { addAttribute("recurrence-count", it, attrs) }
+    }
+    task.recurrenceOrigin?.let { origin ->
+      addAttribute("recurrence-of", origin.sourceTaskId, attrs)
+      origin.date?.let { addAttribute("recurrence-date", it.toString(), attrs) }
+    }
     startElement("task", attrs, handler)
     cdataElement("notes", task.externalizedNotes(), attrs, handler)
 
