@@ -139,6 +139,20 @@ class LevellingBlockingTest {
     }
 
     @Test
+    fun `a blocked day frees the capacity of another, not blocking person on the task`() {
+      val tasks = listOf(
+        task("fixed", 2, loads = mapOf("bob" to 100, "anna" to 100), blocking = setOf("bob"), fixed = monday),
+        task("other", 1, loads = mapOf("anna" to 100), order = 1)
+      )
+      // Bob is away on Monday and blocks the task, so nobody works on it: Anna is free for the other task that day.
+      val result = levelTasks(tasks, monday, weekdays, isPresent = { who, day -> who != "bob" || day != monday })
+      assertEquals(monday, result.starts["other"])
+      assertTrue(result.conflicts.isEmpty())
+      // Without the absence Anna is booked on Monday and Tuesday.
+      assertEquals(monday.plusDays(2), levelTasks(tasks, monday, weekdays).starts["other"])
+    }
+
+    @Test
     fun `a day at home frees the capacity only for a task which needs somebody on site`() {
       fun onSite(required: Boolean) = LevelTask(id = "fixed", orderInPlan = 0, priority = 2, durationDays = 1, fixedStart = monday,
         loads = mapOf("bob" to 100), blocking = setOf("bob"), requiresPresence = required)
