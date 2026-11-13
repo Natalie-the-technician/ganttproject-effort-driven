@@ -39,8 +39,11 @@ import javafx.scene.layout.Region
 import javafx.util.Callback
 import javafx.util.StringConverter
 import javafx.util.converter.DefaultStringConverter
+import biz.ganttproject.task.recurrence.toModelDate
+import net.sourceforge.ganttproject.chart.absenceSummaryForTask
 import net.sourceforge.ganttproject.gui.AbstractTableAndActionsComponentFx
 import net.sourceforge.ganttproject.gui.TableView2TableActionsModel
+import net.sourceforge.ganttproject.language.GanttLanguage
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.resource.HumanResourceManager
 import net.sourceforge.ganttproject.roles.Role
@@ -215,7 +218,20 @@ class TaskResourcesPanel(
         }
       }
 
-      columns.addAll(listOf(idCol, nameCol, unitCol, coordinatorCol, roleCol) + axisCols)
+      // The days of this task on which the resource is away. Read only.
+      val absenceCol = TableColumn2<ResourceAssignmentRow, String>(i18n.formatText("taskProperties.resources.absence")).apply {
+        setCellValueFactory { row ->
+          SimpleStringProperty(row.value.assignment?.resource?.let { resource ->
+            absenceSummaryForTask(task, resource) { day ->
+              GanttLanguage.getInstance().shortDateFormat.format(day.toModelDate())
+            }
+          } ?: "")
+        }
+        isEditable = false
+        prefWidth = 160.0
+      }
+
+      columns.addAll(listOf(idCol, nameCol, unitCol, coordinatorCol, roleCol) + axisCols + absenceCol)
     }
 
     // Create split layout with table and cost panel
