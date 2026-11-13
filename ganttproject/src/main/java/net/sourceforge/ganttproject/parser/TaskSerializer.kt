@@ -149,6 +149,8 @@ class TaskLoader(private val taskManager: TaskManager, private val treeCollapseV
       task.isOnSiteOnly = child.isOnSiteOnly ?: false
       task.recurrenceRule = RecurrenceRule.fromXml(child.recurrenceUnit, child.recurrenceInterval, child.recurrenceUntil, child.recurrenceCount)
       task.recurrenceOrigin = RecurrenceOrigin.fromXml(child.recurrenceOf, child.recurrenceDate)
+      task.actualEffort = child.actualEffort
+      task.originalEffort = child.originalEffort
       child.notes?.let {
         task.notes = it
       }

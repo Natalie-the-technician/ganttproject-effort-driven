@@ -91,5 +91,9 @@ public interface MutableTask {
 
   void setRecurrenceOrigin(RecurrenceOrigin origin);
 
+  void setActualEffort(BigDecimal actualEffort);
+
+  void setOriginalEffort(BigDecimal originalEffort);
+
   void setCustomProperties(CustomPropertyHolder customProperties) throws CustomColumnsException;
 }

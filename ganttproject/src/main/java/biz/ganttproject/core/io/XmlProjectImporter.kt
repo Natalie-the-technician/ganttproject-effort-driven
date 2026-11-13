@@ -154,6 +154,7 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
     assignment.isCoordinator = it.isCoordinator
     assignment.isBlocking = it.isBlocking
     assignment.isNoEffort = it.isNoEffort
+    assignment.actualEffort = it.actualEffort
     it.role?.let { function ->
       val role = findRole(function)
       if (role != null) {
@@ -296,6 +297,8 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
     task.isOnSiteOnly = xmlTask.isOnSiteOnly ?: false
     task.recurrenceRule = RecurrenceRule.fromXml(xmlTask.recurrenceUnit, xmlTask.recurrenceInterval, xmlTask.recurrenceUntil, xmlTask.recurrenceCount)
     task.recurrenceOrigin = RecurrenceOrigin.fromXml(xmlTask.recurrenceOf, xmlTask.recurrenceDate)
+    task.actualEffort = xmlTask.actualEffort
+    task.originalEffort = xmlTask.originalEffort
     xmlTask.shape?.let {
       task.shape = buildShapePaint(it, task.color)
     }

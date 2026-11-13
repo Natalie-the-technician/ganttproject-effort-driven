@@ -554,6 +554,8 @@ public class HumanResource implements CustomPropertyHolder {
 
     private Role myRoleForAssignment;
 
+    private BigDecimal myActualEffort;
+
     private ResourceAssignmentImpl(ResourceAssignment assignmentToTask) {
       myAssignmentToTask = assignmentToTask;
     }
@@ -635,6 +637,17 @@ public class HumanResource implements CustomPropertyHolder {
     @Override
     public void setRoleForAssignment(Role role) {
       myRoleForAssignment = role;
+    }
+
+    @Override
+    public BigDecimal getActualEffort() {
+      return myActualEffort;
+    }
+
+    @Override
+    public void setActualEffort(BigDecimal actualEffort) {
+      myActualEffort = actualEffort;
+      HumanResource.this.fireAssignmentChanged();
     }
 
     @Override

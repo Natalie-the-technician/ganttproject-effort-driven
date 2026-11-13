@@ -93,6 +93,8 @@ class TaskSaver(private val taskCollapseView: TreeCollapseView<Task>): SaverBase
       addAttribute("cost-calculated", task.cost.isCalculated, attrs)
     }
     task.effort?.let { addAttribute(TaskEffort.XML_ATTRIBUTE, it.toPlainString(), attrs) }
+    task.actualEffort?.let { addAttribute(TaskEffort.ACTUAL_XML_ATTRIBUTE, it.toPlainString(), attrs) }
+    task.originalEffort?.let { addAttribute(TaskEffort.ORIGINAL_XML_ATTRIBUTE, it.toPlainString(), attrs) }
     if (task.isEffortDriven) {
       addAttribute("effort-driven", true, attrs)
     }

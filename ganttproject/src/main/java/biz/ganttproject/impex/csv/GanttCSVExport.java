@@ -46,6 +46,7 @@ import org.apache.commons.csv.CSVFormat;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -220,6 +221,19 @@ public class GanttCSVExport {
             case EFFORT:
               writer.print(task.getEffort() == null ? "" : task.getEffort().toPlainString());
               break;
+            case ACTUAL_EFFORT:
+              BigDecimal actualEffort = ActualEffortKt.getTotalActualEffort(task);
+              writer.print(actualEffort == null ? "" : actualEffort.toPlainString());
+              break;
+            case ORIGINAL_EFFORT:
+              writer.print(task.getOriginalEffort() == null ? "" : task.getOriginalEffort().toPlainString());
+              break;
+            case ESTIMATE_FACTOR: {
+              var quality = EstimateQualityKt.getEstimateQuality(task);
+              var factor = quality == null ? null : quality.getFactor();
+              writer.print(factor == null ? "" : factor.toPlainString());
+              break;
+            }
             case EFFORT_DRIVEN:
               writer.print(task.isEffortDriven());
               break;

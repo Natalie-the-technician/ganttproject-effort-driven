@@ -27,9 +27,18 @@ import java.math.BigDecimal
 object TaskEffort {
   const val XML_ATTRIBUTE = "effort-hours"
 
+  /** Attribute of the effort actually spent on a task, in the same unit as [XML_ATTRIBUTE]. */
+  const val ACTUAL_XML_ATTRIBUTE = "actual-effort-hours"
+
+  /** Attribute of the effort the task was first estimated with, in the same unit as [XML_ATTRIBUTE]. */
+  const val ORIGINAL_XML_ATTRIBUTE = "original-effort-hours"
+
   /** Hours per day assumed for a resource which has none set. */
   const val DEFAULT_HOURS_PER_DAY = 8.0
 
   /** Converts a stored effort value to hours. The only place which knows the unit of the stored value. */
   fun toHours(effort: BigDecimal): BigDecimal = effort
+
+  /** Converts hours to the stored unit. The counterpart of [toHours]. */
+  fun fromHours(hours: BigDecimal): BigDecimal = hours
 }

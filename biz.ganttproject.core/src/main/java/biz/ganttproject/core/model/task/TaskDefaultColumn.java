@@ -60,7 +60,10 @@ public enum TaskDefaultColumn implements BuiltinColumn {
   EFFORT_DRIVEN(new ColumnList.ColumnStub("tpd20", null, false, -1, 20), Boolean.class, "tableColEffortDriven"),
   DEADLINE(new ColumnList.ColumnStub("tpd24", null, false, -1, 75), GregorianCalendar.class, "tableColDeadline"),
   WAIT_ONLY(new ColumnList.ColumnStub("tpd25", null, false, -1, 20), Boolean.class, "tableColWaitOnly"),
-  DATE_FIXED(new ColumnList.ColumnStub("tpd26", null, false, -1, 20), Boolean.class, "tableColDateFixed");
+  DATE_FIXED(new ColumnList.ColumnStub("tpd26", null, false, -1, 20), Boolean.class, "tableColDateFixed"),
+  ACTUAL_EFFORT(new ColumnList.ColumnStub("tpd21", null, false, -1, 50), BigDecimal.class, "tableColActualEffort"),
+  ORIGINAL_EFFORT(new ColumnList.ColumnStub("tpd22", null, false, -1, 50), BigDecimal.class, "tableColOriginalEffort"),
+  ESTIMATE_FACTOR(new ColumnList.ColumnStub("tpd23", null, false, -1, 50), BigDecimal.class, "tableColEstimateFactor", Functions.NOT_EDITABLE, false);
 
   private final boolean myIsIconified;
 

@@ -969,6 +969,7 @@ public class TaskManagerImpl implements TaskManager {
         assignment.setCoordinator(resourceAssignment.isCoordinator());
         assignment.setBlocking(resourceAssignment.isBlocking());
         assignment.setNoEffort(resourceAssignment.isNoEffort());
+        assignment.setActualEffort(resourceAssignment.getActualEffort());
       }
     }
   }

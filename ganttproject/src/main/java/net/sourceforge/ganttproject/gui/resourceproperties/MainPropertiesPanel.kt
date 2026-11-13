@@ -45,6 +45,8 @@ import javafx.scene.layout.CornerRadii
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.util.StringConverter
+import net.sourceforge.ganttproject.gui.taskproperties.hoursPerDayValidatorFor
+import net.sourceforge.ganttproject.gui.taskproperties.parseHoursPerDay
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RoleManager
@@ -68,6 +70,7 @@ class MainPropertiesPanel(private val resource: HumanResource, private val proje
     ObservableString("homeOfficeWeek", formatWorkWeek(resource.homeOfficeWeek), homeOfficeWeekValidator)
   internal val homeOfficePeriodsOption =
     ObservableString("homeOfficePeriods", formatHomeOfficePeriods(resource.homeOfficePeriods), homeOfficePeriodsValidator)
+  internal val hoursPerDayOption = ObservableString("hoursPerDay", resource.hoursPerDay?.toPlainString(), hoursPerDayValidatorFor(resource.hoursPerDay))
   private val rateOption = ObservableMoney("standardRate", resource.standardPayRate)
   private val totalCostOption = ObservableMoney("totalCost", resource.totalCost).also {
     it.setWritable(false)
@@ -89,6 +92,7 @@ class MainPropertiesPanel(private val resource: HumanResource, private val proje
       text(workWeekOption)
       text(homeOfficeWeekOption)
       text(homeOfficePeriodsOption)
+      text(hoursPerDayOption)
 
       skip()
       title("section.rate")
@@ -111,6 +115,10 @@ class MainPropertiesPanel(private val resource: HumanResource, private val proje
   fun requestFocus() = onRequestFocus()
 
   fun save() {
+    // A value which is marked as invalid is never taken over, neither the last valid text before it.
+    if (validationErrors.isNotEmpty()) {
+      return
+    }
     nameOption.ifChanged(resource::setName)
     phoneOption.ifChanged(resource::setPhone)
     emailOption.ifChanged(resource::setMail)
@@ -133,6 +141,15 @@ class MainPropertiesPanel(private val resource: HumanResource, private val proje
       val periods = parseHomeOfficePeriods(text ?: "") ?: return@ifChanged
       if (HomeOffice(emptyList(), periods).periods != resource.homeOfficePeriods) {
         resource.homeOfficePeriods = periods
+      }
+    }
+    hoursPerDayOption.ifChanged {
+      val hoursPerDay = parseHoursPerDay(it)
+      val current = resource.hoursPerDay
+      // An emptied field of a resource without hours per day is not a change.
+      val isSame = if (hoursPerDay == null || current == null) hoursPerDay == current else hoursPerDay.compareTo(current) == 0
+      if (!isSame) {
+        resource.hoursPerDay = hoursPerDay
       }
     }
   }

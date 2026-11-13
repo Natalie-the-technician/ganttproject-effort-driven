@@ -22,6 +22,7 @@ import net.sourceforge.ganttproject.resource.HumanResource;
 import net.sourceforge.ganttproject.resource.HumanResourceManager;
 import net.sourceforge.ganttproject.roles.Role;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -54,6 +55,7 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
       copy.setBlocking(next.isBlocking());
       copy.setNoEffort(next.isNoEffort());
       copy.setRoleForAssignment(next.getRoleForAssignment());
+      copy.setActualEffort(next.getActualEffort());
       addAssignment(copy);
     }
   }
@@ -204,6 +206,16 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
     }
 
     @Override
+    public BigDecimal getActualEffort() {
+      return myAssignmentToResource.getActualEffort();
+    }
+
+    @Override
+    public void setActualEffort(BigDecimal actualEffort) {
+      myAssignmentToResource.setActualEffort(actualEffort);
+    }
+
+    @Override
     public String toString() {
       return this.getResource().getName() + " -> " + this.getTask().getName();
     }
@@ -222,6 +234,8 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
     private boolean myNoEffort;
 
     private Role myRoleForAssignment;
+
+    private BigDecimal myActualEffort;
 
     public ResourceAssignmentStub(HumanResource resource, Runnable onDelete) {
       myResource = resource;
@@ -296,6 +310,16 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
     }
 
     @Override
+    public BigDecimal getActualEffort() {
+      return myActualEffort;
+    }
+
+    @Override
+    public void setActualEffort(BigDecimal actualEffort) {
+      myActualEffort = actualEffort;
+    }
+
+    @Override
     public String toString() {
       return this.getResource().getName() + " -> " + this.getTask().getName();
     }
@@ -344,6 +368,7 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
           result.setBlocking(next.myAssignment.isBlocking());
           result.setNoEffort(next.myAssignment.isNoEffort());
           result.setRoleForAssignment(next.myAssignment.getRoleForAssignment());
+          result.setActualEffort(next.myAssignment.getActualEffort());
         }
         default:
           break;
@@ -420,6 +445,7 @@ class ResourceAssignmentCollectionImpl implements ResourceAssignmentCollection {
           copy.setBlocking(next.isBlocking());
           copy.setNoEffort(next.isNoEffort());
           copy.setRoleForAssignment(next.getRoleForAssignment());
+          copy.setActualEffort(next.getActualEffort());
           addAssignment(copy);
         }
       }

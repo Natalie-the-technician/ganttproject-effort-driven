@@ -89,6 +89,7 @@ public class AllocationTagHandler extends AbstractTagHandler {
     assignment.setCoordinator(coordinator);
     assignment.setBlocking(xmlAllocation.isBlocking());
     assignment.setNoEffort(xmlAllocation.isNoEffort());
+    assignment.setActualEffort(xmlAllocation.getActualEffort());
   }
 
   private HumanResourceManager getResourceManager() {

@@ -24,6 +24,7 @@ import biz.ganttproject.app.PropertyPaneBuilderImpl
 import biz.ganttproject.app.RootLocalizer
 import biz.ganttproject.core.option.ObservableBoolean
 import biz.ganttproject.core.option.ObservableMoney
+import biz.ganttproject.core.option.ValidationException
 import javafx.beans.property.SimpleBooleanProperty
 import javafx.beans.property.SimpleObjectProperty
 import javafx.beans.property.SimpleStringProperty
@@ -176,6 +177,13 @@ class TaskResourcesPanel(
         prefWidth = 80.0
       }
 
+      // Hours per day of the resource, read only. It is edited in the properties dialog of the resource.
+      val hoursPerDayCol = TableColumn2<ResourceAssignmentRow, String>(i18n.formatText("tableColResourceHoursPerDay")).apply {
+        setCellValueFactory { SimpleStringProperty(hoursPerDayText(it.value.assignment)) }
+        isEditable = false
+        prefWidth = 100.0
+      }
+
       // Coordinator column. The check box is bound to the value which the cell value factory
       // returns, so that value has to be the one which writes into the assignment. See
       // coordinatorProperty below.
@@ -231,7 +239,20 @@ class TaskResourcesPanel(
         prefWidth = 160.0
       }
 
-      columns.addAll(listOf(idCol, nameCol, unitCol, coordinatorCol, roleCol) + axisCols + absenceCol)
+      // Effort which the resource actually spent on the task, in hours
+      val actualEffortCol = TableColumn2<ResourceAssignmentRow, String>(i18n.formatText("tableColActualEffort")).apply {
+        setCellValueFactory { SimpleStringProperty(actualEffortText(it.value.assignment)) }
+        setCellFactory { TextFieldTableCell(DefaultStringConverter()) }
+        setOnEditCommit { event ->
+          model.setValueAt(event.newValue, event.tablePosition.row, 5)
+          model.refreshTable()
+        }
+        isEditable = true
+        prefWidth = 100.0
+      }
+
+      columns.addAll(listOf(idCol, nameCol, unitCol, coordinatorCol, roleCol) + axisCols + absenceCol +
+        listOf(hoursPerDayCol, actualEffortCol))
     }
 
     // Create split layout with table and cost panel
@@ -391,6 +412,12 @@ private class ResourceAssignmentTableModel(task: Task) {
   private fun updateAssignment(value: Any?, row: Int, col: Int) {
     val assignment = _assignments[row]
     when (col) {
+      5 -> { // Actual effort
+        try {
+          assignment.actualEffort = parseDecimal(value?.toString(), BigDecimal.ZERO)
+        } catch (e: ValidationException) {
+        }
+      }
       4 -> { // Role
         if (value is Role) {
           assignment.roleForAssignment = value
@@ -415,12 +442,14 @@ private class ResourceAssignmentTableModel(task: Task) {
         } else if (value is HumanResource) {
           val load = assignment.load
           val coord = assignment.isCoordinator
+          val actualEffort = assignment.actualEffort
           assignment.delete()
           mutator.deleteAssignment(assignment.resource)
           val newAssignment = mutator.addAssignment(value)
           newAssignment.load = load
           newAssignment.isCoordinator = coord
           pendingAxes.moveTo(assignment, newAssignment)
+          newAssignment.actualEffort = actualEffort
           _assignments[row] = newAssignment
         }
       }
@@ -452,6 +481,14 @@ private class ResourceAssignmentTableModel(task: Task) {
     mutator.commit()
   }
 }
+
+/** Hours per day of the resource of the assignment, empty if the resource has none set. */
+internal fun hoursPerDayText(assignment: ResourceAssignment?): String =
+  assignment?.resource?.hoursPerDay?.toPlainString() ?: ""
+
+/** Actual effort of the assignment, empty if none was recorded. */
+internal fun actualEffortText(assignment: ResourceAssignment?): String =
+  assignment?.actualEffort?.toPlainString() ?: ""
 
 /**
  * Row data class for the table.

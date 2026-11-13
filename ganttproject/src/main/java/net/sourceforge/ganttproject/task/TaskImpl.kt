@@ -152,7 +152,7 @@ internal class MutatorReentered(taskImpl: TaskImpl, private val delegate: Mutato
   }
 }
 
-// FieldChange treats null as "no change", so a nullable effort is wrapped to make clearing it a change.
+// FieldChange treats null as "no change", so a nullable effort (planned or actual) is wrapped to make clearing it a change.
 data class EffortValue(val effort: BigDecimal?)
 
 data class DeadlineValue(val deadline: GanttCalendar?)
@@ -175,6 +175,8 @@ internal open class MutatorImpl(
   private val myCompletionPercentageChange = FieldChange(myProgressEventSender, taskImpl.completionPercentage)
   private val costChange = FieldChange(myPropertiesEventSender, taskImpl.cost)
   private val effortChange = FieldChange(myPropertiesEventSender, EffortValue(taskImpl.effort))
+  private val actualEffortChange = FieldChange(myPropertiesEventSender, EffortValue(taskImpl.actualEffort))
+  private val originalEffortChange = FieldChange(myPropertiesEventSender, EffortValue(taskImpl.originalEffort))
   private val effortDrivenChange = FieldChange(myPropertiesEventSender, taskImpl.isEffortDriven)
   private val deadlineChange = FieldChange(myPropertiesEventSender, DeadlineValue(taskImpl.deadline))
   private val waitOnlyChange = FieldChange(myPropertiesEventSender, taskImpl.isWaitOnly)
@@ -267,6 +269,16 @@ internal open class MutatorImpl(
       }
       effortChange.ifChanged {
         taskImpl.effort = it.effort
+        // The first estimate is kept once, and an explicit change of the original effort below wins.
+        if (taskImpl.originalEffort == null && it.effort != null) {
+          taskImpl.originalEffort = it.effort
+        }
+      }
+      actualEffortChange.ifChanged {
+        taskImpl.actualEffort = it.effort
+      }
+      originalEffortChange.ifChanged {
+        taskImpl.originalEffort = it.effort
       }
       effortDrivenChange.ifChanged {
         taskImpl.isEffortDriven = it
@@ -429,6 +441,10 @@ internal open class MutatorImpl(
   override fun setCost(cost: Task.Cost) { costChange.setValue(cost) }
 
   override fun setEffort(effort: BigDecimal?) { effortChange.setValue(EffortValue(effort)) }
+
+  override fun setActualEffort(actualEffort: BigDecimal?) { actualEffortChange.setValue(EffortValue(actualEffort)) }
+
+  override fun setOriginalEffort(originalEffort: BigDecimal?) { originalEffortChange.setValue(EffortValue(originalEffort)) }
 
   override fun setEffortDriven(effortDriven: Boolean) { effortDrivenChange.setValue(effortDriven) }
 

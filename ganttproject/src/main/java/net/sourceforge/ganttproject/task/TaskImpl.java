@@ -121,6 +121,10 @@ public class TaskImpl implements Task {
 
   private BigDecimal myEffort;
 
+  private BigDecimal myActualEffort;
+
+  private BigDecimal myOriginalEffort;
+
   private boolean isEffortDriven;
 
   private GanttCalendar myDeadline;
@@ -198,6 +202,8 @@ public class TaskImpl implements Task {
     bExpand = copy.bExpand;
     myCost.setValue(copy.myCost);
     myEffort = copy.myEffort;
+    myActualEffort = copy.myActualEffort;
+    myOriginalEffort = copy.myOriginalEffort;
     isEffortDriven = copy.isEffortDriven;
     myDeadline = copy.myDeadline;
     isWaitOnly = copy.isWaitOnly;
@@ -816,6 +822,26 @@ public class TaskImpl implements Task {
   @Override
   public void setEffort(BigDecimal effort) {
     myEffort = effort;
+  }
+
+  @Override
+  public BigDecimal getActualEffort() {
+    return myActualEffort;
+  }
+
+  @Override
+  public void setActualEffort(BigDecimal actualEffort) {
+    myActualEffort = actualEffort;
+  }
+
+  @Override
+  public BigDecimal getOriginalEffort() {
+    return myOriginalEffort;
+  }
+
+  @Override
+  public void setOriginalEffort(BigDecimal originalEffort) {
+    myOriginalEffort = originalEffort;
   }
 
   @Override

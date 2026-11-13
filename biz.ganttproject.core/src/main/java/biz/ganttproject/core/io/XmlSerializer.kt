@@ -309,6 +309,14 @@ data class XmlTasks(
     var recurrenceDate: String? = null,
 
     @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    @get:JacksonXmlProperty(isAttribute = true, localName = TaskEffort.ACTUAL_XML_ATTRIBUTE)
+    var actualEffort: BigDecimal? = null,
+
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    @get:JacksonXmlProperty(isAttribute = true, localName = TaskEffort.ORIGINAL_XML_ATTRIBUTE)
+    var originalEffort: BigDecimal? = null,
+
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
     @get:JacksonXmlCData
     var notes: String? = null,
 
@@ -432,7 +440,7 @@ data class XmlResources(
   }
 }
 
-@JsonPropertyOrder("task-id", "resource-id", "function", "responsible", "blocking", "no-effort", "load")
+@JsonPropertyOrder("task-id", "resource-id", "function", "responsible", "blocking", "no-effort", "load", TaskEffort.ACTUAL_XML_ATTRIBUTE)
 data class XmlAllocation(
   @get:JacksonXmlProperty(isAttribute = true, localName = "task-id") var taskId: Int = 0,
   @get:JacksonXmlProperty(isAttribute = true, localName = "resource-id") var resourceId: Int = 0,
@@ -442,7 +450,9 @@ data class XmlAllocation(
   // default to false, which is what a file without the attributes means.
   @get:JacksonXmlProperty(isAttribute = true, localName = "blocking") var isBlocking: Boolean = false,
   @get:JacksonXmlProperty(isAttribute = true, localName = "no-effort") var isNoEffort: Boolean = false,
-  @get:JacksonXmlProperty(isAttribute = true) var load: Float = 0.0f
+  @get:JacksonXmlProperty(isAttribute = true) var load: Float = 0.0f,
+  @get:JsonInclude(JsonInclude.Include.NON_NULL)
+  @get:JacksonXmlProperty(isAttribute = true, localName = TaskEffort.ACTUAL_XML_ATTRIBUTE) var actualEffort: BigDecimal? = null
 )
 @JsonPropertyOrder("start", "end", "resourceid")
 data class XmlVacation(
