@@ -283,8 +283,9 @@ class WorkWeekTest {
 
   @Test
   fun `levelling a task whose resource works on no day ends`() {
+    // The resource is booked for a long time, so that every day would be a candidate which is searched to the limit.
     val tasks = listOf(
-      LevelTask(id = "a", orderInPlan = 0, priority = 0, durationDays = 2, predecessors = emptyList(),
+      LevelTask(id = "a", orderInPlan = 0, priority = 0, durationDays = 20_000, predecessors = emptyList(),
         fixedStart = null, earliestStart = null, loads = mapOf("r" to 100), frozen = false, deadline = null, blocking = emptySet()),
       LevelTask(id = "b", orderInPlan = 1, priority = 0, durationDays = 2, predecessors = emptyList(),
         fixedStart = null, earliestStart = null, loads = mapOf("r" to 100), frozen = false, deadline = null, blocking = emptySet()))
