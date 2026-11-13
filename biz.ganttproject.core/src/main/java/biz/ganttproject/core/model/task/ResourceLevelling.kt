@@ -35,7 +35,8 @@ import java.time.LocalDate
  *  - a deadline is not enforced either, a task which ends after it is reported;
  *  - a task is never split, it runs on consecutive working days;
  *  - a task is placed only where all of its blocking resources are present; if there is no such window, or no window
- *    with room, it stays on its earliest day and this is reported.
+ *    with room, it stays on its earliest day and this is reported;
+ *  - a blocking resource books no capacity on a day of a task on which it is away, so other tasks may use it.
  */
 
 /** A task in the form levelling needs it. */
@@ -179,7 +180,13 @@ fun levelTasks(
   fun place(task: LevelTask, days: List<LocalDate>) {
     task.pools.forEach { pool ->
       val booked = used.getOrPut(pool) { mutableMapOf() }
-      days.forEach { booked[it] = (booked[it] ?: 0) + task.loadIn(pool) }
+      days.forEach { day ->
+        // A blocking resource which is away that day does not work on the task, so it keeps its capacity.
+        val away = pool in task.blocking && (!isPresent(pool, day) || (task.requiresPresence && !isAtWorkplace(pool, day)))
+        if (!away) {
+          booked[day] = (booked[day] ?: 0) + task.loadIn(pool)
+        }
+      }
     }
     starts[task.id] = days.first()
     durations[task.id] = days.size

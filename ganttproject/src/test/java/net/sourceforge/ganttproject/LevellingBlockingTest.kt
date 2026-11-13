@@ -127,6 +127,39 @@ class LevellingBlockingTest {
     }
 
     @Test
+    fun `a day of absence frees the capacity of the blocking resource for other tasks`() {
+      val tasks = listOf(
+        task("fixed", 2, loads = mapOf("bob" to 100), blocking = setOf("bob"), fixed = monday),
+        task("other", 1, loads = mapOf("bob" to 100), order = 1)
+      )
+      val result = levelTasks(tasks, monday, weekdays, isPresent = absentOn(monday))
+      // Bob is away on Monday, so the other task takes the day; Tuesday is booked by the fixed task.
+      assertEquals(monday, result.starts["other"])
+      assertTrue(result.conflicts.isEmpty())
+    }
+
+    @Test
+    fun `a day at home frees the capacity only for a task which needs somebody on site`() {
+      fun onSite(required: Boolean) = LevelTask(id = "fixed", orderInPlan = 0, priority = 2, durationDays = 1, fixedStart = monday,
+        loads = mapOf("bob" to 100), blocking = setOf("bob"), requiresPresence = required)
+      val other = task("other", 1, loads = mapOf("bob" to 100), order = 1)
+      val atHome: (String, LocalDate) -> Boolean = { _, day -> day != monday }
+      assertEquals(monday, levelTasks(listOf(onSite(true), other), monday, weekdays, isAtWorkplace = atHome).starts["other"])
+      assertEquals(monday.plusDays(1), levelTasks(listOf(onSite(false), other), monday, weekdays, isAtWorkplace = atHome).starts["other"])
+    }
+
+    @Test
+    fun `without a blocked day the capacity is booked as before`() {
+      val tasks = listOf(
+        task("fixed", 2, loads = mapOf("bob" to 100), blocking = setOf("bob"), fixed = monday),
+        task("other", 1, loads = mapOf("bob" to 100), order = 1)
+      )
+      val result = levelTasks(tasks, monday, weekdays, isPresent = { _, _ -> true })
+      assertEquals(monday.plusDays(2), result.starts["other"])
+      assertEquals(levelTasks(tasks, monday, weekdays), result)
+    }
+
+    @Test
     fun `two blocking resources which are never present together are reported`() {
       // anna is present on even days and bob on odd days.
       val isPresent: (String, LocalDate) -> Boolean = { id, day -> (day.toEpochDay() % 2 == 0L) == (id == "anna") }
