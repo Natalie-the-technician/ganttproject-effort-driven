@@ -21,6 +21,7 @@ package net.sourceforge.ganttproject.action.task
 import biz.ganttproject.app.RootLocalizer
 import biz.ganttproject.core.model.task.LevelConflict
 import biz.ganttproject.core.model.task.LevelResult
+import biz.ganttproject.core.model.task.SHARED_POOL
 import biz.ganttproject.core.model.task.levelTasks
 import biz.ganttproject.task.recurrence.toModelLocalDate
 import net.sourceforge.ganttproject.action.GPAction
@@ -30,6 +31,7 @@ import net.sourceforge.ganttproject.task.algorithm.applyLevelling
 import net.sourceforge.ganttproject.task.algorithm.capacityProblems
 import net.sourceforge.ganttproject.task.algorithm.collectLevelTasks
 import net.sourceforge.ganttproject.task.algorithm.durationAtStart
+import net.sourceforge.ganttproject.task.algorithm.resourcePresence
 import net.sourceforge.ganttproject.task.algorithm.startAllowed
 import net.sourceforge.ganttproject.task.algorithm.workingDayTest
 import net.sourceforge.ganttproject.undo.GPUndoManager
@@ -71,7 +73,7 @@ class LevellingAction(
     // Unfinished work is not laid into the past; started work stays where it is anyway.
     val from = maxOf(taskManager.projectStart.toModelLocalDate(), today)
     val result = levelTasks(tasks, from, workingDayTest(taskManager.calendar), durationAtStart(taskManager),
-      canStartOn = startAllowed(taskManager))
+      canStartOn = startAllowed(taskManager), isPresent = resourcePresence(taskManager))
     if (result.conflicts.any { it is LevelConflict.Cycle }) {
       report.show(true, i18n("task.level.cycle"))
       return
@@ -119,6 +121,19 @@ class LevellingAction(
         "${nameOf(it.id)}: ${it.deadline} / ${it.actualEnd} (+${it.missingDays})"
       })
     }
+    val noDate = result.conflicts.filterIsInstance<LevelConflict.NoPossibleDate>()
+    if (noDate.isNotEmpty()) {
+      section(text, i18n("task.level.noDate", noDate.size), noDate.map { conflict ->
+        val reasons = mutableListOf<String>()
+        if (conflict.blocking.isNotEmpty()) {
+          reasons.add(i18n("task.level.noDate.absence", conflict.blocking.joinToString { resourceName(it) }))
+        }
+        if (conflict.fullFor.isNotEmpty()) {
+          reasons.add(i18n("task.level.noDate.capacity", conflict.fullFor.joinToString { resourceName(it) }))
+        }
+        "${nameOf(conflict.id)}: ${reasons.joinToString("; ")}"
+      })
+    }
     val capacity = capacityProblems(taskManager)
     if (capacity.isNotEmpty()) {
       section(text, i18n("task.level.capacity", capacity.size), capacity.map { it.name })
@@ -133,6 +148,12 @@ class LevellingAction(
   }
 
   private fun nameOf(id: String): String = taskManager.getTask(id.toIntOrNull() ?: -1)?.name ?: id
+
+  // The pool of the tasks without resources has no name of its own.
+  private fun resourceName(id: String): String =
+    if (id == SHARED_POOL) i18n("task.level.noDate.sharedPool")
+    else taskManager.tasks.asSequence().flatMap { it.assignments.asSequence() }
+      .mapNotNull { it.resource }.firstOrNull { it.id.toString() == id }?.name ?: id
 
   private fun section(text: StringBuilder, title: String, rows: List<String>) {
     text.append("\n\n").append(title)

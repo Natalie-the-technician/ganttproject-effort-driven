@@ -21,6 +21,9 @@ package net.sourceforge.ganttproject.action.task
 import biz.ganttproject.app.DefaultLocalizer
 import biz.ganttproject.app.RootLocalizer
 import biz.ganttproject.core.calendar.GanttDaysOff
+import biz.ganttproject.core.model.task.LevelConflict
+import biz.ganttproject.core.model.task.LevelResult
+import biz.ganttproject.core.model.task.SHARED_POOL
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.CalendarFactory.LocaleApi
 import biz.ganttproject.core.time.CalendarFactory.setLocaleApi
@@ -175,6 +178,39 @@ class LevellingActionTest {
     action(answer = false).actionPerformed(null)
     val text = preview!!
     assertTrue(text.contains("[task.level.unreachable 1]\n  • second: 2026-11-02 / 2026-11-05")) { text }
+  }
+
+  @Test
+  fun `the preview names a task whose blocking resource is never present`() {
+    val anna = resource("anna")
+    val bob = resource("bob")
+    // Away for three centuries, longer than any search.
+    bob.addDaysOff(GanttDaysOff(CalendarFactory.createGanttCalendar(2026, 0, 1).time,
+      CalendarFactory.createGanttCalendar(2326, 0, 1).time))
+    task("first", 2, anna to 100f)
+    task("second", 1, anna to 100f).assignmentCollection.addAssignment(bob).also {
+      it.load = 0f
+      it.isBlocking = true
+    }
+    action(answer = false).actionPerformed(null)
+    val text = preview!!
+    assertTrue(text.contains("[task.level.noDate 1]\n  • second: [task.level.noDate.absence bob]")) { text }
+  }
+
+  @Test
+  fun `the preview gives one row per task with every reason`() {
+    val anna = resource("anna")
+    val bob = resource("bob")
+    val first = task("first", 1, anna to 100f, bob to 0f)
+    val second = task("second", 1)
+    val result = LevelResult(emptyMap(), listOf(
+      LevelConflict.NoPossibleDate(first.taskID.toString(), listOf(bob.id.toString()), listOf(anna.id.toString())),
+      LevelConflict.NoPossibleDate(second.taskID.toString(), emptyList(), listOf(SHARED_POOL))
+    ))
+    val text = action(answer = false).levellingPreview(result, 0, monday)
+    assertTrue(text.contains("[task.level.noDate 2]\n" +
+      "  • first: [task.level.noDate.absence bob]; [task.level.noDate.capacity anna]\n" +
+      "  • second: [task.level.noDate.capacity [task.level.noDate.sharedPool]]")) { text }
   }
 
   @Test

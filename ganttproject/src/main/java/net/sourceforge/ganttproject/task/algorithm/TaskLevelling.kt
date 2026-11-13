@@ -88,22 +88,36 @@ private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today
     earliestStart = if (thirdDateConstraint == TaskImpl.EARLIESTBEGIN) third?.time?.toModelLocalDate() else null,
     loads = loads,
     frozen = frozen,
-    deadline = deadline?.time?.toModelLocalDate()
+    deadline = deadline?.time?.toModelLocalDate(),
+    // A blocking resource has to be present whatever its load, also on a milestone.
+    blocking = assignments.filter { it.resource != null && it.isBlocking }.map { it.resource.id.toString() }.toSet()
   )
 }
 
 /**
  * Whether a task may start on the given day. An effort driven task does not start on a day off of any of its
  * resources, it starts when all of them are back; a day off later in the task lengthens it instead. An assignment
- * without load brings no hours, so its days off do not hold the task back. Every other task may start on any day.
+ * without load or marked as no effort brings no hours, so its days off do not hold the task back. Every other task
+ * may start on any day.
  */
 fun startAllowed(taskManager: TaskManager): (LevelTask, LocalDate) -> Boolean = { levelTask, start ->
   val task = taskManager.getTask(levelTask.id.toInt())
   if (task == null || !task.isEffortDriven || task.isMilestone) {
     true
   } else {
-    task.assignments.filter { it.load > 0 }.none { it.resource?.daysOffRanges()?.covers(start) == true }
+    task.assignments.filter { it.load > 0 && it.contributesEffort }
+      .none { it.resource?.daysOffRanges()?.covers(start) == true }
   }
+}
+
+/**
+ * Whether a resource, by its id as in [LevelTask.blocking], is present on the given day, that is, not on a day off.
+ * The days off are read once, when the function is made, so one function serves one levelling run.
+ */
+fun resourcePresence(taskManager: TaskManager): (String, LocalDate) -> Boolean {
+  val daysOff = taskManager.tasks.flatMap { it.assignments.toList() }.mapNotNull { it.resource }.distinct()
+    .associate { it.id.toString() to it.daysOffRanges() }
+  return { resourceId, day -> daysOff[resourceId]?.covers(day) != true }
 }
 
 /**

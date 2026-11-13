@@ -33,7 +33,9 @@ import java.time.LocalDate
  *  - several tasks may run on the same day as long as each resource stays within its capacity;
  *  - a fixed date stays, and so does frozen work; if they overload a resource, the overload is reported, not resolved;
  *  - a deadline is not enforced either, a task which ends after it is reported;
- *  - a task is never split, it runs on consecutive working days.
+ *  - a task is never split, it runs on consecutive working days;
+ *  - a task is placed only where all of its blocking resources are present; if there is no such window, or no window
+ *    with room, it stays on its earliest day and this is reported.
  */
 
 /** A task in the form levelling needs it. */
@@ -69,7 +71,13 @@ data class LevelTask(
   val frozen: Boolean = false,
 
   /** Latest end. Not enforced, a task which ends later is reported. */
-  val deadline: LocalDate? = null
+  val deadline: LocalDate? = null,
+
+  /**
+   * Resources which have to be present on every day of the task, whatever their load. Several of them leave only the
+   * days on which all of them are present. Fixed dates and frozen work do not ask.
+   */
+  val blocking: Set<String> = emptySet()
 )
 
 sealed interface LevelConflict {
@@ -91,6 +99,13 @@ sealed interface LevelConflict {
   data class DeadlineMissed(
     val id: String, val deadline: LocalDate, val actualEnd: LocalDate, val missingDays: Int
   ) : LevelConflict
+
+  /**
+   * The search found no window for the task, which is placed on its earliest day instead. At least one list is not
+   * empty: [blocking] are all blocking resources of the task if one of them was absent on a candidate day, so that no
+   * day has them all present; [fullFor] are the pools which had no room on a candidate day.
+   */
+  data class NoPossibleDate(val id: String, val blocking: List<String>, val fullFor: List<String>) : LevelConflict
 }
 
 data class LevelResult(
@@ -127,6 +142,7 @@ fun LevelTask.loadIn(pool: String): Int = loads[pool] ?: SHARED_POOL_LOAD
  * @param capacityOf how many percent of a working day of a pool may be booked.
  * @param canStartOn whether a task may start on the given day, such as not on a day off of its resources. A task
  * with a fixed start is not asked.
+ * @param isPresent whether a resource is present on the given day; asked only for the [LevelTask.blocking] resources.
  */
 fun levelTasks(
   tasks: List<LevelTask>,
@@ -134,7 +150,8 @@ fun levelTasks(
   isWorkingDay: (LocalDate) -> Boolean,
   durationAt: (LevelTask, LocalDate) -> Int = { task, _ -> task.durationDays },
   capacityOf: (String) -> Int = { 100 },
-  canStartOn: (LevelTask, LocalDate) -> Boolean = { _, _ -> true }
+  canStartOn: (LevelTask, LocalDate) -> Boolean = { _, _ -> true },
+  isPresent: (String, LocalDate) -> Boolean = { _, _ -> true }
 ): LevelResult {
   val byId = tasks.associateBy { it.id }
   val order = topologicalOrder(tasks) ?: return LevelResult(emptyMap(), listOf(LevelConflict.Cycle(tasks.map { it.id })))
@@ -179,7 +196,15 @@ fun levelTasks(
       }
       workingDays(start, durationAt(task, start), isWorkingDay)
     } else {
-      findEarliestWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf, canStartOn)
+      val search = searchWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf, canStartOn, isPresent)
+      if (search.exhausted) {
+        // A blocking resource counts as a reason only if its absence actually turned a day down.
+        val blocking = if (search.absenceBlocked) task.blocking.sorted() else emptyList()
+        if (blocking.isNotEmpty() || search.fullFor.isNotEmpty()) {
+          conflicts.add(LevelConflict.NoPossibleDate(id, blocking, search.fullFor.sorted()))
+        }
+      }
+      search.window
     }
     place(task, days)
   }
@@ -281,8 +306,31 @@ fun findEarliestWindow(
   used: Map<String, Map<LocalDate, Int>>,
   isWorkingDay: (LocalDate) -> Boolean,
   capacityOf: (String) -> Int,
-  canStartOn: (LevelTask, LocalDate) -> Boolean = { _, _ -> true }
-): List<LocalDate> {
+  canStartOn: (LevelTask, LocalDate) -> Boolean = { _, _ -> true },
+  isPresent: (String, LocalDate) -> Boolean = { _, _ -> true }
+): List<LocalDate> =
+  searchWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf, canStartOn, isPresent).window
+
+/**
+ * The outcome of a window search. When the search is [exhausted], [window] starts on the earliest day, and
+ * [absenceBlocked] and [fullFor] tell why the candidate days were turned down.
+ */
+private class WindowSearch(
+  val window: List<LocalDate>, val exhausted: Boolean, val absenceBlocked: Boolean, val fullFor: Set<String>
+)
+
+private fun searchWindow(
+  earliest: LocalDate,
+  task: LevelTask,
+  durationAt: (LevelTask, LocalDate) -> Int,
+  used: Map<String, Map<LocalDate, Int>>,
+  isWorkingDay: (LocalDate) -> Boolean,
+  capacityOf: (String) -> Int,
+  canStartOn: (LevelTask, LocalDate) -> Boolean,
+  isPresent: (String, LocalDate) -> Boolean
+): WindowSearch {
+  var absenceBlocked = false
+  val fullFor = mutableSetOf<String>()
   var candidate = nextWorkingDay(earliest, isWorkingDay)
   repeat(MAX_SEARCH_DAYS) {
     if (!canStartOn(task, candidate)) {
@@ -292,13 +340,23 @@ fun findEarliestWindow(
     // The duration depends on the start day when working hours change, so it is asked for every candidate.
     val window = workingDays(candidate, durationAt(task, candidate), isWorkingDay)
     val blockedAt = window.firstOrNull { day ->
-      task.pools.any { pool ->
+      // Absence is asked first: on a day without a blocking resource the capacity does not matter.
+      val absent = task.blocking.any { !isPresent(it, day) }
+      if (absent) {
+        absenceBlocked = true
+      }
+      absent || task.pools.any { pool ->
         val load = task.loadIn(pool)
         // A load of zero fits even on a day which fixed dates have overloaded.
-        load > 0 && (used[pool]?.get(day) ?: 0) + load > maxOf(capacityOf(pool), load)
+        (load > 0 && (used[pool]?.get(day) ?: 0) + load > maxOf(capacityOf(pool), load)).also {
+          if (it) fullFor.add(pool)
+        }
       }
-    } ?: return window
+    } ?: return WindowSearch(window, false, absenceBlocked, fullFor)
     candidate = nextWorkingDay(blockedAt.plusDays(1), isWorkingDay)
   }
-  return workingDays(nextWorkingDay(earliest, isWorkingDay), durationAt(task, earliest), isWorkingDay)
+  return WindowSearch(
+    workingDays(nextWorkingDay(earliest, isWorkingDay), durationAt(task, earliest), isWorkingDay),
+    true, absenceBlocked, fullFor
+  )
 }
