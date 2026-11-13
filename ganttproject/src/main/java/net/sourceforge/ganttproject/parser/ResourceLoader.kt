@@ -18,7 +18,6 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package net.sourceforge.ganttproject.parser
 
-import biz.ganttproject.core.calendar.GanttDaysOff
 import biz.ganttproject.core.io.XmlProject
 import biz.ganttproject.core.io.XmlResources
 import biz.ganttproject.core.model.task.CapacityChange
@@ -80,7 +79,7 @@ class ResourceLoader(private val resourceManager: HumanResourceManager, private 
         val startDate = xmlVacation.startDate
         val endDate = xmlVacation.endDate
         if (startDate.isNotBlank() && endDate.isNotBlank()) {
-          it.addDaysOff(GanttDaysOff(GanttCalendar.parseXMLDate(startDate), GanttCalendar.parseXMLDate(endDate)))
+          it.addDaysOff(daysOffFromFile(GanttCalendar.parseXMLDate(startDate), GanttCalendar.parseXMLDate(endDate), xmlVacation.resourceid))
         }
       } ?: run {
         // LOG
