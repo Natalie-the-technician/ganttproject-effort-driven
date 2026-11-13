@@ -127,6 +127,17 @@ public class TaskRendererImpl2 extends ChartRendererBase {
     }
 
     @Override
+    public List<ITaskSceneTask> getSeriesMembers(int rowId) {
+      Task task = myModel.getTaskManager().getTask(rowId);
+      if (task == null) {
+        return Collections.emptyList();
+      }
+      return SeriesRowKt.collapsedSeriesMembers(task, myModel.getTaskManager().getTaskHierarchy()).stream()
+        .<ITaskSceneTask>map(member -> new ITaskSceneTaskImpl(member, myModel))
+        .collect(Collectors.toList());
+    }
+
+    @Override
     public ChartComparison getComparison() {
       return myModel.getComparison();
     }

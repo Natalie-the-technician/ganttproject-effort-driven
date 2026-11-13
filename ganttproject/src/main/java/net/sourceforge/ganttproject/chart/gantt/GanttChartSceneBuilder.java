@@ -68,6 +68,13 @@ public class GanttChartSceneBuilder {
     default List<AbsenceRun> getAbsenceRuns(int rowId) {
       return List.of();
     }
+    /**
+     * The tasks which a collapsed recurrence series draws in the row of its group, earliest first. Empty if the
+     * row is not a collapsed series.
+     */
+    default List<ITaskSceneTask> getSeriesMembers(int rowId) {
+      return List.of();
+    }
     /** What the band underneath the task bars compares. */
     ChartComparison getComparison();
     /** The effort comparison of the task in the given row. */
@@ -219,9 +226,15 @@ public class GanttChartSceneBuilder {
     int rowNum = 0;
     for (ITaskSceneTask t : visibleTasks) {
       boundPolygons.clear();
-      List<ITaskActivity<ITaskSceneTask>> activities = t.getActivities();
-      activities = mySplitter.split(activities, Integer.MAX_VALUE);
-      List<Polygon> rectangles = renderActivities(rowNum, t, activities, defaultUnitOffsets, true);
+      List<ITaskSceneTask> seriesMembers = input.getSeriesMembers(t.getRowId());
+      List<Polygon> rectangles;
+      if (seriesMembers.isEmpty()) {
+        List<ITaskActivity<ITaskSceneTask>> activities = t.getActivities();
+        activities = mySplitter.split(activities, Integer.MAX_VALUE);
+        rectangles = renderActivities(rowNum, t, activities, defaultUnitOffsets, true);
+      } else {
+        rectangles = renderSeriesRow(rowNum, seriesMembers, defaultUnitOffsets);
+      }
       for (Polygon p : rectangles) {
         if (p.getModelObject() != null) {
           boundPolygons.add(p);
@@ -446,6 +459,24 @@ public class GanttChartSceneBuilder {
   public static final String BAND_LOWER = "band.lower";
 
   private static Predicate<Polygon> REMOVE_SUPERTASK_ENDINGS = shape -> !shape.hasStyle("task.ending");
+
+  /**
+   * Draws every member of a collapsed series as a bar of its own in one row. Each bar has the progress of its
+   * member. Members which overlap are drawn over each other, the later one on top.
+   *
+   * @return the bars of the last member, which is the one that gets the labels
+   */
+  private List<Polygon> renderSeriesRow(int rowNum, List<ITaskSceneTask> members, OffsetList defaultUnitOffsets) {
+    List<Polygon> last = new ArrayList<>();
+    for (ITaskSceneTask member : members) {
+      List<ITaskActivity<ITaskSceneTask>> activities = mySplitter.split(member.getActivities(), Integer.MAX_VALUE);
+      last = myTaskActivityRenderer.renderActivities(rowNum, activities, defaultUnitOffsets);
+      if (!myTaskApi.hasNestedTasks(member) && !member.isMilestone()) {
+        renderProgressBar(last.stream().filter(REMOVE_SUPERTASK_ENDINGS).toList());
+      }
+    }
+    return last;
+  }
 
   private List<Polygon> renderActivities(final int rowNum, ITaskSceneTask t, List<ITaskActivity<ITaskSceneTask>> activities,
       OffsetList defaultUnitOffsets, boolean areVisible) {
