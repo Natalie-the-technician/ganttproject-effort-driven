@@ -27,6 +27,7 @@ import biz.ganttproject.task.recurrence.toModelLocalDate
 import net.sourceforge.ganttproject.action.GPAction
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskManager
+import net.sourceforge.ganttproject.task.algorithm.AutoBaselines
 import net.sourceforge.ganttproject.task.algorithm.applyLevelling
 import net.sourceforge.ganttproject.task.algorithm.capacityProblems
 import net.sourceforge.ganttproject.task.algorithm.collectLevelTasks
@@ -51,14 +52,16 @@ fun interface LevellingReport {
 /**
  * Moves tasks later until no resource is booked over its capacity.
  *
- * Nothing is changed before the preview is confirmed, and the whole run is one undoable edit.
+ * Nothing is changed before the preview is confirmed, and the whole run is one undoable edit. With [autoBaselines]
+ * a baseline is saved first; the baseline is not part of the undoable edit.
  */
 class LevellingAction(
   private val taskManager: TaskManager,
   private val undoManager: GPUndoManager,
   private val confirmation: LevellingConfirmation,
   private val report: LevellingReport,
-  private val today: () -> LocalDate = { LocalDate.now() }
+  private val today: () -> LocalDate = { LocalDate.now() },
+  private val autoBaselines: AutoBaselines? = null
 ) : GPAction("task.level") {
 
   override fun getLocalizedName(): String = i18n("task.level")
@@ -83,8 +86,10 @@ class LevellingAction(
       report.show(false, i18n("task.level.nothing"))
       return
     }
-    confirmation.ask(levellingPreview(result, moved.size, today)) { confirmed ->
+    val preview = levellingPreview(result, moved.size, today) + (autoBaselines?.previewNote()?.let { "\n\n$it" } ?: "")
+    confirmation.ask(preview) { confirmed ->
       if (confirmed) {
+        autoBaselines?.saveBeforeLevelling()
         applyLevelling(result.starts, result.durations, taskManager, undoManager, i18n("task.level.undo"))
       }
     }

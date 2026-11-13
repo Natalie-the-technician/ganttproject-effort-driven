@@ -27,6 +27,7 @@ import biz.ganttproject.core.model.task.SHARED_POOL
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.CalendarFactory.LocaleApi
 import biz.ganttproject.core.time.CalendarFactory.setLocaleApi
+import net.sourceforge.ganttproject.GanttPreviousState
 import net.sourceforge.ganttproject.GanttProjectImpl
 import net.sourceforge.ganttproject.PrjInfos
 import net.sourceforge.ganttproject.document.Document
@@ -39,6 +40,7 @@ import net.sourceforge.ganttproject.io.GanttXMLSaver
 import net.sourceforge.ganttproject.parser.ParserFactory
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.task.Task
+import net.sourceforge.ganttproject.task.algorithm.AutoBaselines
 import net.sourceforge.ganttproject.undo.GPUndoListener
 import net.sourceforge.ganttproject.undo.GPUndoManager
 import net.sourceforge.ganttproject.undo.UndoManagerImpl
@@ -55,11 +57,13 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.math.BigDecimal
 import java.nio.file.Files
 import java.text.DateFormat
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.Locale
 
 /** The levelling menu action: the preview, cancelling, confirming and undoing a whole run. */
@@ -123,11 +127,25 @@ class LevellingActionTest {
         assignments.forEach { (resource, load) -> task.assignmentCollection.addAssignment(resource).load = load }
       }
 
-  private fun action(answer: Boolean, today: LocalDate = monday, undoManager: GPUndoManager = countingUndoManager) =
+  private fun action(answer: Boolean, today: LocalDate = monday, undoManager: GPUndoManager = countingUndoManager,
+                     autoBaselines: AutoBaselines? = null) =
     LevellingAction(project.taskManager, undoManager,
       { message, confirmed -> preview = message; confirmed(answer) },
       { _, message -> reports.add(message) },
-      { today })
+      { today }, autoBaselines)
+
+  private fun autoBaselines(enabled: Boolean, limit: Int = 15, minute: () -> Int = { 0 }) =
+    AutoBaselines(project.taskManager, { project.baselines }, { enabled },
+      { LocalDateTime.of(2026, 11, 2, 10, minute()) }, { RootLocalizer.formatText("task.level.baseline.name", it) },
+      limit)
+
+  private fun saved(): String = ByteArrayOutputStream().also { GanttXMLSaver(project).save(it) }.toString(Charsets.UTF_8)
+
+  private fun twoTasksToLevel(): Task {
+    val anna = resource("anna")
+    task("first", 3, anna to 100f)
+    return task("second", 2, anna to 100f)
+  }
 
   private fun startOf(task: Task): LocalDate =
     project.taskManager.getTask(task.taskID).start.let { LocalDate.of(it.year, it.month + 1, it.date) }
@@ -283,6 +301,72 @@ class LevellingActionTest {
    * A project which undo can restore: it has a document, forgets its tasks and resources when it is closed, and saves
    * and reads through the real project file format.
    */
+  @Test
+  fun `with the option off no baseline is made, the preview does not mention one and the file has none`() {
+    val second = twoTasksToLevel()
+    action(answer = true, autoBaselines = autoBaselines(enabled = false)).actionPerformed(null)
+    assertEquals(monday.plusDays(3), startOf(second))
+    assertTrue(project.baselines.isEmpty())
+    assertFalse(preview!!.contains("task.level.baseline"))
+    assertFalse(saved().contains("previous-tasks"))
+  }
+
+  @Test
+  fun `with the option on a baseline of the old dates is saved before the tasks move`() {
+    val second = twoTasksToLevel()
+    action(answer = true, autoBaselines = autoBaselines(enabled = true)).actionPerformed(null)
+    assertEquals(monday.plusDays(3), startOf(second))
+    assertEquals(1, project.baselines.size)
+    val baseline = project.baselines.single()
+    assertEquals("[task.level.baseline.name 2026-11-02 10:00]", baseline.name)
+    val old = baseline.tasks.single { it.id == second.taskID }
+    assertEquals(LocalDate.of(2026, 11, 2), old.start.let { LocalDate.of(it.year, it.month + 1, it.date) })
+    assertTrue(preview!!.contains("[task.level.baseline [task.level.baseline.name 2026-11-02 10:00]]"))
+    assertTrue(saved().contains("previous-tasks"))
+  }
+
+  @Test
+  fun `with the option on cancelling the preview saves no baseline`() {
+    twoTasksToLevel()
+    action(answer = false, autoBaselines = autoBaselines(enabled = true)).actionPerformed(null)
+    assertTrue(project.baselines.isEmpty())
+  }
+
+  @Test
+  fun `with the option on a run with nothing to move saves no baseline`() {
+    val anna = resource("anna")
+    task("first", 3, anna to 50f)
+    task("second", 2, anna to 50f)
+    action(answer = true, autoBaselines = autoBaselines(enabled = true)).actionPerformed(null)
+    assertTrue(project.baselines.isEmpty())
+  }
+
+  @Test
+  fun `the oldest automatic baselines go and baselines named by hand stay`() {
+    twoTasksToLevel()
+    val byHand = listOf("Release 1", "[task.level.baseline.name]", "Before levelling the office move").map {
+      GanttPreviousState(it, listOf())
+    }
+    project.baselines.addAll(byHand)
+    (1..4).forEach { minute ->
+      val auto = autoBaselines(enabled = true, limit = 2, minute = { minute })
+      auto.saveBeforeLevelling()
+    }
+    val names = project.baselines.map { it.name }
+    assertEquals(listOf("[task.level.baseline.name 2026-11-02 10:03]", "[task.level.baseline.name 2026-11-02 10:04]"),
+      names.filter { it.contains("10:") })
+    byHand.forEach { assertTrue(project.baselines.any { b -> b === it }) }
+    assertEquals(5, names.size)
+  }
+
+  @Test
+  fun `the preview says how many automatic baselines the run removes`() {
+    twoTasksToLevel()
+    val auto = autoBaselines(enabled = true, limit = 1)
+    auto.saveBeforeLevelling()
+    assertTrue(auto.previewNote()!!.endsWith(" [task.level.baseline.prune 1]"))
+  }
+
   private class RestorableProject : GanttProjectImpl() {
     override var document: Document = FileDocument(Files.createTempFile("levelling", ".gan").toFile())
     private val uiFacade = testUiFacade()

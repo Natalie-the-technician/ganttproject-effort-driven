@@ -36,6 +36,8 @@ import net.sourceforge.ganttproject.action.help.HelpMenu;
 import net.sourceforge.ganttproject.action.project.ProjectMenu;
 import net.sourceforge.ganttproject.action.resource.ResourceActionSet;
 import net.sourceforge.ganttproject.action.task.LevellingAction;
+import net.sourceforge.ganttproject.task.algorithm.AutoBaselines;
+import net.sourceforge.ganttproject.task.algorithm.LevellingOptions;
 import net.sourceforge.ganttproject.task.algorithm.LevellingRunNotifierKt;
 import net.sourceforge.ganttproject.task.algorithm.LevellingStaleness;
 import net.sourceforge.ganttproject.action.view.ViewMenu;
@@ -171,7 +173,8 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
         (isProblem, message) -> getUIFacade().showOptionDialog(
             isProblem ? JOptionPane.WARNING_MESSAGE : JOptionPane.INFORMATION_MESSAGE, message,
             new Action[] { OkAction.create("ok", () -> Unit.INSTANCE) }),
-        LocalDate::now);
+        LocalDate::now,
+        new AutoBaselines(getTaskManager(), this::getBaselines));
     mTask.add(myLevellingAction);
     bar.add(mTask);
 
@@ -222,6 +225,7 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     options.addOptionGroups(getUIFacade().getGanttChart().getOptionGroups());
     options.addOptionGroups(getUIFacade().getResourceChart().getOptionGroups());
     options.addOptionGroups(getProjectUIFacade().getOptionGroups());
+    options.addOptionGroups(LevellingOptions.INSTANCE.getOptionGroup());
     options.addOptionGroups(getDocumentManager().getNetworkOptionGroups());
     options.addOptions(GPCloudOptions.INSTANCE.getOptionGroup());
     options.addOptions(getRssFeedChecker().getOptions());
