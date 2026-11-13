@@ -22,7 +22,6 @@ import biz.ganttproject.app.RootLocalizer
 import biz.ganttproject.core.model.task.LevelConflict
 import biz.ganttproject.core.model.task.LevelResult
 import biz.ganttproject.core.model.task.SHARED_POOL
-import biz.ganttproject.core.model.task.levelTasks
 import biz.ganttproject.task.recurrence.toModelLocalDate
 import net.sourceforge.ganttproject.action.GPAction
 import net.sourceforge.ganttproject.task.Task
@@ -30,13 +29,9 @@ import net.sourceforge.ganttproject.task.TaskManager
 import net.sourceforge.ganttproject.task.algorithm.applyLevelling
 import net.sourceforge.ganttproject.task.algorithm.capacityProblems
 import net.sourceforge.ganttproject.task.algorithm.collectLevelTasks
-import net.sourceforge.ganttproject.task.algorithm.durationAtStart
-import net.sourceforge.ganttproject.task.algorithm.presenceTest
-import net.sourceforge.ganttproject.task.algorithm.resourcePresence
-import net.sourceforge.ganttproject.task.algorithm.startAllowed
+import net.sourceforge.ganttproject.task.algorithm.levelProject
 import net.sourceforge.ganttproject.task.algorithm.WorkWeekWorkingDays
 import net.sourceforge.ganttproject.task.algorithm.movedTasks
-import net.sourceforge.ganttproject.task.algorithm.workingDaysOf
 import net.sourceforge.ganttproject.undo.GPUndoManager
 import java.awt.event.ActionEvent
 import java.time.LocalDate
@@ -74,12 +69,7 @@ class LevellingAction(
       report.show(false, i18n("task.level.nothing"))
       return
     }
-    // Unfinished work is not laid into the past; started work stays where it is anyway.
-    val from = maxOf(taskManager.projectStart.toModelLocalDate(), today)
-    val worksOn = workingDaysOf(taskManager, workingDays)
-    val result = levelTasks(tasks, from, workingDays.projectOnly, durationAtStart(taskManager, worksOn),
-      canStartOn = startAllowed(taskManager), isPresent = resourcePresence(taskManager), workingDaysOf = worksOn,
-      isAtWorkplace = presenceTest(taskManager))
+    val result = levelProject(taskManager, tasks, today, workingDays)
     if (result.conflicts.any { it is LevelConflict.Cycle }) {
       report.show(true, i18n("task.level.cycle"))
       return

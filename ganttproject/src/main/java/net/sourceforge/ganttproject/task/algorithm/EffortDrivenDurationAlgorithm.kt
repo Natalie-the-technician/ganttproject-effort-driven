@@ -115,13 +115,14 @@ class EffortInputs(
   fun blockedOn(day: LocalDate): Boolean = blockingDaysOff.covers(day) || blockingHomeOffice.any { it.worksFromHome(day) }
 }
 
-fun effortInputs(allAssignments: Array<ResourceAssignment>, requiresPresence: Boolean = false): EffortInputs {
+fun effortInputs(allAssignments: Array<ResourceAssignment>, requiresPresence: Boolean = false,
+                 daysOffOf: (HumanResource) -> List<Pair<LocalDate, LocalDate>> = { it.daysOffRanges() }): EffortInputs {
   val assignments = allAssignments.filter { it.contributesEffort }.toTypedArray()
   return EffortInputs(
     assignments,
     capacitySchedule(assignments),
-    assignments.map { it.resource?.daysOffRanges().orEmpty() },
-    allAssignments.filter { it.load > 0 && it.isBlocking }.flatMap { it.resource?.daysOffRanges().orEmpty() },
+    assignments.map { it.resource?.let(daysOffOf).orEmpty() },
+    allAssignments.filter { it.load > 0 && it.isBlocking }.flatMap { it.resource?.let(daysOffOf).orEmpty() },
     if (!requiresPresence) emptyList() else
       allAssignments.filter { it.load > 0 && it.isBlocking }.mapNotNull { it.resource?.homeOffice }.filter { !it.isEmpty }
   )

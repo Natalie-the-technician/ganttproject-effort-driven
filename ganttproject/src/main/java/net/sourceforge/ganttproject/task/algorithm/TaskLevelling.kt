@@ -21,10 +21,13 @@ package net.sourceforge.ganttproject.task.algorithm
 import biz.ganttproject.core.calendar.GPCalendar
 import biz.ganttproject.core.model.task.LevelTask
 import biz.ganttproject.core.model.task.SHARED_POOL
+import biz.ganttproject.core.model.task.LevelResult
 import biz.ganttproject.core.model.task.SHARED_POOL_LOAD
+import biz.ganttproject.core.model.task.levelTasks
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.task.recurrence.toModelDate
 import biz.ganttproject.task.recurrence.toModelLocalDate
+import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskImpl
 import net.sourceforge.ganttproject.task.TaskManager
@@ -108,13 +111,14 @@ private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today
  * assignment which is not blocking, or has no load, does not hold the task back. Every other task may start on any
  * day.
  */
-fun startAllowed(taskManager: TaskManager): (LevelTask, LocalDate) -> Boolean = { levelTask, start ->
+fun startAllowed(taskManager: TaskManager,
+                 daysOffOf: (HumanResource) -> List<Pair<LocalDate, LocalDate>> = { it.daysOffRanges() }): (LevelTask, LocalDate) -> Boolean = { levelTask, start ->
   val task = taskManager.getTask(levelTask.id.toInt())
   if (task == null || !task.isEffortDriven || task.isMilestone) {
     true
   } else {
     task.assignments.filter { it.load > 0 && it.isBlocking }
-      .none { it.resource?.daysOffRanges()?.covers(start) == true }
+      .none { it.resource?.let(daysOffOf)?.covers(start) == true }
   }
 }
 
@@ -122,9 +126,10 @@ fun startAllowed(taskManager: TaskManager): (LevelTask, LocalDate) -> Boolean = 
  * Whether a resource, by its id as in [LevelTask.blocking], is present on the given day, that is, not on a day off.
  * The days off are read once, when the function is made, so one function serves one levelling run.
  */
-fun resourcePresence(taskManager: TaskManager): (String, LocalDate) -> Boolean {
+fun resourcePresence(taskManager: TaskManager,
+                     daysOffOf: (HumanResource) -> List<Pair<LocalDate, LocalDate>> = { it.daysOffRanges() }): (String, LocalDate) -> Boolean {
   val daysOff = taskManager.tasks.flatMap { it.assignments.toList() }.mapNotNull { it.resource }.distinct()
-    .associate { it.id.toString() to it.daysOffRanges() }
+    .associate { it.id.toString() to daysOffOf(it) }
   return { resourceId, day -> daysOff[resourceId]?.covers(day) != true }
 }
 
@@ -137,6 +142,21 @@ fun presenceTest(taskManager: TaskManager): (String, LocalDate) -> Boolean {
   val homeOffice = taskManager.tasks.flatMap { it.assignments.toList() }.mapNotNull { it.resource }.distinct()
     .associate { it.id.toString() to it.homeOffice }.filterValues { !it.isEmpty }
   return { resourceId, day -> homeOffice[resourceId]?.worksFromHome(day) != true }
+}
+
+/**
+ * Levels [tasks] as the levelling action does, from [today] on. [daysOffOf] tells the days off of a person, which lets
+ * a caller ask what the result would be with other days off than the ones in the model.
+ */
+fun levelProject(taskManager: TaskManager, tasks: List<LevelTask>, today: LocalDate,
+                 workingDays: WorkWeekWorkingDays = WorkWeekWorkingDays(taskManager.calendar),
+                 daysOffOf: (HumanResource) -> List<Pair<LocalDate, LocalDate>> = { it.daysOffRanges() }): LevelResult {
+  // Unfinished work is not laid into the past; started work stays where it is anyway.
+  val from = maxOf(taskManager.projectStart.toModelLocalDate(), today)
+  val worksOn = workingDaysOf(taskManager, workingDays)
+  return levelTasks(tasks, from, workingDays.projectOnly, durationAtStart(taskManager, worksOn, daysOffOf),
+    canStartOn = startAllowed(taskManager, daysOffOf), isPresent = resourcePresence(taskManager, daysOffOf),
+    workingDaysOf = worksOn, isAtWorkplace = presenceTest(taskManager))
 }
 
 /**
@@ -162,14 +182,15 @@ fun workingDaysOf(taskManager: TaskManager,
  * keeps its duration. What the duration is derived from is read once per task.
  */
 fun durationAtStart(taskManager: TaskManager,
-                    worksOn: (LevelTask) -> (LocalDate) -> Boolean = workingDaysOf(taskManager)): (LevelTask, LocalDate) -> Int {
+                    worksOn: (LevelTask) -> (LocalDate) -> Boolean = workingDaysOf(taskManager),
+                    daysOffOf: (HumanResource) -> List<Pair<LocalDate, LocalDate>> = { it.daysOffRanges() }): (LevelTask, LocalDate) -> Int {
   val inputs = mutableMapOf<String, EffortInputs>()
   return { levelTask, start ->
     val task = taskManager.getTask(levelTask.id.toInt())
     if (levelTask.frozen || task == null || !task.isEffortDriven || task.isMilestone) {
       levelTask.durationDays
     } else {
-      val effortInputs = inputs.getOrPut(levelTask.id) { effortInputs(task.assignments, task.isOnSiteOnly) }
+      val effortInputs = inputs.getOrPut(levelTask.id) { effortInputs(task.assignments, task.isOnSiteOnly, daysOffOf) }
       effortDrivenDurationDays(task.effort, effortInputs, start, worksOn(levelTask))?.toInt() ?: levelTask.durationDays
     }
   }
