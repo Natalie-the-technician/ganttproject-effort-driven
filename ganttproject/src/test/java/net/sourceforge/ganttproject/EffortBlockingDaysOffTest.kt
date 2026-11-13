@@ -132,6 +132,30 @@ class EffortBlockingDaysOffTest {
   }
 
   @Test
+  fun `a day off of a blocking resource with load zero does not take the day`() {
+    val anna = resource("anna")
+    val bob = resource("bob")
+    bob.dayOff(monday)
+    val task = effortTask("16")
+    task.assign(anna)
+    task.assign(bob, blocking = true, load = 0f)
+    // Bob is not involved: Monday and Tuesday 8 hours each.
+    assertEquals(2, task.days())
+  }
+
+  @Test
+  fun `a day off of a blocking resource with some load takes the day`() {
+    val anna = resource("anna")
+    val bob = resource("bob")
+    bob.dayOff(monday)
+    val task = effortTask("16")
+    task.assign(anna)
+    task.assign(bob, blocking = true, load = 50f)
+    // Monday nobody works, Tuesday and Wednesday 8 hours plus 4 hours.
+    assertEquals(3, task.days())
+  }
+
+  @Test
   fun `a day off of a resource which is not blocking only takes its own hours`() {
     val anna = resource("anna")
     val bob = resource("bob")
