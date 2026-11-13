@@ -148,9 +148,15 @@ fun capacityProblems(taskManager: TaskManager): List<Task> = taskManager.tasks.f
  * A moved task gets its start as the earliest begin, otherwise the scheduler would pull it back to the end of its
  * predecessors. The end is set as well, because a new start alone stretches the task.
  *
- * @return the number of moved tasks; nothing is added to the undo history when there are none.
+ * @return the number of moved tasks; nothing is added to the undo history when there are none. The run is reported
+ * to [notifier] afterwards in either case.
  */
 fun applyLevelling(
+  starts: Map<String, LocalDate>, durations: Map<String, Int>, taskManager: TaskManager,
+  undoManager: GPUndoManager, editName: String, notifier: LevellingRunNotifier = levellingRunNotifier
+): Int = notifier.runAndReport { writeLevellingBack(starts, durations, taskManager, undoManager, editName) }
+
+private fun writeLevellingBack(
   starts: Map<String, LocalDate>, durations: Map<String, Int>, taskManager: TaskManager,
   undoManager: GPUndoManager, editName: String
 ): Int {
