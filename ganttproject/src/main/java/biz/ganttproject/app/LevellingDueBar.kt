@@ -22,9 +22,11 @@ import biz.ganttproject.FXUtil
 import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.control.Button
+import javafx.scene.control.Control
 import javafx.scene.control.Label
 import javafx.scene.control.Tooltip
 import javafx.scene.layout.HBox
+import net.sourceforge.ganttproject.BaselineGap
 import net.sourceforge.ganttproject.task.algorithm.LevellingStaleness
 
 /**
@@ -36,10 +38,17 @@ import net.sourceforge.ganttproject.task.algorithm.LevellingStaleness
  * The node is neither visible nor managed while the levelling is not due, so it takes no room in the status bar.
  * [runLevelling] is called on the JavaFX thread, and it has to move itself to the thread where the levelling action
  * runs.
+ *
+ * The same node says which tasks are missing in the baseline, with a button that adds them. This part is computed
+ * when the message appears and after the button has done its work, so a task added while the message is shown is
+ * counted at the next levelling cycle.
  */
 class LevellingDueBar(
   private val staleness: LevellingStaleness,
-  private val runLevelling: () -> Unit
+  private val runLevelling: () -> Unit,
+  private val baselineGapOf: () -> BaselineGap = { BaselineGap.Covered },
+  /** Adds the missing tasks to the baseline and calls back when it is done, on the JavaFX thread or not. */
+  private val runCatchUp: (onDone: () -> Unit) -> Unit = { it() }
 ) {
   val label: Label = Label(RootLocalizer.formatText("levelling.due.message")).also {
     it.tooltip = Tooltip(RootLocalizer.formatText("levelling.due.message.tooltip"))
@@ -51,7 +60,17 @@ class LevellingDueBar(
     it.tooltip = Tooltip(RootLocalizer.formatText("levelling.due.button.tooltip"))
   }
 
-  val node: HBox = HBox(8.0, label, button).also {
+  val baselineLabel: Label = Label().also {
+    it.padding = Insets(0.0, 0.0, 0.0, 8.0)
+  }
+
+  /** There is no button without a baseline: only creating a baseline can fix that. */
+  val baselineButton: Button = Button(RootLocalizer.formatText("baseline.missing.button")).also {
+    it.setOnAction { runCatchUp { FXUtil.runLater { refreshBaselineGap() } } }
+    it.tooltip = Tooltip(RootLocalizer.formatText("baseline.missing.button.tooltip"))
+  }
+
+  val node: HBox = HBox(8.0, label, button, baselineLabel, baselineButton).also {
     it.alignment = Pos.CENTER_LEFT
     it.padding = Insets(0.0, 8.0, 0.0, 8.0)
   }
@@ -67,8 +86,30 @@ class LevellingDueBar(
     staleness.removeListener(onChange)
   }
 
+  /** Computes the baseline part again. Nothing is computed while the message is hidden. */
+  fun refreshBaselineGap() {
+    showGap(if (node.isVisible) baselineGapOf() else BaselineGap.Covered)
+  }
+
   private fun show(visible: Boolean) {
     node.isVisible = visible
     node.isManaged = visible
+    refreshBaselineGap()
+  }
+
+  private fun showGap(gap: BaselineGap) {
+    val text = when (gap) {
+      is BaselineGap.Covered -> null
+      is BaselineGap.NoBaseline -> RootLocalizer.formatText("baseline.missing.none")
+      is BaselineGap.Missing -> RootLocalizer.formatText("baseline.missing", gap.tasks.size, gap.baseline.name)
+    }
+    baselineLabel.text = text ?: ""
+    setShown(baselineLabel, text != null)
+    setShown(baselineButton, gap is BaselineGap.Missing)
+  }
+
+  private fun setShown(control: Control, shown: Boolean) {
+    control.isVisible = shown
+    control.isManaged = shown
   }
 }

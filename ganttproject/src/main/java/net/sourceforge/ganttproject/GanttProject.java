@@ -125,6 +125,34 @@ public class GanttProject extends GanttProjectBase implements ResourceView, Gant
     });
   }
 
+  /** Which tasks are missing in the shown or the last baseline, for the status bar message. */
+  public BaselineGap getBaselineGap() {
+    return BaselineCatchUpKt.baselineGap(getTaskManager(), getBaselines(), getGanttChart().getBaseline());
+  }
+
+  /**
+   * Adds the missing tasks to the shown or the last baseline on the Swing thread, for the button of the status bar
+   * message. {@code onDone} is called in any case.
+   */
+  public void runBaselineCatchUpFromMessage(Runnable onDone) {
+    SwingUtilities.invokeLater(() -> {
+      try {
+        GanttPreviousState shown = getGanttChart().getBaseline();
+        GanttPreviousState target = BaselineCatchUpKt.catchUpTarget(getBaselines(), shown);
+        if (target != null) {
+          GanttPreviousState result = BaselineCatchUpKt.catchUpBaseline(getBaselines(), target, getTaskManager(),
+              getUndoManager(), InternationalizationCoreKt.getRootLocalizer().formatText("baseline.catchUp"));
+          if (result != null && target == shown) {
+            getGanttChart().setBaseline(result);
+            getGanttChart().reset();
+          }
+        }
+      } finally {
+        onDone.run();
+      }
+    });
+  }
+
   private final GanttChartTabContentPanel myGanttChartTabContent;
 
   private final ResourceChartTabContentPanel myResourceChartTabContent;
