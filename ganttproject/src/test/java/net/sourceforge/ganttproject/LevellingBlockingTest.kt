@@ -347,13 +347,13 @@ class LevellingBlockingTest {
     }
 
     @Test
-    fun `an effort driven task starts behind a day off of its resource`() {
+    fun `an effort driven task starts behind a day off of its blocking resource`() {
       val anna = resource("anna")
       val bob = resource("bob")
       bob.dayOff(monday, monday.plusDays(1))
       val task = effortTask("16")
       task.assign(anna, 100f)
-      task.assign(bob, 100f)
+      task.assign(bob, 100f, blocking = true)
       val result = level()
       assertEquals(monday.plusDays(2), task.startDay())
       assertTrue(result.conflicts.isEmpty())

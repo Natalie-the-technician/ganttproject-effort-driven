@@ -90,6 +90,8 @@ private fun GPCalendar.isWorkingDay(day: LocalDate): Boolean =
  * the task, but the resource contributes no hours on it: five days of work with one day off in the middle make six
  * days. Days off are only taken into account when there is a [start] to count from. Assignments which do not
  * [contributesEffort] are left out.
+ * A day off of a resource whose assignment is blocking takes the whole day: nobody makes progress on it, the day
+ * still belongs to the task. This holds for blocking assignments which do not contribute effort as well.
  */
 fun effortDrivenDurationDays(effort: BigDecimal?, allAssignments: Array<ResourceAssignment>,
                              start: LocalDate? = null, calendar: GPCalendar? = null): Long? {
@@ -99,13 +101,14 @@ fun effortDrivenDurationDays(effort: BigDecimal?, allAssignments: Array<Resource
   val assignments = allAssignments.filter { it.contributesEffort }.toTypedArray()
   val schedule = capacitySchedule(assignments)
   val daysOff = assignments.map { it.resource?.daysOffRanges().orEmpty() }
-  if (start != null && daysOff.any { it.isNotEmpty() }) {
+  val blockingDaysOff = allAssignments.filter { it.isBlocking }.flatMap { it.resource?.daysOffRanges().orEmpty() }
+  if (start != null && (daysOff.any { it.isNotEmpty() } || blockingDaysOff.isNotEmpty())) {
     // No resource brings any hours on any day, so counting days would only run into the limit.
     if (schedule.base.signum() <= 0 && schedule.changes.all { it.hoursPerDay.signum() <= 0 }) {
       return null
     }
     val hoursOn = { day: LocalDate ->
-      assignments.indices.fold(BigDecimal.ZERO) { sum, i ->
+      if (blockingDaysOff.covers(day)) BigDecimal.ZERO else assignments.indices.fold(BigDecimal.ZERO) { sum, i ->
         if (daysOff[i].covers(day)) sum else sum.add(availableHoursPerDay(assignments[i], day))
       }
     }
