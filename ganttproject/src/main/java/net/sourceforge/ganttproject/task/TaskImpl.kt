@@ -173,6 +173,7 @@ internal open class MutatorImpl(
   private val deadlineChange = FieldChange(myPropertiesEventSender, DeadlineValue(taskImpl.deadline))
   private val waitOnlyChange = FieldChange(myPropertiesEventSender, taskImpl.isWaitOnly)
   private val dateFixedChange = FieldChange(myPropertiesEventSender, taskImpl.isDateFixed)
+  private val onSiteOnlyChange = FieldChange(myPropertiesEventSender, taskImpl.isOnSiteOnly)
   private val criticalFlagChange = FieldChange(myPropertiesEventSender, taskImpl.isCritical)
   private val customPropertiesChange = FieldChange<CustomPropertyHolder>(myPropertiesEventSender, taskImpl.customValues.copyOf())
   private val expansionChange = FieldChange(myPropertiesEventSender, taskImpl.expand)
@@ -271,6 +272,9 @@ internal open class MutatorImpl(
       dateFixedChange.ifChanged {
         taskImpl.isDateFixed = it
       }
+      onSiteOnlyChange.ifChanged {
+        taskImpl.isOnSiteOnly = it
+      }
       criticalFlagChange.ifChanged {
         taskImpl.isCritical = it
         taskUpdateBuilder?.setCritical(criticalFlagChange.oldValue, it)
@@ -338,7 +342,7 @@ internal open class MutatorImpl(
    * hand is taken back for the same reason: the end follows from the start and the derived duration.
    */
   private fun deriveDurationFromEffort() {
-    if (!(effortChange.hasChange() || effortDrivenChange.hasChange() || myDurationChange.hasChange() || myStartChange.hasChange() || myEndChange.hasChange())) {
+    if (!(effortChange.hasChange() || effortDrivenChange.hasChange() || onSiteOnlyChange.hasChange() || myDurationChange.hasChange() || myStartChange.hasChange() || myEndChange.hasChange())) {
       return
     }
     val isMilestone = milestoneChange.newValueOrElse { taskImpl.isMilestone }
@@ -346,7 +350,8 @@ internal open class MutatorImpl(
       return
     }
     val effort = effortChange.newValueOrElse { EffortValue(taskImpl.effort) }.effort
-    effortDrivenProjectDays(effort, taskImpl.assignments, getStart().toLocalDate(), myManager.calendar)?.let {
+    effortDrivenProjectDays(effort, taskImpl.assignments, getStart().toLocalDate(), myManager.calendar,
+      requiresPresence = onSiteOnlyChange.newValueOrElse { taskImpl.isOnSiteOnly })?.let {
       // Drop what was asked for, then ask for the derived duration the usual way, which moves the end along.
       myDurationChange.clear()
       myEndChange.clear()
@@ -416,6 +421,8 @@ internal open class MutatorImpl(
   override fun setWaitOnly(waitOnly: Boolean) { waitOnlyChange.setValue(waitOnly) }
 
   override fun setDateFixed(dateFixed: Boolean) { dateFixedChange.setValue(dateFixed) }
+
+  override fun setOnSiteOnly(onSiteOnly: Boolean) { onSiteOnlyChange.setValue(onSiteOnly) }
 
   override fun setShape(shape: ShapePaint) { shapeChange.setValue(shape) }
 

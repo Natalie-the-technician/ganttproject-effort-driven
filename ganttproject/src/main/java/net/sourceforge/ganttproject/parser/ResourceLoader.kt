@@ -21,6 +21,7 @@ package net.sourceforge.ganttproject.parser
 import biz.ganttproject.core.io.XmlProject
 import biz.ganttproject.core.io.XmlResources
 import biz.ganttproject.core.model.task.CapacityChange
+import biz.ganttproject.core.model.task.HomeOfficePeriod
 import biz.ganttproject.core.model.task.WorkWeekChange
 import biz.ganttproject.core.model.task.parseWeekDays
 import java.time.LocalDate
@@ -49,6 +50,8 @@ class ResourceLoader(private val resourceManager: HumanResourceManager, private 
         hr.utilization = xmlResource.utilization
         hr.hoursSchedule = xmlResource.capacityChanges()
         hr.workWeek = xmlResource.workWeekChanges()
+        hr.homeOfficeWeek = xmlResource.homeOfficeWeekChanges()
+        hr.homeOfficePeriods = xmlResource.homeOfficePeriods()
         val roleID = xmlResource.role
         if (roleID.isNotBlank()) {
           roleManager.findRole(roleID)?.let { hr.role = it }
@@ -137,6 +140,26 @@ fun XmlResources.XmlResource.workWeekChanges(): List<WorkWeekChange> = workWeek.
   try {
     val days = parseWeekDays(it.days) ?: return@mapNotNull null
     WorkWeekChange(it.date?.takeIf { date -> date.isNotBlank() }?.let { date -> LocalDate.parse(date) }, days)
+  } catch (e: DateTimeParseException) {
+    null
+  }
+}
+
+/** The weekly pattern of days at home as stored in the file, read the way [workWeekChanges] reads the working week. */
+fun XmlResources.XmlResource.homeOfficeWeekChanges(): List<WorkWeekChange> = homeOfficeWeek.mapNotNull {
+  try {
+    val days = parseWeekDays(it.days) ?: return@mapNotNull null
+    WorkWeekChange(it.date?.takeIf { date -> date.isNotBlank() }?.let { date -> LocalDate.parse(date) }, days)
+  } catch (e: DateTimeParseException) {
+    null
+  }
+}
+
+/** The periods at home as stored in the file. A period which ends where it starts or before is its first day. */
+fun XmlResources.XmlResource.homeOfficePeriods(): List<HomeOfficePeriod> = homeOfficePeriods.mapNotNull {
+  try {
+    val start = LocalDate.parse(it.start)
+    HomeOfficePeriod(start, LocalDate.parse(it.end).takeIf { end -> end.isAfter(start) } ?: start.plusDays(1))
   } catch (e: DateTimeParseException) {
     null
   }

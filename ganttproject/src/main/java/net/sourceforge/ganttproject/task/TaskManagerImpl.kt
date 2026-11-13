@@ -44,6 +44,7 @@ internal fun TaskManager.TaskBuilder.setupNewTask(task: TaskImpl, manager: TaskM
     task.shape = it.shape
     task.effort = it.effort
     task.isEffortDriven = it.isEffortDriven
+    task.isOnSiteOnly = it.isOnSiteOnly
     it.customValues.customProperties.forEach { prop ->
       task.customValues.setValue(prop.definition, prop.value)
     }

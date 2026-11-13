@@ -31,6 +31,7 @@ import net.sourceforge.ganttproject.task.algorithm.applyLevelling
 import net.sourceforge.ganttproject.task.algorithm.capacityProblems
 import net.sourceforge.ganttproject.task.algorithm.collectLevelTasks
 import net.sourceforge.ganttproject.task.algorithm.durationAtStart
+import net.sourceforge.ganttproject.task.algorithm.presenceTest
 import net.sourceforge.ganttproject.task.algorithm.resourcePresence
 import net.sourceforge.ganttproject.task.algorithm.startAllowed
 import net.sourceforge.ganttproject.task.algorithm.WorkWeekWorkingDays
@@ -77,7 +78,8 @@ class LevellingAction(
     val from = maxOf(taskManager.projectStart.toModelLocalDate(), today)
     val worksOn = workingDaysOf(taskManager, workingDays)
     val result = levelTasks(tasks, from, workingDays.projectOnly, durationAtStart(taskManager, worksOn),
-      canStartOn = startAllowed(taskManager), isPresent = resourcePresence(taskManager), workingDaysOf = worksOn)
+      canStartOn = startAllowed(taskManager), isPresent = resourcePresence(taskManager), workingDaysOf = worksOn,
+      isAtWorkplace = presenceTest(taskManager))
     if (result.conflicts.any { it is LevelConflict.Cycle }) {
       report.show(true, i18n("task.level.cycle"))
       return
@@ -127,6 +129,9 @@ class LevellingAction(
         val reasons = mutableListOf<String>()
         if (conflict.blocking.isNotEmpty()) {
           reasons.add(i18n("task.level.noDate.absence", conflict.blocking.joinToString { resourceName(it) }))
+        }
+        if (conflict.atHome.isNotEmpty()) {
+          reasons.add(i18n("task.level.noDate.home", conflict.atHome.joinToString { resourceName(it) }))
         }
         if (conflict.fullFor.isNotEmpty()) {
           reasons.add(i18n("task.level.noDate.capacity", conflict.fullFor.joinToString { resourceName(it) }))

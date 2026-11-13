@@ -127,6 +127,8 @@ public class TaskImpl implements Task {
 
   private boolean isDateFixed;
 
+  private boolean isOnSiteOnly;
+
   private boolean isUnplugged = false;
 
   public final static int NONE = 0;
@@ -194,6 +196,7 @@ public class TaskImpl implements Task {
     myDeadline = copy.myDeadline;
     isWaitOnly = copy.isWaitOnly;
     isDateFixed = copy.isDateFixed;
+    isOnSiteOnly = copy.isOnSiteOnly;
 
     myDependencySlice = new TaskDependencySliceImpl(this, myManager.getDependencyCollection(), TaskDependencySlice.COMPLETE_SLICE_FXN);
     myDependencySliceAsDependant = new TaskDependencySliceAsDependant(this, myManager.getDependencyCollection());
@@ -847,6 +850,16 @@ public class TaskImpl implements Task {
   @Override
   public void setDateFixed(boolean dateFixed) {
     isDateFixed = dateFixed;
+  }
+
+  @Override
+  public boolean isOnSiteOnly() {
+    return isOnSiteOnly;
+  }
+
+  @Override
+  public void setOnSiteOnly(boolean onSiteOnly) {
+    isOnSiteOnly = onSiteOnly;
   }
 
   @Override

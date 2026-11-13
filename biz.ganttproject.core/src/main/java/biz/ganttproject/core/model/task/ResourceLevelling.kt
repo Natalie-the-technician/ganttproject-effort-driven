@@ -77,7 +77,10 @@ data class LevelTask(
    * Resources which have to be present on every day of the task, whatever their load. Several of them leave only the
    * days on which all of them are present. Fixed dates and frozen work do not ask.
    */
-  val blocking: Set<String> = emptySet()
+  val blocking: Set<String> = emptySet(),
+
+  /** The task needs its [blocking] resources on site, so it keeps off the days at home of them. */
+  val requiresPresence: Boolean = false
 )
 
 sealed interface LevelConflict {
@@ -103,9 +106,12 @@ sealed interface LevelConflict {
   /**
    * The search found no window for the task, which is placed on its earliest day instead. At least one list is not
    * empty: [blocking] are all blocking resources of the task if one of them was absent on a candidate day, so that no
-   * day has them all present; [fullFor] are the pools which had no room on a candidate day.
+   * day has them all present; [atHome] are all blocking resources of a task which needs them on site, if one of them
+   * was at home on a candidate day; [fullFor] are the pools which had no room on a candidate day.
    */
-  data class NoPossibleDate(val id: String, val blocking: List<String>, val fullFor: List<String>) : LevelConflict
+  data class NoPossibleDate(
+    val id: String, val blocking: List<String>, val fullFor: List<String>, val atHome: List<String> = emptyList()
+  ) : LevelConflict
 }
 
 data class LevelResult(
@@ -143,6 +149,8 @@ fun LevelTask.loadIn(pool: String): Int = loads[pool] ?: SHARED_POOL_LOAD
  * @param canStartOn whether a task may start on the given day, such as not on a day off of its resources. A task
  * with a fixed start is not asked.
  * @param isPresent whether a resource is present on the given day; asked only for the [LevelTask.blocking] resources.
+ * @param isAtWorkplace whether a resource is on site, not at home, on the given day; asked only for the
+ * [LevelTask.blocking] resources of a task which [LevelTask.requiresPresence].
  * @param workingDaysOf the working days of a task, when they differ from task to task, such as by the working weeks
  * of its resources. The duration and the days of a task are counted with its own working days.
  */
@@ -154,7 +162,8 @@ fun levelTasks(
   capacityOf: (String) -> Int = { 100 },
   canStartOn: (LevelTask, LocalDate) -> Boolean = { _, _ -> true },
   isPresent: (String, LocalDate) -> Boolean = { _, _ -> true },
-  workingDaysOf: (LevelTask) -> (LocalDate) -> Boolean = { isWorkingDay }
+  workingDaysOf: (LevelTask) -> (LocalDate) -> Boolean = { isWorkingDay },
+  isAtWorkplace: (String, LocalDate) -> Boolean = { _, _ -> true }
 ): LevelResult {
   val byId = tasks.associateBy { it.id }
   val order = topologicalOrder(tasks) ?: return LevelResult(emptyMap(), listOf(LevelConflict.Cycle(tasks.map { it.id })))
@@ -201,12 +210,13 @@ fun levelTasks(
       }
       workingDays(start, durationAt(task, start), worksOn)
     } else {
-      val search = searchWindow(earliest, task, durationAt, used, worksOn, capacityOf, canStartOn, isPresent)
+      val search = searchWindow(earliest, task, durationAt, used, worksOn, capacityOf, canStartOn, isPresent, isAtWorkplace)
       if (search.exhausted) {
         // A blocking resource counts as a reason only if its absence actually turned a day down.
         val blocking = if (search.absenceBlocked) task.blocking.sorted() else emptyList()
-        if (blocking.isNotEmpty() || search.fullFor.isNotEmpty()) {
-          conflicts.add(LevelConflict.NoPossibleDate(id, blocking, search.fullFor.sorted()))
+        val atHome = if (search.homeBlocked) task.blocking.sorted() else emptyList()
+        if (blocking.isNotEmpty() || atHome.isNotEmpty() || search.fullFor.isNotEmpty()) {
+          conflicts.add(LevelConflict.NoPossibleDate(id, blocking, search.fullFor.sorted(), atHome))
         }
       }
       search.window
@@ -310,16 +320,18 @@ fun findEarliestWindow(
   isWorkingDay: (LocalDate) -> Boolean,
   capacityOf: (String) -> Int,
   canStartOn: (LevelTask, LocalDate) -> Boolean = { _, _ -> true },
-  isPresent: (String, LocalDate) -> Boolean = { _, _ -> true }
+  isPresent: (String, LocalDate) -> Boolean = { _, _ -> true },
+  isAtWorkplace: (String, LocalDate) -> Boolean = { _, _ -> true }
 ): List<LocalDate> =
-  searchWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf, canStartOn, isPresent).window
+  searchWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf, canStartOn, isPresent, isAtWorkplace).window
 
 /**
  * The outcome of a window search. When the search is [exhausted], [window] starts on the earliest day, and
  * [absenceBlocked] and [fullFor] tell why the candidate days were turned down.
  */
 private class WindowSearch(
-  val window: List<LocalDate>, val exhausted: Boolean, val absenceBlocked: Boolean, val fullFor: Set<String>
+  val window: List<LocalDate>, val exhausted: Boolean, val absenceBlocked: Boolean, val fullFor: Set<String>,
+  val homeBlocked: Boolean = false
 )
 
 private fun searchWindow(
@@ -330,9 +342,11 @@ private fun searchWindow(
   isWorkingDay: (LocalDate) -> Boolean,
   capacityOf: (String) -> Int,
   canStartOn: (LevelTask, LocalDate) -> Boolean,
-  isPresent: (String, LocalDate) -> Boolean
+  isPresent: (String, LocalDate) -> Boolean,
+  isAtWorkplace: (String, LocalDate) -> Boolean
 ): WindowSearch {
   var absenceBlocked = false
+  var homeBlocked = false
   val fullFor = mutableSetOf<String>()
   var candidate = nextWorkingDay(earliest, isWorkingDay)
   if (!isWorkingDay(candidate)) {
@@ -341,6 +355,12 @@ private fun searchWindow(
     return WindowSearch(listOf(candidate), true, false, emptySet())
   }
   repeat(MAX_SEARCH_DAYS) {
+    if (task.requiresPresence && task.blocking.any { !isAtWorkplace(it, candidate) }) {
+      // The task does not start on a day at home, whatever its duration.
+      homeBlocked = true
+      candidate = nextWorkingDay(candidate.plusDays(1), isWorkingDay)
+      return@repeat
+    }
     if (!canStartOn(task, candidate)) {
       // A start turned down on a day off of a blocking resource is its absence as well.
       if (task.blocking.any { !isPresent(it, candidate) }) {
@@ -357,18 +377,23 @@ private fun searchWindow(
       if (absent) {
         absenceBlocked = true
       }
-      absent || task.pools.any { pool ->
+      // A day at home is no absence: it only turns the task down which needs somebody on site.
+      val atHome = !absent && task.requiresPresence && task.blocking.any { !isAtWorkplace(it, day) }
+      if (atHome) {
+        homeBlocked = true
+      }
+      absent || atHome || task.pools.any { pool ->
         val load = task.loadIn(pool)
         // A load of zero fits even on a day which fixed dates have overloaded.
         (load > 0 && (used[pool]?.get(day) ?: 0) + load > maxOf(capacityOf(pool), load)).also {
           if (it) fullFor.add(pool)
         }
       }
-    } ?: return WindowSearch(window, false, absenceBlocked, fullFor)
+    } ?: return WindowSearch(window, false, absenceBlocked, fullFor, homeBlocked)
     candidate = nextWorkingDay(blockedAt.plusDays(1), isWorkingDay)
   }
   return WindowSearch(
     workingDays(nextWorkingDay(earliest, isWorkingDay), durationAt(task, earliest), isWorkingDay),
-    true, absenceBlocked, fullFor
+    true, absenceBlocked, fullFor, homeBlocked
   )
 }

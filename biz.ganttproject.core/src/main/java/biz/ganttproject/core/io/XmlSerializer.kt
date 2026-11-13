@@ -281,6 +281,10 @@ data class XmlTasks(
     var isDateFixed: Boolean? = null,
 
     @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    @get:JacksonXmlProperty(isAttribute = true, localName = "on-site-only")
+    var isOnSiteOnly: Boolean? = null,
+
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
     @get:JacksonXmlCData
     var notes: String? = null,
 
@@ -358,6 +362,16 @@ data class XmlResources(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY)
     var workWeek: List<XmlWorkWeek> = emptyList(),
 
+    @get:JacksonXmlElementWrapper(useWrapping = false)
+    @get:JacksonXmlProperty(localName = "home-office-week")
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY)
+    var homeOfficeWeek: List<XmlWorkWeek> = emptyList(),
+
+    @get:JacksonXmlElementWrapper(useWrapping = false)
+    @get:JacksonXmlProperty(localName = "home-office-period")
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY)
+    var homeOfficePeriods: List<XmlHomeOfficePeriod> = emptyList(),
+
     @get:JsonInclude(JsonInclude.Include.NON_NULL) var rate: XmlRate? = null,
 
     @get:JacksonXmlElementWrapper(useWrapping = false)
@@ -379,6 +393,12 @@ data class XmlResources(
       @get:JsonInclude(JsonInclude.Include.NON_NULL)
       @get:JacksonXmlProperty(isAttribute = true) var date: String? = null,
       @get:JacksonXmlProperty(isAttribute = true) var days: String = ""
+    )
+
+    // As the interval of a vacation, the end is the day after the last day at home.
+    data class XmlHomeOfficePeriod(
+      @get:JacksonXmlProperty(isAttribute = true) var start: String = "",
+      @get:JacksonXmlProperty(isAttribute = true) var end: String = ""
     )
 
     data class XmlRate(

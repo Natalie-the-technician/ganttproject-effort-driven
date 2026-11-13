@@ -144,6 +144,7 @@ class TaskLoader(private val taskManager: TaskManager, private val treeCollapseV
       task.deadline = child.deadline?.let { GanttCalendar.parseXMLDate(it) }
       task.isWaitOnly = child.isWaitOnly ?: false
       task.isDateFixed = child.isDateFixed ?: false
+      task.isOnSiteOnly = child.isOnSiteOnly ?: false
       child.notes?.let {
         task.notes = it
       }

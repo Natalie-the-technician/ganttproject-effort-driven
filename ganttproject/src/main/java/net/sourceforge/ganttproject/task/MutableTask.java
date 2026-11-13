@@ -83,5 +83,7 @@ public interface MutableTask {
 
   void setDateFixed(boolean dateFixed);
 
+  void setOnSiteOnly(boolean onSiteOnly);
+
   void setCustomProperties(CustomPropertyHolder customProperties) throws CustomColumnsException;
 }

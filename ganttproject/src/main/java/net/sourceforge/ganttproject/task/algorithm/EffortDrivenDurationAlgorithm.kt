@@ -21,6 +21,7 @@ package net.sourceforge.ganttproject.task.algorithm
 import biz.ganttproject.core.calendar.GPCalendar
 import biz.ganttproject.core.model.task.CapacityChange
 import biz.ganttproject.core.model.task.CapacitySchedule
+import biz.ganttproject.core.model.task.HomeOffice
 import biz.ganttproject.core.model.task.TaskEffort
 import biz.ganttproject.task.recurrence.toModelLocalDate
 import biz.ganttproject.core.model.task.daysNeeded
@@ -95,28 +96,34 @@ private fun GPCalendar.isWorkingDay(day: LocalDate): Boolean =
  * those without load, which are not involved in the task.
  */
 fun effortDrivenDurationDays(effort: BigDecimal?, allAssignments: Array<ResourceAssignment>,
-                             start: LocalDate? = null, calendar: GPCalendar? = null): Long? =
-  effortDrivenDurationDays(effort, effortInputs(allAssignments), start) { calendar?.isWorkingDay(it) ?: true }
+                             start: LocalDate? = null, calendar: GPCalendar? = null, requiresPresence: Boolean = false): Long? =
+  effortDrivenDurationDays(effort, effortInputs(allAssignments, requiresPresence), start) { calendar?.isWorkingDay(it) ?: true }
 
 /**
  * What the duration of an effort driven task is derived from, read from its assignments: the assignments which
- * [contributesEffort], their hours and days off, and the days off of the blocking assignments. Reading them once lets
+ * [contributesEffort], their hours and days off, and the days off of the blocking assignments, and for a task which needs
+ * somebody on site the days at home of the blocking assignments, which take the day as a day off does. Reading them once lets
  * a caller which asks for many start days, such as levelling, derive the duration without reading them again.
  */
 class EffortInputs(
   val assignments: Array<ResourceAssignment>,
   val schedule: CapacitySchedule,
   val daysOff: List<List<Pair<LocalDate, LocalDate>>>,
-  val blockingDaysOff: List<Pair<LocalDate, LocalDate>>
-)
+  val blockingDaysOff: List<Pair<LocalDate, LocalDate>>,
+  val blockingHomeOffice: List<HomeOffice> = emptyList()
+) {
+  fun blockedOn(day: LocalDate): Boolean = blockingDaysOff.covers(day) || blockingHomeOffice.any { it.worksFromHome(day) }
+}
 
-fun effortInputs(allAssignments: Array<ResourceAssignment>): EffortInputs {
+fun effortInputs(allAssignments: Array<ResourceAssignment>, requiresPresence: Boolean = false): EffortInputs {
   val assignments = allAssignments.filter { it.contributesEffort }.toTypedArray()
   return EffortInputs(
     assignments,
     capacitySchedule(assignments),
     assignments.map { it.resource?.daysOffRanges().orEmpty() },
-    allAssignments.filter { it.load > 0 && it.isBlocking }.flatMap { it.resource?.daysOffRanges().orEmpty() }
+    allAssignments.filter { it.load > 0 && it.isBlocking }.flatMap { it.resource?.daysOffRanges().orEmpty() },
+    if (!requiresPresence) emptyList() else
+      allAssignments.filter { it.load > 0 && it.isBlocking }.mapNotNull { it.resource?.homeOffice }.filter { !it.isEmpty }
   )
 }
 
@@ -129,14 +136,13 @@ fun effortDrivenDurationDays(effort: BigDecimal?, inputs: EffortInputs, start: L
   val assignments = inputs.assignments
   val schedule = inputs.schedule
   val daysOff = inputs.daysOff
-  val blockingDaysOff = inputs.blockingDaysOff
-  if (start != null && (daysOff.any { it.isNotEmpty() } || blockingDaysOff.isNotEmpty())) {
+  if (start != null && (daysOff.any { it.isNotEmpty() } || inputs.blockingDaysOff.isNotEmpty() || inputs.blockingHomeOffice.isNotEmpty())) {
     // No resource brings any hours on any day, so counting days would only run into the limit.
     if (schedule.base.signum() <= 0 && schedule.changes.all { it.hoursPerDay.signum() <= 0 }) {
       return null
     }
     val hoursOn = { day: LocalDate ->
-      if (blockingDaysOff.covers(day)) BigDecimal.ZERO else assignments.indices.fold(BigDecimal.ZERO) { sum, i ->
+      if (inputs.blockedOn(day)) BigDecimal.ZERO else assignments.indices.fold(BigDecimal.ZERO) { sum, i ->
         if (daysOff[i].covers(day)) sum else sum.add(availableHoursPerDay(assignments[i], day))
       }
     }
@@ -167,7 +173,8 @@ class EffortDrivenDurationAlgorithm(private val taskManager: TaskManager) : Algo
         continue
       }
       val start = task.start.toLocalDate()
-      val days = effortDrivenProjectDays(task.effort, task.assignments, start, taskManager.calendar, workingDays) ?: continue
+      val days = effortDrivenProjectDays(task.effort, task.assignments, start, taskManager.calendar, workingDays,
+        task.isOnSiteOnly) ?: continue
       val newDuration = taskManager.createLength(days)
       val current = task.duration
       if (current.timeUnit == newDuration.timeUnit && current.length == newDuration.length) {

@@ -21,6 +21,8 @@ package net.sourceforge.ganttproject.resource;
 import biz.ganttproject.core.calendar.GanttDaysOff;
 import biz.ganttproject.core.model.task.CapacityChange;
 import biz.ganttproject.core.model.task.CapacitySchedule;
+import biz.ganttproject.core.model.task.HomeOffice;
+import biz.ganttproject.core.model.task.HomeOfficePeriod;
 import biz.ganttproject.core.model.task.WorkWeekChange;
 import biz.ganttproject.core.model.task.WorkWeekSchedule;
 import biz.ganttproject.customproperty.*;
@@ -70,6 +72,10 @@ public class HumanResource implements CustomPropertyHolder {
   private List<CapacityChange> myHoursSchedule = Collections.emptyList();
 
   private List<WorkWeekChange> myWorkWeek = Collections.emptyList();
+
+  private List<WorkWeekChange> myHomeOfficeWeek = Collections.emptyList();
+
+  private List<HomeOfficePeriod> myHomeOfficePeriods = Collections.emptyList();
 
   private final List<GanttDaysOff> myDaysOffList = new ArrayList<>();
 
@@ -124,6 +130,8 @@ public class HumanResource implements CustomPropertyHolder {
     setUtilization(copy.getUtilization());
     setHoursSchedule(copy.getHoursSchedule());
     setWorkWeek(copy.getWorkWeek());
+    setHomeOfficeWeek(copy.getHomeOfficeWeek());
+    setHomeOfficePeriods(copy.getHomeOfficePeriods());
     myManager = copy.myManager;
     // Straight into the list rather than through addDaysOff(): the copy is not in the manager yet
     // and must not be announced, which is what areEventsEnabled = false above takes care of for the
@@ -464,6 +472,34 @@ public class HumanResource implements CustomPropertyHolder {
   public void setWorkWeek(List<WorkWeekChange> workWeek) {
     myWorkWeek = Collections.unmodifiableList(new WorkWeekSchedule(workWeek).getChanges());
     fireResourceChanged();
+  }
+
+  /**
+   * The days of the week on which this resource works at home, as they change over time, sorted by date. Empty if
+   * the resource never works at home on a weekly pattern.
+   */
+  public List<WorkWeekChange> getHomeOfficeWeek() {
+    return myHomeOfficeWeek;
+  }
+
+  public void setHomeOfficeWeek(List<WorkWeekChange> homeOfficeWeek) {
+    myHomeOfficeWeek = Collections.unmodifiableList(new WorkWeekSchedule(homeOfficeWeek).getChanges());
+    fireResourceChanged();
+  }
+
+  /** The periods in which this resource works at home, sorted by start. */
+  public List<HomeOfficePeriod> getHomeOfficePeriods() {
+    return myHomeOfficePeriods;
+  }
+
+  public void setHomeOfficePeriods(List<HomeOfficePeriod> homeOfficePeriods) {
+    myHomeOfficePeriods = Collections.unmodifiableList(new HomeOffice(Collections.emptyList(), homeOfficePeriods).getPeriods());
+    fireResourceChanged();
+  }
+
+  /** Where this resource works: the weekly pattern and the periods at home together. */
+  public HomeOffice getHomeOffice() {
+    return new HomeOffice(myHomeOfficeWeek, myHomeOfficePeriods);
   }
 
   public double getTotalLoad() {

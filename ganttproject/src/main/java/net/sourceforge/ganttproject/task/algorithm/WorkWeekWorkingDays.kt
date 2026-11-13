@@ -96,8 +96,9 @@ class WorkWeekWorkingDays(private val calendar: GPCalendar) {
  * which starts on [start]. The days are counted with the working days of the task, see [WorkWeekWorkingDays].
  */
 fun effortDrivenProjectDays(effort: java.math.BigDecimal?, assignments: Array<ResourceAssignment>, start: LocalDate,
-                            calendar: GPCalendar, workingDays: WorkWeekWorkingDays = WorkWeekWorkingDays(calendar)): Long? {
+                            calendar: GPCalendar, workingDays: WorkWeekWorkingDays = WorkWeekWorkingDays(calendar),
+                            requiresPresence: Boolean = false): Long? {
   val isWorkingDay = workingDays.forAssignments(assignments)
-  val days = effortDrivenDurationDays(effort, effortInputs(assignments), start, isWorkingDay) ?: return null
+  val days = effortDrivenDurationDays(effort, effortInputs(assignments, requiresPresence), start, isWorkingDay) ?: return null
   return workingDays.projectDays(start, days, isWorkingDay)
 }

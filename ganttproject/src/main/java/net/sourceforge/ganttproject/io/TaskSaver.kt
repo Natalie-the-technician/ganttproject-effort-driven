@@ -103,6 +103,9 @@ class TaskSaver(private val taskCollapseView: TreeCollapseView<Task>): SaverBase
     if (task.isDateFixed) {
       addAttribute("date-fixed", true, attrs)
     }
+    if (task.isOnSiteOnly) {
+      addAttribute("on-site-only", true, attrs)
+    }
     startElement("task", attrs, handler)
     cdataElement("notes", task.externalizedNotes(), attrs, handler)
 

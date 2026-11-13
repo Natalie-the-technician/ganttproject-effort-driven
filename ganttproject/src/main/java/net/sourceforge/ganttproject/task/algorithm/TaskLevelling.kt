@@ -97,7 +97,8 @@ private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today
     frozen = frozen,
     deadline = deadline?.time?.toModelLocalDate(),
     // A blocking resource has to be present whatever its load, also on a milestone.
-    blocking = assignments.filter { it.resource != null && it.isBlocking }.map { it.resource.id.toString() }.toSet()
+    blocking = assignments.filter { it.resource != null && it.isBlocking }.map { it.resource.id.toString() }.toSet(),
+    requiresPresence = isOnSiteOnly
   )
 }
 
@@ -125,6 +126,17 @@ fun resourcePresence(taskManager: TaskManager): (String, LocalDate) -> Boolean {
   val daysOff = taskManager.tasks.flatMap { it.assignments.toList() }.mapNotNull { it.resource }.distinct()
     .associate { it.id.toString() to it.daysOffRanges() }
   return { resourceId, day -> daysOff[resourceId]?.covers(day) != true }
+}
+
+/**
+ * Whether a resource, by its id as in [LevelTask.blocking], is on site on the given day, that is, not at home. A day at
+ * home is not a day off: the resource works, but not on a task which has to be done on site. The home offices are read
+ * once, when the function is made, so one function serves one levelling run.
+ */
+fun presenceTest(taskManager: TaskManager): (String, LocalDate) -> Boolean {
+  val homeOffice = taskManager.tasks.flatMap { it.assignments.toList() }.mapNotNull { it.resource }.distinct()
+    .associate { it.id.toString() to it.homeOffice }.filterValues { !it.isEmpty }
+  return { resourceId, day -> homeOffice[resourceId]?.worksFromHome(day) != true }
 }
 
 /**
@@ -157,7 +169,7 @@ fun durationAtStart(taskManager: TaskManager,
     if (levelTask.frozen || task == null || !task.isEffortDriven || task.isMilestone) {
       levelTask.durationDays
     } else {
-      val effortInputs = inputs.getOrPut(levelTask.id) { effortInputs(task.assignments) }
+      val effortInputs = inputs.getOrPut(levelTask.id) { effortInputs(task.assignments, task.isOnSiteOnly) }
       effortDrivenDurationDays(task.effort, effortInputs, start, worksOn(levelTask))?.toInt() ?: levelTask.durationDays
     }
   }
@@ -169,7 +181,8 @@ fun durationAtStart(taskManager: TaskManager,
  */
 fun capacityProblems(taskManager: TaskManager): List<Task> = taskManager.tasks.filter { task ->
   task.isEffortDriven && !task.isMilestone && !task.isSupertask && (task.effort?.signum() ?: 0) > 0 &&
-    effortDrivenProjectDays(task.effort, task.assignments, task.start.time.toModelLocalDate(), taskManager.calendar) == null
+    effortDrivenProjectDays(task.effort, task.assignments, task.start.time.toModelLocalDate(), taskManager.calendar,
+      requiresPresence = task.isOnSiteOnly) == null
 }
 
 /**

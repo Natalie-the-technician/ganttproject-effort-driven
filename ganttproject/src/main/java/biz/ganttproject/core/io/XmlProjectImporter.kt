@@ -25,6 +25,8 @@ import biz.ganttproject.core.model.task.ConstraintType.fromPersistentValue
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.GanttCalendar
 import net.sourceforge.ganttproject.parser.capacityChanges
+import net.sourceforge.ganttproject.parser.homeOfficePeriods
+import net.sourceforge.ganttproject.parser.homeOfficeWeekChanges
 import net.sourceforge.ganttproject.parser.workWeekChanges
 import net.sourceforge.ganttproject.GanttPreviousState
 import net.sourceforge.ganttproject.GanttPreviousStateTask
@@ -234,6 +236,8 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
       resource.utilization = xmlRes.utilization
       resource.hoursSchedule = xmlRes.capacityChanges()
       resource.workWeek = xmlRes.workWeekChanges()
+      resource.homeOfficeWeek = xmlRes.homeOfficeWeekChanges()
+      resource.homeOfficePeriods = xmlRes.homeOfficePeriods()
       xmlRes.props.forEach { xmlProp ->
         val prop = resCustomPropManager.definitions.find { it.id == xmlProp.definitionId }
         if (prop != null) {
@@ -287,6 +291,7 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
     task.deadline = xmlTask.deadline?.let { GanttCalendar.parseXMLDate(it) }
     task.isWaitOnly = xmlTask.isWaitOnly ?: false
     task.isDateFixed = xmlTask.isDateFixed ?: false
+    task.isOnSiteOnly = xmlTask.isOnSiteOnly ?: false
     xmlTask.shape?.let {
       task.shape = buildShapePaint(it, task.color)
     }

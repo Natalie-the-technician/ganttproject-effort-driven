@@ -124,6 +124,9 @@ public interface Task extends MutableTask, IdentifiableRow {
   /** Whether resource levelling must keep this task on its start date. */
   boolean isDateFixed();
 
+  /** Whether this task needs its blocking resources on site, so that levelling keeps it off their days at home. */
+  boolean isOnSiteOnly();
+
   TaskMutator createMutator();
 
   TaskMutator createMutatorFixingDuration();
