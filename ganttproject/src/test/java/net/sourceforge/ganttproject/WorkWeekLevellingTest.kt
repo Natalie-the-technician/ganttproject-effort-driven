@@ -135,14 +135,14 @@ class WorkWeekLevellingTest {
     val result = level()
     assertEquals(6, result.durations[first.id])
     assertEquals(monday, result.starts[first.id])
-    // Six of Anna's days are Monday to Saturday; on the project calendar they would reach to Tuesday the 10th.
+    // Anna names Saturday, but the project leaves it free: her six days are Monday to Friday and the Monday after.
     val end = workingDays.endAfter(monday, 6, workingDays.forTask(first))
-    assertEquals(monday.plusDays(7), end)
+    assertEquals(monday.plusDays(8), end)
     assertEquals(end, result.starts[second.id])
     applyLevelling(result.starts, result.durations, project.taskManager, undoManager, "level")
     assertEquals(end, second.startDay())
-    // The task model counts the project working days Monday to Friday; Saturday is no working day of the project.
-    assertEquals(5, first.duration.length)
+    // The task model counts the same project working days, so bar and calculation agree.
+    assertEquals(6, first.duration.length)
   }
 
   @Test
@@ -157,7 +157,7 @@ class WorkWeekLevellingTest {
     val result = level()
     assertEquals(6, result.durations[annaFirst.id])
     assertEquals(3, result.durations[ottoFirst.id])
-    assertEquals(monday.plusDays(7), result.starts[annaSecond.id])
+    assertEquals(monday.plusDays(8), result.starts[annaSecond.id])
     // Otto does not work on Wednesday: Monday, Tuesday and Thursday, so his next task starts on Friday.
     assertEquals(monday.plusDays(4), result.starts[ottoSecond.id])
     assertEquals(workingDays.endAfter(monday, 3, workingDays.forTask(ottoFirst)), result.starts[ottoSecond.id])

@@ -153,19 +153,19 @@ class WorkWeekTest {
   }
 
   @Test
-  fun `a task works on a day when every involved resource does, but never on a holiday`() {
+  fun `a task works on a day when the project and every involved resource do, but never on a day the project leaves free`() {
     val monTue = WorkWeekSchedule(listOf(week(MONDAY, TUESDAY)))
     val withSaturday = WorkWeekSchedule(listOf(week(MONDAY, SATURDAY)))
     val nothing = WorkWeekSchedule()
     val wednesday = monday.plusDays(2)
     val saturday = monday.plusDays(5)
-    assertFalse(taskWorksOn(wednesday, true, false, listOf(monTue)))
-    assertTrue(taskWorksOn(wednesday, true, false, listOf(nothing)))
-    assertTrue(taskWorksOn(saturday, false, true, listOf(withSaturday)))
-    // A resource without a week follows the project calendar, which leaves Saturday free.
-    assertFalse(taskWorksOn(saturday, false, true, listOf(withSaturday, nothing)))
-    assertFalse(taskWorksOn(saturday, false, false, listOf(withSaturday)))
-    assertTrue(taskWorksOn(wednesday, true, false, emptyList()))
+    assertFalse(taskWorksOn(wednesday, true, listOf(monTue)))
+    assertTrue(taskWorksOn(wednesday, true, listOf(nothing)))
+    // The resource names Saturday, but the project leaves it free, be it for its weekday or as a holiday.
+    assertFalse(taskWorksOn(saturday, false, listOf(withSaturday)))
+    assertFalse(taskWorksOn(saturday, false, listOf(withSaturday, nothing)))
+    assertTrue(taskWorksOn(wednesday, true, emptyList()))
+    assertFalse(taskWorksOn(wednesday, false, emptyList()))
   }
 
   // The project file
@@ -223,12 +223,12 @@ class WorkWeekTest {
   }
 
   @Test
-  fun `a Saturday is a day of the task only when every resource works on it`() {
+  fun `a Saturday which the resource names is no day of the task, the project leaves it free`() {
     val anna = resource("anna", week(MONDAY, TUESDAY, FRIDAY, SATURDAY))
     val bob = resource("bob")
-    // Anna alone: Monday, Tuesday, Friday, Saturday make four days of work in the first week.
-    assertEquals(5, effortTask("32", anna).days())
-    // With Bob, who follows the project calendar, Saturday is free and Anna does not work Wednesday and Thursday.
+    // Anna alone: Monday, Tuesday, Friday and the Monday after make four days of work, six days of the project.
+    assertEquals(6, effortTask("32", anna).days())
+    // With Bob, who follows the project calendar, Anna does not work Wednesday and Thursday.
     assertEquals(2, effortTask("32", anna, bob).days())
     assertEquals(6, effortTask("64", anna, bob).days())
   }

@@ -30,14 +30,6 @@ import net.sourceforge.ganttproject.task.Task
 import java.time.LocalDate
 
 /**
- * Whether the project calendar leaves a day with the given mask free because of its weekday only. A weekend day is
- * free unless it is a working day by exception; a holiday is free whatever its weekday, and the mask of a holiday
- * never has [GPCalendar.DayMask.WORKING].
- */
-fun projectDayIsFreeForWeekdayReasons(mask: Int): Boolean =
-  mask and GPCalendar.DayMask.WORKING == 0 && mask and GPCalendar.DayMask.HOLIDAY == 0
-
-/**
  * Whether the working week of the resource of this assignment decides on the days of its task: the resource brings
  * hours to the effort or has to be present, and the assignment has a load. An assignment which is neither, or has no
  * load, is not involved in the task.
@@ -70,7 +62,7 @@ class WorkWeekWorkingDays(private val calendar: GPCalendar) {
     }
     return { day ->
       val mask = calendar.getDayMask(day.toModelDate())
-      taskWorksOn(day, mask and GPCalendar.DayMask.WORKING != 0, projectDayIsFreeForWeekdayReasons(mask), involved)
+      taskWorksOn(day, mask and GPCalendar.DayMask.WORKING != 0, involved)
     }
   }
 

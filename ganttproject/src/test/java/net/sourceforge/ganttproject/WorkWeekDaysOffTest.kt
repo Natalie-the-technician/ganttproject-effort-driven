@@ -40,7 +40,6 @@ import java.text.DateFormat
 import java.time.DayOfWeek
 import java.time.DayOfWeek.FRIDAY
 import java.time.DayOfWeek.MONDAY
-import java.time.DayOfWeek.SATURDAY
 import java.time.DayOfWeek.THURSDAY
 import java.time.DayOfWeek.TUESDAY
 import java.time.DayOfWeek.WEDNESDAY
@@ -57,7 +56,6 @@ class WorkWeekDaysOffTest {
   private val monday = LocalDate.of(2026, 11, 2)
   private val wednesday = monday.plusDays(2)
   private val thursday = monday.plusDays(3)
-  private val saturday = monday.plusDays(5)
 
   @BeforeEach
   fun setUp() {
@@ -149,16 +147,16 @@ class WorkWeekDaysOffTest {
 
   @Test
   fun `two tasks with different work weeks get their own days in one levelling run`() {
-    val sam = resource("sam", week(MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY))
-    val wolf = resource("wolf", week(MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY))
-    sam.dayOff(saturday)
-    wolf.dayOff(saturday)
-    // Saturday is a day of Sam's task and costs a day; it is no day of Wolf's task and costs nothing.
-    val withSaturday = effortTask(48, sam)
-    val withoutSaturday = effortTask(48, wolf)
-    assertEquals(listOf(7, 6), levelledDays(withSaturday, withoutSaturday))
-    assertEquals(listOf(6, 7), levelledDays(withoutSaturday, withSaturday))
-    assertEquals(7L, derivedDays(withSaturday))
-    assertEquals(6L, derivedDays(withoutSaturday))
+    val sam = resource("sam", week(MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY))
+    val wolf = resource("wolf", week(MONDAY, TUESDAY, THURSDAY, FRIDAY))
+    sam.dayOff(wednesday)
+    wolf.dayOff(wednesday)
+    // Wednesday is a day of Sam's task and costs a day; it is no day of Wolf's task and costs nothing.
+    val withWednesday = effortTask(48, sam)
+    val withoutWednesday = effortTask(48, wolf)
+    assertEquals(listOf(7, 6), levelledDays(withWednesday, withoutWednesday))
+    assertEquals(listOf(6, 7), levelledDays(withoutWednesday, withWednesday))
+    assertEquals(7L, derivedDays(withWednesday))
+    assertEquals(6L, derivedDays(withoutWednesday))
   }
 }

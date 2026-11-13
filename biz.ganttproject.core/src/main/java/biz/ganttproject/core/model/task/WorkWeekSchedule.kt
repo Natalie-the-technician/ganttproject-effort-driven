@@ -52,24 +52,17 @@ class WorkWeekSchedule(changes: List<WorkWeekChange> = emptyList()) {
 }
 
 /**
- * Whether a task works on [day], given the working weeks of the resources [involved] in it. Every involved resource
- * has to be available, where a resource without a statement for the day is available if the project calendar says
- * so. Hence a resource can take a working day of the project away from the task, and a day which the project calendar
- * leaves free because of its weekday becomes a working day of the task if all involved resources work on it. A day
- * which the project calendar leaves free for another reason, such as a holiday, stays free. A task without involved
+ * Whether a task works on [day], given the working weeks of the resources [involved] in it. A task only works on
+ * working days of the project: a day which the project calendar leaves free, be it a weekend day or a holiday, is
+ * never a working day of the task, even if every involved resource names its weekday. On a working day of the project
+ * every involved resource has to be available, where a resource without a statement for the day is available. Hence a
+ * resource can take a working day of the project away from the task, but never add one. A task without involved
  * resources follows the project calendar.
  *
  * @param projectWorking whether the project calendar says that [day] is a working day.
- * @param freeForWeekday whether the project calendar leaves [day] free because of its weekday only.
  */
-fun taskWorksOn(day: LocalDate, projectWorking: Boolean, freeForWeekday: Boolean,
-                involved: List<WorkWeekSchedule>): Boolean {
-  if (involved.isEmpty()) {
-    return projectWorking
-  }
-  val everybodyAvailable = involved.all { it.worksOn(day) ?: projectWorking }
-  return if (projectWorking) everybodyAvailable else everybodyAvailable && freeForWeekday
-}
+fun taskWorksOn(day: LocalDate, projectWorking: Boolean, involved: List<WorkWeekSchedule>): Boolean =
+  projectWorking && involved.all { it.worksOn(day) ?: true }
 
 /**
  * Reads a working week as typed by a user: `1,2,5,6; 2027-03-01: 1,2,3`. Days are ISO numbers from 1 for Monday to

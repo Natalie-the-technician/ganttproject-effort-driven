@@ -53,8 +53,13 @@ import java.io.File
 import java.math.BigDecimal
 import java.nio.file.Files
 import java.text.DateFormat
+import java.time.DayOfWeek.FRIDAY
 import java.time.DayOfWeek.MONDAY
+import java.time.DayOfWeek.SATURDAY
+import java.time.DayOfWeek.SUNDAY
+import java.time.DayOfWeek.THURSDAY
 import java.time.DayOfWeek.TUESDAY
+import java.time.DayOfWeek.WEDNESDAY
 import java.time.LocalDate
 import java.util.Locale
 
@@ -183,6 +188,28 @@ class WorkWeekFieldTest {
     panel.save()
     assertEquals(listOf(WorkWeekChange(null, setOf(MONDAY, TUESDAY)), WorkWeekChange(LocalDate.of(2027, 5, 1), setOf())),
       workWeek())
+  }
+
+  @Test
+  fun `a work week without a day in common with the project week is accepted with a warning`() {
+    val projectWeek = projectWorkWeek(project.taskManager.calendar)
+    assertEquals(setOf(MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY), projectWeek)
+    assertNotNull(workWeekWarning("6,7", projectWeek))
+    assertNotNull(workWeekWarning("1,2,3,4,5; 2027-05-01: 6", projectWeek))
+    assertNull(workWeekWarning("1,6", projectWeek))
+    assertNull(workWeekWarning("1,2,3,4,5,6", projectWeek))
+    assertNull(workWeekWarning("", projectWeek))
+    assertNull(workWeekWarning("1,8", projectWeek))
+    // Without the week of the project nothing is known about it.
+    assertNull(workWeekWarning("6,7"))
+    // It is a different warning from the one for a week without any day.
+    assertNotEquals(workWeekWarning(":", projectWeek), workWeekWarning("6,7", projectWeek))
+
+    val anna = resource()
+    val panel = MainPropertiesPanel(anna, project.taskManager.calendar)
+    panel.workWeekOption.set("6,7")
+    panel.save()
+    assertEquals(listOf(WorkWeekChange(null, setOf(SATURDAY, SUNDAY))), anna.workWeek)
   }
 
   /**

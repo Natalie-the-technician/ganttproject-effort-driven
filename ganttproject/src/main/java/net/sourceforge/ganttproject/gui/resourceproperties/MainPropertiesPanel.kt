@@ -23,6 +23,7 @@ import biz.ganttproject.app.PropertySheetBuilder
 import biz.ganttproject.app.RootLocalizer
 import biz.ganttproject.app.i18n
 import biz.ganttproject.colorFromUiManager
+import biz.ganttproject.core.calendar.GPCalendar
 import biz.ganttproject.core.model.task.WorkWeekSchedule
 import biz.ganttproject.core.model.task.formatWorkWeek
 import biz.ganttproject.core.model.task.parseWorkWeek
@@ -44,8 +45,12 @@ import javafx.util.StringConverter
 import net.sourceforge.ganttproject.resource.HumanResource
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RoleManager
+import java.time.DayOfWeek
 
-class MainPropertiesPanel(private val resource: HumanResource) {
+class MainPropertiesPanel(private val resource: HumanResource, private val projectWeek: Set<DayOfWeek>? = null) {
+  constructor(resource: HumanResource, calendar: GPCalendar) : this(resource, projectWorkWeek(calendar))
+
+
   val title: String = RootLocalizer.formatText("general")
   val fxComponent by lazy { getFxNode() }
   val validationErrors = FXCollections.observableArrayList<String>()
@@ -85,10 +90,11 @@ class MainPropertiesPanel(private val resource: HumanResource) {
     pane.validationErrors.addListener(MapChangeListener {
       validationErrors.setAll(pane.validationErrors.values)
     })
-    // A week without a working day is accepted, so it is a warning below the fields, not a validation error.
+    // A week without a working day, or without a day in common with the project, is accepted, so it is a warning below
+    // the fields, not a validation error.
     val workWeekHint = ErrorPane()
-    workWeekOption.addWatcher { workWeekHint.message(workWeekWarning(it.newValue), ErrorPane.MessageType.WARNING) }
-    workWeekHint.message(workWeekWarning(workWeekOption.value), ErrorPane.MessageType.WARNING)
+    workWeekOption.addWatcher { workWeekHint.message(workWeekWarning(it.newValue, projectWeek), ErrorPane.MessageType.WARNING) }
+    workWeekHint.message(workWeekWarning(workWeekOption.value, projectWeek), ErrorPane.MessageType.WARNING)
     onRequestFocus = pane::requestFocus
     children.add(VBox(pane.node, workWeekHint.fxNode))
   }
@@ -119,14 +125,27 @@ private val workWeekValidator = ValueValidator { text ->
   text
 }
 
+/** The weekdays which the project calendar sets as working days. Exceptions of single dates are not looked at. */
+internal fun projectWorkWeek(calendar: GPCalendar): Set<DayOfWeek> = DayOfWeek.values().filter {
+  // java.util.Calendar numbers Sunday as 1, java.time numbers it as 7.
+  calendar.getWeekDayType(it.value % 7 + 1) == GPCalendar.DayType.WORKING
+}.toSet()
+
 /**
- * The warning for a work week with a change on which the resource works on no day, or null. Such a week is valid:
- * the effort driven tasks of the resource just make no progress from that date on.
+ * The warning for a work week with a change on which the resource works on no day, or, if the week of the project is
+ * given, with a change whose days are all free in the project, or null. Such a week is valid: the effort driven tasks
+ * of the resource just make no progress from that date on, because a task only works on working days of the project.
  */
-internal fun workWeekWarning(text: String?): String? {
-  val noDay = parseWorkWeek(text ?: "")?.firstOrNull { it.days.isEmpty() } ?: return null
-  return noDay.from?.let { i18n.formatText("workWeek.warning.noDayFrom", it.toString()) }
-    ?: i18n.formatText("workWeek.warning.noDay")
+internal fun workWeekWarning(text: String?, projectWeek: Set<DayOfWeek>? = null): String? {
+  val changes = parseWorkWeek(text ?: "") ?: return null
+  changes.firstOrNull { it.days.isEmpty() }?.let { noDay ->
+    return noDay.from?.let { i18n.formatText("workWeek.warning.noDayFrom", it.toString()) }
+      ?: i18n.formatText("workWeek.warning.noDay")
+  }
+  if (projectWeek != null && changes.any { change -> change.days.none { it in projectWeek } }) {
+    return i18n.formatText("workWeek.warning.noProjectDay")
+  }
+  return null
 }
 
 private val roleStringConverter = object : StringConverter<Role>() {

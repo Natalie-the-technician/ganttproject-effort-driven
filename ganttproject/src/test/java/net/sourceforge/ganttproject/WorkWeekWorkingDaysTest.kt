@@ -29,7 +29,6 @@ import net.sourceforge.ganttproject.task.ResourceAssignment
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.algorithm.WorkWeekWorkingDays
 import net.sourceforge.ganttproject.task.algorithm.isInvolvedInWorkWeek
-import net.sourceforge.ganttproject.task.algorithm.projectDayIsFreeForWeekdayReasons
 import net.sourceforge.ganttproject.task.algorithm.workingDayTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -136,17 +135,17 @@ class WorkWeekWorkingDaysTest {
   // Taking days away and adding them
 
   @Test
-  fun `a resource working Monday, Tuesday, Friday and Saturday gives the task exactly these days`() {
+  fun `a resource working Monday, Tuesday, Friday and Saturday gives the task Monday, Tuesday and Friday`() {
     val task = effortTask()
     task.assign(resource("anna", week(MONDAY, TUESDAY, FRIDAY, SATURDAY)))
-    assertEquals(listOf(monday, tuesday, friday, saturday), daysOf(task))
+    assertEquals(listOf(monday, tuesday, friday), daysOf(task))
   }
 
   @Test
-  fun `Sunday is a working day of a resource which names it`() {
+  fun `Sunday is no day of the task although the resource names it, because the project is free on Sunday`() {
     val task = effortTask()
     task.assign(resource("anna", week(MONDAY, SUNDAY)))
-    assertEquals(listOf(monday, sunday), daysOf(task))
+    assertEquals(listOf(monday), daysOf(task))
   }
 
   @Test
@@ -161,19 +160,19 @@ class WorkWeekWorkingDaysTest {
   }
 
   @Test
-  fun `a dated change which adds a day applies on its date, not a day earlier`() {
+  fun `a dated change which takes a weekday away applies from its date on, every week`() {
     val task = effortTask()
-    task.assign(resource("anna", week(*weekdays, SATURDAY, from = saturday)))
+    task.assign(resource("anna", week(MONDAY, TUESDAY, WEDNESDAY, THURSDAY, from = friday)))
     val worksOn = workingDays(task)
-    assertFalse(worksOn(saturday.minusDays(7)))
-    assertTrue(worksOn(saturday))
-    assertTrue(worksOn(saturday.plusDays(7)))
+    assertTrue(worksOn(friday.minusDays(7)))
+    assertFalse(worksOn(friday))
+    assertFalse(worksOn(friday.plusDays(7)))
   }
 
   // Several resources
 
   @Test
-  fun `Saturday is a day of the task only when both resources work on it`() {
+  fun `Saturday is never a day of the task, not even when both resources work on it`() {
     val oneOfTwo = effortTask()
     oneOfTwo.assign(resource("anna", week(*weekdays, SATURDAY)))
     oneOfTwo.assign(resource("bob", week(*weekdays)))
@@ -182,16 +181,16 @@ class WorkWeekWorkingDaysTest {
     val both = effortTask()
     both.assign(resource("carl", week(*weekdays, SATURDAY)))
     both.assign(resource("dora", week(*weekdays, SATURDAY)))
-    assertTrue(workingDays(both)(saturday))
+    assertFalse(workingDays(both)(saturday))
   }
 
   @Test
-  fun `a resource without a working week does not agree to Saturday and takes no weekday away`() {
+  fun `a resource without a working week takes no weekday away, while another resource still can`() {
     val task = effortTask()
-    task.assign(resource("anna", week(*weekdays, SATURDAY)))
+    task.assign(resource("anna", week(MONDAY, TUESDAY, THURSDAY, FRIDAY)))
     task.assign(resource("bob"))
-    assertFalse(workingDays(task)(saturday))
-    assertTrue(workingDays(task)(wednesday))
+    assertFalse(workingDays(task)(wednesday))
+    assertTrue(workingDays(task)(thursday))
   }
 
   // Holidays
@@ -204,41 +203,32 @@ class WorkWeekWorkingDaysTest {
     task.assign(resource("bob", week(*weekdays, SATURDAY)))
     val worksOn = workingDays(task)
     assertFalse(worksOn(wednesday))
-    // In the same plan Saturday, which is free because of its weekday only, is added.
-    assertTrue(worksOn(saturday))
-  }
-
-  @Test
-  fun `the day mask tells a weekend day from a holiday`() {
-    holidays(wednesday)
-    val calendar = project.taskManager.calendar
-    assertTrue(projectDayIsFreeForWeekdayReasons(calendar.getDayMask(saturday.toModelDate())))
-    assertFalse(projectDayIsFreeForWeekdayReasons(calendar.getDayMask(wednesday.toModelDate())))
-    assertFalse(projectDayIsFreeForWeekdayReasons(calendar.getDayMask(tuesday.toModelDate())))
+    // Saturday is free in the project too, so the task does not work on it either.
+    assertFalse(worksOn(saturday))
   }
 
   // Which assignments decide
 
   @Test
-  fun `a blocking assignment which brings no effort decides on Saturday`() {
+  fun `a blocking assignment which brings no effort decides on a weekday`() {
     val task = effortTask()
-    task.assign(resource("anna", week(*weekdays, SATURDAY)))
-    task.assign(resource("bob", week(*weekdays))).also {
+    task.assign(resource("anna", week(*weekdays)))
+    task.assign(resource("bob", week(MONDAY, TUESDAY, WEDNESDAY, THURSDAY))).also {
       it.isNoEffort = true
       it.isBlocking = true
     }
-    assertFalse(workingDays(task)(saturday))
+    assertFalse(workingDays(task)(friday))
   }
 
   @Test
   fun `an assignment which brings no effort and is not blocking does not decide`() {
     val task = effortTask()
-    task.assign(resource("anna", week(*weekdays, SATURDAY)))
-    task.assign(resource("bob", week(*weekdays))).also {
+    task.assign(resource("anna", week(*weekdays)))
+    task.assign(resource("bob", week(MONDAY, TUESDAY, WEDNESDAY, THURSDAY))).also {
       it.isNoEffort = true
       it.isBlocking = false
     }
-    assertTrue(workingDays(task)(saturday))
+    assertTrue(workingDays(task)(friday))
   }
 
   @Test
