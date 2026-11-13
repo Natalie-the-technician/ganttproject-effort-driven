@@ -24,8 +24,11 @@ import biz.ganttproject.app.RootLocalizer
 import biz.ganttproject.app.i18n
 import biz.ganttproject.colorFromUiManager
 import biz.ganttproject.core.calendar.GPCalendar
+import biz.ganttproject.core.model.task.HomeOffice
 import biz.ganttproject.core.model.task.WorkWeekSchedule
+import biz.ganttproject.core.model.task.formatHomeOfficePeriods
 import biz.ganttproject.core.model.task.formatWorkWeek
+import biz.ganttproject.core.model.task.parseHomeOfficePeriods
 import biz.ganttproject.core.model.task.parseWorkWeek
 import biz.ganttproject.core.option.ObservableChoice
 import biz.ganttproject.core.option.ObservableDouble
@@ -61,6 +64,10 @@ class MainPropertiesPanel(private val resource: HumanResource, private val proje
   private val roleOption = ObservableChoice<Role>("role", resource.role,
     RoleManager.Access.getInstance().getEnabledRoles().toList(), roleStringConverter)
   internal val workWeekOption = ObservableString("workWeek", formatWorkWeek(resource.workWeek), workWeekValidator)
+  internal val homeOfficeWeekOption =
+    ObservableString("homeOfficeWeek", formatWorkWeek(resource.homeOfficeWeek), homeOfficeWeekValidator)
+  internal val homeOfficePeriodsOption =
+    ObservableString("homeOfficePeriods", formatHomeOfficePeriods(resource.homeOfficePeriods), homeOfficePeriodsValidator)
   private val rateOption = ObservableMoney("standardRate", resource.standardPayRate)
   private val totalCostOption = ObservableMoney("totalCost", resource.totalCost).also {
     it.setWritable(false)
@@ -80,6 +87,8 @@ class MainPropertiesPanel(private val resource: HumanResource, private val proje
       text(emailOption)
       dropdown(roleOption)
       text(workWeekOption)
+      text(homeOfficeWeekOption)
+      text(homeOfficePeriodsOption)
 
       skip()
       title("section.rate")
@@ -114,6 +123,18 @@ class MainPropertiesPanel(private val resource: HumanResource, private val proje
         resource.workWeek = workWeek
       }
     }
+    homeOfficeWeekOption.ifChanged { text ->
+      val week = parseWorkWeek(text ?: "") ?: return@ifChanged
+      if (HomeOffice(week).week.changes != resource.homeOfficeWeek) {
+        resource.homeOfficeWeek = week
+      }
+    }
+    homeOfficePeriodsOption.ifChanged { text ->
+      val periods = parseHomeOfficePeriods(text ?: "") ?: return@ifChanged
+      if (HomeOffice(emptyList(), periods).periods != resource.homeOfficePeriods) {
+        resource.homeOfficePeriods = periods
+      }
+    }
   }
 
 }
@@ -130,6 +151,20 @@ internal fun projectWorkWeek(calendar: GPCalendar): Set<DayOfWeek> = DayOfWeek.v
   // java.util.Calendar numbers Sunday as 1, java.time numbers it as 7.
   calendar.getWeekDayType(it.value % 7 + 1) == GPCalendar.DayType.WORKING
 }.toSet()
+
+private val homeOfficeWeekValidator = ValueValidator { text ->
+  if (parseWorkWeek(text) == null) {
+    throw ValidationException(i18n.formatText("homeOfficeWeek.error", text))
+  }
+  text
+}
+
+private val homeOfficePeriodsValidator = ValueValidator { text ->
+  if (parseHomeOfficePeriods(text) == null) {
+    throw ValidationException(i18n.formatText("homeOfficePeriods.error", text))
+  }
+  text
+}
 
 /**
  * The warning for a work week with a change on which the resource works on no day, or, if the week of the project is
