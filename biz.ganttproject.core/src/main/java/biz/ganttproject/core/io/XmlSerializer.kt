@@ -353,6 +353,11 @@ data class XmlResources(
     @get:JsonInclude(JsonInclude.Include.NON_EMPTY)
     var hoursChanges: List<XmlHoursChange> = emptyList(),
 
+    @get:JacksonXmlElementWrapper(useWrapping = false)
+    @get:JacksonXmlProperty(localName = "work-week")
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY)
+    var workWeek: List<XmlWorkWeek> = emptyList(),
+
     @get:JsonInclude(JsonInclude.Include.NON_NULL) var rate: XmlRate? = null,
 
     @get:JacksonXmlElementWrapper(useWrapping = false)
@@ -367,6 +372,13 @@ data class XmlResources(
     data class XmlHoursChange(
       @get:JacksonXmlProperty(isAttribute = true) var date: String = "",
       @get:JacksonXmlProperty(isAttribute = true) var hours: BigDecimal = BigDecimal(0)
+    )
+
+    // The days are ISO weekday numbers, such as "1,2,5". Without a date they apply from the beginning of the plan.
+    data class XmlWorkWeek(
+      @get:JsonInclude(JsonInclude.Include.NON_NULL)
+      @get:JacksonXmlProperty(isAttribute = true) var date: String? = null,
+      @get:JacksonXmlProperty(isAttribute = true) var days: String = ""
     )
 
     data class XmlRate(

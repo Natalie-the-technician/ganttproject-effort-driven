@@ -23,6 +23,8 @@ import biz.ganttproject.customproperty.CustomPropertyDefinition;
 import biz.ganttproject.customproperty.CustomPropertyManager;
 import net.sourceforge.ganttproject.IGanttProject;
 import biz.ganttproject.core.model.task.CapacityChange;
+import biz.ganttproject.core.model.task.WorkWeekChange;
+import biz.ganttproject.core.model.task.WorkWeekScheduleKt;
 import net.sourceforge.ganttproject.resource.HumanResource;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.AttributesImpl;
@@ -53,6 +55,7 @@ class ResourceSaver extends SaverBase {
       startElement("resource", attrs, handler);
       {
         saveHoursSchedule(p, handler);
+        saveWorkWeek(p, handler);
         saveRates(p, handler);
         saveCustomProperties(project, p, handler);
       }
@@ -67,6 +70,17 @@ class ResourceSaver extends SaverBase {
       addAttribute("date", change.getFrom().toString(), attrs);
       addAttribute("hours", change.getHoursPerDay().toPlainString(), attrs);
       emptyElement("hours-change", attrs, handler);
+    }
+  }
+
+  private void saveWorkWeek(HumanResource p, TransformerHandler handler) throws SAXException {
+    for (WorkWeekChange change : p.getWorkWeek()) {
+      AttributesImpl attrs = new AttributesImpl();
+      if (change.getFrom() != null) {
+        addAttribute("date", change.getFrom().toString(), attrs);
+      }
+      addAttribute("days", WorkWeekScheduleKt.formatWeekDays(change.getDays()), attrs);
+      emptyElement("work-week", attrs, handler);
     }
   }
 

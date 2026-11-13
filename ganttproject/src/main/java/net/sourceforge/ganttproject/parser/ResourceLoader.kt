@@ -21,6 +21,8 @@ package net.sourceforge.ganttproject.parser
 import biz.ganttproject.core.io.XmlProject
 import biz.ganttproject.core.io.XmlResources
 import biz.ganttproject.core.model.task.CapacityChange
+import biz.ganttproject.core.model.task.WorkWeekChange
+import biz.ganttproject.core.model.task.parseWeekDays
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import biz.ganttproject.core.table.ColumnList
@@ -46,6 +48,7 @@ class ResourceLoader(private val resourceManager: HumanResourceManager, private 
         hr.hoursPerDay = xmlResource.hoursPerDay
         hr.utilization = xmlResource.utilization
         hr.hoursSchedule = xmlResource.capacityChanges()
+        hr.workWeek = xmlResource.workWeekChanges()
         val roleID = xmlResource.role
         if (roleID.isNotBlank()) {
           roleManager.findRole(roleID)?.let { hr.role = it }
@@ -121,6 +124,19 @@ fun loadResourceView(xmlProject: XmlProject, zoomManager: ZoomManager, resourceC
 fun XmlResources.XmlResource.capacityChanges(): List<CapacityChange> = hoursChanges.mapNotNull {
   try {
     CapacityChange(LocalDate.parse(it.date), it.hours)
+  } catch (e: DateTimeParseException) {
+    null
+  }
+}
+
+/**
+ * The working week of a resource as stored in the file. An entry with an unreadable date or day is skipped, the way an
+ * unreadable change of the working hours is.
+ */
+fun XmlResources.XmlResource.workWeekChanges(): List<WorkWeekChange> = workWeek.mapNotNull {
+  try {
+    val days = parseWeekDays(it.days) ?: return@mapNotNull null
+    WorkWeekChange(it.date?.takeIf { date -> date.isNotBlank() }?.let { date -> LocalDate.parse(date) }, days)
   } catch (e: DateTimeParseException) {
     null
   }

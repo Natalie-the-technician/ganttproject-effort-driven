@@ -21,6 +21,8 @@ package net.sourceforge.ganttproject.resource;
 import biz.ganttproject.core.calendar.GanttDaysOff;
 import biz.ganttproject.core.model.task.CapacityChange;
 import biz.ganttproject.core.model.task.CapacitySchedule;
+import biz.ganttproject.core.model.task.WorkWeekChange;
+import biz.ganttproject.core.model.task.WorkWeekSchedule;
 import biz.ganttproject.customproperty.*;
 import com.google.common.base.Strings;
 import kotlin.Unit;
@@ -66,6 +68,8 @@ public class HumanResource implements CustomPropertyHolder {
   private Integer myUtilization;
 
   private List<CapacityChange> myHoursSchedule = Collections.emptyList();
+
+  private List<WorkWeekChange> myWorkWeek = Collections.emptyList();
 
   private final List<GanttDaysOff> myDaysOffList = new ArrayList<>();
 
@@ -119,6 +123,7 @@ public class HumanResource implements CustomPropertyHolder {
     setHoursPerDay(copy.getHoursPerDay());
     setUtilization(copy.getUtilization());
     setHoursSchedule(copy.getHoursSchedule());
+    setWorkWeek(copy.getWorkWeek());
     myManager = copy.myManager;
     // Straight into the list rather than through addDaysOff(): the copy is not in the manager yet
     // and must not be announced, which is what areEventsEnabled = false above takes care of for the
@@ -445,6 +450,19 @@ public class HumanResource implements CustomPropertyHolder {
 
   public void setHoursSchedule(List<CapacityChange> hoursSchedule) {
     myHoursSchedule = Collections.unmodifiableList(new CapacitySchedule(BigDecimal.ZERO, hoursSchedule).getChanges());
+    fireResourceChanged();
+  }
+
+  /**
+   * The days of the week on which this resource works, as they change over time, sorted by date. Empty if the
+   * resource works on the days of the project calendar.
+   */
+  public List<WorkWeekChange> getWorkWeek() {
+    return myWorkWeek;
+  }
+
+  public void setWorkWeek(List<WorkWeekChange> workWeek) {
+    myWorkWeek = Collections.unmodifiableList(new WorkWeekSchedule(workWeek).getChanges());
     fireResourceChanged();
   }
 
