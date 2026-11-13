@@ -22,7 +22,6 @@ import biz.ganttproject.core.calendar.GPCalendar
 import biz.ganttproject.core.model.task.LevelTask
 import biz.ganttproject.core.model.task.SHARED_POOL
 import biz.ganttproject.core.model.task.SHARED_POOL_LOAD
-import biz.ganttproject.core.model.task.endAfterWorkingDays
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.task.recurrence.toModelDate
 import biz.ganttproject.task.recurrence.toModelLocalDate
@@ -48,7 +47,8 @@ fun workingDayTest(calendar: GPCalendar): (LocalDate) -> Boolean = { day ->
  * dependency on all leaves under it. Work which has started stays where it is, and so does a task with a fixed date.
  * A task which has not started and starts before [today] is moved if [moveUnstartedPast] is true and stays otherwise.
  */
-fun collectLevelTasks(taskManager: TaskManager, today: LocalDate, moveUnstartedPast: Boolean = true): List<LevelTask> {
+fun collectLevelTasks(taskManager: TaskManager, today: LocalDate, moveUnstartedPast: Boolean = true,
+                      workingDays: WorkWeekWorkingDays = WorkWeekWorkingDays(taskManager.calendar)): List<LevelTask> {
   val hierarchy = taskManager.taskHierarchy
   val leavesUnder = mutableMapOf<Int, List<Int>>()
   fun collectLeaves(task: Task): List<Int> {
@@ -58,10 +58,13 @@ fun collectLevelTasks(taskManager: TaskManager, today: LocalDate, moveUnstartedP
     return leaves
   }
   val leaves = hierarchy.getNestedTasks(hierarchy.rootTask).flatMap { collectLeaves(it) }
-  return leaves.mapIndexed { order, id -> taskManager.getTask(id).toLevelTask(order, leavesUnder, today, moveUnstartedPast) }
+  return leaves.mapIndexed { order, id ->
+    taskManager.getTask(id).toLevelTask(order, leavesUnder, today, moveUnstartedPast, workingDays)
+  }
 }
 
-private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today: LocalDate, moveUnstartedPast: Boolean): LevelTask {
+private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today: LocalDate, moveUnstartedPast: Boolean,
+                             workingDays: WorkWeekWorkingDays): LevelTask {
   // Every resource books its own load; two assignments of one resource add up. A negative load books nothing.
   val loadByResource = assignments
     .filter { it.resource != null }
@@ -76,11 +79,15 @@ private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today
   }
   val start = this.start.time.toModelLocalDate()
   val frozen = completionPercentage > 0 || (start < today && !moveUnstartedPast)
+  // Levelling counts the days of a task with its own working days, the task model with those of the project.
+  val worksOn = workingDays.forTask(this)
+  val durationDays = if (worksOn === workingDays.projectOnly) duration.length.coerceAtLeast(1)
+    else workingDays.taskDays(start, end.time.toModelLocalDate(), worksOn)
   return LevelTask(
     id = taskID.toString(),
     orderInPlan = order,
     priority = priority.ordinal,
-    durationDays = duration.length.coerceAtLeast(1),
+    durationDays = durationDays,
     predecessors = dependenciesAsDependant.toArray()
       .flatMap { leavesUnder[it.dependee.taskID] ?: listOf(it.dependee.taskID) }
       .distinct().map { it.toString() },
@@ -121,15 +128,38 @@ fun resourcePresence(taskManager: TaskManager): (String, LocalDate) -> Boolean {
 }
 
 /**
- * The duration of a task if it starts on the given day. An effort driven task is derived again, because its duration
- * depends on the start when the working hours of its resources change; every other task keeps its duration.
+ * The working days of each levelled task as [WorkWeekWorkingDays.forTask] gives them. Levelling asks for the same days
+ * again and again, so the answers are remembered; one function serves one levelling run.
  */
-fun durationAtStart(taskManager: TaskManager): (LevelTask, LocalDate) -> Int = { levelTask, start ->
-  val task = taskManager.getTask(levelTask.id.toInt())
-  if (levelTask.frozen || task == null || !task.isEffortDriven || task.isMilestone) {
-    levelTask.durationDays
-  } else {
-    effortDrivenDurationDays(task.effort, task.assignments, start, taskManager.calendar)?.toInt() ?: levelTask.durationDays
+fun workingDaysOf(taskManager: TaskManager,
+                  workingDays: WorkWeekWorkingDays = WorkWeekWorkingDays(taskManager.calendar)): (LevelTask) -> (LocalDate) -> Boolean {
+  val perTask = mutableMapOf<String, (LocalDate) -> Boolean>()
+  return { levelTask ->
+    perTask.getOrPut(levelTask.id) {
+      val worksOn = taskManager.getTask(levelTask.id.toInt())?.let { workingDays.forTask(it) } ?: workingDays.projectOnly
+      val answers = HashMap<LocalDate, Boolean>()
+      val remembering: (LocalDate) -> Boolean = { day -> answers.getOrPut(day) { worksOn(day) } }
+      remembering
+    }
+  }
+}
+
+/**
+ * The duration of a task in its own working days if it starts on the given day. An effort driven task is derived
+ * again, because its duration depends on the start when the working hours of its resources change; every other task
+ * keeps its duration. What the duration is derived from is read once per task.
+ */
+fun durationAtStart(taskManager: TaskManager,
+                    worksOn: (LevelTask) -> (LocalDate) -> Boolean = workingDaysOf(taskManager)): (LevelTask, LocalDate) -> Int {
+  val inputs = mutableMapOf<String, EffortInputs>()
+  return { levelTask, start ->
+    val task = taskManager.getTask(levelTask.id.toInt())
+    if (levelTask.frozen || task == null || !task.isEffortDriven || task.isMilestone) {
+      levelTask.durationDays
+    } else {
+      val effortInputs = inputs.getOrPut(levelTask.id) { effortInputs(task.assignments) }
+      effortDrivenDurationDays(task.effort, effortInputs, start, worksOn(levelTask))?.toInt() ?: levelTask.durationDays
+    }
   }
 }
 
@@ -139,7 +169,7 @@ fun durationAtStart(taskManager: TaskManager): (LevelTask, LocalDate) -> Int = {
  */
 fun capacityProblems(taskManager: TaskManager): List<Task> = taskManager.tasks.filter { task ->
   task.isEffortDriven && !task.isMilestone && !task.isSupertask && (task.effort?.signum() ?: 0) > 0 &&
-    effortDrivenDurationDays(task.effort, task.assignments, task.start.time.toModelLocalDate(), taskManager.calendar) == null
+    effortDrivenProjectDays(task.effort, task.assignments, task.start.time.toModelLocalDate(), taskManager.calendar) == null
 }
 
 /**
@@ -156,16 +186,31 @@ fun applyLevelling(
   undoManager: GPUndoManager, editName: String, notifier: LevellingRunNotifier = levellingRunNotifier
 ): Int = notifier.runAndReport { writeLevellingBack(starts, durations, taskManager, undoManager, editName) }
 
+/** The tasks which levelling to [starts] and [durations] moves or makes longer or shorter. */
+fun movedTasks(starts: Map<String, LocalDate>, durations: Map<String, Int>, taskManager: TaskManager): List<Task> =
+  levellingMoves(starts, durations, taskManager).map { it.task }
+
+private data class Move(val task: Task, val start: LocalDate, val end: LocalDate)
+
+private fun levellingMoves(starts: Map<String, LocalDate>, durations: Map<String, Int>, taskManager: TaskManager): List<Move> {
+  val workingDays = WorkWeekWorkingDays(taskManager.calendar)
+  return starts.mapNotNull { (id, start) ->
+    val task = taskManager.getTask(id.toInt()) ?: return@mapNotNull null
+    val isWorkingDay = workingDays.forTask(task)
+    // Levelling counts in the working days of the task, the task model in those of the project.
+    val taskDays = durations[id] ?: if (isWorkingDay === workingDays.projectOnly) task.duration.length
+      else workingDays.taskDays(task.start.time.toModelLocalDate(), task.end.time.toModelLocalDate(), isWorkingDay)
+    val days = workingDays.projectDays(start, taskDays.toLong(), isWorkingDay).toInt()
+    if (task.start.time.toModelLocalDate() == start && days == task.duration.length) null
+    else Move(task, start, workingDays.endAfter(start, taskDays, isWorkingDay))
+  }
+}
+
 private fun writeLevellingBack(
   starts: Map<String, LocalDate>, durations: Map<String, Int>, taskManager: TaskManager,
   undoManager: GPUndoManager, editName: String
 ): Int {
-  val isWorkingDay = workingDayTest(taskManager.calendar)
-  val moves = starts.mapNotNull { (id, start) ->
-    val task = taskManager.getTask(id.toInt()) ?: return@mapNotNull null
-    val days = durations[id] ?: task.duration.length
-    if (task.start.time.toModelLocalDate() == start && days == task.duration.length) null else Triple(task, start, days)
-  }
+  val moves = levellingMoves(starts, durations, taskManager)
   if (moves.isEmpty()) {
     return 0
   }
@@ -175,12 +220,12 @@ private fun writeLevellingBack(
     val wasEnabled = scheduler.isEnabled
     scheduler.isEnabled = false
     try {
-      moves.forEach { (task, start, days) ->
+      moves.forEach { (task, start, end) ->
         val startDate = CalendarFactory.createGanttCalendar(start.toModelDate())
         task.createMutator().also {
           it.setStart(startDate)
           if (!task.isMilestone) {
-            it.setEnd(CalendarFactory.createGanttCalendar(endAfterWorkingDays(start, days, isWorkingDay).toModelDate()))
+            it.setEnd(CalendarFactory.createGanttCalendar(end.toModelDate()))
           }
           it.setThird(startDate, TaskImpl.EARLIESTBEGIN)
           it.commit()

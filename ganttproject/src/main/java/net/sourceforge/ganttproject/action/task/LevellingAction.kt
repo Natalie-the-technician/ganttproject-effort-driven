@@ -33,7 +33,9 @@ import net.sourceforge.ganttproject.task.algorithm.collectLevelTasks
 import net.sourceforge.ganttproject.task.algorithm.durationAtStart
 import net.sourceforge.ganttproject.task.algorithm.resourcePresence
 import net.sourceforge.ganttproject.task.algorithm.startAllowed
-import net.sourceforge.ganttproject.task.algorithm.workingDayTest
+import net.sourceforge.ganttproject.task.algorithm.WorkWeekWorkingDays
+import net.sourceforge.ganttproject.task.algorithm.movedTasks
+import net.sourceforge.ganttproject.task.algorithm.workingDaysOf
 import net.sourceforge.ganttproject.undo.GPUndoManager
 import java.awt.event.ActionEvent
 import java.time.LocalDate
@@ -65,15 +67,17 @@ class LevellingAction(
 
   override fun actionPerformed(event: ActionEvent?) {
     val today = today()
-    val tasks = collectLevelTasks(taskManager, today)
+    val workingDays = WorkWeekWorkingDays(taskManager.calendar)
+    val tasks = collectLevelTasks(taskManager, today, workingDays = workingDays)
     if (tasks.isEmpty()) {
       report.show(false, i18n("task.level.nothing"))
       return
     }
     // Unfinished work is not laid into the past; started work stays where it is anyway.
     val from = maxOf(taskManager.projectStart.toModelLocalDate(), today)
-    val result = levelTasks(tasks, from, workingDayTest(taskManager.calendar), durationAtStart(taskManager),
-      canStartOn = startAllowed(taskManager), isPresent = resourcePresence(taskManager))
+    val worksOn = workingDaysOf(taskManager, workingDays)
+    val result = levelTasks(tasks, from, workingDays.projectOnly, durationAtStart(taskManager, worksOn),
+      canStartOn = startAllowed(taskManager), isPresent = resourcePresence(taskManager), workingDaysOf = worksOn)
     if (result.conflicts.any { it is LevelConflict.Cycle }) {
       report.show(true, i18n("task.level.cycle"))
       return
@@ -90,11 +94,7 @@ class LevellingAction(
     }
   }
 
-  private fun movedTasks(result: LevelResult): List<Task> = result.starts.mapNotNull { (id, start) ->
-    val task = taskManager.getTask(id.toInt()) ?: return@mapNotNull null
-    val days = result.durations[id] ?: task.duration.length
-    if (task.start.time.toModelLocalDate() == start && days == task.duration.length) null else task
-  }
+  private fun movedTasks(result: LevelResult): List<Task> = movedTasks(result.starts, result.durations, taskManager)
 
   /** The text of the preview: what is moved, and what levelling cannot resolve. */
   internal fun levellingPreview(result: LevelResult, movedCount: Int, today: LocalDate): String {

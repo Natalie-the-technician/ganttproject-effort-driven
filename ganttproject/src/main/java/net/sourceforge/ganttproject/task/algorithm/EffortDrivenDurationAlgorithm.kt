@@ -95,14 +95,41 @@ private fun GPCalendar.isWorkingDay(day: LocalDate): Boolean =
  * those without load, which are not involved in the task.
  */
 fun effortDrivenDurationDays(effort: BigDecimal?, allAssignments: Array<ResourceAssignment>,
-                             start: LocalDate? = null, calendar: GPCalendar? = null): Long? {
+                             start: LocalDate? = null, calendar: GPCalendar? = null): Long? =
+  effortDrivenDurationDays(effort, effortInputs(allAssignments), start) { calendar?.isWorkingDay(it) ?: true }
+
+/**
+ * What the duration of an effort driven task is derived from, read from its assignments: the assignments which
+ * [contributesEffort], their hours and days off, and the days off of the blocking assignments. Reading them once lets
+ * a caller which asks for many start days, such as levelling, derive the duration without reading them again.
+ */
+class EffortInputs(
+  val assignments: Array<ResourceAssignment>,
+  val schedule: CapacitySchedule,
+  val daysOff: List<List<Pair<LocalDate, LocalDate>>>,
+  val blockingDaysOff: List<Pair<LocalDate, LocalDate>>
+)
+
+fun effortInputs(allAssignments: Array<ResourceAssignment>): EffortInputs {
+  val assignments = allAssignments.filter { it.contributesEffort }.toTypedArray()
+  return EffortInputs(
+    assignments,
+    capacitySchedule(assignments),
+    assignments.map { it.resource?.daysOffRanges().orEmpty() },
+    allAssignments.filter { it.load > 0 && it.isBlocking }.flatMap { it.resource?.daysOffRanges().orEmpty() }
+  )
+}
+
+/** The same as above with the [inputs] read already and the working days of the task given by [isWorkingDay]. */
+fun effortDrivenDurationDays(effort: BigDecimal?, inputs: EffortInputs, start: LocalDate?,
+                             isWorkingDay: (LocalDate) -> Boolean): Long? {
   if (effort == null || effort.signum() <= 0) {
     return null
   }
-  val assignments = allAssignments.filter { it.contributesEffort }.toTypedArray()
-  val schedule = capacitySchedule(assignments)
-  val daysOff = assignments.map { it.resource?.daysOffRanges().orEmpty() }
-  val blockingDaysOff = allAssignments.filter { it.load > 0 && it.isBlocking }.flatMap { it.resource?.daysOffRanges().orEmpty() }
+  val assignments = inputs.assignments
+  val schedule = inputs.schedule
+  val daysOff = inputs.daysOff
+  val blockingDaysOff = inputs.blockingDaysOff
   if (start != null && (daysOff.any { it.isNotEmpty() } || blockingDaysOff.isNotEmpty())) {
     // No resource brings any hours on any day, so counting days would only run into the limit.
     if (schedule.base.signum() <= 0 && schedule.changes.all { it.hoursPerDay.signum() <= 0 }) {
@@ -113,7 +140,7 @@ fun effortDrivenDurationDays(effort: BigDecimal?, allAssignments: Array<Resource
         if (daysOff[i].covers(day)) sum else sum.add(availableHoursPerDay(assignments[i], day))
       }
     }
-    return daysNeeded(TaskEffort.toHours(effort), start, hoursOn) { calendar?.isWorkingDay(it) ?: true }?.toLong()
+    return daysNeeded(TaskEffort.toHours(effort), start, hoursOn, isWorkingDay)?.toLong()
   }
   if (schedule.isConstant || start == null) {
     if (schedule.base.signum() <= 0) {
@@ -122,7 +149,7 @@ fun effortDrivenDurationDays(effort: BigDecimal?, allAssignments: Array<Resource
     val days = TaskEffort.toHours(effort).divide(schedule.base, 6, RoundingMode.HALF_UP).setScale(0, RoundingMode.CEILING)
     return maxOf(1L, days.toLong())
   }
-  return daysNeeded(TaskEffort.toHours(effort), start, schedule) { calendar?.isWorkingDay(it) ?: true }?.toLong()
+  return daysNeeded(TaskEffort.toHours(effort), start, schedule, isWorkingDay)?.toLong()
 }
 
 /**
@@ -134,11 +161,13 @@ class EffortDrivenDurationAlgorithm(private val taskManager: TaskManager) : Algo
     if (!isEnabled) {
       return
     }
+    val workingDays = WorkWeekWorkingDays(taskManager.calendar)
     for (task in taskManager.tasks) {
       if (!task.isEffortDriven || task.isMilestone || task.isSupertask) {
         continue
       }
-      val days = effortDrivenDurationDays(task.effort, task.assignments, task.start.toLocalDate(), taskManager.calendar) ?: continue
+      val start = task.start.toLocalDate()
+      val days = effortDrivenProjectDays(task.effort, task.assignments, start, taskManager.calendar, workingDays) ?: continue
       val newDuration = taskManager.createLength(days)
       val current = task.duration
       if (current.timeUnit == newDuration.timeUnit && current.length == newDuration.length) {

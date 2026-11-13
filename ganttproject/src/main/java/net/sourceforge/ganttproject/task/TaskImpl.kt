@@ -27,7 +27,7 @@ import net.sourceforge.ganttproject.GPLogger
 import net.sourceforge.ganttproject.storage.ProjectDatabase
 import net.sourceforge.ganttproject.storage.ProjectDatabaseException
 import net.sourceforge.ganttproject.task.algorithm.ShiftTaskTreeAlgorithm
-import net.sourceforge.ganttproject.task.algorithm.effortDrivenDurationDays
+import net.sourceforge.ganttproject.task.algorithm.effortDrivenProjectDays
 import java.awt.Color
 import java.math.BigDecimal
 
@@ -346,7 +346,7 @@ internal open class MutatorImpl(
       return
     }
     val effort = effortChange.newValueOrElse { EffortValue(taskImpl.effort) }.effort
-    effortDrivenDurationDays(effort, taskImpl.assignments, getStart().toLocalDate(), myManager.calendar)?.let {
+    effortDrivenProjectDays(effort, taskImpl.assignments, getStart().toLocalDate(), myManager.calendar)?.let {
       // Drop what was asked for, then ask for the derived duration the usual way, which moves the end along.
       myDurationChange.clear()
       myEndChange.clear()

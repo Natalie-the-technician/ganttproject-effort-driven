@@ -143,6 +143,8 @@ fun LevelTask.loadIn(pool: String): Int = loads[pool] ?: SHARED_POOL_LOAD
  * @param canStartOn whether a task may start on the given day, such as not on a day off of its resources. A task
  * with a fixed start is not asked.
  * @param isPresent whether a resource is present on the given day; asked only for the [LevelTask.blocking] resources.
+ * @param workingDaysOf the working days of a task, when they differ from task to task, such as by the working weeks
+ * of its resources. The duration and the days of a task are counted with its own working days.
  */
 fun levelTasks(
   tasks: List<LevelTask>,
@@ -151,7 +153,8 @@ fun levelTasks(
   durationAt: (LevelTask, LocalDate) -> Int = { task, _ -> task.durationDays },
   capacityOf: (String) -> Int = { 100 },
   canStartOn: (LevelTask, LocalDate) -> Boolean = { _, _ -> true },
-  isPresent: (String, LocalDate) -> Boolean = { _, _ -> true }
+  isPresent: (String, LocalDate) -> Boolean = { _, _ -> true },
+  workingDaysOf: (LevelTask) -> (LocalDate) -> Boolean = { isWorkingDay }
 ): LevelResult {
   val byId = tasks.associateBy { it.id }
   val order = topologicalOrder(tasks) ?: return LevelResult(emptyMap(), listOf(LevelConflict.Cycle(tasks.map { it.id })))
@@ -160,7 +163,7 @@ fun levelTasks(
   val used = mutableMapOf<String, MutableMap<LocalDate, Int>>()
   val starts = mutableMapOf<String, LocalDate>()
   val durations = mutableMapOf<String, Int>()
-  // First working day after each task.
+  // The day after the last day of each task. A successor starts on its own next working day from there.
   val ends = mutableMapOf<String, LocalDate>()
   val conflicts = mutableListOf<LevelConflict>()
 
@@ -171,13 +174,14 @@ fun levelTasks(
     }
     starts[task.id] = days.first()
     durations[task.id] = days.size
-    ends[task.id] = nextWorkingDay(days.last().plusDays(1), isWorkingDay)
+    ends[task.id] = days.last().plusDays(1)
   }
 
   // Frozen work is booked first, so that no movable task can take its days.
   tasks.filter { it.frozen }.forEach { task ->
-    val start = nextWorkingDay(task.fixedStart ?: projectStart, isWorkingDay)
-    place(task, workingDays(start, durationAt(task, start), isWorkingDay))
+    val worksOn = workingDaysOf(task)
+    val start = nextWorkingDay(task.fixedStart ?: projectStart, worksOn)
+    place(task, workingDays(start, durationAt(task, start), worksOn))
   }
 
   for (id in order) {
@@ -187,16 +191,17 @@ fun levelTasks(
     }
     var earliest = maxOf(projectStart, task.earliestStart ?: projectStart)
     task.predecessors.forEach { p -> ends[p]?.let { earliest = maxOf(earliest, it) } }
-    earliest = nextWorkingDay(earliest, isWorkingDay)
+    val worksOn = workingDaysOf(task)
+    earliest = nextWorkingDay(earliest, worksOn)
 
     val days = if (task.fixedStart != null) {
-      val start = nextWorkingDay(task.fixedStart, isWorkingDay)
+      val start = nextWorkingDay(task.fixedStart, worksOn)
       if (start < earliest) {
         conflicts.add(LevelConflict.FixedDateNotReachable(id, start, earliest))
       }
-      workingDays(start, durationAt(task, start), isWorkingDay)
+      workingDays(start, durationAt(task, start), worksOn)
     } else {
-      val search = searchWindow(earliest, task, durationAt, used, isWorkingDay, capacityOf, canStartOn, isPresent)
+      val search = searchWindow(earliest, task, durationAt, used, worksOn, capacityOf, canStartOn, isPresent)
       if (search.exhausted) {
         // A blocking resource counts as a reason only if its absence actually turned a day down.
         val blocking = if (search.absenceBlocked) task.blocking.sorted() else emptyList()
@@ -211,11 +216,9 @@ fun levelTasks(
 
   tasks.forEach { task ->
     val deadline = task.deadline ?: return@forEach
-    val end = ends[task.id] ?: return@forEach
-    val lastDay = generateSequence(end.minusDays(1)) { it.minusDays(1) }.take(MAX_SEARCH_DAYS)
-      .firstOrNull { isWorkingDay(it) || it < projectStart } ?: return@forEach
+    val lastDay = ends[task.id]?.minusDays(1) ?: return@forEach
     if (lastDay.isAfter(deadline)) {
-      val missingDays = workingDaysBetween(deadline.plusDays(1), lastDay.plusDays(1), isWorkingDay)
+      val missingDays = workingDaysBetween(deadline.plusDays(1), lastDay.plusDays(1), workingDaysOf(task))
       conflicts.add(LevelConflict.DeadlineMissed(task.id, deadline, lastDay, missingDays))
     }
   }
@@ -225,7 +228,7 @@ fun levelTasks(
       val ids = tasks.filter { t ->
         val start = starts[t.id]
         t.pools.contains(pool) && start != null &&
-          workingDays(start, durations[t.id] ?: t.durationDays, isWorkingDay).contains(day)
+          workingDays(start, durations[t.id] ?: t.durationDays, workingDaysOf(t)).contains(day)
       }.map { it.id }
       conflicts.add(LevelConflict.Overload(day, percent, ids, pool))
     }
@@ -332,6 +335,11 @@ private fun searchWindow(
   var absenceBlocked = false
   val fullFor = mutableSetOf<String>()
   var candidate = nextWorkingDay(earliest, isWorkingDay)
+  if (!isWorkingDay(candidate)) {
+    // The task has no working day at all, such as when a resource works on no day. Every candidate would search up to
+    // the limit again, which takes hours, so the task stays on its earliest day.
+    return WindowSearch(listOf(candidate), true, false, emptySet())
+  }
   repeat(MAX_SEARCH_DAYS) {
     if (!canStartOn(task, candidate)) {
       // A start turned down on a day off of a blocking resource is its absence as well.
