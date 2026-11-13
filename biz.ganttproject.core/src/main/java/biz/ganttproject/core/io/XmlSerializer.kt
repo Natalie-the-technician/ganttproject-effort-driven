@@ -147,7 +147,7 @@ data class XmlCalendars(
   @get:JsonInclude(JsonInclude.Include.NON_NULL)
   var events: List<XmlCalendarEvent>? = null,
 ) {
-  @JsonPropertyOrder("day-type", "default-week", "only-show-weekends")
+  @JsonPropertyOrder("day-type", "default-week", "only-show-weekends", "holidays-are-working-days")
   data class XmlDayTypes(
     @get:JacksonXmlElementWrapper(useWrapping = false)
     @get:JacksonXmlProperty(localName = "day-type")
@@ -157,6 +157,10 @@ data class XmlCalendars(
     var defaultWeek: XmlDefaultWeek = XmlDefaultWeek(),
     @get:JacksonXmlProperty(localName = "only-show-weekends")
     var onlyShowWeekends: XmlOnlyShowWeekends = XmlOnlyShowWeekends(),
+    // Written only when set, so that files which do not use it are the same as before.
+    @get:JacksonXmlProperty(localName = "holidays-are-working-days")
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    var holidaysAreWorkingDays: XmlHolidaysAreWorkingDays? = null,
 //    @get:JacksonXmlProperty(localName = "overriden-day-types")
 //    var overridenDayTypes: String? = null, // TODO: what is that tag?
 //    var days: String? = null // TODO: what is that tag?
@@ -177,6 +181,8 @@ data class XmlCalendars(
     )
 
     data class XmlOnlyShowWeekends(@get:JacksonXmlProperty(isAttribute = true) var value: Boolean = false)
+
+    data class XmlHolidaysAreWorkingDays(@get:JacksonXmlProperty(isAttribute = true) var value: Boolean = false)
   }
 
   data class XmlCalendarEvent(
