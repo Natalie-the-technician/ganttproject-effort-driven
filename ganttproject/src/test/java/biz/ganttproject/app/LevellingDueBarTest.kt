@@ -86,4 +86,18 @@ class LevellingDueBarTest {
     assertFalse(bar.node.isVisible)
     assertFalse(bar.node.isManaged)
   }
+
+  @Test
+  fun `the message and the button have a tooltip of their own`() = withBar { _, bar ->
+    val labelTip = bar.label.tooltip?.text
+    val buttonTip = bar.button.tooltip?.text
+    assertTrue(!labelTip.isNullOrBlank())
+    assertTrue(!buttonTip.isNullOrBlank())
+    assertTrue(labelTip != buttonTip)
+  }
+
+  @Test
+  fun `a key without a text is shown as the key itself`() {
+    assertEquals("levelling.due.no-such-key", RootLocalizer.formatText("levelling.due.no-such-key"))
+  }
 }

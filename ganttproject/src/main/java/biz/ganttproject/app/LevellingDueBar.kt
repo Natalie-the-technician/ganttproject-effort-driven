@@ -23,11 +23,15 @@ import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.control.Button
 import javafx.scene.control.Label
+import javafx.scene.control.Tooltip
 import javafx.scene.layout.HBox
 import net.sourceforge.ganttproject.task.algorithm.LevellingStaleness
 
 /**
  * The status bar message which says that the levelling is due, with a button that runs it.
+ *
+ * The message is a signal: a short sentence, and the reason for it is in the tooltips, because the status bar is
+ * narrow on small screens.
  *
  * The node is neither visible nor managed while the levelling is not due, so it takes no room in the status bar.
  * [runLevelling] is called on the JavaFX thread, and it has to move itself to the thread where the levelling action
@@ -37,10 +41,14 @@ class LevellingDueBar(
   private val staleness: LevellingStaleness,
   private val runLevelling: () -> Unit
 ) {
-  val label: Label = Label(RootLocalizer.formatText("levelling.due.message"))
+  val label: Label = Label(RootLocalizer.formatText("levelling.due.message")).also {
+    it.tooltip = Tooltip(RootLocalizer.formatText("levelling.due.message.tooltip"))
+  }
 
   val button: Button = Button(RootLocalizer.formatText("levelling.due.button")).also {
     it.setOnAction { runLevelling() }
+    // The button explains what pressing it does, which is not what the label explains.
+    it.tooltip = Tooltip(RootLocalizer.formatText("levelling.due.button.tooltip"))
   }
 
   val node: HBox = HBox(8.0, label, button).also {
