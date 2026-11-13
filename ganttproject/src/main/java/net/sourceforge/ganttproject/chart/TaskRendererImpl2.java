@@ -132,7 +132,7 @@ public class TaskRendererImpl2 extends ChartRendererBase {
       if (task == null) {
         return Collections.emptyList();
       }
-      return SeriesRowKt.collapsedSeriesMembers(task, myModel.getTaskManager().getTaskHierarchy()).stream()
+      return SeriesRowKt.collapsedSeriesMembers(task, myModel.getTaskManager().getTaskHierarchy(), myModel.getVisibleTasks()).stream()
         .<ITaskSceneTask>map(member -> new ITaskSceneTaskImpl(member, myModel))
         .collect(Collectors.toList());
     }

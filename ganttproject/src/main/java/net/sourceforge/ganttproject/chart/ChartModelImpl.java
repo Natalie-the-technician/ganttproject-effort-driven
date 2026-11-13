@@ -15,6 +15,7 @@ import biz.ganttproject.core.time.TimeUnitStack;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import net.sourceforge.ganttproject.GanttPreviousStateTask;
+import net.sourceforge.ganttproject.chart.gantt.SeriesRowKt;
 import net.sourceforge.ganttproject.chart.gantt.ITaskActivity;
 import net.sourceforge.ganttproject.chart.item.ChartItem;
 import net.sourceforge.ganttproject.chart.item.TaskBoundaryChartItem;
@@ -180,6 +181,11 @@ public class ChartModelImpl extends ChartModelBase {
   // }
   // return result.toArray(new GraphicPrimitiveContainer.Rectangle[0]);
   // }
+
+  /** True if the row of the task draws the bars of the members of a collapsed recurrence series. */
+  public boolean isSeriesRow(Task t) {
+    return !SeriesRowKt.collapsedSeriesMembers(t, getTaskManager().getTaskHierarchy(), getVisibleTasks()).isEmpty();
+  }
 
   public List<Task> getVisibleTasks() {
     return myVisibleTasks == null ? Collections.<Task> emptyList() : myVisibleTasks;

@@ -29,6 +29,7 @@ import kotlin.jvm.functions.Function1;
 import net.java.balloontip.BalloonTip;
 import net.java.balloontip.CustomBalloonTip;
 import net.java.balloontip.styles.ToolTipBalloonStyle;
+import biz.ganttproject.task.recurrence.CollapsedSeriesRows;
 import net.sourceforge.ganttproject.*;
 import net.sourceforge.ganttproject.chart.*;
 import net.sourceforge.ganttproject.chart.item.ChartItem;
@@ -49,7 +50,8 @@ import java.awt.event.MouseMotionListener;
 import java.util.List;
 import java.util.function.Supplier;
 
-public class GanttChartController extends AbstractChartImplementation implements ChartImplementation {
+public class GanttChartController extends AbstractChartImplementation
+    implements ChartImplementation, CollapsedSeriesRows {
   private final TaskManager myTaskManager;
   private final ChartModelImpl myChartModel;
   private final ChartViewState myChartViewState;
@@ -171,6 +173,11 @@ public class GanttChartController extends AbstractChartImplementation implements
         getActiveInteraction().paint(g);
       }
     }
+  }
+
+  @Override
+  public boolean drawsSeriesInOneRow(Task task) {
+    return myChartModel.isSeriesRow(task);
   }
 
   @Override

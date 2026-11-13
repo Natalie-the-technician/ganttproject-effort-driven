@@ -241,7 +241,9 @@ public class GanttChartSceneBuilder {
         }
       }
       renderLabels(boundPolygons);
-      renderComparisonBand(t, rowNum, defaultUnitOffsets);
+      if (seriesMembers.isEmpty()) {
+        renderComparisonBand(t, rowNum, defaultUnitOffsets);
+      }
       rowNum++;
       Canvas.Line nextLine = getPrimitiveContainer().createLine(0, rowNum * getRowHeight(),
           input.getWidth(), rowNum * getRowHeight());
@@ -462,7 +464,7 @@ public class GanttChartSceneBuilder {
 
   /**
    * Draws every member of a collapsed series as a bar of its own in one row. Each bar has the progress of its
-   * member. Members which overlap are drawn over each other, the later one on top.
+   * member, its own absence stripes and its own comparison band. Members which overlap are drawn over each other, the later one on top.
    *
    * @return the bars of the last member, which is the one that gets the labels
    */
@@ -472,8 +474,10 @@ public class GanttChartSceneBuilder {
       List<ITaskActivity<ITaskSceneTask>> activities = mySplitter.split(member.getActivities(), Integer.MAX_VALUE);
       last = myTaskActivityRenderer.renderActivities(rowNum, activities, defaultUnitOffsets);
       if (!myTaskApi.hasNestedTasks(member) && !member.isMilestone()) {
+        renderAbsenceStripes(member, last, defaultUnitOffsets);
         renderProgressBar(last.stream().filter(REMOVE_SUPERTASK_ENDINGS).toList());
       }
+      renderComparisonBand(member, rowNum, defaultUnitOffsets);
     }
     return last;
   }

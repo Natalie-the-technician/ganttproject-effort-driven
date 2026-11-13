@@ -28,11 +28,17 @@ import biz.ganttproject.core.model.task.RecurrenceUnit
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.GanttCalendar
 import biz.ganttproject.core.time.TimeDuration
+import biz.ganttproject.task.recurrence.CollapsedSeriesRows
+import biz.ganttproject.task.recurrence.ancestorsToOpen
 import biz.ganttproject.task.recurrence.applyRecurrences
 import biz.ganttproject.task.recurrence.toModelDate
 import biz.ganttproject.task.recurrence.toModelLocalDate
 import biz.ganttproject.task.recurrence.planRecurrences
 import net.sourceforge.ganttproject.TestSetupHelper
+import net.sourceforge.ganttproject.chart.AbsenceRun
+import net.sourceforge.ganttproject.chart.ChartComparison
+import net.sourceforge.ganttproject.chart.ComparisonResult
+import net.sourceforge.ganttproject.chart.STYLE_ABSENCE
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskManager
 import net.sourceforge.ganttproject.undo.GPUndoManager
@@ -101,20 +107,70 @@ class SeriesRowSceneTest {
     assertEquals(5 * DAY_WIDTH, scene.bars.single().width)
   }
 
+  @Test
+  fun `every bar has the absence stripes of its own member`() {
+    val scene = scene(
+      listOf(Member(AUG_5, 5), Member(AUG_12, 5), Member(AUG_19, 5)), AUG_5, 20,
+      absence = mapOf(1 to listOf(AbsenceRun(LocalDate.of(2026, 8, 13), LocalDate.of(2026, 8, 15))))
+    )
+    val stripe = scene.stripes.single()
+    assertEquals(daysFromChartStart(day(2026, Calendar.AUGUST, 13)) * DAY_WIDTH, stripe.leftX)
+    assertEquals(2 * DAY_WIDTH, stripe.width)
+    assertTrue(scene.bars.count { stripe.leftX >= it.leftX && stripe.leftX < it.leftX + it.width } == 1, "on one bar only")
+  }
+
+  @Test
+  fun `a member without absence has no stripe`() {
+    val scene = scene(
+      listOf(Member(AUG_5, 5), Member(AUG_12, 5)), AUG_5, 20,
+      absence = mapOf(1 to listOf(AbsenceRun(LocalDate.of(2026, 8, 13), LocalDate.of(2026, 8, 14))))
+    )
+    assertEquals(1, scene.stripes.size)
+    assertTrue(scene.stripes.single().leftX >= scene.bars[1].leftX, "no stripe on the first bar")
+  }
+
+  @Test
+  fun `every bar has the comparison band of its own member`() {
+    val scene = scene(
+      listOf(Member(AUG_5, 3), Member(AUG_12, 3), Member(AUG_19, 3)), AUG_5, 20,
+      effort = mapOf(0 to ComparisonResult.MORE, 2 to ComparisonResult.LESS)
+    )
+    assertEquals(2, scene.bands.size, "the member without a deviation has no band")
+    assertEquals(listOf(AUG_5, AUG_19).map { daysFromChartStart(it) * DAY_WIDTH }, scene.bands.map { it.leftX })
+    assertTrue(scene.bands[0].hasStyle("later") && scene.bands[1].hasStyle("earlier"))
+  }
+
+  @Test
+  fun `no band spans the whole row`() {
+    val scene = scene(
+      listOf(Member(AUG_5, 3), Member(AUG_19, 3)), AUG_5, 20,
+      effort = mapOf(-1 to ComparisonResult.MORE)
+    )
+    assertEquals(0, scene.bands.size, "the group has no deviation of its own to draw")
+  }
+
   private class Member(val start: Date, val days: Int, val completion: Int = 0)
 
-  private class SceneBars(val bars: List<Canvas.Rectangle>, val progressWidths: List<Int>)
+  private class SceneBars(
+    val bars: List<Canvas.Rectangle>, val progressWidths: List<Int>,
+    val stripes: List<Canvas.Rectangle> = emptyList(), val bands: List<Canvas.Rectangle> = emptyList()
+  )
 
   private fun scene(vararg members: Member): SceneBars = scene(members.toList(), AUG_5, 20)
 
-  private fun scene(members: List<Member>, groupStart: Date, groupDays: Int): SceneBars {
+  private fun scene(
+    members: List<Member>, groupStart: Date, groupDays: Int,
+    absence: Map<Int, List<AbsenceRun>> = emptyMap(), effort: Map<Int, ComparisonResult> = emptyMap()
+  ): SceneBars {
     val calendar = AlwaysWorkingTimeCalendarImpl()
     val group = SingleActivitySceneTask(ROW_ID, groupStart, calendar.shiftDate(groupStart, days(groupDays)), days(groupDays))
     val sceneMembers = members.mapIndexed { i, m ->
       SeriesMemberSceneTask(ROW_ID + 1 + i, m.start, calendar.shiftDate(m.start, days(m.days)), days(m.days), m.completion)
     }
-    val stub = InputApiStub(calendar, group, null)
+    val stub = InputApiStub(calendar, group, null, ChartComparison.EFFORT)
     val input = object : GanttChartSceneBuilder.InputApi by stub {
+      override fun getAbsenceRuns(rowId: Int): List<AbsenceRun> = absence[rowId - ROW_ID - 1] ?: emptyList()
+      override fun getEffortComparison(rowId: Int): ComparisonResult = effort[rowId - ROW_ID - 1] ?: ComparisonResult.NO_BAND
       override fun getSeriesMembers(rowId: Int): List<ITaskSceneTask> = if (rowId == ROW_ID) sceneMembers else emptyList()
     }
     val canvas = Canvas()
@@ -132,8 +188,10 @@ class SeriesRowSceneTest {
     canvas.layers.forEach { it.paint(collector) }
     val progress = rectangles.filter { it.style?.startsWith("task.progress") == true }
     return SceneBars(
-      bars = rectangles.filter { it.modelObject is ITaskActivity<*> }
+      bars = rectangles.filter { it.modelObject is ITaskActivity<*> && it.style != "previousStateTask" }
         .sortedBy { it.leftX },
+      stripes = rectangles.filter { it.style == STYLE_ABSENCE }.sortedBy { it.leftX },
+      bands = rectangles.filter { it.style == "previousStateTask" }.sortedBy { it.leftX },
       progressWidths = sceneMembers.map { member -> progress.filter { it.modelObject === member }.sumOf { it.width } }
     )
   }
@@ -192,7 +250,7 @@ class SeriesMembersTest {
   fun `a collapsed group gives its source task and repetitions, earliest first`() {
     val group = series(count = 4, effort = "6")
     collapse(group)
-    val members = collapsedSeriesMembers(group, taskManager.taskHierarchy)
+    val members = collapsedSeriesMembers(group, taskManager.taskHierarchy, emptyList())
     assertEquals(4, members.size)
     assertEquals((0L..3L).map { monday.plusWeeks(it) }, members.map { it.start.time.toModelLocalDate() })
   }
@@ -201,20 +259,61 @@ class SeriesMembersTest {
   fun `a series without effort has members all the same`() {
     val group = series(count = 3, effort = null)
     collapse(group)
-    assertEquals(3, collapsedSeriesMembers(group, taskManager.taskHierarchy).size)
+    assertEquals(3, collapsedSeriesMembers(group, taskManager.taskHierarchy, emptyList()).size)
   }
 
   @Test
   fun `a series with one repetition has two members`() {
     val group = series(count = 2, effort = "2")
     collapse(group)
-    assertEquals(2, collapsedSeriesMembers(group, taskManager.taskHierarchy).size)
+    assertEquals(2, collapsedSeriesMembers(group, taskManager.taskHierarchy, emptyList()).size)
   }
 
   @Test
-  fun `an expanded group has no members to draw in its row`() {
+  fun `a group whose members have rows is expanded and has nothing to draw in its row`() {
     val group = series(count = 3, effort = "6")
-    assertTrue(collapsedSeriesMembers(group, taskManager.taskHierarchy).isEmpty())
+    val rows = taskManager.taskHierarchy.getNestedTasks(group).toList()
+    assertTrue(collapsedSeriesMembers(group, taskManager.taskHierarchy, rows).isEmpty())
+  }
+
+  @Test
+  fun `the row list decides, Task expand is not asked`() {
+    val group = series(count = 3, effort = "6")
+    val hierarchy = taskManager.taskHierarchy
+    val rows = hierarchy.getNestedTasks(group).toList()
+    collapse(group)
+    assertTrue(collapsedSeriesMembers(group, hierarchy, rows).isEmpty(), "expand=false, but the table shows the members")
+    group.createMutator().also { it.setExpand(true); it.commit() }
+    assertEquals(3, collapsedSeriesMembers(group, hierarchy, emptyList()).size, "expand=true, but the table hides the members")
+    assertTrue(group.expand, "reading the row list does not touch the field")
+  }
+
+  @Test
+  fun `a press on a member leaves a collapsed series group shut`() {
+    val group = series(count = 3, effort = "6")
+    val member = taskManager.taskHierarchy.getNestedTasks(group).first()
+    val chart = object : CollapsedSeriesRows {
+      override fun drawsSeriesInOneRow(task: Task) = task == group
+    }
+    assertEquals(emptyList<Task>(), ancestorsToOpen(listOf(member), taskManager.taskHierarchy, chart))
+  }
+
+  @Test
+  fun `any other source still opens the group of the task it selects`() {
+    val group = series(count = 3, effort = "6")
+    val member = taskManager.taskHierarchy.getNestedTasks(group).first()
+    assertEquals(listOf(group), ancestorsToOpen(listOf(member), taskManager.taskHierarchy, "search box"))
+    assertEquals(listOf(group), ancestorsToOpen(listOf(member), taskManager.taskHierarchy, null))
+  }
+
+  @Test
+  fun `the chart keeps shut only the groups whose row it draws`() {
+    val group = series(count = 3, effort = "6")
+    val member = taskManager.taskHierarchy.getNestedTasks(group).first()
+    val chart = object : CollapsedSeriesRows {
+      override fun drawsSeriesInOneRow(task: Task) = false
+    }
+    assertEquals(listOf(group), ancestorsToOpen(listOf(member), taskManager.taskHierarchy, chart))
   }
 
   @Test
@@ -222,6 +321,6 @@ class SeriesMembersTest {
     val summary = taskManager.newTaskBuilder().withName("Phase").build()
     taskManager.newTaskBuilder().withName("Step").withParent(summary).build()
     collapse(summary)
-    assertTrue(collapsedSeriesMembers(summary, taskManager.taskHierarchy).isEmpty())
+    assertTrue(collapsedSeriesMembers(summary, taskManager.taskHierarchy, emptyList()).isEmpty())
   }
 }
