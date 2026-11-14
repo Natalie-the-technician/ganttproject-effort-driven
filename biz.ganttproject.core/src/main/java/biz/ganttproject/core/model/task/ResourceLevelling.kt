@@ -334,6 +334,10 @@ private fun searchWindow(
   var candidate = nextWorkingDay(earliest, isWorkingDay)
   repeat(MAX_SEARCH_DAYS) {
     if (!canStartOn(task, candidate)) {
+      // A start turned down on a day off of a blocking resource is its absence as well.
+      if (task.blocking.any { !isPresent(it, candidate) }) {
+        absenceBlocked = true
+      }
       candidate = nextWorkingDay(candidate.plusDays(1), isWorkingDay)
       return@repeat
     }
