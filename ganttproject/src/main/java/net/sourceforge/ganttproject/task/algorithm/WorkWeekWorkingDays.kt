@@ -80,11 +80,19 @@ class WorkWeekWorkingDays(private val calendar: GPCalendar) {
   }
 
   /**
-   * The end date of the task model, which is the first working day of the project after the [days] working days of a
-   * task from [start] on.
+   * The first working day of the project after the [days] working days of a task from [start] on, which is where a
+   * successor of the task can start.
    */
   fun endAfter(start: LocalDate, days: Int, isWorkingDay: (LocalDate) -> Boolean): LocalDate =
     nextWorkingDay(workingDays(start, days, isWorkingDay).last().plusDays(1), projectOnly)
+
+  /**
+   * The end date of the task model for a task which needs [days] of its own working days from [start] on: the day
+   * after its last working day, as for a new task with the same days. A task which ends on a Friday ends on Saturday
+   * there, not on the next Monday, which would show Sunday as its last day.
+   */
+  fun modelEnd(start: LocalDate, days: Int, isWorkingDay: (LocalDate) -> Boolean): LocalDate =
+    workingDays(start, days, isWorkingDay).last().plusDays(1)
 
   /** The inverse of [projectDays]: the working days of the task between [start] and [end], at least one. */
   fun taskDays(start: LocalDate, end: LocalDate, isWorkingDay: (LocalDate) -> Boolean): Int =
