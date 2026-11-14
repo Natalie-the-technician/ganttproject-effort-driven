@@ -264,9 +264,11 @@ class ResourceLevellingTest {
   }
 
   @Test
-  fun `the end is the first working day after the task`() {
+  fun `the end is the day after the last working day of the task`() {
     // Thursday, three days: Thursday, Friday and Monday, the end is Tuesday.
     assertEquals(monday.plusDays(8), endAfterWorkingDays(monday.plusDays(3), 3, weekdays))
+    // Thursday, two days: Thursday and Friday, the end is Saturday and not Monday.
+    assertEquals(monday.plusDays(5), endAfterWorkingDays(monday.plusDays(3), 2, weekdays))
     assertEquals(listOf(SHARED_POOL), task("x", 1, loads = emptyMap()).pools)
   }
 }
