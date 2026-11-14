@@ -22,6 +22,7 @@ import biz.ganttproject.core.option.ObservableBoolean
 import biz.ganttproject.core.option.ObservableString
 import biz.ganttproject.core.option.ValidationException
 import biz.ganttproject.core.option.ValueValidator
+import biz.ganttproject.core.option.parseDecimalOrNull
 import biz.ganttproject.core.option.validatorI18N
 import net.sourceforge.ganttproject.task.Task
 import net.sourceforge.ganttproject.task.TaskMutator
@@ -30,28 +31,18 @@ import net.sourceforge.ganttproject.task.totalActualEffort
 import java.math.BigDecimal
 
 /**
- * Parses the content of a decimal field. An empty text means "not set" and gives null.
+ * Parses the content of a decimal field the way [parseDecimalOrNull] does, which the decimal cells of the tables use too.
+ * An empty text means "not set" and gives null.
  * Throws [ValidationException] if the text is not a number or is not within the bounds.
  */
 fun parseDecimal(text: String?, min: BigDecimal, isMinExclusive: Boolean = false, max: BigDecimal? = null): BigDecimal? {
-  val trimmed = text?.trim()
-  if (trimmed.isNullOrEmpty()) {
-    return null
-  }
-  val value = try {
-    BigDecimal(withDecimalPoint(trimmed))
-  } catch (e: NumberFormatException) {
-    throw ValidationException(validatorI18N("validator.decimal.error.parse", arrayOf(trimmed)))
-  }
+  val value = parseDecimalOrNull(text) ?: return null
   val belowMin = if (isMinExclusive) value <= min else value < min
   if (belowMin || (max != null && value > max)) {
-    throw ValidationException(validatorI18N("validator.decimal.error.range", arrayOf(trimmed)))
+    throw ValidationException(validatorI18N("validator.decimal.error.range", arrayOf(text!!.trim())))
   }
   return value
 }
-
-/** A comma as the decimal separator is accepted, as long as there is no point which could be a separator too. */
-private fun withDecimalPoint(text: String) = if (text.count { it == ',' } == 1 && '.' !in text) text.replace(',', '.') else text
 
 fun decimalValidator(min: BigDecimal, isMinExclusive: Boolean = false, max: BigDecimal? = null) =
   ValueValidator<String> { text -> parseDecimal(text, min, isMinExclusive, max); text }
