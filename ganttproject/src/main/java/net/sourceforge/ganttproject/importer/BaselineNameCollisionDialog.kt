@@ -26,6 +26,7 @@ import biz.ganttproject.app.dialog
 import javafx.application.Platform
 import javafx.event.ActionEvent
 import javafx.scene.control.ButtonType
+import javafx.stage.WindowEvent
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -34,9 +35,17 @@ import java.util.concurrent.CompletableFuture
  * dialog was closed in any other way (Escape, the window close button).
  *
  * OptionPaneBuilder.showDialog is not used because it calls its handler only on OK.
+ * onClosed alone is not enough: the window close button hides the window without closing the
+ * dialog (Dialog.kt sets onCloseRequest to window.hide()), and then onClosed is never called.
  */
 fun showBaselineNameCollisionDialog(collidingNames: List<String>, handleAnswer: (BaselineNameCollision?) -> Unit) {
   var answered = false
+  val answerOnce = { answer: BaselineNameCollision? ->
+    if (!answered) {
+      answered = true
+      handleAnswer(answer)
+    }
+  }
   val optionPane = OptionPaneBuilder<BaselineNameCollision>().apply {
     i18n = RootLocalizer.createWithRootKey(rootKey = "importer.baselineNameCollision")
     titleHelpString?.update(collidingNames.joinToString(", "))
@@ -48,7 +57,8 @@ fun showBaselineNameCollisionDialog(collidingNames: List<String>, handleAnswer: 
   }
   dialog(title = optionPane.titleString.value) { controller ->
     controller.setHeader(optionPane.createHeader())
-    controller.setContent(optionPane.buildPane().apply { styleClass.add("option-pane") })
+    val pane = optionPane.buildPane().apply { styleClass.add("option-pane") }
+    controller.setContent(pane)
     controller.addStyleSheet(OPTION_PANE_STYLESHEET)
     controller.addStyleClass("option-pane-padding")
     controller.setEscCloseEnabled(true)
@@ -57,13 +67,13 @@ fun showBaselineNameCollisionDialog(collidingNames: List<String>, handleAnswer: 
       // A filter, because the dialog pane's own handler of this button closes the dialog and so
       // calls onClosed before any handler added here would run.
       btn.addEventFilter(ActionEvent.ACTION) {
-        answered = true
-        handleAnswer(optionPane.toggleGroup.selectedToggle?.userData as? BaselineNameCollision)
+        answerOnce(optionPane.toggleGroup.selectedToggle?.userData as? BaselineNameCollision)
       }
     }
-    // onClosed is also called after OK
-    controller.onClosed = {
-      if (!answered) handleAnswer(null)
+    // onClosed is also called after OK, and twice after Escape
+    controller.onClosed = { answerOnce(null) }
+    controller.onShown = {
+      pane.scene?.window?.addEventHandler(WindowEvent.WINDOW_HIDDEN) { answerOnce(null) }
     }
   }
 }
