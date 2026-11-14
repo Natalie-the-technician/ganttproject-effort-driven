@@ -22,6 +22,7 @@ import biz.ganttproject.core.model.task.CapacityChange
 import biz.ganttproject.core.model.task.SHARED_POOL
 import biz.ganttproject.core.model.task.levelTasks
 import biz.ganttproject.core.time.CalendarFactory
+import biz.ganttproject.core.time.GanttCalendar
 import biz.ganttproject.core.time.CalendarFactory.LocaleApi
 import biz.ganttproject.core.time.CalendarFactory.setLocaleApi
 import net.sourceforge.ganttproject.resource.HumanResource
@@ -107,7 +108,9 @@ class TaskLevellingTest {
     return applyLevelling(result.starts, result.durations, project.taskManager, undoManager, "level")
   }
 
-  private fun Task.startDay(): LocalDate = LocalDate.of(start.year, start.month + 1, start.date)
+  private fun Task.startDay(): LocalDate = start.day()
+
+  private fun GanttCalendar.day(): LocalDate = LocalDate.of(year, month + 1, date)
 
   @Test
   fun `an assignment with load zero takes nothing`() {
@@ -159,6 +162,64 @@ class TaskLevellingTest {
     level()
     assertEquals(monday, fixed.startDay())
     assertEquals(monday, waiting.startDay())
+  }
+
+  @Test
+  fun `a moved milestone ends where it starts and its supertask encloses it`() {
+    val anna = resource("anna")
+    task("first", 3, anna to 100f)
+    val phase = task("phase", 1)
+    val second = project.taskManager.newTaskBuilder().withName("second").withParent(phase)
+      .withStartDate(CalendarFactory.createGanttCalendar(2026, 10, 2).time)
+      .withDuration(project.taskManager.createLength(2)).build().also { it.assignmentCollection.addAssignment(anna).load = 100f }
+    val done = project.taskManager.newTaskBuilder().withName("done").withParent(phase)
+      .withStartDate(CalendarFactory.createGanttCalendar(2026, 10, 4).time).build().also { it.isMilestone = true }
+    project.taskManager.dependencyCollection.createDependency(done, second)
+    val before = done.startDay()
+    // Reading the end keeps it in the task, as the chart and the table do.
+    assertEquals(done.start, done.end)
+    level()
+    assertTrue(done.startDay() > before)
+    assertEquals(done.start, done.end)
+    assertTrue(phase.start <= second.start) { "phase ${phase.start} starts after second ${second.start}" }
+    // The scheduler ends a supertask on Saturday rather than on the Monday after, so no working day may lie between.
+    val isWorkingDay = workingDayTest(project.taskManager.calendar)
+    val gap = generateSequence(phase.end.day()) { it.plusDays(1) }.takeWhile { it < done.end.day() }
+    assertTrue(gap.none(isWorkingDay)) { "phase ${phase.end} ends before done ${done.end}" }
+  }
+
+  @Test
+  fun `a milestone in the past which started work depends on stays and so does the work`() {
+    // As in HouseBuildingSample: a supertask with finished work depends on a milestone which is not marked as done.
+    val past = CalendarFactory.createGanttCalendar(2026, 9, 26).time
+    val release = project.taskManager.newTaskBuilder().withName("release").withStartDate(past).build()
+      .also { it.isMilestone = true }
+    val design = task("design", 1)
+    val draft = project.taskManager.newTaskBuilder().withName("draft").withParent(design).withStartDate(past)
+      .withDuration(project.taskManager.createLength(3)).build()
+      .also { t -> t.createMutator().also { it.setCompletionPercentage(100); it.commit() } }
+    project.taskManager.dependencyCollection.createDependency(design, release)
+    val levelTasks = collectLevelTasks(project.taskManager, monday).associateBy { it.id }
+    assertTrue(levelTasks.getValue(release.taskID.toString()).frozen)
+    level()
+    assertEquals(LocalDate.of(2026, 10, 26), release.startDay())
+    assertEquals(release.start, release.end)
+    assertEquals(LocalDate.of(2026, 10, 26), draft.startDay())
+  }
+
+  @Test
+  fun `a levelled task ends where a new task with the same days ends`() {
+    val anna = resource("anna")
+    task("first", 3, anna to 100f)
+    val second = task("second", 2, anna to 100f)
+    level()
+    // Thursday and Friday: the end is Saturday, so that Friday is shown as the last day, not Sunday.
+    val fresh = project.taskManager.newTaskBuilder().withName("fresh").withStartDate(second.start.time)
+      .withDuration(project.taskManager.createLength(2)).build()
+    assertEquals(monday.plusDays(3), second.startDay())
+    assertEquals(fresh.end, second.end)
+    assertEquals(fresh.displayEnd, second.displayEnd)
+    assertEquals(2, second.duration.length)
   }
 
   @Test
