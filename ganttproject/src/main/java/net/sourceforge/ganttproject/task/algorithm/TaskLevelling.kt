@@ -217,7 +217,7 @@ private fun levellingMoves(starts: Map<String, LocalDate>, durations: Map<String
       else workingDays.taskDays(task.start.time.toModelLocalDate(), task.end.time.toModelLocalDate(), isWorkingDay)
     val days = workingDays.projectDays(start, taskDays.toLong(), isWorkingDay).toInt()
     if (task.start.time.toModelLocalDate() == start && days == task.duration.length) null
-    else Move(task, start, workingDays.endAfter(start, taskDays, isWorkingDay))
+    else Move(task, start, workingDays.modelEnd(start, taskDays, isWorkingDay))
   }
 }
 
