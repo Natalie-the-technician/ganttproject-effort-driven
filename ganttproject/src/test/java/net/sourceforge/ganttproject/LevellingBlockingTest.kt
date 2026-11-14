@@ -20,6 +20,7 @@ package net.sourceforge.ganttproject
 
 import biz.ganttproject.core.calendar.GanttDaysOff
 import biz.ganttproject.core.model.task.LevelConflict
+import biz.ganttproject.core.model.task.LevelResult
 import biz.ganttproject.core.model.task.LevelTask
 import biz.ganttproject.core.model.task.SHARED_POOL
 import biz.ganttproject.core.model.task.levelTasks
@@ -180,6 +181,22 @@ class LevellingBlockingTest {
     }
 
     @Test
+    fun `a turned down start day counts as absence of a blocking resource which is away that day`() {
+      val isPresent: (String, LocalDate) -> Boolean = { _, _ -> false }
+      val result = levelTasks(listOf(task("a", 1, blocking = setOf("bob"))), monday, everyDay,
+        canStartOn = { _, day -> isPresent("bob", day) }, isPresent = isPresent)
+      assertEquals(listOf(LevelConflict.NoPossibleDate("a", listOf("bob"), emptyList())), result.conflicts)
+      assertEquals(monday, result.starts["a"])
+    }
+
+    @Test
+    fun `a start turned down while the blocking resource is present is not blamed on its absence`() {
+      val result = levelTasks(listOf(task("a", 1, blocking = setOf("bob"))), monday, everyDay,
+        canStartOn = { _, _ -> false })
+      assertTrue(result.conflicts.isEmpty())
+    }
+
+    @Test
     fun `turned down days are not reported when a window is found`() {
       val absent = absentOn(monday)
       val result = levelTasks(listOf(task("first", 2), task("a", 1, blocking = setOf("bob"), order = 1)),
@@ -255,12 +272,13 @@ class LevellingBlockingTest {
 
     private fun Task.startDay(): LocalDate = LocalDate.of(start.year, start.month + 1, start.date)
 
-    private fun level() {
+    private fun level(): LevelResult {
       val tasks = collectLevelTasks(project.taskManager, monday)
       val result = levelTasks(tasks, monday, workingDayTest(project.taskManager.calendar),
         durationAtStart(project.taskManager), canStartOn = startAllowed(project.taskManager),
         isPresent = resourcePresence(project.taskManager))
       applyLevelling(result.starts, result.durations, project.taskManager, undoManager, "level")
+      return result
     }
 
     @Test
@@ -326,6 +344,32 @@ class LevellingBlockingTest {
       assertTrue(canStartOn(collectLevelTasks(project.taskManager, monday).single(), monday))
       level()
       assertEquals(monday, task.startDay())
+    }
+
+    @Test
+    fun `an effort driven task starts behind a day off of its blocking resource`() {
+      val anna = resource("anna")
+      val bob = resource("bob")
+      bob.dayOff(monday, monday.plusDays(1))
+      val task = effortTask("16")
+      task.assign(anna, 100f)
+      task.assign(bob, 100f, blocking = true)
+      val result = level()
+      assertEquals(monday.plusDays(2), task.startDay())
+      assertTrue(result.conflicts.isEmpty())
+    }
+
+    @Test
+    fun `an effort driven task whose blocking resource is never present is reported`() {
+      val anna = resource("anna")
+      val bob = resource("bob")
+      bob.dayOff(monday, monday.plusYears(200))
+      val task = effortTask("16")
+      task.assign(anna, 100f)
+      task.assign(bob, 100f, blocking = true)
+      val result = level()
+      assertEquals(listOf(LevelConflict.NoPossibleDate(task.taskID.toString(), listOf(bob.id.toString()), emptyList())),
+        result.conflicts)
     }
   }
 }
