@@ -264,9 +264,12 @@ fun workingDaysBetween(from: LocalDate, to: LocalDate, isWorkingDay: (LocalDate)
   return count
 }
 
-/** The first working day after [days] working days from [start] on. This is the end date of the task model. */
+/**
+ * The day after the last of [days] working days from [start] on. This is the end date of the task model: a task which
+ * ends on a Friday ends on Saturday there, not on the next Monday, which would show Sunday as its last day.
+ */
 fun endAfterWorkingDays(start: LocalDate, days: Int, isWorkingDay: (LocalDate) -> Boolean): LocalDate =
-  nextWorkingDay(workingDays(start, days, isWorkingDay).last().plusDays(1), isWorkingDay)
+  workingDays(start, days, isWorkingDay).last().plusDays(1)
 
 /**
  * The earliest window from [earliest] on in which every resource of the task has room on every day.
