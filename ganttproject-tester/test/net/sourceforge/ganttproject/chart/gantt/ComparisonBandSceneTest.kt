@@ -110,11 +110,21 @@ class ComparisonBandSceneTest {
   }
 
   @Test
-  fun `the dates view keeps the label below the bar right under the bar`() {
+  fun `with a baseline the dates view puts the label below the bar under the band`() {
     val scene = labelScene(ChartComparison.DATES, baseline(start = AUG_27, duration = 5))
     val band = scene.bands.single() as Canvas.Polygon
-    assertEquals(band.topY + 2, scene.downLabelTopY, "as in master, the label lies on the band, right under the bar")
-    assertEquals(scene.dateViewRowHeight, scene.rowHeight)
+    assertTrue(scene.downLabelTopY > band.bottomY, "the label starts below the band")
+    assertEquals(labelScene(ChartComparison.DATES, baseline = null).rowHeight + BAR_HEIGHT, scene.rowHeight,
+      "the row makes room for the band")
+  }
+
+  @Test
+  fun `without a baseline the dates view keeps the label below the bar where it was`() {
+    val scene = labelScene(ChartComparison.DATES, baseline = null)
+    assertEquals(0, scene.bands.size)
+    // Measured on 908451c85, before the label moved under the band with a baseline
+    assertEquals(11, scene.downLabelTopY)
+    assertEquals(29, scene.rowHeight)
   }
 
   @Test
