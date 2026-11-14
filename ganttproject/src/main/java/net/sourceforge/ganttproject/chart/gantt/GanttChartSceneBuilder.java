@@ -148,6 +148,9 @@ public class GanttChartSceneBuilder {
     );
 
     myLabelsRenderer = new TaskLabelSceneBuilder<>(taskLabelSceneApi, myLabelsLayer);
+    // In the comparison views the label below the bar goes under the band. The dates view keeps it where it was.
+    myLabelsRenderer.setBandHeight(
+        () -> input.getComparison().getNeedsBandRoomWithoutBaseline() ? getRectangleHeight() : 0);
     myChartApi = input.getChartApi(myLabelsRenderer);
     this.mySplitter = new TaskActivitySplitter<ITask>(
       input::getStartDate,
@@ -352,19 +355,21 @@ public class GanttChartSceneBuilder {
       return;
     }
     GanttPreviousStateTask taskBaseline = findBaselineTask(t);
+    boolean isSummary = t.getHasNestedTasks();
     if (taskBaseline == null) {
+      // Without a baseline there is no dates half, and a summary task has nothing else to show.
       DatesAndDurations both = ChartComparisonKt.compareDatesAndDurations(
           null, t.getEnd().getTime(), null, t.getDuration().getLength());
-      List<ITaskActivity<ITaskSceneTask>> bar = mySplitter.split(activities, Integer.MAX_VALUE);
-      paintBand(rowNum, defaultUnitOffsets, bar, getBandStyles(t, both.getDates(), BAND_UPPER));
-      paintBand(rowNum, defaultUnitOffsets, bar, getBandStyles(t, both.getDurations(), BAND_LOWER));
+      if (!isSummary && both.getDurations() != ComparisonResult.NO_BAND) {
+        paintBand(rowNum, defaultUnitOffsets, mySplitter.split(activities, Integer.MAX_VALUE),
+            getBandStyles(t, both.getDurations(), BAND_LOWER));
+      }
       return;
     }
     Date baselineStart = taskBaseline.getStart().getTime();
     Date baselineEnd = getBaselineEnd(taskBaseline);
     DatesAndDurations both = ChartComparisonKt.compareDatesAndDurations(
         baselineEnd, t.getEnd().getTime(), taskBaseline.getDuration(), t.getDuration().getLength());
-    boolean isSummary = t.getHasNestedTasks();
     if (both.getDates() != ComparisonResult.NO_BAND) {
       paintBand(rowNum, defaultUnitOffsets, createBandActivities(t, baselineStart, baselineEnd),
           getBandStyles(t, both.getDates(), isSummary ? null : BAND_UPPER));
