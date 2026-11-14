@@ -136,9 +136,17 @@ class TaskViewAction(
     // The title is user text, so it is no i18n key. GPAction has already asked the localizer in its
     // constructor and got null; the name is put in here afterwards, as TaskFilterAction does for a
     // custom filter.
+    refresh()
+  }
+
+  /**
+   * The entry is cached, and the management dialog renames and changes the very view it was made
+   * for. So name, hidden count and check mark are read again whenever the menu is built.
+   */
+  internal fun refresh() {
     putValue(NAME, taskView.title)
     putValue(HELP_TEXT, RootLocalizer.formatText("taskView.hiddenCount", taskView.hiddenCount))
-    super.putValue(SELECTED_KEY, viewManager.isActive(taskView))
+    putValue(SELECTED_KEY, viewManager.isActive(taskView))
   }
 
   override fun actionPerformed(e: ActionEvent?) {
@@ -190,7 +198,7 @@ class TaskViewActionSet(private val viewManager: TaskViewManager) {
   fun tableViewActions(builder: MenuBuilder) {
     val viewActions = viewManager.views.map { view ->
       actionCache.getOrPut(view) { TaskViewAction(viewManager, view) }.also {
-        it.putValue(javax.swing.Action.SELECTED_KEY, viewManager.isActive(view))
+        it.refresh()
       }
     }
     actionCache.keys.retainAll(viewManager.views.toSet())

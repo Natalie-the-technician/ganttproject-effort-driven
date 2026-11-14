@@ -18,7 +18,7 @@ along with GanttProject.  If not, see <http://www.gnu.org/licenses/>.
 */
 package biz.ganttproject.ganttview
 
-import biz.ganttproject.app.IfNullLocalizer
+import biz.ganttproject.app.DefaultLocalizer
 import biz.ganttproject.app.Localizer
 import biz.ganttproject.app.RootLocalizer
 import biz.ganttproject.app.dialog
@@ -114,11 +114,12 @@ internal class ViewEditor(
 }
 
 /**
- * Fork texts first, then GanttProject's own. The generic keys of the list dialog -- "add",
- * "delete", "apply" -- are answered by the fork bundle so that the dialog is German on a German
- * desktop; the 22 `taskTable.*` keys of the stock program are translated to zero per cent.
+ * Only the dialog's own keys, `taskViewDialog.*`, then GanttProject's common ones such as "add",
+ * "delete" and "apply". The filter dialog's keys are NOT asked: as long as the view keys are not in
+ * the translation bundle, they would answer "Task Filters", "New Filter" and "Enable filter", and
+ * the dialog would pass itself off as the filter dialog.
  */
-private val i18n: Localizer = IfNullLocalizer(
-  RootLocalizer.createWithRootKey("taskViewDialog", RootLocalizer),
-  RootLocalizer.createWithRootKey("taskTable.filterDialog", RootLocalizer)
-)
+internal fun viewDialogLocalizer(root: DefaultLocalizer = RootLocalizer): Localizer =
+  root.createWithRootKey("taskViewDialog", root)
+
+private val i18n: Localizer = viewDialogLocalizer()
