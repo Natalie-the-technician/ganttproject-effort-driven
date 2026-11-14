@@ -42,6 +42,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.text.DateFormat
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Tests importing the baselines of a project file into the current project.
@@ -238,6 +239,34 @@ class BaselineImportTest {
     assertEquals(false, undoManager.canUndo(), "there has to be no undoable edit")
   }
 
+  @Test
+  fun `import while another thread reads the tasks leaves a complete task list`() {
+    // The import runs on a background thread while the task table and the chart read the tasks.
+    // A task list cached without the last imported task made the critical path calculation after
+    // the import fail with "Cannot read field numDependants because nested is null".
+    val file = savedFileWithSubtasks()
+    repeat(200) { round ->
+      val target = GanttProjectImpl()
+      target.addTask("Target task")
+      target.takeBaseline("Baseline")
+      val undoManager = BaselineSnapshotUndoManager(target.baselines)
+      val stop = AtomicBoolean(false)
+      val reader = Thread { while (!stop.get()) { target.taskManager.tasks } }.also { it.start() }
+      try {
+        importer(target, undoManager, listOf(file)) { null }.run()
+        importer(target, undoManager, listOf(file)) { BaselineNameCollision.RENAME }.run()
+      } finally {
+        stop.set(true)
+        reader.join()
+      }
+      val taskManager = target.taskManager
+      assertEquals(taskManager.taskHierarchy.getDeepNestedTasks(taskManager.rootTask).toSet(), taskManager.tasks.toSet(),
+        "round $round: the task list has to contain every task of the hierarchy")
+      assertEquals(listOf("Baseline", "Baseline (2)"), target.baselines.map { it.name })
+      taskManager.processCriticalPath(taskManager.rootTask)
+    }
+  }
+
   private fun importer(
     target: GanttProjectImpl, undoManager: GPUndoManager, files: List<File>, question: (List<String>) -> BaselineNameCollision?
   ) = ImporterFromGanttFile().also {
@@ -246,6 +275,18 @@ class BaselineImportTest {
     it.setContext(target, TestUIFacade(undoManager), nicePreferences())
     it.setModel(model)
     it.setBaselineNameCollisionQuestion(question)
+  }
+
+  private fun savedFileWithSubtasks(): File {
+    val project = GanttProjectImpl()
+    val summary = project.addTask("Summary")
+    (1..5).forEach { project.taskManager.newTaskBuilder().withName("Subtask $it").withParent(summary).build() }
+    project.addTask("Task")
+    project.addTask("Milestone")
+    project.takeBaseline("Baseline")
+    val file = File.createTempFile("BaselineImportTest", ".gan").also { it.deleteOnExit() }
+    FileOutputStream(file).use { GanttXMLSaver(project).save(it) }
+    return file
   }
 
   private fun savedFileWithBaseline(vararg names: String): File {
