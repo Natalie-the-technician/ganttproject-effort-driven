@@ -46,6 +46,8 @@ fun workingDayTest(calendar: GPCalendar): (LocalDate) -> Boolean = { day ->
  *
  * Supertasks get their dates from their children, so only leaves are levelled; a dependency on a supertask becomes a
  * dependency on all leaves under it. Work which has started stays where it is, and so does a task with a fixed date.
+ * A task which started work depends on has happened already and stays as well, even if it is not marked as done;
+ * otherwise the scheduler would push the started work after it.
  * A task which has not started and starts before [today] is moved if [moveUnstartedPast] is true and stays otherwise.
  */
 fun collectLevelTasks(taskManager: TaskManager, today: LocalDate, moveUnstartedPast: Boolean = true): List<LevelTask> {
@@ -58,10 +60,24 @@ fun collectLevelTasks(taskManager: TaskManager, today: LocalDate, moveUnstartedP
     return leaves
   }
   val leaves = hierarchy.getNestedTasks(hierarchy.rootTask).flatMap { collectLeaves(it) }
-  return leaves.mapIndexed { order, id -> taskManager.getTask(id).toLevelTask(order, leavesUnder, today, moveUnstartedPast) }
+  val started = leaves.filter { taskManager.getTask(it).completionPercentage > 0 }.toMutableSet()
+  do {
+    val count = started.size
+    leavesUnder.forEach { (id, under) ->
+      val successorStarted = taskManager.getTask(id).dependenciesAsDependee.toArray().any { dependency ->
+        (leavesUnder[dependency.dependant.taskID] ?: listOf(dependency.dependant.taskID)).any { it in started }
+      }
+      if (successorStarted) started.addAll(under)
+    }
+  } while (started.size > count)
+  return leaves.mapIndexed { order, id ->
+    taskManager.getTask(id).toLevelTask(order, leavesUnder, id in started, today, moveUnstartedPast)
+  }
 }
 
-private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today: LocalDate, moveUnstartedPast: Boolean): LevelTask {
+private fun Task.toLevelTask(
+  order: Int, leavesUnder: Map<Int, List<Int>>, started: Boolean, today: LocalDate, moveUnstartedPast: Boolean
+): LevelTask {
   // Every resource books its own load; two assignments of one resource add up. A negative load books nothing.
   val loadByResource = assignments
     .filter { it.resource != null }
@@ -75,7 +91,7 @@ private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today
     loadByResource.ifEmpty { mapOf(SHARED_POOL to SHARED_POOL_LOAD) }
   }
   val start = this.start.time.toModelLocalDate()
-  val frozen = completionPercentage > 0 || (start < today && !moveUnstartedPast)
+  val frozen = started || (start < today && !moveUnstartedPast)
   return LevelTask(
     id = taskID.toString(),
     orderInPlan = order,

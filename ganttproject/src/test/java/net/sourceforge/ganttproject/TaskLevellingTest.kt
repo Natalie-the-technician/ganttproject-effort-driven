@@ -189,6 +189,25 @@ class TaskLevellingTest {
   }
 
   @Test
+  fun `a milestone in the past which started work depends on stays and so does the work`() {
+    // As in HouseBuildingSample: a supertask with finished work depends on a milestone which is not marked as done.
+    val past = CalendarFactory.createGanttCalendar(2026, 9, 26).time
+    val release = project.taskManager.newTaskBuilder().withName("release").withStartDate(past).build()
+      .also { it.isMilestone = true }
+    val design = task("design", 1)
+    val draft = project.taskManager.newTaskBuilder().withName("draft").withParent(design).withStartDate(past)
+      .withDuration(project.taskManager.createLength(3)).build()
+      .also { t -> t.createMutator().also { it.setCompletionPercentage(100); it.commit() } }
+    project.taskManager.dependencyCollection.createDependency(design, release)
+    val levelTasks = collectLevelTasks(project.taskManager, monday).associateBy { it.id }
+    assertTrue(levelTasks.getValue(release.taskID.toString()).frozen)
+    level()
+    assertEquals(LocalDate.of(2026, 10, 26), release.startDay())
+    assertEquals(release.start, release.end)
+    assertEquals(LocalDate.of(2026, 10, 26), draft.startDay())
+  }
+
+  @Test
   fun `a levelled task ends where a new task with the same days ends`() {
     val anna = resource("anna")
     task("first", 3, anna to 100f)
