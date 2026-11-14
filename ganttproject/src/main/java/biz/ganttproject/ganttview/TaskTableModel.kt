@@ -22,6 +22,7 @@ package biz.ganttproject.ganttview
 import biz.ganttproject.FXUtil
 import biz.ganttproject.core.model.task.TaskDefaultColumn
 import biz.ganttproject.core.option.ValidationException
+import biz.ganttproject.core.option.parseDecimalOrNull
 import biz.ganttproject.core.table.TableModel
 import biz.ganttproject.core.time.CalendarFactory
 import biz.ganttproject.core.time.GanttCalendar
@@ -158,7 +159,7 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
         }
       }
       TaskDefaultColumn.COST -> try {
-        val cost = BigDecimal(value.toString())
+        val cost = parseDecimalOrNull(value.toString()) ?: BigDecimal.ZERO
         node.createMutator().also {
           it.setCost(CostStub(cost, false))
           it.commit()
@@ -167,7 +168,7 @@ class TaskTableModel(private val customColumnsManager: CustomPropertyManager): T
         throw ValidationException(MessageFormat.format("Can't parse {0} as number", value))
       }
       TaskDefaultColumn.EFFORT -> try {
-        val effort = value.toString().trim().takeIf { it.isNotEmpty() }?.let { BigDecimal(it) }
+        val effort = parseDecimalOrNull(value.toString())
         node.createMutator().also {
           it.setEffort(effort)
           it.commit()
