@@ -58,6 +58,9 @@ public class GanttChartController extends AbstractChartImplementation
   private final MouseListenerImpl myMouseListener;
   private final MouseMotionListenerImpl myMouseMotionListener;
   private final TaskTableChartConnector myTaskTableConnector;
+  // The task table changes its visible tasks in the FX thread while the chart is painted in the Swing thread, so the
+  // chart reads a copy which is taken in the FX thread after each change.
+  private volatile List<Task> myVisibleTasks;
   protected CustomBalloonTip myTooltip;
 
   public GanttChartController(IGanttProject project, UIFacade uiFacade, ChartModelImpl chartModel,
@@ -72,8 +75,12 @@ public class GanttChartController extends AbstractChartImplementation
     myMouseMotionListener = new MouseMotionListenerImpl(this, uiFacade, chartComponent);
 //    mySelection = new GanttChartSelection(myTaskManager, mySelectionManager);
     myTaskTableConnector = taskTableConnector;
+    myVisibleTasks = List.copyOf(myTaskTableConnector.getVisibleTasks());
     myTaskTableConnector.getVisibleTasks().addListener(
-        (ListChangeListener<Task>) c -> SwingUtilities.invokeLater(this::reset)
+        (ListChangeListener<Task>) c -> {
+          myVisibleTasks = List.copyOf(c.getList());
+          SwingUtilities.invokeLater(this::reset);
+        }
     );
     myTaskTableConnector.getTableScrollOffset().addListener(
         (ChangeListener<? super Number>) (wtf, old, newValue) -> SwingUtilities.invokeLater(() -> {
@@ -165,8 +172,7 @@ public class GanttChartController extends AbstractChartImplementation
       model.setRowHeight((int)Math.ceil(rowHeight));
       model.setTopTimeUnit(getViewState().getTopTimeUnit());
       model.setBottomTimeUnit(getViewState().getBottomTimeUnit());
-      List<Task> visibleTasks = myTaskTableConnector.getVisibleTasks();
-      model.setVisibleTasks(visibleTasks);
+      model.setVisibleTasks(myVisibleTasks);
       myChartModel.setTimelineTasks(getUIFacade().getCurrentTaskView().getTimelineTasks());
       model.paint(g);
       if (getActiveInteraction() != null) {
@@ -212,7 +218,7 @@ public class GanttChartController extends AbstractChartImplementation
       @Override
       public Unit invoke(GanttExportSettings settings) {
         setupExportSettings(settings, modelCopy);
-        settings.setVisibleTasks(myTaskTableConnector.getVisibleTasks());
+        settings.setVisibleTasks(myVisibleTasks);
         return Unit.INSTANCE;
       }
     };

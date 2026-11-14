@@ -48,6 +48,8 @@ fun workingDayTest(calendar: GPCalendar): (LocalDate) -> Boolean = { day ->
  *
  * Supertasks get their dates from their children, so only leaves are levelled; a dependency on a supertask becomes a
  * dependency on all leaves under it. Work which has started stays where it is, and so does a task with a fixed date.
+ * A task which started work depends on has happened already and stays as well, even if it is not marked as done;
+ * otherwise the scheduler would push the started work after it.
  * A task which has not started and starts before [today] is moved if [moveUnstartedPast] is true and stays otherwise.
  */
 fun collectLevelTasks(taskManager: TaskManager, today: LocalDate, moveUnstartedPast: Boolean = true,
@@ -61,13 +63,25 @@ fun collectLevelTasks(taskManager: TaskManager, today: LocalDate, moveUnstartedP
     return leaves
   }
   val leaves = hierarchy.getNestedTasks(hierarchy.rootTask).flatMap { collectLeaves(it) }
+  val started = leaves.filter { taskManager.getTask(it).completionPercentage > 0 }.toMutableSet()
+  do {
+    val count = started.size
+    leavesUnder.forEach { (id, under) ->
+      val successorStarted = taskManager.getTask(id).dependenciesAsDependee.toArray().any { dependency ->
+        (leavesUnder[dependency.dependant.taskID] ?: listOf(dependency.dependant.taskID)).any { it in started }
+      }
+      if (successorStarted) started.addAll(under)
+    }
+  } while (started.size > count)
   return leaves.mapIndexed { order, id ->
-    taskManager.getTask(id).toLevelTask(order, leavesUnder, today, moveUnstartedPast, workingDays)
+    taskManager.getTask(id).toLevelTask(order, leavesUnder, id in started, today, moveUnstartedPast, workingDays)
   }
 }
 
-private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today: LocalDate, moveUnstartedPast: Boolean,
-                             workingDays: WorkWeekWorkingDays): LevelTask {
+private fun Task.toLevelTask(
+  order: Int, leavesUnder: Map<Int, List<Int>>, started: Boolean, today: LocalDate, moveUnstartedPast: Boolean,
+  workingDays: WorkWeekWorkingDays
+): LevelTask {
   // Every resource books its own load; two assignments of one resource add up. A negative load books nothing.
   val loadByResource = assignments
     .filter { it.resource != null }
@@ -81,7 +95,7 @@ private fun Task.toLevelTask(order: Int, leavesUnder: Map<Int, List<Int>>, today
     loadByResource.ifEmpty { mapOf(SHARED_POOL to SHARED_POOL_LOAD) }
   }
   val start = this.start.time.toModelLocalDate()
-  val frozen = completionPercentage > 0 || (start < today && !moveUnstartedPast)
+  val frozen = started || (start < today && !moveUnstartedPast)
   // Levelling counts the days of a task with its own working days, the task model with those of the project.
   val worksOn = workingDays.forTask(this)
   val durationDays = if (worksOn === workingDays.projectOnly) duration.length.coerceAtLeast(1)
@@ -210,7 +224,8 @@ fun capacityProblems(taskManager: TaskManager): List<Task> = taskManager.tasks.f
  * Moves the tasks to their levelled [starts] with the levelled [durations], in one undoable edit.
  *
  * A moved task gets its start as the earliest begin, otherwise the scheduler would pull it back to the end of its
- * predecessors. The end is set as well, because a new start alone stretches the task.
+ * predecessors. The end is set as well, because a new start alone stretches the task. A milestone has no end of its
+ * own; its stored end is dropped, otherwise it would stay at the old date before the new start.
  *
  * @return the number of moved tasks; nothing is added to the undo history when there are none. The run is reported
  * to [notifier] afterwards in either case.
@@ -236,7 +251,7 @@ private fun levellingMoves(starts: Map<String, LocalDate>, durations: Map<String
       else workingDays.taskDays(task.start.time.toModelLocalDate(), task.end.time.toModelLocalDate(), isWorkingDay)
     val days = workingDays.projectDays(start, taskDays.toLong(), isWorkingDay).toInt()
     if (task.start.time.toModelLocalDate() == start && days == task.duration.length) null
-    else Move(task, start, workingDays.endAfter(start, taskDays, isWorkingDay))
+    else Move(task, start, workingDays.modelEnd(start, taskDays, isWorkingDay))
   }
 }
 
@@ -256,7 +271,7 @@ private fun writeLevellingBack(
     try {
       moves.forEach { (task, start, end) ->
         val startDate = CalendarFactory.createGanttCalendar(start.toModelDate())
-        task.createMutator().also {
+        (if (task.isMilestone) task.createMutatorFixingDuration() else task.createMutator()).also {
           it.setStart(startDate)
           if (!task.isMilestone) {
             it.setEnd(CalendarFactory.createGanttCalendar(end.toModelDate()))
