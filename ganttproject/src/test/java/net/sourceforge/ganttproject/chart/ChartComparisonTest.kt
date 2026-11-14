@@ -75,9 +75,10 @@ class ChartComparisonTest {
   }
 
   @Test
-  fun `without a baseline both halves are neutral`() {
+  fun `without a baseline only the durations half is drawn, and it is neutral`() {
     val both = compareDatesAndDurations(null, day("2026-09-11"), null, 5)
-    assertEquals(DatesAndDurations(ComparisonResult.NEUTRAL, ComparisonResult.NEUTRAL), both)
+    assertEquals(DatesAndDurations(ComparisonResult.NO_BAND, ComparisonResult.NEUTRAL), both,
+      "no dates to compare, so no dates half, as in the dates view")
   }
 
   /**

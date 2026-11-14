@@ -100,6 +100,16 @@ class ComparisonBandSceneTest {
   }
 
   @Test
+  fun `without a baseline the dates and durations view draws only a neutral lower half`() {
+    val bands = bands(ChartComparison.DATES_AND_DURATIONS, baseline = null)
+    assertEquals(1, bands.size, "no hatched dates half without dates to compare")
+    assertTrue(bands[0].hasStyle(GanttChartSceneBuilder.BAND_LOWER))
+    assertFalse(bands[0].hasStyle("later") || bands[0].hasStyle("earlier"))
+    assertEquals(0, bands(ChartComparison.DATES_AND_DURATIONS, baseline = null, summary = true).size,
+      "a summary task keeps only the dates comparison, and there is none")
+  }
+
+  @Test
   fun `the dates and durations view draws a moved and longer task in both halves`() {
     val bands = bands(ChartComparison.DATES_AND_DURATIONS, baseline(start = AUG_27, duration = 3))
     assertEquals(2, bands.size)

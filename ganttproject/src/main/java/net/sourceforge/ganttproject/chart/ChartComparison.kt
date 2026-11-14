@@ -101,12 +101,15 @@ fun compareDurations(baselineDuration: Int?, currentDuration: Int): ComparisonRe
 /** Both halves of the dates and durations view. */
 data class DatesAndDurations(val dates: ComparisonResult, val durations: ComparisonResult)
 
-/** The dates and durations view. Without a baseline both halves are neutral. */
+/**
+ * The dates and durations view. Without a baseline each half follows its own view: the dates half has nothing to
+ * compare and draws nothing, like the dates view, and the durations half is neutral, like the durations view.
+ */
 fun compareDatesAndDurations(
   baselineEnd: Date?, currentEnd: Date, baselineDuration: Int?, currentDuration: Int
 ): DatesAndDurations =
   if (baselineEnd == null || baselineDuration == null) {
-    DatesAndDurations(ComparisonResult.NEUTRAL, ComparisonResult.NEUTRAL)
+    DatesAndDurations(ComparisonResult.NO_BAND, compareDurations(null, currentDuration))
   } else {
     DatesAndDurations(
       compareDates(baselineEnd, currentEnd, baselineDuration, currentDuration),
