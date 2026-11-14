@@ -199,8 +199,12 @@ public class TaskRendererImpl2 extends ChartRendererBase {
   }
 
   public int calculateRowHeight() {
-    int rowHeight = chartRenderer.myLabelsRenderer.calculateRowHeight();
-    if (myModel.getBaseline() != null || myModel.getComparison().getNeedsBandRoomWithoutBaseline()) {
+    TaskLabelSceneBuilder<?> labels = chartRenderer.myLabelsRenderer;
+    int rowHeight = labels.calculateRowHeight();
+    boolean needsBandRoom = myModel.getBaseline() != null || myModel.getComparison().getNeedsBandRoomWithoutBaseline();
+    // In the comparison views a label below the bar already makes room for the band underneath it.
+    boolean labelsMakeBandRoom = myModel.getComparison().getNeedsBandRoomWithoutBaseline() && labels.isTextDown();
+    if (needsBandRoom && !labelsMakeBandRoom) {
       rowHeight = rowHeight + 8;
     }
     return rowHeight;

@@ -133,6 +133,9 @@ public class GanttChartSceneBuilder {
     );
 
     myLabelsRenderer = new TaskLabelSceneBuilder<>(taskLabelSceneApi, myLabelsLayer);
+    // In the comparison views the label below the bar goes under the band. The dates view keeps it where it was.
+    myLabelsRenderer.setBandHeight(
+        () -> input.getComparison().getNeedsBandRoomWithoutBaseline() ? getRectangleHeight() : 0);
     myChartApi = input.getChartApi(myLabelsRenderer);
     this.mySplitter = new TaskActivitySplitter<ITask>(
       input::getStartDate,

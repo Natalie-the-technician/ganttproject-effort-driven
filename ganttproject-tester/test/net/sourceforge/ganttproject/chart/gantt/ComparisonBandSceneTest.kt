@@ -100,6 +100,24 @@ class ComparisonBandSceneTest {
   }
 
   @Test
+  fun `the label below the bar goes under the band in the comparison views`() {
+    for (comparison in listOf(ChartComparison.EFFORT, ChartComparison.DURATIONS, ChartComparison.DATES_AND_DURATIONS)) {
+      val scene = labelScene(comparison, baseline = null)
+      val bandBottom = scene.bands.maxOf { (it as Canvas.Polygon).bottomY }
+      assertTrue(scene.downLabelTopY > bandBottom, "$comparison: the label starts below the band")
+      assertEquals(scene.dateViewRowHeight + BAR_HEIGHT, scene.rowHeight, "$comparison: the row makes room for the band")
+    }
+  }
+
+  @Test
+  fun `the dates view keeps the label below the bar right under the bar`() {
+    val scene = labelScene(ChartComparison.DATES, baseline(start = AUG_27, duration = 5))
+    val band = scene.bands.single() as Canvas.Polygon
+    assertEquals(band.topY + 2, scene.downLabelTopY, "as in master, the label lies on the band, right under the bar")
+    assertEquals(scene.dateViewRowHeight, scene.rowHeight)
+  }
+
+  @Test
   fun `without a baseline the dates and durations view draws only a neutral lower half`() {
     val bands = bands(ChartComparison.DATES_AND_DURATIONS, baseline = null)
     assertEquals(1, bands.size, "no hatched dates half without dates to compare")
@@ -181,10 +199,48 @@ private fun bands(
   return collectBaselineBars(canvas)
 }
 
+private const val BAR_HEIGHT = 10
+
+private class LabelScene(
+  val bands: List<Canvas.Shape>, val downLabelTopY: Int, val rowHeight: Int, val dateViewRowHeight: Int
+)
+
+/** The scene of a task with a label below the bar, an effort above the original one and the given view. */
+private fun labelScene(comparison: ChartComparison, baseline: List<GanttPreviousStateTask>?): LabelScene {
+  val calendar = AlwaysWorkingTimeCalendarImpl()
+  val length = days(5)
+  val task = BandTestTask(ROW, SEP_3, calendar.shiftDate(SEP_3, length), length, false, false, label = "below")
+  val canvas = Canvas()
+  val builder = GanttChartSceneBuilder(InputApiStub(calendar, task, baseline, comparison, ComparisonResult.MORE), canvas)
+  builder.getTaskLabelSceneApi().bottomLabelOption.setValue("name")
+  builder.render()
+  val downLabels = mutableListOf<Canvas.Text>()
+  val collector = object : biz.ganttproject.core.chart.canvas.Painter {
+    override fun prePaint() = Unit
+    override fun paint(rectangle: Canvas.Rectangle) = Unit
+    override fun paint(line: Canvas.Line) = Unit
+    override fun paint(next: Canvas.Text) {
+      // Only the label below the bar hangs from its top.
+      if (next.vAlignment == Canvas.VAlignment.TOP) downLabels.add(next)
+    }
+    override fun paint(textGroup: Canvas.TextGroup) = Unit
+    override fun paint(rhombus: Canvas.Rhombus) = Unit
+  }
+  canvas.paint(collector)
+  canvas.layers.forEach { it.paint(collector) }
+  val datesBuilder = GanttChartSceneBuilder(InputApiStub(calendar, task, baseline, ChartComparison.DATES), Canvas())
+  datesBuilder.getTaskLabelSceneApi().bottomLabelOption.setValue("name")
+  return LabelScene(
+    collectBaselineBars(canvas), downLabels.single().bottomY,
+    builder.myLabelsRenderer.calculateRowHeight(), datesBuilder.myLabelsRenderer.calculateRowHeight()
+  )
+}
+
 private class BandTestTask(
   private val rowId: Int, startDate: Date, endDate: Date, private val length: TimeDuration,
-  private val summary: Boolean, private val milestone: Boolean
+  private val summary: Boolean, private val milestone: Boolean, private val label: String? = null
 ) : TestSceneTask() {
+  override fun getProperty(propertyID: String?): String? = label
   private val ownActivities: List<TaskSceneTaskActivity> =
     listOf(TaskActivityDataImpl(true, true, 1f, this, startDate, endDate, length))
   override fun getRowId(): Int = rowId
