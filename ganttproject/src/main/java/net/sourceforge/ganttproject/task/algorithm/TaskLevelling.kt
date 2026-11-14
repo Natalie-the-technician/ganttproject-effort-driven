@@ -118,7 +118,8 @@ fun capacityProblems(taskManager: TaskManager): List<Task> = taskManager.tasks.f
  * Moves the tasks to their levelled [starts] with the levelled [durations], in one undoable edit.
  *
  * A moved task gets its start as the earliest begin, otherwise the scheduler would pull it back to the end of its
- * predecessors. The end is set as well, because a new start alone stretches the task.
+ * predecessors. The end is set as well, because a new start alone stretches the task. A milestone has no end of its
+ * own; its stored end is dropped, otherwise it would stay at the old date before the new start.
  *
  * @return the number of moved tasks; nothing is added to the undo history when there are none.
  */
@@ -143,7 +144,7 @@ fun applyLevelling(
     try {
       moves.forEach { (task, start, days) ->
         val startDate = CalendarFactory.createGanttCalendar(start.toModelDate())
-        task.createMutator().also {
+        (if (task.isMilestone) task.createMutatorFixingDuration() else task.createMutator()).also {
           it.setStart(startDate)
           if (!task.isMilestone) {
             it.setEnd(CalendarFactory.createGanttCalendar(endAfterWorkingDays(start, days, isWorkingDay).toModelDate()))
