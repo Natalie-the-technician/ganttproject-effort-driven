@@ -31,8 +31,10 @@ import javafx.stage.Window
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import java.awt.GraphicsEnvironment
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
@@ -49,6 +51,7 @@ class BaselineNameCollisionDialogTest {
     @BeforeAll
     @JvmStatic
     fun startJavaFx() {
+      assumeTrue(!GraphicsEnvironment.isHeadless(), "needs a display to show the dialog")
       try {
         val started = CountDownLatch(1)
         Platform.startup { started.countDown() }
