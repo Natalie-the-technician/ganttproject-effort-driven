@@ -78,8 +78,13 @@ class ForkFreeTextReadTest {
     read(forkFile())
     val chris = project.humanResourceManager.getById(2)
     assertEquals(80, chris.utilization)
+    assertEquals(0, BigDecimal("6").compareTo(chris.hoursPerDay))
+    // The fork: hours_per_day x utilisation / 100 x load / 100 = 6 x 0.8 x 1 = 4.8 hours a day on task 4
+    val assignment = project.taskManager.getTask(4).assignments.single { it.resource == chris }
+    assertEquals(0, BigDecimal("4.8").compareTo(availableHoursPerDay(assignment)), "${availableHoursPerDay(assignment)}")
     val anna = project.humanResourceManager.getById(0)
     assertNull(anna.utilization, "100 percent is no utilization")
+    assertEquals(0, BigDecimal("8").compareTo(anna.hoursPerDay))
   }
 
   @Test
@@ -87,6 +92,7 @@ class ForkFreeTextReadTest {
     read(forkFile())
     val definitions = project.resourceCustomPropertyManager.definitions.map { it.id }
     assertFalse("utilisation_percent" in definitions, "$definitions")
+    assertFalse("hours_per_day" in definitions, "$definitions")
   }
 
   @Test
@@ -94,6 +100,7 @@ class ForkFreeTextReadTest {
     val imported = XmlProjectImporter().import(forkFile())
     val chris = imported.humanResourceManager.getById(2)
     assertEquals(80, chris.utilization)
+    assertEquals(0, BigDecimal("6").compareTo(chris.hoursPerDay))
     assertFalse("utilisation_percent" in imported.resourceCustomPropertyManager.definitions.map { it.id })
   }
 
@@ -102,7 +109,9 @@ class ForkFreeTextReadTest {
     read(forkFile())
     val saved = save(project)
     assertTrue(saved.contains("""utilization="80""""), saved)
+    assertTrue(saved.contains("hours-per-day=\"6"), saved)
     assertFalse(saved.contains("utilisation_percent"), saved)
+    assertFalse(saved.contains("hours_per_day"), saved)
   }
 
   @Test
@@ -124,7 +133,7 @@ class ForkFreeTextReadTest {
 
   @Test
   fun `a utilization of zero in the fork stays full, since the fork read it as 100`() {
-    read(projectXml(utilisation = "0", resourceAttrs = """ hours-per-day="4""""))
+    read(projectXml(utilisation = "0", hoursPerDay = "4.0"))
     val resource = resource()
     assertNull(resource.utilization, "0 means no hours now, the fork worked with 100")
     val assignment = project.taskManager.getTask(1).assignments.single()
@@ -140,13 +149,21 @@ class ForkFreeTextReadTest {
   }
 
   @Test
+  fun `hours per day of zero in the fork stay the default, since the fork read them as 8`() {
+    read(projectXml(hoursPerDay = "0.0"))
+    assertNull(resource().hoursPerDay)
+    assertFalse(save(project).contains("hours_per_day"))
+  }
+
+  @Test
   fun `missing and empty values of the fork leave the resource as it is and are dropped`() {
-    read(projectXml(hoursSchedule = "", utilisation = ""))
+    read(projectXml(hoursSchedule = "", utilisation = "", hoursPerDay = ""))
     val resource = resource()
     assertNull(resource.utilization)
+    assertNull(resource.hoursPerDay)
     assertEquals(emptyList<CapacityChange>(), resource.hoursSchedule)
     val saved = save(project)
-    assertFalse(saved.contains("hours_schedule") || saved.contains("utilisation_percent"), saved)
+    assertFalse(saved.contains("hours_schedule") || saved.contains("utilisation_percent") || saved.contains("hours_per_day"), saved)
   }
 
   @Test
@@ -172,6 +189,15 @@ class ForkFreeTextReadTest {
     assertNull(resource.utilization)
     assertEquals("62.5", customValue(resource, "utilisation_percent")?.toString())
     assertTrue(save(project).contains("62.5"))
+  }
+
+  @Test
+  fun `unreadable hours per day are not guessed and stay as text`() {
+    read(projectXml(hoursPerDay = "eight"))
+    val resource = resource()
+    assertNull(resource.hoursPerDay)
+    assertEquals("eight", customValue(resource, "hours_per_day")?.toString())
+    assertTrue(save(project).contains("eight"))
   }
 
   @Test
