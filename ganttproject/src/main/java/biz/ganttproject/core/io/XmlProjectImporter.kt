@@ -35,6 +35,7 @@ import net.sourceforge.ganttproject.GanttPreviousStateTask
 import net.sourceforge.ganttproject.GanttProjectImpl
 import net.sourceforge.ganttproject.IGanttProject
 import net.sourceforge.ganttproject.parser.daysOffFromFile
+import net.sourceforge.ganttproject.parser.migrateForkFreeText
 import net.sourceforge.ganttproject.roles.Role
 import net.sourceforge.ganttproject.roles.RolePersistentID
 import biz.ganttproject.customproperty.CustomColumnsException
@@ -87,6 +88,7 @@ class XmlProjectImporter(private val ganttProject: GanttProjectImpl = GanttProje
     taskManager.isZeroMilestones = xmlProject.tasks.emptyMilestones
     taskManager.algorithmCollection.scheduler.setDiagnostic(RethrowingDiagnosticImpl())
 
+    xmlProject.migrateForkFreeText()
     importCustomProps()
     importRoles()
     importResources()

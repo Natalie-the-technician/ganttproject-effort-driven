@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?><project name="Website relaunch (demo)" company="Example Ltd" webLink="" version="3.0.2906" locale="en_US">
+    <description><![CDATA[Demo plan for app screenshots. Fictional data.]]></description>
+    <calendars>
+        <day-types>
+            <day-type id="0"/>
+            <day-type id="1"/>
+            <default-week id="1" name="default" sun="1" mon="0" tue="0" wed="0" thu="0" fri="0" sat="1"/>
+            <only-show-weekends value="false"/>
+            <overriden-day-types/>
+            <days/>
+        </day-types>
+    </calendars>
+    <tasks empty-milestones="true">
+        <taskproperties>
+            <taskproperty id="tpd0" name="type" type="default" valuetype="icon"/>
+            <taskproperty id="tpd1" name="priority" type="default" valuetype="icon"/>
+            <taskproperty id="tpd2" name="info" type="default" valuetype="icon"/>
+            <taskproperty id="tpd3" name="name" type="default" valuetype="text"/>
+            <taskproperty id="tpd4" name="begindate" type="default" valuetype="date"/>
+            <taskproperty id="tpd5" name="enddate" type="default" valuetype="date"/>
+            <taskproperty id="tpd6" name="duration" type="default" valuetype="int"/>
+            <taskproperty id="tpd7" name="completion" type="default" valuetype="int"/>
+            <taskproperty id="tpd8" name="coordinator" type="default" valuetype="text"/>
+            <taskproperty id="tpd9" name="predecessorsr" type="default" valuetype="text"/>
+            <taskproperty id="effort_hours" name="Effort (h)" type="custom" valuetype="double"/>
+        </taskproperties>
+        <task id="0" uid="7289d8ae17bb482daf19b381e176a948" name="Discovery" color="#8cb6ce" meeting="false" start="2026-11-02" duration="6" complete="100" expand="true">
+            <task id="1" uid="358047782e9348e8887dd76721a971eb" name="Stakeholder interviews" color="#8cb6ce" meeting="false" start="2026-11-02" duration="3" complete="100" expand="true">
+                <customproperty taskproperty-id="effort_hours" value="16.0"/>
+                <depend id="2" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="2" uid="702d18e4e3164222a573d361c356479a" name="Requirements document" color="#8cb6ce" meeting="false" start="2026-11-05" duration="3" complete="100" expand="true">
+                <customproperty taskproperty-id="effort_hours" value="12.0"/>
+                <depend id="4" type="2" difference="0" hardness="Strong"/>
+            </task>
+        </task>
+        <task id="3" uid="7380c2b3f7ac450ba1e6416299466ec6" name="Design" color="#8cb6ce" meeting="false" start="2026-11-10" duration="11" complete="40" expand="true">
+            <task id="4" uid="0a7f4b2e6b444ccc8ebe6646930e313e" name="Wireframes" color="#8cb6ce" meeting="false" start="2026-11-10" duration="5" complete="60" expand="true">
+                <customproperty taskproperty-id="effort_hours" value="30.0"/>
+                <depend id="5" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="5" uid="fd1d3684a87e463289faf195ed48f4b8" name="Visual design" color="#8cb6ce" meeting="false" start="2026-11-17" duration="5" complete="0" expand="true">
+                <customproperty taskproperty-id="effort_hours" value="40.0"/>
+                <depend id="6" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="6" uid="4585c98bb6194146ba3415def63ca404" name="Design review" color="#8cb6ce" meeting="true" start="2026-11-24" duration="0" complete="0" expand="true">
+                <depend id="8" type="2" difference="0" hardness="Strong"/>
+                <depend id="9" type="2" difference="0" hardness="Strong"/>
+            </task>
+        </task>
+        <task id="7" uid="5e2c91c4c0094150a0c6133c4f429865" name="Build" color="#8cb6ce" meeting="false" start="2026-11-25" duration="13" complete="0" expand="true">
+            <task id="8" uid="20dc3da5609b4c4e9d77080fdc2047d8" name="Frontend implementation" color="#8cb6ce" meeting="false" start="2026-11-25" duration="8" complete="0" expand="true">
+                <customproperty taskproperty-id="effort_hours" value="64.0"/>
+                <depend id="10" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="9" uid="c2f1cf67b2ef4c35a7baabb49211b39d" name="Content migration" color="#8cb6ce" meeting="false" start="2026-11-25" duration="6" complete="0" expand="true">
+                <customproperty taskproperty-id="effort_hours" value="30.0"/>
+                <depend id="10" type="2" difference="0" hardness="Strong"/>
+            </task>
+            <task id="10" uid="cefb9e339d1043e2bdc5e6d655caa7be" name="QA and launch preparation" color="#8cb6ce" meeting="false" start="2026-12-07" duration="4" complete="0" expand="true">
+                <customproperty taskproperty-id="effort_hours" value="24.0"/>
+                <depend id="11" type="2" difference="0" hardness="Strong"/>
+            </task>
+        </task>
+        <task id="11" uid="8f791d1efaef43ccaf427a02552d2088" name="Go-live" color="#8cb6ce" meeting="true" start="2026-12-11" duration="0" complete="0" expand="true">
+        </task>
+    </tasks>
+    <resources>
+        <custom-property-definition id="hours_per_day" name="Hours per day" type="double"/>
+        <custom-property-definition id="utilisation_percent" name="Utilisation (%)" type="int"/>
+        <resource id="0" name="Anna Keller" function="Default:0" contacts="" phone="">
+            <custom-property definition-id="hours_per_day" value="8.0"/>
+            <custom-property definition-id="utilisation_percent" value="100"/>
+        </resource>
+        <resource id="1" name="Ben Osei" function="Default:0" contacts="" phone="">
+            <custom-property definition-id="hours_per_day" value="8.0"/>
+            <custom-property definition-id="utilisation_percent" value="100"/>
+        </resource>
+        <resource id="2" name="Chris Lindqvist" function="Default:0" contacts="" phone="">
+            <custom-property definition-id="hours_per_day" value="6.0"/>
+            <custom-property definition-id="utilisation_percent" value="80"/>
+        </resource>
+    </resources>
+    <allocations>
+        <allocation task-id="1" resource-id="0" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="2" resource-id="0" function="Default:0" responsible="true" load="50.0"/>
+        <allocation task-id="2" resource-id="1" function="Default:0" responsible="false" load="50.0"/>
+        <allocation task-id="4" resource-id="2" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="5" resource-id="2" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="8" resource-id="1" function="Default:0" responsible="true" load="100.0"/>
+        <allocation task-id="9" resource-id="0" function="Default:0" responsible="true" load="80.0"/>
+        <allocation task-id="10" resource-id="1" function="Default:0" responsible="true" load="50.0"/>
+        <allocation task-id="10" resource-id="0" function="Default:0" responsible="false" load="50.0"/>
+    </allocations>
+    <vacations/>
+    <previous/>
+    <roles roleset-name="Default"/>
+</project>

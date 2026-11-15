@@ -41,6 +41,7 @@ class ResourceLoader(private val resourceManager: HumanResourceManager, private 
                      private val customPropertyManager: CustomPropertyManager,
                      private val onVacationWithoutDays: (resourceName: String, start: LocalDate, end: LocalDate) -> Unit = { _, _, _ -> }) {
   fun loadResources(xmlProject: XmlProject) {
+    xmlProject.migrateForkFreeText()
     loadCustomPropertyDefinitions(xmlProject)
     xmlProject.resources.resources.forEach { xmlResource ->
       val resource = resourceManager.create(xmlResource.name, xmlResource.id).also { hr ->
