@@ -158,6 +158,55 @@ class ForkEffortReadTest {
     assertFalse(save(project).contains("tpc3"))
   }
 
+  // In the fork an effort was what made the duration follow the assignments. Here that is the effort driven switch.
+
+  @Test
+  fun `a task with an effort of the fork is effort driven, and its duration follows its assignments`() {
+    read(projectXml(task(1, "16")))
+    val task = project.taskManager.getTask(1)
+    assertTrue(task.isEffortDriven)
+    // 16 hours at 8 hours a day of the only assignment are 2 days, the file says 1
+    assertEquals(2, task.duration.length)
+    assertTrue(save(project).contains("""effort-driven="true""""))
+  }
+
+  @Test
+  fun `the importer makes a task with an effort of the fork effort driven as well`() {
+    val imported = XmlProjectImporter().import(forkFile())
+    assertEquals(demoEfforts.keys, imported.taskManager.tasks.filter { it.isEffortDriven }.map { it.taskID }.toSet())
+  }
+
+  @Test
+  fun `the tasks of the demo plan with an effort are effort driven, and only those`() {
+    read(forkFile())
+    assertEquals(demoEfforts.keys, project.taskManager.tasks.filter { it.isEffortDriven }.map { it.taskID }.toSet())
+  }
+
+  @Test
+  fun `a summary task and a milestone with an effort of the fork are not effort driven, as the fork left them alone`() {
+    read(projectXml(
+      task(1, "40", children = task(2, "16")),
+      task(3, "2", attrs = """ meeting="true" duration="0"""")))
+    assertFalse(project.taskManager.getTask(1).isEffortDriven)
+    assertTrue(project.taskManager.getTask(2).isEffortDriven)
+    assertFalse(project.taskManager.getTask(3).isEffortDriven)
+  }
+
+  @Test
+  fun `a task whose effort of the fork is not taken is not effort driven`() {
+    read(projectXml(task(1, "0"), task(2, "a lot"), task(3, "")))
+    (1..3).forEach { assertFalse(project.taskManager.getTask(it).isEffortDriven, "task $it") }
+  }
+
+  @Test
+  fun `an effort driven switch already in the file is kept`() {
+    read(projectXml(task(1, "16", attrs = """ effort-driven="false"""")))
+    val task = project.taskManager.getTask(1)
+    assertEquals(0, BigDecimal("16").compareTo(task.effort))
+    assertFalse(task.isEffortDriven)
+    assertEquals(1, task.duration.length)
+  }
+
   private fun efforts(tasks: Array<Task>): Map<Int, String> =
     tasks.mapNotNull { task -> task.effort?.let { task.taskID to it.stripTrailingZeros().toPlainString() } }.toMap()
 

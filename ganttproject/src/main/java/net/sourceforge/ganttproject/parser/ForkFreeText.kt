@@ -48,6 +48,8 @@ const val FORK_EFFORT_HOURS = "effort_hours"
  * it stays where it is, as text, and is logged and handed to [onUnreadable]. So does a value next to an attribute which
  * is already in the file, because the attribute wins. A definition which no resource or task uses any more is dropped,
  * so that saving writes only the attributes. An effort of zero or less was no effort in the fork, so it becomes none.
+ * A leaf task which gets the effort of the fork becomes effort driven, unless the file says otherwise, because in the
+ * fork the effort was what made the duration follow the assignments.
  */
 fun XmlProject.migrateForkFreeText(onUnreadable: (name: String, property: String, value: String) -> Unit = { _, _, _ -> }) {
   migrateForkResourceFreeText(onUnreadable)
@@ -187,5 +189,9 @@ private fun XmlTask.migrateEffort(value: String): Boolean {
     return true
   }
   effort = TaskEffort.fromHours(hours)
+  // In the fork the effort of a leaf task was what made its duration follow its assignments.
+  if (isEffortDriven == null && !isMilestone && tasks.isNullOrEmpty()) {
+    isEffortDriven = true
+  }
   return true
 }
